@@ -4,6 +4,7 @@
 //! and a small set of frequently used worksheet functions. Unsupported syntax
 //! is reported rather than guessed.
 
+use std::cell::Cell;
 use std::collections::{HashMap, HashSet};
 use std::fmt;
 
@@ -12,6 +13,10 @@ const MAX_EXACT_INTEGER: f64 = 9_007_199_254_740_992.0;
 const MAX_EXACT_INTEGER_U64: u64 = 9_007_199_254_740_992;
 const MAX_ARRAY_CELLS: usize = 100_000;
 const MAX_TEXT_LENGTH_UNITS: usize = 32_767;
+const MAX_FORMULA_LENGTH_UNITS: usize = 8_192;
+const MAX_FUNCTION_NESTING: usize = 64;
+const MAX_EXPRESSION_NESTING: usize = 96;
+const MAX_WILDCARD_WORK: usize = 5_000_000;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Value {
@@ -126,7 +131,11 @@ pub fn evaluate_result(
     if parser.peek().is_some() {
         return Err(FormulaError::Parse("unexpected trailing input".into()));
     }
-    let env = Environment { cells, sheet_name };
+    let env = Environment {
+        cells,
+        sheet_name,
+        wildcard_work_remaining: Cell::new(MAX_WILDCARD_WORK),
+    };
     match eval(&expression, &env)? {
         CalcValue::Scalar(value) => {
             validate_text_value(&value)?;
@@ -186,6 +195,7 @@ enum CalcValue {
 struct Environment<'a> {
     cells: &'a HashMap<String, Value>,
     sheet_name: &'a str,
+    wildcard_work_remaining: Cell<usize>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -363,6 +373,14 @@ struct Parser {
 impl Parser {
     fn new(formula: &str) -> Result<Self, FormulaError> {
         let source = formula.trim().strip_prefix('=').unwrap_or(formula.trim());
+        if source
+            .encode_utf16()
+            .take(MAX_FORMULA_LENGTH_UNITS + 1)
+            .count()
+            > MAX_FORMULA_LENGTH_UNITS
+        {
+            return Err(FormulaError::Value);
+        }
         let mut lexer = Lexer::new(source);
         let mut tokens = Vec::new();
         loop {
@@ -373,7 +391,41 @@ impl Parser {
                 break;
             }
         }
-        Ok(Self { tokens, pos: 0 })
+        let parser = Self { tokens, pos: 0 };
+        parser.validate_nesting()?;
+        Ok(parser)
+    }
+
+    fn validate_nesting(&self) -> Result<(), FormulaError> {
+        let mut stack = Vec::new();
+        let mut function_depth = 0;
+        for (index, token) in self.tokens.iter().enumerate() {
+            match token {
+                Token::LParen => {
+                    if stack.len() >= MAX_EXPRESSION_NESTING {
+                        return Err(FormulaError::Value);
+                    }
+                    let is_function =
+                        index > 0 && matches!(&self.tokens[index - 1], Token::Ident(_));
+                    if is_function {
+                        function_depth += 1;
+                        if function_depth > MAX_FUNCTION_NESTING {
+                            return Err(FormulaError::Value);
+                        }
+                    }
+                    stack.push(is_function);
+                }
+                Token::RParen => {
+                    if let Some(is_function) = stack.pop()
+                        && is_function
+                    {
+                        function_depth -= 1;
+                    }
+                }
+                _ => {}
+            }
+        }
+        Ok(())
     }
 
     fn peek(&self) -> Option<&Token> {
@@ -390,10 +442,21 @@ impl Parser {
             Token::Number(n, source) => Expr::Number(n, source),
             Token::Text(s) => Expr::Text(s),
             Token::ErrorNA => Expr::Error(FormulaError::NA),
-            Token::Operator(op) if op == "+" || op == "-" => Expr::Unary(
-                op.chars().next().unwrap(),
-                Box::new(self.parse_expression(27)?),
-            ),
+            Token::Operator(op) if op == "+" || op == "-" => {
+                let mut operators = vec![op.chars().next().unwrap()];
+                while matches!(self.peek(), Some(Token::Operator(next)) if next == "+" || next == "-")
+                {
+                    let Token::Operator(next) = self.take() else {
+                        unreachable!();
+                    };
+                    operators.push(next.chars().next().unwrap());
+                }
+                let mut operand = self.parse_expression(27)?;
+                for operator in operators.into_iter().rev() {
+                    operand = Expr::Unary(operator, Box::new(operand));
+                }
+                operand
+            }
             Token::LParen => {
                 let e = self.parse_expression(0)?;
                 self.expect(Token::RParen)?;
@@ -556,43 +619,42 @@ fn eval(expr: &Expr, env: &Environment<'_>) -> Result<CalcValue, FormulaError> {
         Expr::Missing => Err(FormulaError::Value),
         Expr::Ref(sheet, addr) => Ok(scalar(read_cell(env, sheet, addr))),
         Expr::Range(sheet, start, end) => Ok(CalcValue::Range(read_range(env, sheet, start, end)?)),
-        Expr::Unary(op, value) => {
-            let v = eval_scalar(value, env)?;
-            match op {
-                '+' => Ok(scalar(Value::Number(to_number(&v)?))),
-                '-' => Ok(scalar(Value::Number(-to_number(&v)?))),
-                '%' => Ok(scalar(Value::Number(to_number(&v)? / 100.0))),
-                _ => Err(FormulaError::Unsupported(format!("unary operator {op}"))),
+        Expr::Unary(_, _) => {
+            let mut operations = Vec::new();
+            let mut current = expr;
+            while let Expr::Unary(operator, inner) = current {
+                operations.push(*operator);
+                current = inner;
             }
+            let value = eval_scalar(current, env)?;
+            let mut number = to_number(&value)?;
+            for operator in operations.into_iter().rev() {
+                number = match operator {
+                    '+' => number,
+                    '-' => -number,
+                    '%' => number / 100.0,
+                    _ => {
+                        return Err(FormulaError::Unsupported(format!(
+                            "unary operator {operator}"
+                        )));
+                    }
+                };
+            }
+            Ok(scalar(Value::Number(number)))
         }
-        Expr::Binary(op, left, right) => {
-            let left_value = eval(left, env);
-            let right_value = eval(right, env);
-            match (left_value, right_value) {
-                (Ok(CalcValue::Scalar(Value::Error(error))), Ok(right))
-                    if calc_value_shape(&right).is_none() =>
-                {
-                    Ok(scalar(Value::Error(error)))
-                }
-                (Ok(CalcValue::Scalar(Value::Error(error))), Err(_)) => {
-                    Ok(scalar(Value::Error(error)))
-                }
-                (Ok(left), Ok(CalcValue::Scalar(Value::Error(error))))
-                    if calc_value_shape(&left).is_none()
-                        && !matches!(op.as_str(), "=" | "<>" | "<" | "<=" | ">" | ">=") =>
-                {
-                    Ok(scalar(Value::Error(error)))
-                }
-                (Ok(left), Ok(right)) => apply_binary_values(op, left, right),
-                (Err(error), Ok(right @ (CalcValue::Range(_) | CalcValue::Array(_)))) => {
-                    apply_binary_values(op, scalar(Value::Error(error)), right)
-                }
-                (Ok(left @ (CalcValue::Range(_) | CalcValue::Array(_))), Err(error)) => {
-                    apply_binary_values(op, left, scalar(Value::Error(error)))
-                }
-                (Err(error), _) => Err(error),
-                (_, Err(error)) => Err(error),
+        Expr::Binary(_, _, _) => {
+            let mut chain = Vec::new();
+            let mut current = expr;
+            while let Expr::Binary(operator, left, right) = current {
+                chain.push((operator.as_str(), right.as_ref()));
+                current = left;
             }
+            let mut value = eval(current, env);
+            for (operator, right) in chain.into_iter().rev() {
+                let right_value = eval(right, env);
+                value = apply_binary_results(operator, value, right_value);
+            }
+            value
         }
         Expr::Call(name, args) if name == "SEQUENCE" => {
             sequence_call(args, env).map(CalcValue::Array)
@@ -606,6 +668,36 @@ fn eval(expr: &Expr, env: &Environment<'_>) -> Result<CalcValue, FormulaError> {
             selection_call(name, args, env)
         }
         Expr::Call(name, args) => eval_call(name, args, env).map(scalar),
+    }
+}
+
+fn apply_binary_results(
+    op: &str,
+    left_value: Result<CalcValue, FormulaError>,
+    right_value: Result<CalcValue, FormulaError>,
+) -> Result<CalcValue, FormulaError> {
+    match (left_value, right_value) {
+        (Ok(CalcValue::Scalar(Value::Error(error))), Ok(right))
+            if calc_value_shape(&right).is_none() =>
+        {
+            Ok(scalar(Value::Error(error)))
+        }
+        (Ok(CalcValue::Scalar(Value::Error(error))), Err(_)) => Ok(scalar(Value::Error(error))),
+        (Ok(left), Ok(CalcValue::Scalar(Value::Error(error))))
+            if calc_value_shape(&left).is_none()
+                && !matches!(op, "=" | "<>" | "<" | "<=" | ">" | ">=") =>
+        {
+            Ok(scalar(Value::Error(error)))
+        }
+        (Ok(left), Ok(right)) => apply_binary_values(op, left, right),
+        (Err(error), Ok(right @ (CalcValue::Range(_) | CalcValue::Array(_)))) => {
+            apply_binary_values(op, scalar(Value::Error(error)), right)
+        }
+        (Ok(left @ (CalcValue::Range(_) | CalcValue::Array(_))), Err(error)) => {
+            apply_binary_values(op, left, scalar(Value::Error(error)))
+        }
+        (Err(error), _) => Err(error),
+        (_, Err(error)) => Err(error),
     }
 }
 
@@ -2878,12 +2970,12 @@ fn eval_call(name: &str, args: &[Expr], env: &Environment<'_>) -> Result<Value, 
                 excel_ymd_to_serial(target_year, target_month, target_day)? as f64,
             ));
         }
-        "MATCH" => return match_fn(args, &values, name),
+        "MATCH" => return match_fn(args, &values, name, &env.wildcard_work_remaining),
         "INDEX" => return index_fn(args, &values, name),
-        "VLOOKUP" => return vlookup_fn(args, &values, name),
+        "VLOOKUP" => return vlookup_fn(args, &values, name, &env.wildcard_work_remaining),
         "COUNTIF" | "COUNTIFS" | "SUMIF" | "SUMIFS" | "AVERAGEIF" | "AVERAGEIFS" | "MINIFS"
         | "MAXIFS" => {
-            return criteria_function(name, args, &values);
+            return criteria_function(name, args, &values, &env.wildcard_work_remaining);
         }
         other => Err(FormulaError::Unsupported(format!("function {other}"))),
     }
@@ -4900,12 +4992,14 @@ struct Criteria {
     operator: CriteriaOperator,
     operand: Value,
     wildcard: bool,
+    wildcard_pattern: Option<WildcardPattern>,
 }
 
 fn criteria_function(
     name: &str,
     args: &[Expr],
     values: &[CalcValue],
+    wildcard_work_remaining: &Cell<usize>,
 ) -> Result<Value, FormulaError> {
     let (criteria_ranges, criteria_values, result_range) = match name {
         "COUNTIF" => {
@@ -4992,7 +5086,7 @@ fn criteria_function(
     for index in 0..base.cells.len() {
         let mut matches = true;
         for (range, criterion) in criteria_ranges.iter().zip(parsed_criteria.iter()) {
-            if !criterion_matches(&range.cells[index], criterion)? {
+            if !criterion_matches(&range.cells[index], criterion, wildcard_work_remaining)? {
                 matches = false;
                 break;
             }
@@ -5125,14 +5219,25 @@ fn parse_criteria(value: &CalcValue) -> Result<Criteria, FormulaError> {
         }
         scalar => (CriteriaOperator::Equal, scalar.clone(), false),
     };
+    let wildcard_pattern = match &operand {
+        Value::Text(pattern) if pattern.contains(['*', '?', '~']) => {
+            Some(WildcardPattern::new(pattern)?)
+        }
+        _ => None,
+    };
     Ok(Criteria {
         operator,
         operand,
         wildcard,
+        wildcard_pattern,
     })
 }
 
-fn criterion_matches(candidate: &Value, criteria: &Criteria) -> Result<bool, FormulaError> {
+fn criterion_matches(
+    candidate: &Value,
+    criteria: &Criteria,
+    wildcard_work_remaining: &Cell<usize>,
+) -> Result<bool, FormulaError> {
     if let Value::Error(error) = candidate {
         return Err(error.clone());
     }
@@ -5152,13 +5257,17 @@ fn criterion_matches(candidate: &Value, criteria: &Criteria) -> Result<bool, For
             !is_blank
         });
     }
-    if let (Value::Text(pattern), Value::Text(candidate_text)) = (&criteria.operand, candidate)
+    if let (Value::Text(expected), Value::Text(candidate_text)) = (&criteria.operand, candidate)
         && matches!(
             criteria.operator,
             CriteriaOperator::Equal | CriteriaOperator::NotEqual
         )
     {
-        let matched = wildcard_match(pattern, candidate_text);
+        let matched = if let Some(pattern) = &criteria.wildcard_pattern {
+            wildcard_match(pattern, candidate_text, wildcard_work_remaining)?
+        } else {
+            candidate_text.to_lowercase() == expected.to_lowercase()
+        };
         return Ok(if criteria.operator == CriteriaOperator::NotEqual {
             !matched
         } else {
@@ -5197,55 +5306,120 @@ fn compare_criteria_values(a: &Value, b: &Value) -> Result<i8, FormulaError> {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 enum WildcardToken {
     AnyMany,
     AnyOne,
-    Literal(char),
+    Literal(String),
 }
 
-fn wildcard_match(pattern: &str, text: &str) -> bool {
-    let mut tokens = Vec::new();
-    let mut chars = pattern.chars();
-    while let Some(ch) = chars.next() {
-        match ch {
-            '~' => tokens.push(WildcardToken::Literal(chars.next().unwrap_or('~'))),
-            '*' => tokens.push(WildcardToken::AnyMany),
-            '?' => tokens.push(WildcardToken::AnyOne),
-            literal => tokens.push(WildcardToken::Literal(literal)),
+#[derive(Clone)]
+struct WildcardPattern {
+    tokens: Vec<WildcardToken>,
+}
+
+impl WildcardPattern {
+    fn new(pattern: &str) -> Result<Self, FormulaError> {
+        if pattern
+            .encode_utf16()
+            .take(MAX_TEXT_LENGTH_UNITS + 1)
+            .count()
+            > MAX_TEXT_LENGTH_UNITS
+        {
+            return Err(FormulaError::Value);
         }
-    }
-    let characters: Vec<char> = text.chars().collect();
-    let mut dp = vec![vec![false; characters.len() + 1]; tokens.len() + 1];
-    dp[0][0] = true;
-    for (i, token) in tokens.iter().enumerate() {
-        for j in 0..=characters.len() {
-            if !dp[i][j] {
-                continue;
-            }
-            match token {
-                WildcardToken::AnyMany => {
-                    dp[i + 1][j] = true;
-                    if j < characters.len() {
-                        dp[i][j + 1] = true;
+        let mut tokens = Vec::new();
+        let mut chars = pattern.chars();
+        while let Some(ch) = chars.next() {
+            match ch {
+                '~' => {
+                    let literal = chars.next().unwrap_or('~');
+                    tokens.push(WildcardToken::Literal(literal.to_lowercase().collect()));
+                }
+                '*' => {
+                    if !matches!(tokens.last(), Some(WildcardToken::AnyMany)) {
+                        tokens.push(WildcardToken::AnyMany);
                     }
                 }
-                WildcardToken::AnyOne if j < characters.len() => dp[i + 1][j + 1] = true,
-                WildcardToken::Literal(expected)
-                    if j < characters.len()
-                        && expected.to_lowercase().to_string()
-                            == characters[j].to_lowercase().to_string() =>
-                {
-                    dp[i + 1][j + 1] = true;
+                '?' => {
+                    tokens.push(WildcardToken::AnyOne);
                 }
-                _ => {}
+                literal => tokens.push(WildcardToken::Literal(literal.to_lowercase().collect())),
             }
         }
+        Ok(Self { tokens })
     }
-    dp[tokens.len()][characters.len()]
 }
 
-fn match_fn(args: &[Expr], values: &[CalcValue], name: &str) -> Result<Value, FormulaError> {
+fn wildcard_match(
+    pattern: &WildcardPattern,
+    text: &str,
+    wildcard_work_remaining: &Cell<usize>,
+) -> Result<bool, FormulaError> {
+    if text.len() > MAX_WILDCARD_WORK {
+        return Err(FormulaError::Value);
+    }
+    let width = text.chars().count();
+    let has_wildcard = pattern
+        .tokens
+        .iter()
+        .any(|token| matches!(token, WildcardToken::AnyMany | WildcardToken::AnyOne));
+
+    if !has_wildcard {
+        let cost = pattern.tokens.len().saturating_add(width);
+        if cost > wildcard_work_remaining.get() {
+            return Err(FormulaError::Value);
+        }
+        wildcard_work_remaining.set(wildcard_work_remaining.get() - cost);
+        return Ok(pattern.tokens.len() == width
+            && pattern.tokens.iter().zip(text.chars()).all(|(token, character)| {
+                matches!(token, WildcardToken::Literal(expected) if expected.chars().eq(character.to_lowercase()))
+            }));
+    }
+
+    let cost = pattern
+        .tokens
+        .len()
+        .saturating_add(1)
+        .saturating_mul(width.saturating_add(1));
+    if cost > wildcard_work_remaining.get() {
+        return Err(FormulaError::Value);
+    }
+    wildcard_work_remaining.set(wildcard_work_remaining.get() - cost);
+
+    let characters: Vec<char> = text.chars().collect();
+    let mut previous = vec![false; width + 1];
+    previous[0] = true;
+    for token in &pattern.tokens {
+        let mut current = vec![false; width + 1];
+        match token {
+            WildcardToken::AnyMany => {
+                current[0] = previous[0];
+                for offset in 1..=width {
+                    current[offset] = previous[offset] || current[offset - 1];
+                }
+            }
+            WildcardToken::AnyOne => {
+                current[1..].copy_from_slice(&previous[..width]);
+            }
+            WildcardToken::Literal(expected) => {
+                for offset in 1..=width {
+                    current[offset] = previous[offset - 1]
+                        && expected.chars().eq(characters[offset - 1].to_lowercase());
+                }
+            }
+        }
+        previous = current;
+    }
+    Ok(previous[width])
+}
+
+fn match_fn(
+    args: &[Expr],
+    values: &[CalcValue],
+    name: &str,
+    wildcard_work_remaining: &Cell<usize>,
+) -> Result<Value, FormulaError> {
     arity(name, args, 2, 3)?;
     let lookup = flatten(values[0].clone())
         .into_iter()
@@ -5260,8 +5434,14 @@ fn match_fn(args: &[Expr], values: &[CalcValue], name: &str) -> Result<Value, Fo
     };
     let found = if match_type == 0 {
         let mut found = None;
+        let mut wildcard_pattern = None;
         for (index, candidate) in list.iter().enumerate() {
-            if exact_lookup_equal(candidate, &lookup)? {
+            if exact_lookup_equal(
+                candidate,
+                &lookup,
+                &mut wildcard_pattern,
+                wildcard_work_remaining,
+            )? {
                 found = Some(index);
                 break;
             }
@@ -5323,7 +5503,12 @@ fn index_fn(args: &[Expr], values: &[CalcValue], name: &str) -> Result<Value, Fo
         .ok_or(FormulaError::Ref)
 }
 
-fn vlookup_fn(args: &[Expr], values: &[CalcValue], name: &str) -> Result<Value, FormulaError> {
+fn vlookup_fn(
+    args: &[Expr],
+    values: &[CalcValue],
+    name: &str,
+    wildcard_work_remaining: &Cell<usize>,
+) -> Result<Value, FormulaError> {
     arity(name, args, 3, 4)?;
     let lookup = flatten(values[0].clone())
         .into_iter()
@@ -5342,9 +5527,15 @@ fn vlookup_fn(args: &[Expr], values: &[CalcValue], name: &str) -> Result<Value, 
     let exact = values.len() == 4 && !truthy(&flatten(values[3].clone())[0])?;
     let found = if exact {
         let mut found = None;
+        let mut wildcard_pattern = None;
         for (index, row) in table.iter().enumerate() {
             if let Some(candidate) = row.first()
-                && exact_lookup_equal(candidate, &lookup)?
+                && exact_lookup_equal(
+                    candidate,
+                    &lookup,
+                    &mut wildcard_pattern,
+                    wildcard_work_remaining,
+                )?
             {
                 found = Some(index);
                 break;
@@ -5370,11 +5561,29 @@ fn vlookup_fn(args: &[Expr], values: &[CalcValue], name: &str) -> Result<Value, 
         .ok_or(FormulaError::Ref)
 }
 
-fn exact_lookup_equal(candidate: &Value, lookup: &Value) -> Result<bool, FormulaError> {
+fn exact_lookup_equal(
+    candidate: &Value,
+    lookup: &Value,
+    wildcard_pattern: &mut Option<Option<WildcardPattern>>,
+    wildcard_work_remaining: &Cell<usize>,
+) -> Result<bool, FormulaError> {
     propagate_value_error(candidate)?;
     propagate_value_error(lookup)?;
     match (candidate, lookup) {
-        (Value::Text(candidate), Value::Text(pattern)) => Ok(wildcard_match(pattern, candidate)),
+        (Value::Text(candidate), Value::Text(pattern)) => {
+            if wildcard_pattern.is_none() {
+                let compiled = if pattern.chars().any(|ch| matches!(ch, '*' | '?' | '~')) {
+                    Some(WildcardPattern::new(pattern)?)
+                } else {
+                    None
+                };
+                *wildcard_pattern = Some(compiled);
+            }
+            match wildcard_pattern.as_ref().and_then(Option::as_ref) {
+                Some(compiled) => wildcard_match(compiled, candidate, wildcard_work_remaining),
+                None => Ok(candidate.to_lowercase() == pattern.to_lowercase()),
+            }
+        }
         _ => match compare(candidate, lookup) {
             Ok(ordering) => Ok(ordering == 0),
             Err(FormulaError::Value) => Ok(false),
@@ -6303,6 +6512,55 @@ mod tests {
             cases += 1;
         }
         assert!(cases > 0, "shared fixture file contains no cases");
+    }
+
+    #[test]
+    fn parser_and_evaluator_bound_nesting_without_rejecting_flat_chains() {
+        let nested_64 = format!("=ABS({}1{}", "ABS(".repeat(63), ")".repeat(64));
+        let nested_65 = format!("=ABS({}1{}", "ABS(".repeat(64), ")".repeat(65));
+        assert_eq!(
+            evaluate(&nested_64, &HashMap::new(), "S"),
+            Ok(Value::Number(1.0))
+        );
+        assert_eq!(
+            evaluate(&nested_65, &HashMap::new(), "S"),
+            Err(FormulaError::Value)
+        );
+
+        let grouped_over_profile = format!("{}1{}", "(".repeat(97), ")".repeat(97));
+        assert_eq!(
+            evaluate(&grouped_over_profile, &HashMap::new(), "S"),
+            Err(FormulaError::Value)
+        );
+
+        let long_sum = format!("=1{}", "+1".repeat(1_000));
+        assert_eq!(
+            evaluate(&long_sum, &HashMap::new(), "S"),
+            Ok(Value::Number(1_001.0))
+        );
+        let long_unary = format!("={}1", "+".repeat(4_096));
+        assert_eq!(
+            evaluate(&long_unary, &HashMap::new(), "S"),
+            Ok(Value::Number(1.0))
+        );
+        let long_postfix = format!("=1{}", "%".repeat(1_000));
+        assert_eq!(
+            evaluate(&long_postfix, &HashMap::new(), "S"),
+            Ok(Value::Number(0.0))
+        );
+
+        let too_long = "1".repeat(MAX_FORMULA_LENGTH_UNITS + 1);
+        assert_eq!(
+            evaluate(&too_long, &HashMap::new(), "S"),
+            Err(FormulaError::Value)
+        );
+    }
+
+    #[test]
+    fn wildcard_matching_stops_at_the_formula_work_budget() {
+        let formula = format!("=COUNTIF(A1,\"{}\")", "a*".repeat(2_000));
+        let input = cells(&[("A1", Value::Text("a".repeat(2_000)))]);
+        assert_eq!(evaluate(&formula, &input, "S"), Err(FormulaError::Value));
     }
 
     #[test]

@@ -16,7 +16,7 @@
   },
   "best_score": 6,
   "best_run": 1,
-  "current_run": 23,
+  "current_run": 24,
   "runs": [
     {
       "run": 0,
@@ -1024,6 +1024,59 @@
         ],
         "independent_review": "Independent package review found no remaining blocker in ZIP64 handling, central-directory validation, bounded member reads, cleanup, or regression coverage.",
         "compatibility_limit": "Run 23 changes package safety and build isolation, not formula semantics. The adapter uses a guarded private CPython zipfile end-record helper and fails closed if unavailable. No Excel Desktop checks were performed; shared evaluator fixtures remain parity evidence rather than Excel conformance evidence."
+      }
+    },
+    {
+      "run": 24,
+      "score": 6,
+      "max_score": 6,
+      "validation_score": 6,
+      "operator": "harden-formula-nesting-and-bound-wildcard-evaluation",
+      "result": "ACCEPTED",
+      "timestamp": "2026-09-24T23:23:28-04:00",
+      "evidence": {
+        "python": "Python 3.13 full suite: 185 passed; compileall passed.",
+        "rust": "31 tests passed; cargo fmt --check, cargo check --locked, cargo test --locked, and cargo clippy --all-targets --locked -- -D warnings passed with CARGO_TARGET_DIR set to this checkout's rust/target.",
+        "catalog_schemas": "All three Draft 2020-12 schemas passed with format checking.",
+        "source_refs_resolved": true,
+        "all_implemented_functions_have_shared_fixtures": true,
+        "fixture_ids_unique": true,
+        "allowed_licenses": [
+          "MIT",
+          "Apache-2.0"
+        ],
+        "code_copied": false,
+        "python_runtime_dependencies": [],
+        "rust_runtime_dependencies": [],
+        "excel_spot_checks": 0,
+        "implemented_functions": 115,
+        "catalog_inventory_functions": 521,
+        "catalog_only_functions": 406,
+        "detailed_semantic_specs": 85,
+        "source_records": 110,
+        "open_source_patterns": 16,
+        "unique_shared_fixtures": 1371,
+        "new_slice": [
+          "formula length and nesting preflight",
+          "iterative evaluation of long unary, postfix, and left-associated binary chains",
+          "bounded rolling-row wildcard matching with a per-evaluation work budget"
+        ],
+        "new_slice_fixture_cases": 5,
+        "new_slice_fixture_distribution": {
+          "wildcard escape, Unicode lowercase, and literal comparison profiles": 3,
+          "literal-only wildcard work-budget boundary": 1,
+          "UTF-16 lookup-pattern length boundary": 1
+        },
+        "fixture_adjustment": "Shortened two exact decimal literals in the existing cancellation stress case so its formula remains within the 8,192-unit input limit; expected result remains 7.",
+        "resource_limits": {
+          "formula_utf16_units": 8192,
+          "nested_function_calls": 64,
+          "parenthesis_nesting_profile": 96,
+          "wildcard_matching_steps_per_evaluation": 5000000
+        },
+        "independent_review": "Review found and corrected wildcard work-accounting, tilde-escape, Unicode lowercase, and UTF-8-versus-UTF-16 differences. Final read-only review found no concrete blocker for Excel-sized inputs.",
+        "jev": "Not used; this run hardens evaluator resource handling and records local wildcard profiles without making a new Microsoft semantics claim.",
+        "compatibility_limit": "Shared cases establish Python/Rust parity only. Parenthesis nesting, wildcard work budget, and Unicode lowercase comparison are Formula Atlas profiles; no Excel Desktop checks were performed. Oversized direct API text inputs remain outside the Excel-sized behavior claim."
       }
     }
   ],

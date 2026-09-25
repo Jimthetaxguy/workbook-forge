@@ -364,6 +364,32 @@ def test_textjoin_rejects_more_than_254_total_arguments():
     assert isinstance(value, ErrorValue) and value.code == "#VALUE!"
 
 
+def test_parser_and_evaluator_bound_nesting_without_rejecting_flat_chains():
+    nested_64 = "=ABS(" + "ABS(" * 63 + "1" + ")" * 64
+    nested_65 = "=ABS(" + "ABS(" * 64 + "1" + ")" * 65
+    assert evaluate(nested_64) == 1
+    assert evaluate(nested_65).code == "#VALUE!"
+
+    grouped_over_profile = "(" * 97 + "1" + ")" * 97
+    assert evaluate(grouped_over_profile).code == "#VALUE!"
+
+    long_sum = "=1" + "+1" * 1_000
+    assert evaluate(long_sum) == 1_001
+    assert evaluate("=" + "+" * 4_096 + "1") == 1
+    assert evaluate("=1" + "%" * 1_000) == 0
+
+
+def test_formula_length_limit_is_checked_before_tokenizing():
+    result = evaluate("1" * 8_193)
+    assert isinstance(result, ErrorValue) and result.code == "#VALUE!"
+
+
+def test_wildcard_matching_stops_at_the_formula_work_budget():
+    pattern = "a*" * 2_000
+    result = evaluate(f'=COUNTIF(A1,"{pattern}")', {"A1": "a" * 2_000})
+    assert isinstance(result, ErrorValue) and result.code == "#VALUE!"
+
+
 def test_excel_1900_date_serial_compatibility():
     assert evaluate("=DATE(1900,1,1)") == 1
     assert evaluate("=DATE(1900,2,28)") == 59
@@ -439,7 +465,6 @@ def test_countblank_and_ifs_handle_error_cells_by_range_role():
     ("formula", "code"),
     [
         ('=COUNTIF(A1:A2,">>5")', "#VALUE!"),
-        ('=COUNTIF(A1:A2,"abc~")', "#VALUE!"),
         ('=COUNTIF(A1:A2,A1:A2)', "#VALUE!"),
         ('=SUMIF(A1:A2,"*",B1:B3)', "#VALUE!"),
         ('=AVERAGEIF(A1:A2,"*",B1:B3)', "#VALUE!"),

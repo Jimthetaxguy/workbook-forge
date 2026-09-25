@@ -15,6 +15,11 @@ import re
 from collections.abc import Iterable, Mapping
 from typing import TypeAlias
 
+MAX_FORMULA_LENGTH_UNITS = 8_192
+MAX_FUNCTION_NESTING = 64
+MAX_EXPRESSION_NESTING = 96
+MAX_WILDCARD_WORK = 5_000_000
+
 
 @dataclass(frozen=True, slots=True)
 class ErrorValue:
@@ -93,8 +98,33 @@ class _Range:
 class _Criterion:
     operator: str
     expected: object
-    wildcard: re.Pattern[str] | None = None
+    wildcard: _WildcardPattern | None = None
     blank: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class _WildcardToken:
+    kind: str
+    literal: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class _WildcardPattern:
+    tokens: tuple[_WildcardToken, ...]
+
+
+@dataclass(slots=True)
+class _WildcardBudget:
+    remaining: int = MAX_WILDCARD_WORK
+
+    def consume(self, amount: int) -> bool:
+        if amount > self.remaining:
+            return False
+        self.remaining -= amount
+        return True
+
+
+_UNSET_WILDCARD = object()
 
 
 _OPTIONAL_OMITTED = object()
@@ -152,8 +182,38 @@ def _tokenize(source: str) -> list[_Token]:
 
 class _Parser:
     def __init__(self, source: str) -> None:
-        self.tokens = _tokenize(source.lstrip())
+        source = source.lstrip()
+        units = 0
+        for character in source:
+            units += 2 if ord(character) > 0xFFFF else 1
+            if units > MAX_FORMULA_LENGTH_UNITS:
+                raise _FormulaSyntaxError(
+                    f"formula exceeds Excel's {MAX_FORMULA_LENGTH_UNITS}-character limit"
+                )
+        self.tokens = _tokenize(source)
+        self._validate_nesting()
         self.index = 0
+
+    def _validate_nesting(self) -> None:
+        stack: list[bool] = []
+        function_depth = 0
+        for index, token in enumerate(self.tokens):
+            if token.value == "(":
+                if len(stack) >= MAX_EXPRESSION_NESTING:
+                    raise _FormulaSyntaxError(
+                        "parenthesis nesting exceeds the Formula Atlas evaluator limit"
+                    )
+                is_function = index > 0 and self.tokens[index - 1].kind == "IDENT"
+                if is_function:
+                    function_depth += 1
+                    if function_depth > MAX_FUNCTION_NESTING:
+                        raise _FormulaSyntaxError(
+                            f"function nesting exceeds Excel's {MAX_FUNCTION_NESTING}-level limit"
+                        )
+                stack.append(is_function)
+            elif token.value == ")" and stack:
+                if stack.pop():
+                    function_depth -= 1
 
     @property
     def current(self) -> _Token:
@@ -201,10 +261,13 @@ class _Parser:
         return node
 
     def parse_unary(self) -> _Node:
-        if self.current.value in ("+", "-"):
-            op = self.consume().value
-            return _Node("unary", op, (self.parse_unary(),))
-        return self.parse_postfix()
+        operators: list[str] = []
+        while self.current.value in ("+", "-"):
+            operators.append(self.consume().value)
+        node = self.parse_postfix()
+        for operator in reversed(operators):
+            node = _Node("unary", operator, (node,))
+        return node
 
     def parse_postfix(self) -> _Node:
         node = self.parse_primary()
@@ -321,13 +384,15 @@ def analyze_formula(formula: str) -> FormulaAnalysis:
         raise ValueError("formula is empty")
     try:
         root = _Parser(source).parse()
-    except _FormulaSyntaxError as error:
+    except (_FormulaSyntaxError, RecursionError) as error:
         raise ValueError(str(error)) from error
 
     references: list[FormulaReference] = []
     functions: list[str] = []
 
-    def visit(node: _Node) -> None:
+    pending = [root]
+    while pending:
+        node = pending.pop()
         if node.kind == "cell":
             address, sheet = node.value
             references.append(FormulaReference(address, None, sheet))
@@ -336,10 +401,7 @@ def analyze_formula(formula: str) -> FormulaAnalysis:
             references.append(FormulaReference(start, end, sheet))
         elif node.kind == "call":
             functions.append(str(node.value))
-        for child in node.children:
-            visit(child)
-
-    visit(root)
+        pending.extend(reversed(node.children))
     return FormulaAnalysis(tuple(references), tuple(functions))
 
 
@@ -563,14 +625,14 @@ def _comparison_number(value: object) -> float | ErrorValue | None:
 
 def _nonfinite_literal_error(node: _Node) -> ErrorValue | None:
     """Return the evaluation error for an overflowing literal operand."""
+    while node.kind in {"unary", "postfix"} and node.children:
+        node = node.children[0]
     if (
         node.kind == "literal"
         and isinstance(node.value, float)
         and not math.isfinite(node.value)
     ):
         return ErrorValue("#NUM!", "numeric literal exceeds the finite binary64 range")
-    if node.kind in {"unary", "postfix"} and node.children:
-        return _nonfinite_literal_error(node.children[0])
     return None
 
 
@@ -578,6 +640,7 @@ def _sequence_call(
     arguments: tuple[_Node, ...],
     cells: Mapping[str, Scalar],
     sheet_name: str,
+    budget: _WildcardBudget,
 ) -> ArrayValue | ErrorValue:
     if not 1 <= len(arguments) <= 4:
         return _arity("SEQUENCE", "1 through 4", len(arguments))
@@ -591,7 +654,7 @@ def _sequence_call(
         if argument.kind == "missing":
             evaluated.append(None)
             continue
-        value = _eval(argument, cells, sheet_name)
+        value = _eval(argument, cells, sheet_name, budget)
         if isinstance(value, ErrorValue):
             return value
         # Rust rejects a non-finite numeric literal while evaluating that
@@ -684,10 +747,11 @@ def _sort_call(
     arguments: tuple[_Node, ...],
     cells: Mapping[str, Scalar],
     sheet_name: str,
+    budget: _WildcardBudget,
 ) -> ArrayValue | ErrorValue:
     if not 1 <= len(arguments) <= 4:
         return _arity("SORT", "1 through 4", len(arguments))
-    source = _eval(arguments[0], cells, sheet_name)
+    source = _eval(arguments[0], cells, sheet_name, budget)
     if isinstance(source, ErrorValue):
         return source
     matrix = _filter_matrix(source)
@@ -695,7 +759,7 @@ def _sort_call(
     def optional(index: int, default: object) -> object | ErrorValue:
         if index >= len(arguments) or arguments[index].kind == "missing":
             return default
-        value = _eval(arguments[index], cells, sheet_name)
+        value = _eval(arguments[index], cells, sheet_name, budget)
         if isinstance(value, ErrorValue):
             return value
         if isinstance(value, (_Range, ArrayValue)):
@@ -803,10 +867,11 @@ def _unique_call(
     arguments: tuple[_Node, ...],
     cells: Mapping[str, Scalar],
     sheet_name: str,
+    budget: _WildcardBudget,
 ) -> ArrayValue | ErrorValue:
     if not 1 <= len(arguments) <= 3:
         return _arity("UNIQUE", "1 through 3", len(arguments))
-    source = _eval(arguments[0], cells, sheet_name)
+    source = _eval(arguments[0], cells, sheet_name, budget)
     if isinstance(source, ErrorValue):
         return source
     matrix = _filter_matrix(source)
@@ -814,7 +879,7 @@ def _unique_call(
     def optional(index: int, default: bool) -> bool | ErrorValue:
         if index >= len(arguments) or arguments[index].kind == "missing":
             return default
-        value = _eval(arguments[index], cells, sheet_name)
+        value = _eval(arguments[index], cells, sheet_name, budget)
         if isinstance(value, ErrorValue):
             return value
         if isinstance(value, (_Range, ArrayValue)) or not isinstance(value, bool):
@@ -874,13 +939,14 @@ def _filter_call(
     arguments: tuple[_Node, ...],
     cells: Mapping[str, Scalar],
     sheet_name: str,
+    budget: _WildcardBudget,
 ) -> object:
     if not 2 <= len(arguments) <= 3:
         return _arity("FILTER", "2 or 3", len(arguments))
-    source = _eval(arguments[0], cells, sheet_name)
+    source = _eval(arguments[0], cells, sheet_name, budget)
     if isinstance(source, ErrorValue):
         return source
-    include = _eval(arguments[1], cells, sheet_name)
+    include = _eval(arguments[1], cells, sheet_name, budget)
     if isinstance(include, ErrorValue):
         return include
     source_rows = _filter_matrix(source)
@@ -913,7 +979,7 @@ def _filter_call(
         fallback = arguments[2]
         if fallback.kind == "missing":
             return None
-        return _eval(fallback, cells, sheet_name)
+        return _eval(fallback, cells, sheet_name, budget)
 
     if axis == "rows":
         result = tuple(source_rows[index] for index in selected_indices)
@@ -1041,18 +1107,23 @@ def _test_integer_parity(value: object, odd: bool) -> bool | ErrorValue:
     return (truncated % 2 == 1) if odd else (truncated % 2 == 0)
 
 
-def _trunc_call(arguments: tuple[_Node, ...], cells: Mapping[str, Scalar], sheet_name: str) -> object:
+def _trunc_call(
+    arguments: tuple[_Node, ...],
+    cells: Mapping[str, Scalar],
+    sheet_name: str,
+    budget: _WildcardBudget,
+) -> object:
     """Evaluate TRUNC while preserving its omitted optional precision argument."""
     if not 1 <= len(arguments) <= 2:
         return _arity("TRUNC", "1 or 2", len(arguments))
-    number = _number(_eval(arguments[0], cells, sheet_name))
+    number = _number(_eval(arguments[0], cells, sheet_name, budget))
     if isinstance(number, ErrorValue):
         return number
     digits: int | ErrorValue
     if len(arguments) == 1 or arguments[1].kind == "missing":
         digits = 0
     else:
-        digits = _decimal_digits(_eval(arguments[1], cells, sheet_name))
+        digits = _decimal_digits(_eval(arguments[1], cells, sheet_name, budget))
     if isinstance(digits, ErrorValue):
         return digits
     return _round_to_precision(number, digits, "toward-zero")
@@ -1545,7 +1616,11 @@ def _workday_result(
 
 
 def _working_day_call(
-    name: str, arguments: tuple[_Node, ...], cells: Mapping[str, Scalar], sheet_name: str
+    name: str,
+    arguments: tuple[_Node, ...],
+    cells: Mapping[str, Scalar],
+    sheet_name: str,
+    budget: _WildcardBudget,
 ) -> object:
     international = name.endswith(".INTL")
     is_workday = name.startswith("WORKDAY")
@@ -1553,7 +1628,7 @@ def _working_day_call(
     if not 2 <= len(arguments) <= maximum_arity:
         return _arity(name, f"2 or {maximum_arity}", len(arguments))
 
-    start_value = _eval(arguments[0], cells, sheet_name)
+    start_value = _eval(arguments[0], cells, sheet_name, budget)
     if isinstance(start_value, ErrorValue):
         return start_value
     if isinstance(start_value, _Range):
@@ -1563,7 +1638,7 @@ def _working_day_call(
     if isinstance(start_day, ErrorValue):
         return start_day
 
-    second_value = _eval(arguments[1], cells, sheet_name)
+    second_value = _eval(arguments[1], cells, sheet_name, budget)
     if isinstance(second_value, ErrorValue):
         return second_value
     if isinstance(second_value, _Range):
@@ -1589,7 +1664,7 @@ def _working_day_call(
 
     weekend = _STANDARD_WEEKEND
     if international and len(arguments) >= 3 and arguments[2].kind != "missing":
-        weekend_value = _eval(arguments[2], cells, sheet_name)
+        weekend_value = _eval(arguments[2], cells, sheet_name, budget)
         if isinstance(weekend_value, ErrorValue):
             return weekend_value
         weekend_result = _weekend_mask(weekend_value)
@@ -1602,7 +1677,7 @@ def _working_day_call(
     holidays: set[int] = set()
     holiday_index = 3 if international else 2
     if len(arguments) > holiday_index and arguments[holiday_index].kind != "missing":
-        holiday_value = _eval(arguments[holiday_index], cells, sheet_name)
+        holiday_value = _eval(arguments[holiday_index], cells, sheet_name, budget)
         holiday_result = _workday_holidays(holiday_value, out_of_range_code=date_range_error)
         if isinstance(holiday_result, ErrorValue):
             return holiday_result
@@ -1617,7 +1692,11 @@ def _working_day_call(
 
 
 def _week_call(
-    name: str, arguments: tuple[_Node, ...], cells: Mapping[str, Scalar], sheet_name: str
+    name: str,
+    arguments: tuple[_Node, ...],
+    cells: Mapping[str, Scalar],
+    sheet_name: str,
+    budget: _WildcardBudget,
 ) -> object:
     if name == "ISOWEEKNUM":
         if len(arguments) != 1:
@@ -1625,7 +1704,7 @@ def _week_call(
     elif not 1 <= len(arguments) <= 2:
         return _arity(name, "1 or 2", len(arguments))
 
-    serial = _number(_eval(arguments[0], cells, sheet_name))
+    serial = _number(_eval(arguments[0], cells, sheet_name, budget))
     if isinstance(serial, ErrorValue):
         return serial
     try:
@@ -1643,7 +1722,7 @@ def _week_call(
 
     selector: int | ErrorValue = 1
     if len(arguments) == 2 and arguments[1].kind != "missing":
-        selector = _week_selector(_eval(arguments[1], cells, sheet_name))
+        selector = _week_selector(_eval(arguments[1], cells, sheet_name, budget))
     if isinstance(selector, ErrorValue):
         return selector
 
@@ -1692,30 +1771,89 @@ def _as_range(value: object, name: str) -> _Range | ErrorValue:
     return _Range((value,), 1, 1)  # type: ignore[arg-type]
 
 
-def _wildcard_regex(pattern: str) -> re.Pattern[str] | ErrorValue | None:
+def _wildcard_pattern(pattern: str) -> _WildcardPattern | ErrorValue | None:
     if not any(character in pattern for character in "*?~"):
         return None
-    pieces = ["^"]
+    units = 0
+    for character in pattern:
+        units += 2 if ord(character) > 0xFFFF else 1
+        if units > MAX_TEXT_LENGTH_UNITS:
+            return ErrorValue(
+                "#VALUE!",
+                f"wildcard pattern exceeds the {MAX_TEXT_LENGTH_UNITS}-UTF-16-unit text limit",
+            )
+    tokens: list[_WildcardToken] = []
     index = 0
     while index < len(pattern):
         character = pattern[index]
         if character == "~":
-            if index + 1 == len(pattern):
-                return ErrorValue("#VALUE!", "criterion has a trailing wildcard escape")
-            if pattern[index + 1] in "*?~":
+            if index + 1 < len(pattern):
                 index += 1
-                pieces.append(re.escape(pattern[index]))
+                literal = pattern[index]
             else:
-                pieces.append(re.escape("~"))
+                literal = "~"
+            tokens.append(
+                _WildcardToken("literal", literal.lower())
+            )
         elif character == "*":
-            pieces.append(".*")
+            if not tokens or tokens[-1].kind != "many":
+                tokens.append(_WildcardToken("many"))
         elif character == "?":
-            pieces.append(".")
+            tokens.append(_WildcardToken("one"))
         else:
-            pieces.append(re.escape(character))
+            tokens.append(
+                _WildcardToken("literal", character.lower())
+            )
         index += 1
-    pieces.append("$")
-    return re.compile("".join(pieces), re.IGNORECASE | re.DOTALL)
+    return _WildcardPattern(tuple(tokens))
+
+
+def _wildcard_matches(
+    pattern: _WildcardPattern,
+    text: str,
+    budget: _WildcardBudget,
+) -> bool | ErrorValue:
+    """Match a wildcard with rolling memory and a formula-wide work budget."""
+    width = len(text)
+    if not any(token.kind in {"many", "one"} for token in pattern.tokens):
+        cost = len(pattern.tokens) + width
+        if not budget.consume(cost):
+            return ErrorValue(
+                "#VALUE!",
+                f"wildcard work exceeds the Formula Atlas {MAX_WILDCARD_WORK}-step limit",
+            )
+        return len(pattern.tokens) == width and all(
+            token.literal is not None and token.literal == character.lower()
+            for token, character in zip(pattern.tokens, text)
+        )
+
+    cost = (len(pattern.tokens) + 1) * (width + 1)
+    if not budget.consume(cost):
+        return ErrorValue(
+            "#VALUE!",
+            f"wildcard work exceeds the Formula Atlas {MAX_WILDCARD_WORK}-step limit",
+        )
+
+    previous = [False] * (width + 1)
+    previous[0] = True
+    for token in pattern.tokens:
+        current = [False] * (width + 1)
+        if token.kind == "many":
+            current[0] = previous[0]
+            for offset in range(1, width + 1):
+                current[offset] = previous[offset] or current[offset - 1]
+        elif token.kind == "one":
+            for offset in range(1, width + 1):
+                current[offset] = previous[offset - 1]
+        else:
+            assert token.literal is not None
+            for offset in range(1, width + 1):
+                current[offset] = (
+                    previous[offset - 1]
+                    and token.literal == text[offset - 1].lower()
+                )
+        previous = current
+    return previous[width]
 
 
 def _parse_criterion(value: object) -> _Criterion | ErrorValue:
@@ -1744,7 +1882,7 @@ def _parse_criterion(value: object) -> _Criterion | ErrorValue:
     if operand == "" or operand[0] in "<>=":
         return ErrorValue("#VALUE!", "malformed criteria operator or operand")
 
-    wildcard = _wildcard_regex(operand)
+    wildcard = _wildcard_pattern(operand)
     if isinstance(wildcard, ErrorValue):
         return wildcard
     if wildcard is not None and operator not in {"=", "<>"}:
@@ -1762,7 +1900,11 @@ def _parse_criterion(value: object) -> _Criterion | ErrorValue:
     return _Criterion(operator, expected, wildcard)
 
 
-def _criterion_matches(value: object, criterion: _Criterion) -> bool | ErrorValue:
+def _criterion_matches(
+    value: object,
+    criterion: _Criterion,
+    budget: _WildcardBudget,
+) -> bool | ErrorValue:
     if isinstance(value, ErrorValue):
         return value
     if criterion.blank:
@@ -1770,7 +1912,13 @@ def _criterion_matches(value: object, criterion: _Criterion) -> bool | ErrorValu
         return is_blank if criterion.operator == "=" else not is_blank
     expected = criterion.expected
     if criterion.wildcard is not None:
-        matched = isinstance(value, str) and criterion.wildcard.fullmatch(value) is not None
+        matched = (
+            _wildcard_matches(criterion.wildcard, value, budget)
+            if isinstance(value, str)
+            else False
+        )
+        if isinstance(matched, ErrorValue):
+            return matched
         return matched if criterion.operator == "=" else not matched
     if isinstance(expected, str):
         if isinstance(value, str):
@@ -1804,7 +1952,11 @@ def _criterion_matches(value: object, criterion: _Criterion) -> bool | ErrorValu
         return False
 
 
-def _criteria_aggregate(name: str, args: tuple[object, ...]) -> object:
+def _criteria_aggregate(
+    name: str,
+    args: tuple[object, ...],
+    budget: _WildcardBudget,
+) -> object:
     if name in {"COUNTIF", "SUMIF", "AVERAGEIF"}:
         criteria_range = _as_range(args[0], name)
         if isinstance(criteria_range, ErrorValue):
@@ -1856,7 +2008,7 @@ def _criteria_aggregate(name: str, args: tuple[object, ...]) -> object:
     for position, value in enumerate(value_range.values):
         matched = True
         for range_, criterion in zip(ranges, criteria):
-            result = _criterion_matches(range_.values[position], criterion)
+            result = _criterion_matches(range_.values[position], criterion, budget)
             if isinstance(result, ErrorValue):
                 return result
             if not result:
@@ -1890,7 +2042,12 @@ def _criteria_aggregate(name: str, args: tuple[object, ...]) -> object:
     )
 
 
-def _eval(node: _Node, cells: Mapping[str, Scalar], sheet_name: str) -> object:
+def _eval(
+    node: _Node,
+    cells: Mapping[str, Scalar],
+    sheet_name: str,
+    budget: _WildcardBudget,
+) -> object:
     if node.kind == "missing":
         return ErrorValue("#VALUE!", "required argument was omitted")
     if node.kind == "literal":
@@ -1901,82 +2058,96 @@ def _eval(node: _Node, cells: Mapping[str, Scalar], sheet_name: str) -> object:
     if node.kind == "range":
         start, end, sheet = node.value  # type: ignore[misc]
         return _range_value(start, end, cells, sheet, sheet_name)
-    if node.kind == "unary":
-        value = _eval(node.children[0], cells, sheet_name)
-        number = _number(value)
-        if isinstance(number, ErrorValue):
-            return number
-        return number if node.value == "+" else -number
-    if node.kind == "postfix":
-        value = _number(_eval(node.children[0], cells, sheet_name))
-        return value if isinstance(value, ErrorValue) else value / 100
+    if node.kind in {"unary", "postfix"}:
+        operations: list[tuple[str, object]] = []
+        current = node
+        while current.kind in {"unary", "postfix"}:
+            operations.append((current.kind, current.value))
+            current = current.children[0]
+        value = _eval(current, cells, sheet_name, budget)
+        for kind, operator in reversed(operations):
+            number = _number(value)
+            if isinstance(number, ErrorValue):
+                return number
+            if kind == "postfix":
+                value = number / 100
+            else:
+                value = number if operator == "+" else -number
+        return value
     if node.kind == "binary":
-        left = _eval(node.children[0], cells, sheet_name)
+        chain: list[tuple[str, _Node]] = []
+        current = node
+        while current.kind == "binary":
+            chain.append((str(current.value), current.children[1]))
+            current = current.children[0]
+        left = _eval(current, cells, sheet_name, budget)
         if not isinstance(left, (_Range, ArrayValue)):
-            left_error = _nonfinite_literal_error(node.children[0])
+            left_error = _nonfinite_literal_error(current)
             if left_error is not None:
                 left = left_error
-        right = _eval(node.children[1], cells, sheet_name)
-        if not isinstance(right, (_Range, ArrayValue)):
-            right_error = _nonfinite_literal_error(node.children[1])
-            if right_error is not None:
-                right = right_error
-        return _apply_binary_values(str(node.value), left, right)
+        for operator, right_node in reversed(chain):
+            right = _eval(right_node, cells, sheet_name, budget)
+            if not isinstance(right, (_Range, ArrayValue)):
+                right_error = _nonfinite_literal_error(right_node)
+                if right_error is not None:
+                    right = right_error
+            left = _apply_binary_values(operator, left, right)
+        return left
     if node.kind == "call":
         name = str(node.value)
         if name == "SEQUENCE":
-            return _sequence_call(node.children, cells, sheet_name)
+            return _sequence_call(node.children, cells, sheet_name, budget)
         if name == "FILTER":
-            return _filter_call(node.children, cells, sheet_name)
+            return _filter_call(node.children, cells, sheet_name, budget)
         if name == "SORT":
-            return _sort_call(node.children, cells, sheet_name)
+            return _sort_call(node.children, cells, sheet_name, budget)
         if name == "UNIQUE":
-            return _unique_call(node.children, cells, sheet_name)
+            return _unique_call(node.children, cells, sheet_name, budget)
         if name in {"NETWORKDAYS", "WORKDAY", "NETWORKDAYS.INTL", "WORKDAY.INTL"}:
-            return _working_day_call(name, node.children, cells, sheet_name)
+            return _working_day_call(name, node.children, cells, sheet_name, budget)
         if name in {"WEEKDAY", "WEEKNUM", "ISOWEEKNUM"}:
-            return _week_call(name, node.children, cells, sheet_name)
+            return _week_call(name, node.children, cells, sheet_name, budget)
         if name in {"TEXTBEFORE", "TEXTAFTER"}:
-            return _text_extract(name, node.children, cells, sheet_name)
+            return _text_extract(name, node.children, cells, sheet_name, budget)
         if name == "TRUNC":
-            return _trunc_call(node.children, cells, sheet_name)
+            return _trunc_call(node.children, cells, sheet_name, budget)
         if name == "IF":
             if len(node.children) not in (2, 3):
                 return _arity(name, "2 or 3", len(node.children))
-            condition = _truth(_eval(node.children[0], cells, sheet_name))
+            condition = _truth(_eval(node.children[0], cells, sheet_name, budget))
             if isinstance(condition, ErrorValue):
                 return condition
             branch = node.children[1] if condition else (node.children[2] if len(node.children) == 3 else _Node("literal", False))
-            return _eval(branch, cells, sheet_name)
+            return _eval(branch, cells, sheet_name, budget)
         if name == "IFERROR":
             if len(node.children) != 2:
                 return _arity(name, "2", len(node.children))
-            value = _eval(node.children[0], cells, sheet_name)
-            return _eval(node.children[1], cells, sheet_name) if isinstance(value, ErrorValue) else value
+            value = _eval(node.children[0], cells, sheet_name, budget)
+            return _eval(node.children[1], cells, sheet_name, budget) if isinstance(value, ErrorValue) else value
         if name == "IFNA":
             if len(node.children) != 2:
                 return _arity(name, "2", len(node.children))
-            value = _eval(node.children[0], cells, sheet_name)
+            value = _eval(node.children[0], cells, sheet_name, budget)
             if isinstance(value, ErrorValue) and value.code in {"#N/A", "#N/A!"}:
-                return _eval(node.children[1], cells, sheet_name)
+                return _eval(node.children[1], cells, sheet_name, budget)
             return value
         if name == "IFS":
             if not 2 <= len(node.children) <= 254 or len(node.children) % 2:
                 return _arity(name, "2 through 254 even-numbered arguments", len(node.children))
             for index in range(0, len(node.children), 2):
-                condition = _eval(node.children[index], cells, sheet_name)
+                condition = _eval(node.children[index], cells, sheet_name, budget)
                 if isinstance(condition, ErrorValue):
                     return condition
                 if not isinstance(condition, bool):
                     return ErrorValue("#VALUE!", "IFS logical tests must evaluate to TRUE or FALSE")
                 if condition:
                     result = node.children[index + 1]
-                    return 0 if result.kind == "missing" else _eval(result, cells, sheet_name)
+                    return 0 if result.kind == "missing" else _eval(result, cells, sheet_name, budget)
             return ErrorValue("#N/A", "IFS found no TRUE logical test")
         if name == "SWITCH":
             if not 3 <= len(node.children) <= 254:
                 return _arity(name, "3 through 254", len(node.children))
-            expression = _eval(node.children[0], cells, sheet_name)
+            expression = _eval(node.children[0], cells, sheet_name, budget)
             if isinstance(expression, ErrorValue):
                 return expression
             if isinstance(expression, (_Range, ArrayValue)):
@@ -1985,25 +2156,25 @@ def _eval(node: _Node, cells: Mapping[str, Scalar], sheet_name: str) -> object:
             has_default = remaining % 2 == 1
             pair_argument_count = remaining - int(has_default)
             for offset in range(0, pair_argument_count, 2):
-                match_value = _eval(node.children[1 + offset], cells, sheet_name)
+                match_value = _eval(node.children[1 + offset], cells, sheet_name, budget)
                 equal = _switch_equal(expression, match_value)
                 if isinstance(equal, ErrorValue):
                     return equal
                 if equal:
                     result = node.children[2 + offset]
-                    return 0 if result.kind == "missing" else _eval(result, cells, sheet_name)
+                    return 0 if result.kind == "missing" else _eval(result, cells, sheet_name, budget)
             if has_default:
                 default = node.children[-1]
-                return 0 if default.kind == "missing" else _eval(default, cells, sheet_name)
+                return 0 if default.kind == "missing" else _eval(default, cells, sheet_name, budget)
             return ErrorValue("#N/A", "SWITCH found no matching value and has no default")
         if name == "XLOOKUP":
             if not 3 <= len(node.children) <= 6:
                 return _arity(name, "3 through 6", len(node.children))
-            lookup_value = _eval(node.children[0], cells, sheet_name)
-            lookup_array = _eval(node.children[1], cells, sheet_name)
-            return_array = _eval(node.children[2], cells, sheet_name)
-            match_mode = 0 if len(node.children) < 5 else _eval(node.children[4], cells, sheet_name)
-            search_mode = 1 if len(node.children) < 6 else _eval(node.children[5], cells, sheet_name)
+            lookup_value = _eval(node.children[0], cells, sheet_name, budget)
+            lookup_array = _eval(node.children[1], cells, sheet_name, budget)
+            return_array = _eval(node.children[2], cells, sheet_name, budget)
+            match_mode = 0 if len(node.children) < 5 else _eval(node.children[4], cells, sheet_name, budget)
+            search_mode = 1 if len(node.children) < 6 else _eval(node.children[5], cells, sheet_name, budget)
             for value in (lookup_value, lookup_array, return_array, match_mode, search_mode):
                 if isinstance(value, ErrorValue):
                     return value
@@ -2015,7 +2186,7 @@ def _eval(node: _Node, cells: Mapping[str, Scalar], sheet_name: str) -> object:
             if found:
                 return result
             if len(node.children) >= 4:
-                fallback = _eval(node.children[3], cells, sheet_name)
+                fallback = _eval(node.children[3], cells, sheet_name, budget)
                 if isinstance(fallback, (_Range, ArrayValue)):
                     return ErrorValue("#VALUE!", "XLOOKUP if_not_found must be scalar in this evaluator")
                 return fallback
@@ -2051,10 +2222,10 @@ def _eval(node: _Node, cells: Mapping[str, Scalar], sheet_name: str) -> object:
                 and node.children[3].kind != "missing"
                 and child.kind == "missing"
             )
-            else _eval(child, cells, sheet_name)
+            else _eval(child, cells, sheet_name, budget)
             for index, child in enumerate(node.children)
         )
-        return _function(name, args)
+        return _function(name, args, budget)
     return ErrorValue("#VALUE!", f"unsupported syntax node {node.kind!r}")
 
 
@@ -2063,6 +2234,7 @@ def _text_extract(
     arguments: tuple[_Node, ...],
     cells: Mapping[str, Scalar],
     sheet_name: str,
+    budget: _WildcardBudget,
 ) -> object:
     if not 2 <= len(arguments) <= 6:
         return _arity(name, "2 through 6", len(arguments))
@@ -2070,7 +2242,7 @@ def _text_extract(
     def read(index: int) -> tuple[object, bool] | ErrorValue:
         if index >= len(arguments) or arguments[index].kind == "missing":
             return None, False
-        value = _eval(arguments[index], cells, sheet_name)
+        value = _eval(arguments[index], cells, sheet_name, budget)
         if isinstance(value, _Range):
             return ErrorValue("#VALUE!", f"{name} arguments must be scalar in this evaluator")
         return value, True
@@ -2144,7 +2316,7 @@ def _text_extract(
 
     if delimiter == "":
         if abs(instance_number) != 1:
-            return _text_extract_fallback(name, arguments, cells, sheet_name)
+            return _text_extract_fallback(name, arguments, cells, sheet_name, budget)
         if name == "TEXTBEFORE":
             return "" if instance_number > 0 else text
         return text if instance_number > 0 else ""
@@ -2156,7 +2328,7 @@ def _text_extract(
     if match_index < 0:
         match_index += len(matches)
     if not 0 <= match_index < len(matches):
-        return _text_extract_fallback(name, arguments, cells, sheet_name)
+        return _text_extract_fallback(name, arguments, cells, sheet_name, budget)
     start, end = matches[match_index]
     return text[:start] if name == "TEXTBEFORE" else text[end:]
 
@@ -2166,10 +2338,11 @@ def _text_extract_fallback(
     arguments: tuple[_Node, ...],
     cells: Mapping[str, Scalar],
     sheet_name: str,
+    budget: _WildcardBudget,
 ) -> object:
     if len(arguments) < 6 or arguments[5].kind == "missing":
         return ErrorValue("#N/A", f"{name} delimiter was not found")
-    fallback = _eval(arguments[5], cells, sheet_name)
+    fallback = _eval(arguments[5], cells, sheet_name, budget)
     if isinstance(fallback, _Range):
         return ErrorValue("#VALUE!", f"{name} if_not_found must be scalar in this evaluator")
     return fallback
@@ -2221,13 +2394,21 @@ def _is_lookup_match(candidate: object, lookup_value: object) -> bool:
     return candidate == lookup_value
 
 
-def _wildcard_lookup_match(candidate: object, lookup_value: object) -> bool | ErrorValue:
+def _wildcard_lookup_match(
+    candidate: object,
+    lookup_value: object,
+    budget: _WildcardBudget,
+    pattern_cache: list[object],
+) -> bool | ErrorValue:
     if isinstance(candidate, str) and isinstance(lookup_value, str):
-        wildcard = _wildcard_regex(lookup_value)
+        if pattern_cache[0] is _UNSET_WILDCARD:
+            pattern_cache[0] = _wildcard_pattern(lookup_value)
+        wildcard = pattern_cache[0]
         if isinstance(wildcard, ErrorValue):
             return wildcard
         if wildcard is not None:
-            return wildcard.fullmatch(candidate) is not None
+            assert isinstance(wildcard, _WildcardPattern)
+            return _wildcard_matches(wildcard, candidate, budget)
     return _is_lookup_match(candidate, lookup_value)
 
 
@@ -2479,7 +2660,11 @@ def _integer_formula_call(name: str, args: tuple[object, ...]) -> object:
     return _binomial_float(number + chosen - 1, chosen)
 
 
-def _function(name: str, args: tuple[object, ...]) -> object:
+def _function(
+    name: str,
+    args: tuple[object, ...],
+    budget: _WildcardBudget,
+) -> object:
     fixed = {
         "ABS": (1, 1), "EVEN": (1, 1), "ODD": (1, 1), "ISEVEN": (1, 1), "ISODD": (1, 1),
         "GCD": (1, 255), "LCM": (1, 255),
@@ -2580,7 +2765,7 @@ def _function(name: str, args: tuple[object, ...]) -> object:
     if name in {
         "COUNTIF", "COUNTIFS", "SUMIF", "SUMIFS", "AVERAGEIF", "AVERAGEIFS", "MINIFS", "MAXIFS"
     }:
-        return _criteria_aggregate(name, args)
+        return _criteria_aggregate(name, args, budget)
     if any(isinstance(argument, (_Range, ArrayValue)) for argument in args) and name not in {
             "SUM", "AVERAGE", "COUNT", "COUNTA", "MIN", "MAX", "AND", "OR", "CONCAT", "TEXTJOIN", "MATCH", "XMATCH", "INDEX", "VLOOKUP",
             "COUNTBLANK", "COUNTIF", "COUNTIFS", "SUMIF", "SUMIFS", "AVERAGEIF", "AVERAGEIFS",
@@ -2994,8 +3179,9 @@ def _function(name: str, args: tuple[object, ...]) -> object:
         if match_type not in (-1, 0, 1):
             return ErrorValue("#VALUE!", "MATCH type must be -1, 0, or 1")
         if match_type == 0:
+            pattern_cache = [_UNSET_WILDCARD]
             for index, value in enumerate(vector, 1):
-                matched = _wildcard_lookup_match(value, lookup)
+                matched = _wildcard_lookup_match(value, lookup, budget, pattern_cache)
                 if isinstance(matched, ErrorValue):
                     return matched
                 if matched:
@@ -3038,8 +3224,13 @@ def _function(name: str, args: tuple[object, ...]) -> object:
             exact = not exact_value
         first_column = [table.values[row * table.columns] for row in range(table.rows)]
         candidate: int | None = None
+        pattern_cache = [_UNSET_WILDCARD]
         for index, value in enumerate(first_column):
-            matched = _wildcard_lookup_match(value, lookup) if exact else _is_lookup_match(value, lookup)
+            matched = (
+                _wildcard_lookup_match(value, lookup, budget, pattern_cache)
+                if exact
+                else _is_lookup_match(value, lookup)
+            )
             if isinstance(matched, ErrorValue):
                 return matched
             if matched:
@@ -4046,7 +4237,8 @@ def evaluate_result(
     if not source:
         return ErrorValue("#VALUE!", "formula is empty")
     try:
-        value = _eval(_Parser(source).parse(), normalized, sheet_name)
+        budget = _WildcardBudget()
+        value = _eval(_Parser(source).parse(), normalized, sheet_name, budget)
         if isinstance(value, ArrayValue):
             return _check_text_result(value)
         if isinstance(value, _Range):
@@ -4059,6 +4251,8 @@ def evaluate_result(
         return _check_text_result(value)
     except _FormulaSyntaxError as error:
         return ErrorValue("#VALUE!", str(error))
+    except RecursionError:
+        return ErrorValue("#VALUE!", "formula exceeds the evaluator's safe nesting limit")
     except (ArithmeticError, ValueError, TypeError) as error:
         return ErrorValue("#VALUE!", str(error))
 

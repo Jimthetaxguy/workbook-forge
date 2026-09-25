@@ -554,6 +554,13 @@ def test_analyze_formula_reports_ast_references_without_reading_string_text():
     assert analysis.functions == ("SUM",)
 
 
+def test_analyze_formula_handles_long_flat_operator_chains_iteratively():
+    formula = "=" + "A1" + "+A1" * 1_000
+    analysis = analyze_formula(formula)
+    assert len(analysis.references) == 1_001
+    assert analysis.functions == ()
+
+
 def test_calculates_formula_dependencies_and_ignores_cached_values(tmp_path):
     source = tmp_path / "source.xlsx"
     output = tmp_path / "calculated.xlsx"

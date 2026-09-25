@@ -15,6 +15,10 @@ The Microsoft function index currently contributes 521 named entries across its 
 - `python/formula_atlas/` — standard-library formula evaluator, catalog API, and `.xlsx` adapter.
 - `rust/` — dependency-free runtime formula evaluator and standard-library shared-fixture reader.
 
+## Evaluator resource limits
+
+Both evaluators cap formulas at 8,192 UTF-16 code units and function nesting at 64 levels, matching documented Excel limits. Formula Atlas also caps parenthesis nesting at 96 levels and wildcard matching at 5,000,000 matching-state steps per formula evaluation. The latter two are local safety profiles. Long unary, postfix, and left-associated arithmetic chains are processed iteratively. Wildcard literal comparisons use per-character Unicode lowercase expansion; locale-specific Excel collation remains unmodeled. These limits and profiles protect evaluator resources and keep the engines aligned; shared fixtures establish parity, not Excel compatibility.
+
 ## Python quick start
 
 From the repository root, install the package with `python -m pip install .`, then:
