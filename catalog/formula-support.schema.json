@@ -1,0 +1,292 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://formula-atlas.local/catalog/formula-support.schema.json",
+  "title": "Formula Atlas evaluator support and semantic glossary",
+  "type": "object",
+  "required": [
+    "catalog_version",
+    "profile",
+    "sources",
+    "categories",
+    "syntax_features",
+    "functions",
+    "semantic_specs",
+    "coverage"
+  ],
+  "properties": {
+    "catalog_version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "profile": {
+      "const": "excel-microsoft-365-desktop"
+    },
+    "sources": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "url",
+          "kind",
+          "retrieved"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "url": {
+            "type": "string",
+            "format": "uri"
+          },
+          "kind": {
+            "type": "string",
+            "minLength": 1
+          },
+          "retrieved": {
+            "type": "string",
+            "format": "date"
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    "categories": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string"
+      }
+    },
+    "syntax_features": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "status"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "status": {
+            "$ref": "#/$defs/status"
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    "functions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "name",
+          "category",
+          "aliases",
+          "arity",
+          "availability",
+          "status"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "category": {
+            "type": "string",
+            "minLength": 1
+          },
+          "aliases": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "arity": {
+            "type": "object",
+            "required": [
+              "min",
+              "max"
+            ],
+            "properties": {
+              "min": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "max": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "additionalProperties": false
+          },
+          "availability": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Microsoft function introduction/version marker or lifecycle status (for example, 2021, legacy, or deprecated-legacy), not current Microsoft 365 desktop build/channel rollout. Current desktop availability is recorded separately in function_inventory.json."
+          },
+          "status": {
+            "$ref": "#/$defs/status"
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    "semantic_specs": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/semanticSpec"
+      }
+    },
+    "coverage": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  },
+  "$defs": {
+    "status": {
+      "type": "object",
+      "properties": {
+        "python": {
+          "$ref": "#/$defs/statusValue"
+        },
+        "rust": {
+          "$ref": "#/$defs/statusValue"
+        }
+      },
+      "additionalProperties": false
+    },
+    "statusValue": {
+      "enum": [
+        "catalogued",
+        "parsed",
+        "evaluated",
+        "conformance-tested"
+      ]
+    },
+    "semanticSpec": {
+      "type": "object",
+      "required": [
+        "arguments",
+        "returns",
+        "semantics",
+        "source_refs"
+      ],
+      "properties": {
+        "arguments": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "name",
+              "kind",
+              "required"
+            ],
+            "properties": {
+              "name": {
+                "type": "string",
+                "minLength": 1
+              },
+              "kind": {
+                "type": "string",
+                "minLength": 1
+              },
+              "required": {
+                "type": "boolean"
+              },
+              "default": {},
+              "empty_allowed": {
+                "type": "boolean"
+              },
+              "repeats_with": {
+                "type": "string"
+              },
+              "max_pairs": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "variadic": {
+                "type": "boolean"
+              },
+              "max_count": {
+                "type": "integer",
+                "minimum": 1
+              }
+            },
+            "allOf": [
+              {
+                "if": {
+                  "required": [
+                    "variadic"
+                  ],
+                  "properties": {
+                    "variadic": {
+                      "const": true
+                    }
+                  }
+                },
+                "then": {
+                  "required": [
+                    "max_count"
+                  ]
+                }
+              },
+              {
+                "if": {
+                  "required": [
+                    "max_count"
+                  ]
+                },
+                "then": {
+                  "required": [
+                    "variadic"
+                  ],
+                  "properties": {
+                    "variadic": {
+                      "const": true
+                    }
+                  }
+                }
+              }
+            ],
+            "additionalProperties": true
+          }
+        },
+        "returns": {
+          "type": "object",
+          "required": [
+            "kind",
+            "shape"
+          ],
+          "properties": {
+            "kind": {
+              "type": "string",
+              "minLength": 1
+            },
+            "shape": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "additionalProperties": true
+        },
+        "semantics": {
+          "type": "object"
+        },
+        "source_refs": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": true
+}

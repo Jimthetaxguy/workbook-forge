@@ -1,0 +1,12 @@
+{
+  "data_class": "public",
+  "claim": {
+    "text": "Microsoft documents a bounded SORT contract that preserves input shape, defaults to the first row or column and ascending order, and supports row or column orientation. UNIQUE defaults to row comparison and exposes by_col and exactly_once selectors; Microsoft examples compose UNIQUE with SORT. These pages establish the arguments and broad result shape, while mixed-type ordering, duplicate comparison details, and tie stability remain implementation profiles.",
+    "subject_definition": "Formula Atlas Run 22 SORT and UNIQUE source boundary"
+  },
+  "source": {
+    "excerpt": "The SORT page specifies same-shape output, sort_index, sort_order 1 or -1, and by_col orientation. The UNIQUE page specifies row/column comparison and exactly_once behavior and shows SORT(UNIQUE(...)) in an example.",
+    "subject_definition": "Microsoft SORT and UNIQUE function references",
+    "scope": "Official Microsoft Support pages retrieved 2026-09-24: https://support.microsoft.com/en-us/excel/functions/sort-function and https://support.microsoft.com/en-us/excel/functions/unique-function. Assesses documented arguments and broad shape only, not evaluator implementation correctness or unspecified comparison behavior."
+  }
+}

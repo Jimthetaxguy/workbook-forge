@@ -1,0 +1,12 @@
+{
+  "data_class": "public",
+  "claim": {
+    "text": "Formula Atlas's workbook adapter must treat table calculated-column and totals-row metadata as formula sources because worksheet cells hold the table data while a separate table part stores table definitions. Refusing dependencies into those formula-result cells avoids treating cached worksheet values as authoritative when table formula semantics are unsupported.",
+    "subject_definition": "Formula Atlas Run 21 table formula dependency boundary"
+  },
+  "source": {
+    "excerpt": "Microsoft documents that worksheet XML contains actual table data while the table definition is stored in a separate table part. A calculatedColumnFormula stores the formula used to calculate each cell in a table column. TableColumn also supports totalsRowFormula and totalsRowFunction metadata.",
+    "subject_definition": "Microsoft SpreadsheetML table structure and formula metadata",
+    "scope": "Public Microsoft Learn pages retrieved 2026-09-24: https://learn.microsoft.com/en-us/office/open-xml/spreadsheet/working-with-tables ; https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.spreadsheet.calculatedcolumnformula?view=openxml-2.12.2 ; https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.spreadsheet.tablecolumn?view=openxml-2.20.0 . Assesses the documentation boundary only, not implementation correctness."
+  }
+}

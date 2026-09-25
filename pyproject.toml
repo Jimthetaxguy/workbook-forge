@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "formula-atlas"
+version = "0.1.0"
+description = "A versioned Excel formula glossary and bounded evaluator"
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "MIT" }
+dependencies = []
+
+[project.optional-dependencies]
+test = []
+
+[tool.setuptools]
+package-dir = {"" = "python"}
+
+[tool.setuptools.data-files]
+"share/formula-atlas/catalog" = [
+  "catalog/formulas.json",
+  "catalog/open_source_patterns.json",
+  "catalog/open-source-patterns.schema.json",
+  "catalog/function-inventory.schema.json",
+  "catalog/formula-support.schema.json",
+  "catalog/function_inventory.json",
+]
+
+[tool.setuptools.packages.find]
+where = ["python"]
+
+[tool.pytest.ini_options]
+testpaths = ["python/tests"]
+pythonpath = ["python"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"

@@ -1,0 +1,1002 @@
+{
+  "target": "One source-linked formula family slice across catalog/formulas.json, both evaluators, and shared fixtures",
+  "scope": "Incrementally expand the Excel 365 formula glossary and scalar evaluator while preserving Python/Rust parity",
+  "baseline": {
+    "date": "2026-09-24",
+    "score": 5,
+    "max_score": 5,
+    "implemented_functions": 65,
+    "catalog_inventory_functions": 521,
+    "detailed_semantic_specs": 31,
+    "unique_shared_fixtures": 202,
+    "python_tests": "128 passed; compileall passed",
+    "rust_tests": "19 passed; fmt, check, clippy passed",
+    "excel_spot_checks": 0,
+    "candidate": "Current uncommitted working tree is the measured baseline; changes are additive and are retained only after the full evaluation passes."
+  },
+  "best_score": 6,
+  "best_run": 1,
+  "current_run": 22,
+  "runs": [
+    {
+      "run": 0,
+      "score": 5,
+      "max_score": 5,
+      "validation_score": 5,
+      "operator": "baseline",
+      "result": "BASELINE",
+      "timestamp": "2026-09-24"
+    },
+    {
+      "run": 1,
+      "score": 6,
+      "max_score": 6,
+      "validation_score": 6,
+      "operator": "add-bounded-formula-family",
+      "result": "ACCEPTED",
+      "timestamp": "2026-09-24",
+      "evidence": {
+        "implemented_functions": 69,
+        "catalog_inventory_functions": 521,
+        "catalog_only_functions": 452,
+        "detailed_semantic_specs": 35,
+        "source_records": 39,
+        "unique_shared_fixtures": 239,
+        "new_slice": [
+          "HOUR",
+          "MINUTE",
+          "SECOND",
+          "TIME"
+        ],
+        "new_slice_fixture_cases": 37,
+        "python": "129 passed; compileall passed",
+        "rust": "19 passed; fmt, check, clippy passed",
+        "source_refs_resolved": true,
+        "every_implemented_function_has_fixture": true,
+        "allowed_licenses": [
+          "MIT",
+          "Apache-2.0"
+        ],
+        "code_copied": false,
+        "excel_spot_checks": 0,
+        "jev": [
+          "HOUR documentation claim: supports (0.97 peakedness; advisory only)",
+          "Microsoft specifies fractional TIME truncation: not_addressed (0.98 peakedness; advisory only)"
+        ],
+        "independent_review": "Found and fixed Python/Rust numeric-text grammar mismatch; confirmed no remaining concrete implementation defect and requested one additional non-ASCII fixture, which is included."
+      }
+    },
+    {
+      "run": 2,
+      "score": 6,
+      "max_score": 6,
+      "validation_score": 6,
+      "operator": "add-bounded-date-family",
+      "result": "ACCEPTED",
+      "timestamp": "2026-09-24",
+      "evidence": {
+        "implemented_functions": 72,
+        "catalog_inventory_functions": 521,
+        "catalog_only_functions": 449,
+        "detailed_semantic_specs": 38,
+        "source_records": 42,
+        "unique_shared_fixtures": 312,
+        "new_slice": [
+          "WEEKDAY",
+          "WEEKNUM",
+          "ISOWEEKNUM"
+        ],
+        "new_slice_fixture_cases": 73,
+        "python": "130 passed; compileall passed",
+        "rust": "19 passed; fmt, check, clippy passed",
+        "source_refs_resolved": true,
+        "every_implemented_function_has_fixture": true,
+        "allowed_licenses": [
+          "MIT",
+          "Apache-2.0"
+        ],
+        "code_copied": false,
+        "excel_spot_checks": 0,
+        "jev": [
+          "Microsoft WEEKDAY return-type set and out-of-range #NUM! claim: supports (0.96 peakedness; advisory only)",
+          "Fractional selector coercion: not addressed (0.98 peakedness; advisory only)"
+        ],
+        "independent_review": "Found and fixed oversized-integer selector parity mismatch; added discriminating System 1 selector boundaries and the ISO rollover into the following year. Both suites pass."
+      }
+    },
+    {
+      "run": 3,
+      "score": 6,
+      "max_score": 6,
+      "validation_score": 6,
+      "operator": "add-bounded-business-calendar-family",
+      "result": "ACCEPTED",
+      "timestamp": "2026-09-24",
+      "evidence": {
+        "implemented_functions": 74,
+        "catalog_inventory_functions": 521,
+        "catalog_only_functions": 447,
+        "detailed_semantic_specs": 40,
+        "source_records": 44,
+        "unique_shared_fixtures": 357,
+        "new_slice": [
+          "WORKDAY",
+          "NETWORKDAYS"
+        ],
+        "new_slice_fixture_cases": 45,
+        "python": "131 passed; compileall passed",
+        "rust": "19 passed; fmt, check, clippy passed",
+        "source_refs_resolved": true,
+        "every_implemented_function_has_fixture": true,
+        "allowed_licenses": [
+          "MIT",
+          "Apache-2.0"
+        ],
+        "code_copied": false,
+        "excel_spot_checks": 0,
+        "jev": [
+          "WORKDAY documented truncation and positive/negative direction: supports_narrower_claim (0.41 peakedness; 0.53 narrower-claim probability; advisory only)",
+          "NETWORKDAYS reversed-range sign and detailed holiday-cell coercion: not specified by cited Microsoft page; retain as evaluator profiles"
+        ],
+        "independent_review": "Confirmed Python/Rust binary-search parity, all three date-boundary fixtures, and coherent counts. Corrected stale documentation that described traversal after the linear scan was removed."
+      }
+    },
+    {
+      "run": 4,
+      "score": 6,
+      "max_score": 6,
+      "validation_score": 6,
+      "operator": "add-bounded-custom-weekend-family",
+      "result": "ACCEPTED",
+      "timestamp": "2026-09-24",
+      "evidence": {
+        "implemented_functions": 76,
+        "catalog_inventory_functions": 521,
+        "catalog_only_functions": 445,
+        "detailed_semantic_specs": 42,
+        "source_records": 46,
+        "unique_shared_fixtures": 417,
+        "new_slice": [
+          "WORKDAY.INTL",
+          "NETWORKDAYS.INTL"
+        ],
+        "new_slice_fixture_cases": 58,
+        "adjacent_regression_fixtures": 2,
+        "additional_boundary_fixtures": 10,
+        "python": "133 passed; compileall passed",
+        "rust": "20 passed; fmt, check, clippy passed",
+        "rust_external_dependencies": [],
+        "source_refs_resolved": true,
+        "every_implemented_function_has_fixture": true,
+        "allowed_licenses": [
+          "MIT",
+          "Apache-2.0"
+        ],
+        "code_copied": false,
+        "excel_spot_checks": 0,
+        "jev": [
+          "Documented WORKDAY.INTL / NETWORKDAYS.INTL selectors, masks, offset/count behavior, and all-one NETWORKDAYS result: supports_narrower_claim (0.89 confidence; 0.91 narrower-claim probability; advisory only; no auto-merge).",
+          "Weekend/date coercion, holiday-cell details, and exact WORKDAY.INTL all-one-mask error remain unspecified and are cataloged as evaluator profiles."
+        ],
+        "independent_review": "Final Python/Rust differential review found no blockers across 417 shared cases. Catalog review confirmed paired numeric selector days, upper-bound and nonfinite endpoint/holiday cases, coherent source refs/counts, and no external Cargo dependencies. Earlier review findings were fixed: base business-day nonfinite parity, Python big-integer API profile, fixture gaps, and Apache POI provenance wording."
+      }
+    },
+    {
+      "run": 5,
+      "score": 6,
+      "max_score": 6,
+      "validation_score": 6,
+      "operator": "add-bounded-day-count-family",
+      "result": "ACCEPTED",
+      "timestamp": "2026-09-24",
+      "evidence": {
+        "implemented_functions": 78,
+        "catalog_inventory_functions": 521,
+        "catalog_only_functions": 443,
+        "detailed_semantic_specs": 44,
+        "source_records": 50,
+        "unique_shared_fixtures": 465,
+        "new_slice": [
+          "DAYS360",
+          "YEARFRAC"
+        ],
+        "new_slice_fixture_cases": 48,
+        "python": "134 passed; compileall passed",
+        "rust": "20 passed; fmt, check, clippy passed",
+        "rust_external_dependencies": [],
+        "source_refs_resolved": true,
+        "all_implemented_functions_have_shared_fixtures": true,
+        "allowed_licenses": [
+          "MIT",
+          "Apache-2.0"
+        ],
+        "code_copied": false,
+        "excel_spot_checks": 0,
+        "jev": [
+          "Claim: Microsoft-documented behavior is separated from evaluator profiles and both engines share fixture coverage. Jev choice=supports_narrower_claim; confidence/peakedness=0.43; probabilities: supports_narrower_claim=0.55, not_addressed=0.44, supports=0.00. Shadow/advisory only; no automatic merge and not ground truth."
+        ],
+        "independent_review": "Final semantics review found and resolved Python/Rust trailing-comma default and DAYS360 error-propagation mismatches; final semantics and catalog reviews reported no blockers. Catalog schemas, counts, fixture IDs, source refs, license policy, and six-pattern context were verified."
+      }
+    },
+    {
+      "run": 6,
+      "score": 6,
+      "max_score": 6,
+      "validation_score": 6,
+      "operator": "add-bounded-coupon-schedule-family",
+      "result": "ACCEPTED",
+      "timestamp": "2026-09-24",
+      "evidence": {
+        "implemented_functions": 84,
+        "catalog_inventory_functions": 521,
+        "catalog_only_functions": 437,
+        "detailed_semantic_specs": 50,
+        "source_records": 57,
+        "unique_shared_fixtures": 519,
+        "new_slice": [
+          "COUPDAYBS",
+          "COUPDAYS",
+          "COUPDAYSNC",
+          "COUPNCD",
+          "COUPNUM",
+          "COUPPCD"
+        ],
+        "new_slice_fixture_cases": 54,
+        "python": "134 passed; compileall passed",
+        "rust": "20 passed; fmt, check, clippy passed",
+        "rust_external_dependencies": [],
+        "catalog_schemas": "all three validated",
+        "source_refs_resolved": true,
+        "all_implemented_functions_have_shared_fixtures": true,
+        "config_validation_ids": 70,
+        "allowed_licenses": [
+          "MIT",
+          "Apache-2.0"
+        ],
+        "code_copied": false,
+        "excel_spot_checks": 0,
+        "jev": [
+          "Microsoft COUPDAYBS documented frequency, basis, truncation, and frequency-error claim: supports (0.98 peakedness; advisory only; shadow=true; no automatic merge; not ground truth)."
+        ],
+        "independent_review": "Semantic review found and fixed COUPPCD strict-before equality and fractional basis-3 COUPDAYS behavior; the stale exact-date coupon fixture was corrected. Final review found no remaining blockers. Catalog and local validation verified counts, schemas, references, fixtures, config IDs, MIT/Apache source policy, and no copied code."
+      }
+    },
+    {
+      "run": 7,
+      "score": 6,
+      "max_score": 6,
+      "validation_score": 6,
+      "operator": "add-bounded-time-value-of-money-family",
+      "result": "ACCEPTED",
+      "timestamp": "2026-09-24T08:14:12-04:00",
+      "evidence": {
+        "implemented_functions": 87,
+        "catalog_inventory_functions": 521,
+        "catalog_only_functions": 434,
+        "detailed_semantic_specs": 53,
+        "source_records": 61,
+        "unique_shared_fixtures": 549,
+        "new_slice": [
+          "FV",
+          "PV",
+          "PMT"
+        ],
+        "new_slice_fixture_cases": 30,
+        "python": "134 passed; compileall passed",
+        "rust": "20 passed; fmt, check, clippy passed",
+        "rust_external_dependencies": [],
+        "catalog_schemas": "all three validated with JSON Schema Draft 2020-12",
+        "source_refs_resolved": true,
+        "all_implemented_functions_have_shared_fixtures": true,
+        "config_validation_ids": 90,
+        "allowed_licenses": [
+          "MIT",
+          "Apache-2.0"
+        ],
+        "code_copied": false,
+        "excel_spot_checks": 0,
+        "jev": [
+          "Combined three-function documentation claim: not_addressed (confidence/peakedness 0.34; advisory, no auto-merge, not ground truth).",
+          "Focused Microsoft FV type 0/1 timing claim: supports (confidence/peakedness 0.92; supports probability 0.94; advisory, no auto-merge, not ground truth)."
+        ],
+        "independent_review": "Semantic review confirmed equations, signs, type timing, omitted payment slots, coercion profiles, and Python/Rust parity; it requested and verified PMT's nonzero-fv example. Catalog review confirmed counts, all fixture/spec source refs, all three schemas, MIT/Apache-only references, and no-copy flags. The PMT source row's months/years label inconsistency is explicitly noted.",
+        "compatibility_limit": "Shared Python/Rust fixture parity only; no direct Excel spot-checks were run."
+      }
+    },
+    {
+      "run": 8,
+      "score": 6,
+      "max_score": 6,
+      "validation_score": 6,
+      "operator": "add-bounded-period-count-function",
+      "result": "ACCEPTED",
+      "timestamp": "2026-09-24T08:39:34-04:00",
+      "evidence": {
+        "implemented_functions": 88,
+        "catalog_inventory_functions": 521,
+        "catalog_only_functions": 433,
+        "detailed_semantic_specs": 54,
+        "source_records": 62,
+        "unique_shared_fixtures": 580,
+        "new_slice": [
+          "NPER"
+        ],
+        "new_slice_fixture_cases": 31,
+        "python": "134 passed; compileall passed",
+        "rust": "20 passed; fmt, check, clippy passed",
+        "rust_external_dependencies": [],
+        "catalog_schemas": "all three validated with JSON Schema Draft 2020-12",
+        "source_refs_resolved": true,
+        "all_implemented_functions_have_shared_fixtures": true,
+        "config_validation_ids": 121,
+        "allowed_licenses": [
+          "MIT",
+          "Apache-2.0"
+        ],
+        "code_copied": false,
+        "excel_spot_checks": 0,
+        "jev": [
+          "Microsoft NPER documentation claim: supports_narrower_claim (confidence 0.45; supports_narrower_claim probability 0.56; shadow/advisory only; no automatic merge; not ground truth).",
+          "NPER's type/default examples and one documentation wording conflict are encoded in the semantic record and fixtures."
+        ],
+        "independent_review": "Semantic review found and fixed Python/Rust disagreement where an earlier non-finite value could mask a later formula error; final review confirmed parity, optional argument handling, equations, and fixture expectations. Catalog review confirmed counts, all 31 NPER fixture refs, schemas, source license policy, no-copy markers, and 121 validation IDs.",
+        "compatibility_limit": "Shared Python/Rust fixture parity only; no direct Excel spot-checks were run. Microsoft documentation leaves the added no-solution, coercion, and numerical boundary cases unspecified."
+      }
+    },
+    {
+      "run": 9,
+      "score": 6,
+      "max_score": 6,
+      "validation_score": 6,
+      "operator": "add-bounded-payment-component-functions",
+      "result": "ACCEPTED",
+      "timestamp": "2026-09-24T09:09:57-04:00",
+      "evidence": {
+        "implemented_functions": 90,
+        "catalog_inventory_functions": 521,
+        "catalog_only_functions": 431,
+        "detailed_semantic_specs": 56,
+        "source_records": 65,
+        "open_source_patterns": 10,
+        "unique_shared_fixtures": 625,
+        "new_slice": [
+          "IPMT",
+          "PPMT"
+        ],
+        "new_slice_fixture_cases": 45,
+        "python": "134 passed; compileall passed",
+        "rust": "20 passed; fmt, check, clippy passed",
+        "rust_external_dependencies": [],
+        "catalog_schemas": "all three validated with JSON Schema Draft 2020-12",
+        "source_refs_resolved": true,
+        "all_implemented_functions_have_shared_fixtures": true,
+        "config_validation_ids": 166,
+        "allowed_licenses": [
+          "MIT",
+          "Apache-2.0"
+        ],
+        "code_copied": false,
+        "excel_spot_checks": 0,
+        "jev": [
+          "Microsoft IPMT/PPMT documentation claim: supports_narrower_claim (confidence/peakedness 0.90; supports_narrower_claim probability 0.93; shadow/advisory only; no automatic merge; not ground truth)."
+        ],
+        "independent_review": "Semantic review verified component equations, timing, optional slots, error precedence, boundaries, overflow, PMT identities, and fractional per/nper coverage. Catalog review confirmed source refs, 45 sourced slice fixtures, schema/count/license integrity, and caught a stale nine-pattern context sentence; the sentence now lists all ten patterns.",
+        "compatibility_limit": "Shared Python/Rust fixture parity only; no direct Excel spot-checks were run. Microsoft leaves coercion, fractional period behavior, numerical profiles, and exact errors for several edge cases unspecified."
+      }
+    },
+    {
+      "run": 10,
+      "score": 6,
+      "max_score": 6,
+      "validation_score": 6,
+      "operator": "add-bounded-cumulative-payment-functions",
+      "result": "ACCEPTED",
+      "timestamp": "2026-09-24T10:11:16-04:00",
+      "evidence": {
+        "implemented_functions": 92,
+        "catalog_inventory_functions": 521,
+        "catalog_only_functions": 429,
+        "detailed_semantic_specs": 58,
+        "source_records": 67,
+        "open_source_patterns": 11,
+        "unique_shared_fixtures": 677,
+        "new_slice": [
+          "CUMIPMT",
+          "CUMPRINC"
+        ],
+        "new_slice_fixture_cases": 52,
+        "python": "134 passed; compileall passed",
+        "rust": "20 passed; fmt, check, clippy passed",
+        "rust_external_dependencies": [],
+        "catalog_schemas": "all three validated with JSON Schema Draft 2020-12",
+        "source_refs_resolved": true,
+        "all_implemented_functions_have_shared_fixtures": true,
+        "config_validation_ids": 218,
+        "allowed_licenses": [
+          "MIT",
+          "Apache-2.0"
+        ],
+        "code_copied": false,
+        "excel_spot_checks": 0,
+        "high_precision_oracle": "168 independent Decimal differential cases across 1e-100 through 0.9 rates, horizons 1 through 100, both payment timings and components; worst relative error 8.23e-14",
+        "jev": [
+          "Microsoft CUMIPMT/CUMPRINC documentation claim: supports_narrower_claim (confidence/peakedness 0.87; shadow/advisory only; no automatic merge; not ground truth)."
+        ],
+        "independent_review": "Final Rust/fixture/license review cleared the log1mexp principal reparameterization, exact 2^53 type 0/1 full-term fixtures, Python/Rust parity, dependency tree, and Apache-2.0 provenance. Semantic review found no remaining blocker and confirmed the documented contracts remain distinct from evaluator profiles. Catalog review verified 521 inventory entries, 92 implemented, 429 catalog-only, 58 specs, 11 patterns, 677 unique fixtures, 218 resolving validation IDs, all three schemas, and source-reference integrity.",
+        "criteria_health_review": "At Run 10, strengthened the existing numeric-fixture criterion to require published Microsoft values, independent derivations, or a high-precision oracle. The six-criterion score scale is unchanged.",
+        "compatibility_limit": "Python/Rust shared fixtures and independent Decimal checks passed; no direct Excel spot-check was run. Fractional period ranges, fractional nper, end_period beyond nper, coercion, error precedence, Excel internal precision, and high-range numerical profiles remain evaluator profiles."
+      }
+    },
+    {
+      "run": 11,
+      "score": 6,
+      "max_score": 6,
+      "validation_score": 6,
+      "operator": "add-bounded-depreciation-functions",
+      "result": "ACCEPTED",
+      "timestamp": "2026-09-24T10:38:26-04:00",
+      "evidence": {
+        "implemented_functions": 94,
+        "catalog_inventory_functions": 521,
+        "catalog_only_functions": 427,
+        "detailed_semantic_specs": 60,
+        "source_records": 70,
+        "open_source_patterns": 12,
+        "unique_shared_fixtures": 710,
+        "new_slice": [
+          "SLN",
+          "SYD"
+        ],
+        "new_slice_fixture_cases": 33,
+        "python": "134 passed; compileall passed",
+        "rust": "20 passed; fmt, check, clippy passed",
+        "rust_external_dependencies": [],
+        "catalog_schemas": "all three validated with JSON Schema Draft 2020-12",
+        "source_refs_resolved": true,
+        "all_implemented_functions_have_shared_fixtures": true,
+        "config_validation_ids": 251,
+        "allowed_licenses": [
+          "MIT",
+          "Apache-2.0"
+        ],
+        "code_copied": false,
+        "excel_spot_checks": 0,
+        "high_precision_oracle": "18 independently derived SLN/SYD numeric cases plus a 700-digit Decimal check for the scaled 1E308-life final-period subnormal profile; the shared rounded result is 2.0.",
+        "jev": [
+          "Microsoft SLN/SYD documentation claim: supports_narrower_claim (confidence/peakedness 0.80; narrower-claim probability 0.84; shadow/advisory only; no automatic merge; not ground truth)."
+        ],
+        "independent_review": "Three reviewers cleared final Run11: semantic review confirmed tiny-life scaling and the large-life subnormal fixture; catalog review verified 521 inventory, 94 implementations, 60 specs, 710 unique fixtures, 251 resolving validation IDs, schemas, and source/license/no-copy integrity; Rust/license review verified shared-fixture parity and empty external dependency lists.",
+        "compatibility_limit": "Shared Python/Rust fixtures and independent Decimal checks passed; no direct Excel spot-checks were run. Domain validation, fractional periods/life, coercion, exact errors, and high-range behavior remain evaluator profiles where Microsoft pages are silent."
+      }
+    },
+    {
+      "run": 12,
+      "score": 6,
+      "max_score": 6,
+      "validation_score": 6,
+      "operator": "add-declining-balance-functions",
+      "result": "ACCEPTED",
+      "timestamp": "2026-09-24T11:17:20-04:00",
+      "evidence": {
+        "implemented_functions": 96,
+        "catalog_inventory_functions": 521,
+        "catalog_only_functions": 425,
+        "detailed_semantic_specs": 62,
+        "source_records": 72,
+        "open_source_patterns": 12,
+        "unique_shared_fixtures": 779,
+        "new_slice": [
+          "DB",
+          "DDB"
+        ],
+        "new_slice_fixture_cases": 69,
+        "python": "134 passed; compileall passed",
+        "rust": "20 passed; fmt, check, clippy passed",
+        "rust_external_dependencies": [],
+        "catalog_schemas": "all three validated with JSON Schema Draft 2020-12",
+        "source_refs_resolved": true,
+        "all_implemented_functions_have_shared_fixtures": true,
+        "config_validation_ids": 275,
+        "allowed_licenses": [
+          "MIT",
+          "Apache-2.0"
+        ],
+        "code_copied": false,
+        "excel_spot_checks": 0,
+        "high_precision_oracle": "Microsoft DB seven-period month-7 schedule matches all displayed values. DDB tiny-factor case independently computed with Decimal over exact binary64 inputs and rounds to 2.47032823 after scaling; large-life final-period DDB Decimal check rounds to 3.01.",
+        "jev": [
+          "Microsoft DB rounded-rate/month rules and DDB factor/cap claim: supports (0.94 peakedness; 0.96 support probability; shadow/advisory only; no automatic merge; not ground truth)."
+        ],
+        "independent_review": "Three reviews caught/fixed one DB source-attribution mismatch and one DDB factor/life underflow; semantic, catalog, Rust parity, license and dependency re-reviews then cleared the slice.",
+        "compatibility_limit": "No direct Microsoft Excel spot-checks. DB/DDB domain, truncation/coercion, exact error precedence, and binary64 boundaries remain evaluator profiles where Microsoft is silent or contradictory."
+      }
+    },
+    {
+      "run": 13,
+      "score": 6,
+      "max_score": 6,
+      "validation_score": 6,
+      "operator": "add-variable-declining-balance-function",
+      "result": "ACCEPTED",
+      "timestamp": "2026-09-24T12:07:46-04:00",
+      "evidence": {
+        "implemented_functions": 97,
+        "catalog_inventory_functions": 521,
+        "catalog_only_functions": 424,
+        "detailed_semantic_specs": 63,
+        "source_records": 75,
+        "open_source_patterns": 12,
+        "unique_shared_fixtures": 822,
+        "new_slice": [
+          "VDB"
+        ],
+        "new_slice_fixture_cases": 43,
+        "python": "134 passed; compileall passed",
+        "rust": "20 passed; fmt, check, clippy passed",
+        "rust_external_dependencies": [],
+        "catalog_schemas": "all three validated with JSON Schema Draft 2020-12",
+        "source_refs_resolved": true,
+        "all_implemented_functions_have_shared_fixtures": true,
+        "config_validation_ids": 318,
+        "allowed_licenses": [
+          "MIT",
+          "Apache-2.0"
+        ],
+        "code_copied": false,
+        "excel_spot_checks": 0,
+        "high_precision_oracle": "Microsoft VDB examples match at their displayed precision. Independent Decimal probes cover life 9E15 (no-switch scaled result 0.30074507; switch-search scaled result 0.81750987) and a subnormal factor (scaled amount 2.47032823). Independently derived switch schedules return 99 with switching and 92.224 with no_switch TRUE.",
+        "jev": [
+          "Microsoft VDB documented-contract claim: supports (peakedness 0.62; supports 0.69, supports_narrower_claim 0.22, contradicts 0.08, not_addressed 0.01; shadow/advisory only; no automatic merge; not ground truth)."
+        ],
+        "independent_review": "Semantic review cleared the bounded evaluator profile after half-open interval and truth-coercion wording were clarified. Catalog review cleared schemas, counts, provenance, and validation IDs. Rust/license review caught and verified the empty-text truth-coercion parity fix; final Python/Rust gates passed.",
+        "compatibility_limit": "No direct Microsoft Excel spot-checks. Fractional-period allocation, no_switch coercion, domain boundaries, and error precedence remain evaluator profiles; the Apache compatibility note reports a fractional-start discrepancy, so no Excel split-additivity claim is made."
+      }
+    },
+    {
+      "run": 14,
+      "score": 6,
+      "max_score": 6,
+      "validation_score": 6,
+      "operator": "add-date-based-french-depreciation-functions",
+      "result": "ACCEPTED",
+      "timestamp": "2026-09-24T13:09:00.884204-04:00",
+      "evidence": {
+        "implemented_functions": 99,
+        "catalog_inventory_functions": 521,
+        "catalog_only_functions": 422,
+        "detailed_semantic_specs": 65,
+        "source_records": 83,
+        "open_source_patterns": 12,
+        "unique_shared_fixtures": 886,
+        "new_slice": [
+          "AMORLINC",
+          "AMORDEGRC"
+        ],
+        "new_slice_fixture_cases": 64,
+        "python": "134 passed; compileall passed",
+        "rust": "21 passed; fmt, locked check, clippy passed",
+        "rust_external_dependencies": [],
+        "catalog_schemas": "all three validated with JSON Schema Draft 2020-12",
+        "source_refs_resolved": true,
+        "all_implemented_functions_have_shared_fixtures": true,
+        "config_validation_ids": 382,
+        "allowed_licenses": [
+          "MIT",
+          "Apache-2.0"
+        ],
+        "code_copied": false,
+        "excel_spot_checks": 0,
+        "high_precision_oracle": "Independent 80-digit Decimal checks: 2400*0.15*134/365 = 132.1643835616438356...; 1000*0.2*59/366 = 32.2404371584699453...; serial-60 200/366 = 0.546448087431693989...; AMORDEGRC life 3.5 gives zero-stub p0/p1 429/286 and positive-stub p0/p1/p2/p3 429/245/163/163. Published Microsoft examples remain 360 and 776.",
+        "jev": [
+          "Microsoft AMORDEGRC deprecation/legacy-compatibility claim: supports_narrower_claim (peakedness 0.43; distribution: insufficient_context 0.02, supports 0.22, supports_narrower_claim 0.54, contradicts 0.00, not_addressed 0.22; shadow/advisory only; automatic_merge=false; output_is_ground_truth=false)."
+        ],
+        "independent_review": "Semantic review found and fixed the zero-stub fallback mismatch against the Apache-2.0 reference, then cleared the updated kernels/corpus. Rust review verified corrected argument mapping, Python/Rust parity, empty external dependency tree, and full build gates. Catalog/source/license audit and all three JSON Schemas pass.",
+        "compatibility_limit": "No direct Microsoft Excel spot-checks. AMORDEGRC is deprecated for old-workbook compatibility. Period indexing, zero-stub fallback, AMORDEGRC rounding/salvage crossing, basis/date profiles including serial 60, coercion, errors, and finite-range limits remain evaluator profiles rather than verified Excel behavior."
+      }
+    },
+    {
+      "run": 15,
+      "score": 6,
+      "max_score": 6,
+      "validation_score": 6,
+      "operator": "add-even-odd-rounding-and-parity-predicate-functions",
+      "result": "ACCEPTED",
+      "timestamp": "2026-09-24T13:49:52.971976-04:00",
+      "evidence": {
+        "implemented_functions": 103,
+        "catalog_inventory_functions": 521,
+        "catalog_only_functions": 418,
+        "detailed_semantic_specs": 69,
+        "source_records": 90,
+        "open_source_patterns": 12,
+        "unique_shared_fixtures": 954,
+        "new_slice": [
+          "EVEN",
+          "ODD",
+          "ISEVEN",
+          "ISODD"
+        ],
+        "new_slice_fixture_cases": 68,
+        "new_slice_fixture_distribution": {
+          "EVEN": 16,
+          "ODD": 19,
+          "ISEVEN": 17,
+          "ISODD": 16
+        },
+        "python": "134 passed; compileall passed",
+        "rust": "21 passed; fmt, locked check, clippy passed; dependency tree contains only formula-atlas-rust",
+        "rust_external_dependencies": [],
+        "catalog_schemas": "all three validated with JSON Schema Draft 2020-12",
+        "source_refs_resolved": true,
+        "all_implemented_functions_have_shared_fixtures": true,
+        "config_validation_ids": 394,
+        "allowed_licenses": [
+          "MIT",
+          "Apache-2.0"
+        ],
+        "code_copied": false,
+        "excel_spot_checks": 0,
+        "jev": [
+          "Microsoft scalar-function rules and Formula Atlas profile separation: supports_narrower_claim (peakedness 0.49; advisory; shadow=true; no automatic merge; not ground truth).",
+          "Office range/array compatibility boundary: supports_narrower_claim (peakedness 0.50; probabilities supports_narrower_claim=0.60, supports=0.14, not_addressed=0.17, contradicts=0.07, insufficient_context=0.02; advisory; shadow=true; no automatic merge; not ground truth)."
+        ],
+        "independent_review": "Final semantic review found no scalar parity or expected-value defects. It confirmed Microsoft range behavior is separated from local #VALUE! boundary outputs and that all five 2^53 fixtures are Formula Atlas binary64 probes, not Excel oracles. Catalog review confirmed counts, IDs, source resolution, three schemas, and MIT/Apache-only OSS pattern policy.",
+        "compatibility_limit": "No Excel spot-checks were run. Microsoft permits ranges for ISEVEN/ISODD and specifies implicit intersection for normal formulas such as EVEN/ODD; Formula Atlas remains scalar-only and lacks formula-cell/array-result context. Shared coercion, blank/Boolean rules, error precedence, and the ODD 2^53 numeric boundary remain evaluator profiles. Microsoft documents 15-digit worksheet precision; all five 16-digit boundary cases are explicitly not Excel oracles."
+      }
+    },
+    {
+      "run": 16,
+      "score": 6,
+      "max_score": 6,
+      "validation_score": 6,
+      "operator": "add-scalar-factorial-and-combination-functions",
+      "result": "ACCEPTED",
+      "timestamp": "2026-09-24T15:37:59-04:00",
+      "evidence": {
+        "implemented_functions": 106,
+        "catalog_inventory_functions": 521,
+        "catalog_only_functions": 415,
+        "detailed_semantic_specs": 72,
+        "source_records": 93,
+        "open_source_patterns": 13,
+        "unique_shared_fixtures": 1050,
+        "new_slice": [
+          "FACT",
+          "COMBIN",
+          "COMBINA"
+        ],
+        "new_slice_fixture_cases": 96,
+        "new_slice_fixture_distribution": {
+          "FACT": 18,
+          "COMBIN": 51,
+          "COMBINA": 27
+        },
+        "python": "136 passed; compileall passed using Python 3.13",
+        "rust": "23 passed; fmt, locked check, clippy passed; dependency tree contains only formula-atlas-rust",
+        "rust_external_dependencies": [],
+        "catalog_schemas": "all three validated with JSON Schema Draft 2020-12",
+        "source_refs_resolved": true,
+        "all_implemented_functions_have_shared_fixtures": true,
+        "config_validation_ids": 490,
+        "allowed_licenses": [
+          "MIT",
+          "Apache-2.0"
+        ],
+        "code_copied": false,
+        "excel_spot_checks": 0,
+        "jev": [
+          "Microsoft truncation-before-domain claim for the bounded FACT/COMBIN/COMBINA slice: supports_narrower_claim (peakedness 0.67; advisory only; shadow=true; no auto-merge; not ground truth)."
+        ],
+        "independent_review": "Final Rust parity review confirmed all 1,050 shared fixtures match, including large literal cancellation, 5,001-digit boundary, formula-error precedence, non-finite scientific-token precedence, and zero-negative-power profile. Semantic review found the exact-ratio division descriptions, local error profiles, and discriminating multiplication fixture sound. Catalog review confirmed all 96 Run 16 cases are in the validation set, schemas pass, IDs and source references resolve, and OSS eligibility remains MIT/Apache-2.0 only.",
+        "compatibility_limit": "No Excel spot-checks were run. Microsoft-backed rules are separated from Formula Atlas profiles. The evaluator remains scalar-only and range errors do not claim Excel implicit-intersection behavior. Exact-source integer arithmetic parity is asserted within FACT, COMBIN, and COMBINA argument expressions; standalone Python integer arithmetic can still differ from Rust binary64 operator evaluation."
+      }
+    },
+    {
+      "run": 17,
+      "score": 6,
+      "max_score": 6,
+      "validation_score": 6,
+      "operator": "add-double-factorial-and-permutation-functions",
+      "result": "ACCEPTED",
+      "timestamp": "2026-09-24T16:13:50-04:00",
+      "evidence": {
+        "implemented_functions": 109,
+        "catalog_inventory_functions": 521,
+        "catalog_only_functions": 412,
+        "detailed_semantic_specs": 75,
+        "source_records": 96,
+        "open_source_patterns": 13,
+        "unique_shared_fixtures": 1131,
+        "new_slice": [
+          "FACTDOUBLE",
+          "PERMUT",
+          "PERMUTATIONA"
+        ],
+        "new_slice_fixture_cases": 77,
+        "new_slice_fixture_distribution": {
+          "FACTDOUBLE": 20,
+          "PERMUT": 29,
+          "PERMUTATIONA": 28
+        },
+        "cross_slice_regression_fixtures": [
+          "combin-negative-first-invalid-text-later-profile",
+          "combina-negative-first-invalid-text-later-profile",
+          "permut-negative-first-invalid-text-later-profile",
+          "permutationa-negative-first-invalid-text-later-profile"
+        ],
+        "python": "136 passed; compileall passed using Python 3.13",
+        "rust": "23 passed; fmt, locked check, clippy passed; shared golden corpus includes all 1,131 fixtures",
+        "rust_external_dependencies": [],
+        "python_runtime_dependencies": [],
+        "catalog_schemas": "all three validated with JSON Schema Draft 2020-12 and format checking",
+        "source_refs_resolved": true,
+        "all_implemented_functions_have_shared_fixtures": true,
+        "config_validation_ids": 571,
+        "allowed_licenses": [
+          "MIT",
+          "Apache-2.0"
+        ],
+        "code_copied": false,
+        "excel_spot_checks": 0,
+        "jev": [
+          "Run 17 claim: supports_narrower_claim (peakedness 0.53; probabilities: supports_narrower_claim 0.62, supports 0.24, insufficient_context 0.03, contradicts 0.01, not_addressed 0.10; shadow/advisory only; no automatic merge; not ground truth)."
+        ],
+        "independent_review": "Semantic review found no release-blocking source or fixture issue and clarified that Microsoft’s odd-product formula implies 1!!=1. Rust parity review found and fixed early negative-domain validation masking later text-coercion errors; after the fix, all 159 combinatorics fixtures matched Python and Rust exactly, including numeric bits and error codes. Catalog review confirmed all counts, unique and resolved IDs, three schemas, source provenance, and MIT/Apache-only/no-copy policy. Python/Rust verification gates passed after the fix.",
+        "compatibility_limit": "No Microsoft Excel spot-checks were run. Published behavior is separated from local scalar range, coercion order, negative-fraction, precision, 0^0, and overflow profiles. FACTDOUBLE is listed as range-capable by MS-OE376, but this evaluator has no formula-cell or array-entry context. conformance-tested means Python/Rust fixture parity, not full Excel compatibility."
+      }
+    },
+    {
+      "run": 18,
+      "score": 6,
+      "max_score": 6,
+      "validation_score": 6,
+      "operator": "add-gcd-and-lcm-functions",
+      "result": "ACCEPTED",
+      "timestamp": "2026-09-24T16:41:16-04:00",
+      "evidence": {
+        "implemented_functions": 111,
+        "catalog_inventory_functions": 521,
+        "catalog_only_functions": 410,
+        "detailed_semantic_specs": 77,
+        "source_records": 98,
+        "open_source_patterns": 14,
+        "unique_shared_fixtures": 1188,
+        "new_slice": [
+          "GCD",
+          "LCM"
+        ],
+        "new_slice_fixture_cases": 57,
+        "new_slice_fixture_distribution": {
+          "GCD": 28,
+          "LCM": 29
+        },
+        "exact_numeric_regressions": [
+          "GCD accepts 2^53-1 and rejects 2^53 as an input.",
+          "LCM accepts 2^53-2 and rejects a result equal to 2^53.",
+          "LCM(4503599627370493,3) independently derives to 13510798882111479 (>2^53), while the local trailing-zero profile returns 0 after validating all arguments."
+        ],
+        "python": "136 passed; compileall passed using Python 3.13",
+        "rust": "23 passed; fmt, locked check, test, and clippy passed; shared corpus has 1,188 cases",
+        "rust_external_dependencies": [],
+        "python_runtime_dependencies": [],
+        "catalog_schemas": "all three validated with JSON Schema Draft 2020-12 and format checking",
+        "source_refs_resolved": true,
+        "all_implemented_functions_have_shared_fixtures": true,
+        "config_validation_ids": 628,
+        "allowed_licenses": [
+          "MIT",
+          "Apache-2.0"
+        ],
+        "code_copied": false,
+        "excel_spot_checks": 0,
+        "jev": [
+          "Run 18 claim: supports_narrower_claim (confidence 0.59; peakedness 0.67; probabilities: supports_narrower_claim 0.67, supports 0.13, not_addressed 0.16, insufficient_context 0.02, contradicts 0.02; shadow/advisory only; no automatic merge; not ground truth)."
+        ],
+        "independent_review": "Semantic review caught and fixed the late-zero fixture derivation and requested explicit labeling of GCD(0,0) as an unverified local profile. Rust parity review found no remaining behavior mismatch and verified exact boundary comparisons. Catalog review confirmed variadic metadata/schema alignment, source and fixture integrity, pinned Apache-2.0 license evidence, and MIT/Apache-only/no-copy policy. All three reviews cleared after fixes.",
+        "compatibility_limit": "No Microsoft Excel spot-checks were run. Microsoft documents GCD input >=2^53 and LCM result >=2^53 as separate #NUM! boundaries. MS-OE376 lists both functions as range-capable; this evaluator retains a local scalar range boundary pending formula-cell/array context. GCD(0,0), LCM zero behavior, scalar coercion, mixed-error order, and negative-fraction order remain evaluator profiles. Conformance-tested means Python/Rust fixture parity, not full Excel compatibility."
+      }
+    },
+    {
+      "run": 19,
+      "score": 6,
+      "max_score": 6,
+      "validation_score": 6,
+      "operator": "add-bounded-array-result-core-and-sequence",
+      "result": "ACCEPTED",
+      "timestamp": "2026-09-24T17:43:16-04:00",
+      "evidence": {
+        "implemented_functions": 112,
+        "catalog_inventory_functions": 521,
+        "catalog_only_functions": 409,
+        "detailed_semantic_specs": 84,
+        "source_records": 107,
+        "open_source_patterns": 15,
+        "unique_shared_fixtures": 1238,
+        "new_slice": [
+          "ArrayValue",
+          "FormulaResult",
+          "evaluate_result",
+          "SEQUENCE"
+        ],
+        "new_slice_fixture_cases": 50,
+        "new_slice_fixture_distribution": {
+          "core_array_and_sequence_cases": 38,
+          "array_consumer_coverage_and_audit_regressions": 12
+        },
+        "python": "138 passed; compileall passed using Python 3.13",
+        "rust": "25 passed; fmt, locked check, tests, and clippy passed",
+        "python_runtime_dependencies": [],
+        "rust_runtime_dependencies": [],
+        "catalog_schemas": "all three Draft 2020-12 schemas validated with format checking",
+        "source_refs_resolved": true,
+        "all_implemented_functions_have_shared_fixtures": true,
+        "config_validation_ids": 678,
+        "allowed_licenses": [
+          "MIT",
+          "Apache-2.0"
+        ],
+        "code_copied": false,
+        "excel_spot_checks": 0,
+        "jev": "Run 19 source/profile claim: supports_narrower_claim (confidence/peakedness 0.57; narrower-claim probability 0.65); shadow/advisory only, no automatic merge, not ground truth.",
+        "independent_review": "Run 19 array-semantics, Python/Rust parity, and catalog reviews cleared. Repairs added direct fixtures for all advertised computed-array consumers, the unsupported array-multiplication boundary, and IFERROR error-cell passthrough. Catalog review confirmed exact counts, schema/provenance integrity, MIT/Apache-only references, no copied code, and no runtime dependencies.",
+        "compatibility_limit": "No Excel spot-checks were run. evaluate_result preserves formula-result array shape but does not place spill cells. Array operators remain scalar and return a local #VALUE! boundary; IFERROR does not replace error cells within arrays/ranges element-wise. Shared fixtures establish Python/Rust parity only."
+      }
+    },
+    {
+      "run": 20,
+      "score": 6,
+      "max_score": 6,
+      "validation_score": 6,
+      "operator": "add-filter-with-bounded-elementwise-array-operators",
+      "result": "ACCEPTED",
+      "timestamp": "2026-09-24T19:05:00-04:00",
+      "evidence": {
+        "implemented_functions": 113,
+        "catalog_inventory_functions": 521,
+        "catalog_only_functions": 408,
+        "detailed_semantic_specs": 84,
+        "source_records": 107,
+        "open_source_patterns": 16,
+        "unique_shared_fixtures": 1301,
+        "new_slice": [
+          "elementwise binary operators",
+          "FILTER"
+        ],
+        "new_slice_fixture_cases": 63,
+        "python": "139 passed; compileall passed using Python 3.13",
+        "rust": "25 passed; fmt, locked check, tests, and clippy passed",
+        "python_runtime_dependencies": [],
+        "rust_runtime_dependencies": [],
+        "catalog_schemas": "all three Draft 2020-12 schemas validated with format checking",
+        "validation_ids": 741,
+        "source_refs_resolved": true,
+        "all_implemented_functions_have_shared_fixtures": true,
+        "allowed_licenses": [
+          "MIT",
+          "Apache-2.0"
+        ],
+        "code_copied": false,
+        "excel_spot_checks": 0,
+        "jev": "Microsoft source claim assessed as supports (confidence/peakedness 0.87; probability supports 0.90, supports_narrower_claim 0.10); shadow/advisory only, no automatic merge, not ground truth.",
+        "independent_review": "Semantic review cleared computed non-finite left-operand precedence for scalar and mixed-array comparisons; prior literal, arithmetic and concatenation cases plus FILTER behavior remain aligned. Catalog integrity review found no blockers for fixture uniqueness, validation IDs, schema, source, licensing, counts, and pending-state accounting.",
+        "compatibility_limit": "No Excel desktop spot-checks were run. Binary comparison coercion/collation, error precedence, and FILTER mask/fallback details remain Formula Atlas profiles. Results preserve arrays but worksheet spill placement is unsupported."
+      }
+    },
+    {
+      "run": 21,
+      "score": 6,
+      "max_score": 6,
+      "validation_score": 6,
+      "operator": "add-targeted-xlsx-scalar-formula-calculation-and-concat-boundaries",
+      "result": "ACCEPTED",
+      "timestamp": "2026-09-24T21:16:10-04:00",
+      "evidence": {
+        "python": "Python 3.13 full suite: 168 passed; compileall passed at cumulative Run22 verification.",
+        "rust": "29 unit/shared-fixture tests passed; cargo fmt --check, cargo check --locked, cargo test --locked, and cargo clippy --all-targets --locked -- -D warnings passed.",
+        "python_runtime_dependencies": [],
+        "rust_runtime_dependencies": [],
+        "catalog_schemas": "All three Draft 2020-12 schemas passed with format checking.",
+        "source_refs_resolved": true,
+        "all_implemented_functions_have_shared_fixtures": true,
+        "fixture_ids_unique": true,
+        "allowed_licenses": [
+          "MIT",
+          "Apache-2.0"
+        ],
+        "code_copied": false,
+        "excel_spot_checks": 0,
+        "implemented_functions": 113,
+        "catalog_inventory_functions": 521,
+        "catalog_only_functions": 408,
+        "detailed_semantic_specs": 85,
+        "source_records": 110,
+        "open_source_patterns": 16,
+        "unique_shared_fixtures": 1322,
+        "new_slice": [
+          "Workbook.calculate_cells_to",
+          "CONCAT numeric-to-text profile and 253-argument bound",
+          "UTF-16 text result limits"
+        ],
+        "new_slice_fixture_cases": 21,
+        "new_slice_fixture_distribution": {
+          "CONCAT behavior and limits": 17,
+          "shared string-format and UTF-16 limits": 4
+        },
+        "jev": "Shadow source review of the table calculated-column/totals-row formula boundary; advisory only and not implementation validation.",
+        "independent_review": "Python workbook package and Run21 semantic reviewers cleared. The cumulative Run22 full gates revalidated the Run21 code and its fixtures.",
+        "compatibility_limit": "Workbook calculation is limited to explicitly requested scalar formula cells and their bounded static dependency closure. It ignores cached formula inputs and stages typed writes, but does not model worksheet spill projection or incremental invalidation. No Excel Desktop checks were run."
+      }
+    },
+    {
+      "run": 22,
+      "score": 6,
+      "max_score": 6,
+      "validation_score": 6,
+      "operator": "add-sort-and-unique-bounded-array-functions",
+      "result": "ACCEPTED",
+      "timestamp": "2026-09-24T21:16:10-04:00",
+      "evidence": {
+        "python": "Python 3.13 full suite: 168 passed; compileall passed at cumulative Run22 verification.",
+        "rust": "29 unit/shared-fixture tests passed; cargo fmt --check, cargo check --locked, cargo test --locked, and cargo clippy --all-targets --locked -- -D warnings passed.",
+        "python_runtime_dependencies": [],
+        "rust_runtime_dependencies": [],
+        "catalog_schemas": "All three Draft 2020-12 schemas passed with format checking.",
+        "source_refs_resolved": true,
+        "all_implemented_functions_have_shared_fixtures": true,
+        "fixture_ids_unique": true,
+        "allowed_licenses": [
+          "MIT",
+          "Apache-2.0"
+        ],
+        "code_copied": false,
+        "excel_spot_checks": 0,
+        "implemented_functions": 115,
+        "catalog_inventory_functions": 521,
+        "catalog_only_functions": 406,
+        "detailed_semantic_specs": 85,
+        "source_records": 110,
+        "open_source_patterns": 16,
+        "unique_shared_fixtures": 1366,
+        "new_slice": [
+          "SORT",
+          "UNIQUE"
+        ],
+        "new_slice_fixture_cases": 44,
+        "new_slice_fixture_distribution": {
+          "SORT": 26,
+          "UNIQUE": 18
+        },
+        "direct_api_regressions": [
+          "source-ordered mixed/non-finite SORT key validation",
+          "non-finite non-key output rejection",
+          "exact Python numeric payload normalization to binary64"
+        ],
+        "jev": "Shadow review confirmed Microsoft references support function signatures and broad result shape only; advisory and not evaluator validation.",
+        "independent_review": "Independent semantic review cleared source-order error handling, finite binary64 outputs, unique hash/equality behavior, range-cap errors, and reversed-endpoint normalization. Catalog review cleared all schemas, 1,366 unique fixture IDs, source references, status counts, inventory markers, and MIT/Apache-only source policy.",
+        "compatibility_limit": "SORT and UNIQUE return bounded, shape-preserving formula values without worksheet spill projection. Key ordering, equality, coercion, strict selector handling, binary64 output, range limit, and empty exactly_once behavior are Formula Atlas profiles where Microsoft documentation is incomplete. Shared fixtures establish Python/Rust parity only; no Excel Desktop checks were run."
+      }
+    }
+  ],
+  "next_mutation": {
+    "operator": "build-excel-desktop-differential-oracle",
+    "target": [
+      "Establish a repeatable harness that submits source-linked formulas and inputs to a real Excel Desktop build and captures typed values and Excel error codes.",
+      "Record Excel version, update channel, calculation mode, and source workbook for each observation.",
+      "Start with high-risk existing profiles, including SORT/UNIQUE ordering and equality, array results, text limits, and date/financial boundaries.",
+      "Compare Python and Rust results to the Excel observation while retaining unsupported cases and undocumented behavior as explicit profiles.",
+      "Do not expand formula-family coverage until the first oracle batch is recorded and reviewed."
+    ],
+    "hypothesis": "A real Excel oracle will separate implementation parity from Excel compatibility, resolve high-impact local profiles, and make later formula-family choices evidence-led.",
+    "official_sources": [
+      "https://support.microsoft.com/en-us/excel/functions/sort-function",
+      "https://support.microsoft.com/en-us/excel/functions/unique-function",
+      "https://support.microsoft.com/en-us/excel/functions/filter-function",
+      "https://support.microsoft.com/en-us/excel/excel-specifications-and-limits"
+    ],
+    "reference_patterns": [
+      "Use the existing source-linked JSONL case format and Python/Rust result APIs; capture Excel output as separate, versioned evidence. No third-party evaluator code or runtime dependency is required."
+    ],
+    "decision_support_advisory": "Jev may assess whether an Excel source supports a narrow claim; it cannot validate observed calculation results or replace direct Excel execution and independent semantic review.",
+    "acceptance": "Use a real Excel Desktop instance. Preserve formula, input, result type/value, error code, Excel version/channel, and run provenance. Re-run selected cases in Python and Rust; label each outcome as documented by Microsoft, observed in Excel, Formula Atlas profile, or unsupported. Do not claim broader compatibility than the observed case set."
+  }
+}

@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://formula-atlas.local/catalog/open-source-patterns.schema.json",
+  "title": "Formula Atlas permitted open-source implementation patterns",
+  "type": "object",
+  "required": ["catalog_version", "catalog_schema", "retrieved", "eligibility_policy", "sources", "patterns"],
+  "properties": {
+    "catalog_version": {"type": "string", "minLength": 1},
+    "catalog_schema": {"const": "open-source-patterns.schema.json"},
+    "retrieved": {"type": "string", "format": "date"},
+    "eligibility_policy": {
+      "type": "object",
+      "required": ["allowed_licenses", "code_copied", "rule"],
+      "properties": {
+        "allowed_licenses": {"const": ["MIT", "Apache-2.0"]},
+        "code_copied": {"const": false},
+        "rule": {"type": "string", "minLength": 1}
+      },
+      "additionalProperties": false
+    },
+    "sources": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "name", "repository", "license_evidence_url", "licenses", "reference_urls", "scope_note"],
+        "properties": {
+          "id": {"type": "string", "minLength": 1},
+          "name": {"type": "string", "minLength": 1},
+          "repository": {"type": "string", "format": "uri"},
+          "license_evidence_url": {"type": "string", "format": "uri"},
+          "licenses": {"type": "array", "minItems": 1, "items": {"enum": ["MIT", "Apache-2.0"]}},
+          "reference_urls": {"type": "array", "minItems": 1, "items": {"type": "string", "format": "uri"}},
+          "scope_note": {"type": "string", "minLength": 1}
+        },
+        "additionalProperties": false
+      }
+    },
+    "patterns": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "source_refs", "observation", "formula_atlas_decision", "next_application", "code_copied"],
+        "properties": {
+          "id": {"type": "string", "minLength": 1},
+          "source_refs": {"type": "array", "minItems": 1, "items": {"type": "string"}},
+          "observation": {"type": "string", "minLength": 1},
+          "formula_atlas_decision": {"type": "string", "minLength": 1},
+          "next_application": {"type": "string", "minLength": 1},
+          "code_copied": {"const": false}
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

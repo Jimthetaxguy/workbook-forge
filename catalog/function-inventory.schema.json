@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://formula-atlas.local/catalog/function-inventory.schema.json",
+  "title": "Formula Atlas function inventory snapshot",
+  "type": "object",
+  "required": ["inventory_version", "profile", "snapshot", "retrieved", "refresh_required", "source", "function_count", "category_counts", "functions"],
+  "properties": {
+    "inventory_version": {"type": "string"},
+    "profile": {"const": "excel-microsoft-365-desktop"},
+    "snapshot": {"const": true},
+    "retrieved": {"type": "string", "format": "date"},
+    "refresh_required": {"type": "boolean"},
+    "source": {
+      "type": "object",
+      "required": ["name", "url", "scope_note", "caveats"],
+      "properties": {
+        "name": {"type": "string"},
+        "url": {"type": "string", "format": "uri"},
+        "scope_note": {"type": "string"},
+        "caveats": {"type": "array", "items": {"type": "string"}}
+      },
+      "additionalProperties": true
+    },
+    "function_count": {"type": "integer", "minimum": 1},
+    "category_counts": {"type": "object", "additionalProperties": {"type": "integer", "minimum": 0}},
+    "functions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "category", "source_name_group", "introduced_version_marker", "excel_365_desktop_availability", "source_url", "function_page_url", "retrieved"],
+        "properties": {
+          "name": {"type": "string", "minLength": 1},
+          "category": {"type": "string", "minLength": 1},
+          "source_name_group": {"type": "array", "minItems": 1, "items": {"type": "string"}},
+          "introduced_version_marker": {"type": ["string", "null"]},
+          "excel_365_desktop_availability": {"enum": ["listed", "unknown"]},
+          "availability_note": {"type": "string"},
+          "source_url": {"type": "string", "format": "uri"},
+          "function_page_url": {"type": "string", "format": "uri"},
+          "retrieved": {"type": "string", "format": "date"}
+        },
+        "additionalProperties": true
+      }
+    }
+  },
+  "additionalProperties": true
+}
