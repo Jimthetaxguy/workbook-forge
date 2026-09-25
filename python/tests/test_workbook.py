@@ -7,7 +7,13 @@ from xml.etree import ElementTree as ET
 import pytest
 
 from formula_atlas import ErrorValue, analyze_formula
-from formula_atlas.workbook import UnsupportedWorkbook, Workbook, WorkbookError
+from formula_atlas.workbook import (
+    UnsupportedWorkbook,
+    Workbook,
+    WorkbookError,
+    _read_archive_part,
+    _safe_xml,
+)
 
 
 def make_xlsx(path, overrides=None):
@@ -270,6 +276,241 @@ def test_rejects_xml_entity_declarations(tmp_path):
             archive.writestr(name, data)
     with pytest.raises(UnsupportedWorkbook, match="DTD/entity"):
         Workbook.open(source)
+
+
+@pytest.mark.parametrize("encoding", ["utf-16-le", "utf-16-be", "utf-32-le", "utf-32-be"])
+def test_rejects_xml_entity_declarations_in_wide_encodings(encoding):
+    xml = '<?xml version="1.0"?><!DOCTYPE x [<!ENTITY e "expanded">]><workbook>&e;</workbook>'
+    byte_order_marks = {
+        "utf-16-le": b"\xff\xfe",
+        "utf-16-be": b"\xfe\xff",
+        "utf-32-le": b"\xff\xfe\x00\x00",
+        "utf-32-be": b"\x00\x00\xfe\xff",
+    }
+    with pytest.raises(UnsupportedWorkbook, match="DTD/entity"):
+        _safe_xml(byte_order_marks[encoding] + xml.encode(encoding), "xl/workbook.xml")
+
+
+def test_open_caps_bytes_emitted_by_archive_member(monkeypatch, tmp_path):
+    source = tmp_path / "expanded-member.xlsx"
+    make_xlsx(source)
+    with zipfile.ZipFile(source) as archive:
+        declared_total = sum(info.file_size for info in archive.infolist())
+        target_name = archive.infolist()[0].filename
+
+    package_limit = declared_total + 31
+    expanded_member = b"x" * (package_limit + 1)
+    requested_sizes = []
+    original_open = zipfile.ZipFile.open
+
+    class ReaderProxy:
+        def __init__(self, stream):
+            self.stream = stream
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_):
+            self.stream.close()
+
+        def read(self, size=-1):
+            requested_sizes.append(size)
+            return self.stream.read(size)
+
+    def audited_open(archive, name, mode="r", pwd=None, *, force_zip64=False):
+        part_name = name.filename if isinstance(name, zipfile.ZipInfo) else name
+        if part_name == target_name and mode == "r":
+            stream = io.BytesIO(expanded_member)
+        else:
+            stream = original_open(archive, name, mode, pwd, force_zip64=force_zip64)
+        return ReaderProxy(stream)
+
+    monkeypatch.setattr(zipfile.ZipFile, "open", audited_open)
+    monkeypatch.setattr("formula_atlas.workbook.MAX_PACKAGE_BYTES", package_limit)
+    with pytest.raises(UnsupportedWorkbook, match="actual uncompressed size limit"):
+        Workbook.open(source)
+
+    assert requested_sizes
+    assert all(0 < size <= 64 * 1024 for size in requested_sizes)
+
+
+def test_archive_part_reads_real_zip_members_in_bounded_chunks(monkeypatch, tmp_path):
+    source = tmp_path / "compressed-members.zip"
+    payload = b"x" * (256 * 1024)
+    with zipfile.ZipFile(source, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr("xl/test.xml", payload)
+
+    requested_sizes = []
+    original_open = zipfile.ZipFile.open
+
+    class ReaderProxy:
+        def __init__(self, stream):
+            self.stream = stream
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_):
+            self.stream.close()
+
+        def read(self, size=-1):
+            requested_sizes.append(size)
+            return self.stream.read(size)
+
+    def audited_open(archive, name, mode="r", pwd=None, *, force_zip64=False):
+        stream = original_open(archive, name, mode, pwd, force_zip64=force_zip64)
+        return ReaderProxy(stream)
+
+    monkeypatch.setattr(zipfile.ZipFile, "open", audited_open)
+    with zipfile.ZipFile(source, "r") as archive:
+        result = _read_archive_part(archive, archive.getinfo("xl/test.xml"), 0)
+
+    assert result == payload
+    assert len(requested_sizes) > 1
+    assert all(0 < size <= 64 * 1024 for size in requested_sizes)
+
+
+@pytest.mark.parametrize("archive_kind", ["ordinary", "zip64", "low-declared-count"])
+def test_open_preflights_actual_package_entry_count(monkeypatch, tmp_path, archive_kind):
+    source = tmp_path / f"many-members-{archive_kind}.xlsx"
+    if archive_kind == "zip64":
+        monkeypatch.setattr(zipfile, "ZIP_FILECOUNT_LIMIT", 4)
+    make_xlsx(source)
+
+    with zipfile.ZipFile(source) as archive:
+        entry_count = len(archive.infolist())
+
+    if archive_kind == "low-declared-count":
+        with source.open("r+b") as stream:
+            stream.seek(-22, 2)
+            end_record = bytearray(stream.read(22))
+            assert end_record[:4] == b"PK\x05\x06"
+            end_record[8:12] = (1).to_bytes(2, "little") * 2
+            stream.seek(-22, 2)
+            stream.write(end_record)
+    else:
+        monkeypatch.setattr("formula_atlas.workbook.MAX_PACKAGE_ENTRIES", entry_count - 1)
+    monkeypatch.setattr(
+        "formula_atlas.workbook.zipfile.ZipFile",
+        lambda *_args, **_kwargs: pytest.fail("ZipFile was constructed before entry preflight"),
+    )
+
+    expected_error_type = (
+        WorkbookError if archive_kind == "low-declared-count" else UnsupportedWorkbook
+    )
+    expected_error = (
+        "entry count is inconsistent"
+        if archive_kind == "low-declared-count"
+        else "package entries"
+    )
+    with pytest.raises(expected_error_type, match=expected_error):
+        Workbook.open(source)
+
+
+def test_open_rejects_nonzero_disk_start_in_central_directory(monkeypatch, tmp_path):
+    source = tmp_path / "multi-disk-entry.xlsx"
+    parts = make_xlsx(source)
+    payload = bytearray(source.read_bytes())
+    end_record_offset = payload.rfind(b"PK\x05\x06")
+    assert end_record_offset >= 0
+    entry_count = int.from_bytes(
+        payload[end_record_offset + 10 : end_record_offset + 12], "little"
+    )
+    central_offset = int.from_bytes(
+        payload[end_record_offset + 16 : end_record_offset + 20], "little"
+    )
+
+    offset = central_offset
+    for _ in range(entry_count):
+        assert payload[offset : offset + 4] == b"PK\x01\x02"
+        payload[offset + 34 : offset + 36] = (1).to_bytes(2, "little")
+        name_length = int.from_bytes(payload[offset + 28 : offset + 30], "little")
+        extra_length = int.from_bytes(payload[offset + 30 : offset + 32], "little")
+        comment_length = int.from_bytes(payload[offset + 32 : offset + 34], "little")
+        offset += 46 + name_length + extra_length + comment_length
+    assert offset == end_record_offset
+    assert entry_count == len(parts)
+    source.write_bytes(payload)
+
+    monkeypatch.setattr(
+        "formula_atlas.workbook.zipfile.ZipFile",
+        lambda *_args, **_kwargs: pytest.fail("ZipFile was constructed before disk-start preflight"),
+    )
+    with pytest.raises(UnsupportedWorkbook, match="multi-disk package entries"):
+        Workbook.open(source)
+
+
+def test_open_rejects_real_archive_over_entry_limit_before_zipfile(monkeypatch, tmp_path):
+    source = tmp_path / "many-empty-members.xlsx"
+    with zipfile.ZipFile(source, "w") as archive:
+        for index in range(10_001):
+            archive.writestr(f"part-{index:05}.bin", b"")
+
+    monkeypatch.setattr(
+        "formula_atlas.workbook.zipfile.ZipFile",
+        lambda *_args, **_kwargs: pytest.fail("ZipFile parsed an over-limit directory"),
+    )
+    with pytest.raises(UnsupportedWorkbook, match="package entries"):
+        Workbook.open(source)
+
+
+def test_open_supports_small_zip64_packages(monkeypatch, tmp_path):
+    source = tmp_path / "zip64.xlsx"
+    monkeypatch.setattr(zipfile, "ZIP_FILECOUNT_LIMIT", 4)
+    make_xlsx(source)
+
+    with Workbook.open(source) as workbook:
+        assert workbook.sheet_names == ("Sheet1",)
+        assert workbook.get("Sheet1", "A1").value == "hello"
+
+
+def test_open_closes_archive_and_stream_when_directory_read_fails(monkeypatch, tmp_path):
+    source = tmp_path / "source.xlsx"
+    make_xlsx(source)
+    zip_file_class = zipfile.ZipFile
+    original_init = zip_file_class.__init__
+    streams = []
+    archives = []
+
+    def tracked_init(self, file, *args, **kwargs):
+        streams.append(file)
+        original_init(self, file, *args, **kwargs)
+        archives.append(self)
+
+    def fail_infolist(_self):
+        raise RuntimeError("injected directory failure")
+
+    monkeypatch.setattr(zip_file_class, "__init__", tracked_init)
+    monkeypatch.setattr(zip_file_class, "infolist", fail_infolist)
+
+    with pytest.raises(RuntimeError, match="injected directory failure"):
+        Workbook.open(source)
+
+    assert streams and streams[0].closed
+    assert archives and archives[0].fp is None
+
+
+def test_open_closes_source_stream_when_file_stat_fails(monkeypatch, tmp_path):
+    source = tmp_path / "source.xlsx"
+    make_xlsx(source)
+    original_open = type(source).open
+    streams = []
+
+    def tracked_open(path, *args, **kwargs):
+        stream = original_open(path, *args, **kwargs)
+        streams.append(stream)
+        return stream
+
+    def fail_fstat(_file_descriptor):
+        raise OSError("injected stat failure")
+
+    monkeypatch.setattr(type(source), "open", tracked_open)
+    monkeypatch.setattr("formula_atlas.workbook.os.fstat", fail_fstat)
+
+    with pytest.raises(WorkbookError, match="injected stat failure"):
+        Workbook.open(source)
+
+    assert streams and streams[0].closed
 
 
 def test_preserves_markup_compatibility_namespace_prefixes(tmp_path):

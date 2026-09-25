@@ -12,13 +12,14 @@ import io
 import math
 import os
 import re
+import struct
 import tempfile
 import threading
 import zipfile
 from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, BinaryIO
 from urllib.parse import unquote
 from xml.etree import ElementTree as ET
 from xml.sax.saxutils import quoteattr
@@ -45,10 +46,16 @@ RANGE_RE = re.compile(
     r"^\$?([A-Za-z]{1,3})\$?([1-9][0-9]{0,6})(?::\$?([A-Za-z]{1,3})\$?([1-9][0-9]{0,6}))?$"
 )
 MAX_PACKAGE_BYTES = 128 * 1024 * 1024
+MAX_COMPRESSED_PACKAGE_BYTES = 130 * 1024 * 1024
+MAX_PACKAGE_ENTRIES = 10_000
+MAX_CENTRAL_DIRECTORY_BYTES = 32 * 1024 * 1024
 MAX_XML_PART_BYTES = 32 * 1024 * 1024
+MAX_ARCHIVE_READ_CHUNK_BYTES = 64 * 1024
 MAX_CALCULATION_FORMULA_CHARS = 100_000
 MAX_CALCULATION_REFERENCE_CELLS = 100_000
 MAX_CALCULATION_REFERENCE_EXPANSION_CELLS = 250_000
+ZIP_CENTRAL_DIRECTORY_RECORD = struct.Struct("<4s6H3I5H2I")
+ZIP_CENTRAL_DIRECTORY_SIGNATURE = b"PK\x01\x02"
 MAX_CALCULATION_RANGE_CHECKS = 250_000
 EXCEL_ERROR_CODES = frozenset(
     {"#NULL!", "#DIV/0!", "#VALUE!", "#REF!", "#NAME?", "#NUM!", "#N/A", "#N/A!", "#SPILL!", "#CALC!"}
@@ -105,12 +112,154 @@ def _safe_xml(data: bytes, part: str) -> ET.Element:
     if len(data) > MAX_XML_PART_BYTES:
         raise UnsupportedWorkbook(f"XML part exceeds size limit: {part}")
     upper = data.upper()
-    if b"<!DOCTYPE" in upper or b"<!ENTITY" in upper:
+    declarations = ("<!DOCTYPE", "<!ENTITY")
+    forbidden = any(token.encode("ascii") in upper for token in declarations)
+    if not forbidden:
+        for encoding in ("utf-16-le", "utf-16-be", "utf-32-le", "utf-32-be"):
+            if any(token.encode(encoding) in upper for token in declarations):
+                forbidden = True
+                break
+    if forbidden:
         raise UnsupportedWorkbook(f"DTD/entity declarations are not accepted: {part}")
     try:
         return ET.fromstring(data)
     except ET.ParseError as exc:
         raise WorkbookError(f"invalid XML in {part}: {exc}") from exc
+
+
+def _read_archive_part(
+    archive: zipfile.ZipFile,
+    info: zipfile.ZipInfo,
+    total_bytes: int,
+) -> bytes:
+    """Read a ZIP member with a bounded decompression request size."""
+    name = info.filename
+    part_limit = MAX_XML_PART_BYTES if name.lower().endswith((".xml", ".rels")) else MAX_PACKAGE_BYTES
+    if info.file_size > part_limit:
+        raise UnsupportedWorkbook(f"package part exceeds size limit: {name}")
+    if total_bytes + info.file_size > MAX_PACKAGE_BYTES:
+        raise UnsupportedWorkbook("workbook exceeds uncompressed size limit")
+
+    buffer = bytearray()
+    with archive.open(info, "r") as member:
+        while True:
+            remaining = min(
+                part_limit - len(buffer),
+                MAX_PACKAGE_BYTES - total_bytes - len(buffer),
+            )
+            read_size = min(MAX_ARCHIVE_READ_CHUNK_BYTES, remaining + 1)
+            chunk = member.read(read_size)
+            if not chunk:
+                break
+            if len(buffer) + len(chunk) > part_limit:
+                raise UnsupportedWorkbook(f"package part exceeds size limit: {name}")
+            if total_bytes + len(buffer) + len(chunk) > MAX_PACKAGE_BYTES:
+                raise UnsupportedWorkbook("workbook exceeds actual uncompressed size limit")
+            buffer.extend(chunk)
+
+    if len(buffer) != info.file_size:
+        raise WorkbookError(f"package member size does not match its ZIP record: {name}")
+    return bytes(buffer)
+
+
+def _preflight_archive_directory(source_stream: BinaryIO, source_size: int) -> int:
+    """Bound and count ZIP directory records before ZipFile allocates ZipInfo objects."""
+    end_record_reader = getattr(zipfile, "_EndRecData", None)
+    end_record_indexes = (
+        "_ECD_DISK_NUMBER",
+        "_ECD_DISK_START",
+        "_ECD_ENTRIES_THIS_DISK",
+        "_ECD_ENTRIES_TOTAL",
+        "_ECD_SIZE",
+        "_ECD_OFFSET",
+        "_ECD_LOCATION",
+    )
+    if end_record_reader is None or any(
+        not hasattr(zipfile, name) for name in end_record_indexes
+    ):
+        raise UnsupportedWorkbook("this Python runtime cannot safely inspect ZIP metadata")
+
+    try:
+        end_record = end_record_reader(source_stream)
+        if not end_record:
+            raise WorkbookError("cannot open workbook: ZIP end record is missing")
+        disk_number = end_record[zipfile._ECD_DISK_NUMBER]
+        disk_start = end_record[zipfile._ECD_DISK_START]
+        entries_on_disk = end_record[zipfile._ECD_ENTRIES_THIS_DISK]
+        declared_entries = end_record[zipfile._ECD_ENTRIES_TOTAL]
+        directory_size = end_record[zipfile._ECD_SIZE]
+        directory_offset = end_record[zipfile._ECD_OFFSET]
+        record_location = end_record[zipfile._ECD_LOCATION]
+    except (OSError, zipfile.BadZipFile, struct.error, IndexError, TypeError) as exc:
+        raise WorkbookError(f"cannot inspect workbook ZIP directory: {exc}") from exc
+    finally:
+        source_stream.seek(0)
+
+    if not all(
+        isinstance(value, int) and value >= 0
+        for value in (
+            disk_number,
+            disk_start,
+            entries_on_disk,
+            declared_entries,
+            directory_size,
+            directory_offset,
+            record_location,
+        )
+    ):
+        raise WorkbookError("workbook ZIP directory metadata is invalid")
+    if disk_number != 0 or disk_start != 0 or entries_on_disk != declared_entries:
+        raise UnsupportedWorkbook("multi-disk or inconsistent ZIP directories are not supported")
+    if declared_entries > MAX_PACKAGE_ENTRIES:
+        raise UnsupportedWorkbook(
+            f"workbook has more than {MAX_PACKAGE_ENTRIES} package entries"
+        )
+    if directory_size > MAX_CENTRAL_DIRECTORY_BYTES:
+        raise UnsupportedWorkbook("workbook ZIP directory exceeds size limit")
+
+    # Match ZipFile's concatenated-archive offset calculation without reading
+    # the whole directory into memory.
+    concat_offset = record_location - directory_size - directory_offset
+    directory_start = directory_offset + concat_offset
+    directory_end = directory_start + directory_size
+    if (
+        directory_start < 0
+        or directory_end != record_location
+        or record_location > source_size
+    ):
+        raise WorkbookError("workbook ZIP directory offsets are invalid")
+
+    source_stream.seek(directory_start)
+    observed_entries = 0
+    remaining = directory_size
+    while remaining:
+        if remaining < ZIP_CENTRAL_DIRECTORY_RECORD.size:
+            raise WorkbookError("workbook ZIP directory has a truncated record")
+        raw_record = source_stream.read(ZIP_CENTRAL_DIRECTORY_RECORD.size)
+        if len(raw_record) != ZIP_CENTRAL_DIRECTORY_RECORD.size:
+            raise WorkbookError("workbook ZIP directory is truncated")
+        record = ZIP_CENTRAL_DIRECTORY_RECORD.unpack(raw_record)
+        if record[0] != ZIP_CENTRAL_DIRECTORY_SIGNATURE:
+            raise WorkbookError("workbook ZIP directory has an invalid record signature")
+        if record[13] != 0:
+            raise UnsupportedWorkbook("multi-disk package entries are not supported")
+
+        variable_size = record[10] + record[11] + record[12]
+        record_size = ZIP_CENTRAL_DIRECTORY_RECORD.size + variable_size
+        if record_size > remaining:
+            raise WorkbookError("workbook ZIP directory record exceeds its declared boundary")
+        source_stream.seek(variable_size, os.SEEK_CUR)
+        remaining -= record_size
+        observed_entries += 1
+        if observed_entries > MAX_PACKAGE_ENTRIES:
+            raise UnsupportedWorkbook(
+                f"workbook has more than {MAX_PACKAGE_ENTRIES} package entries"
+            )
+
+    if observed_entries != declared_entries:
+        raise WorkbookError("workbook ZIP directory entry count is inconsistent")
+    source_stream.seek(0)
+    return observed_entries
 
 
 def _root_namespaces(data: bytes) -> tuple[tuple[str, str], ...]:
@@ -280,12 +429,14 @@ class Workbook:
         self,
         source: Path,
         archive: zipfile.ZipFile,
+        source_stream: BinaryIO,
         parts: dict[str, bytes],
         workbook_part: str,
         content_types: ET.Element,
     ):
         self.source = source
         self._archive = archive
+        self._source_stream = source_stream
         self._parts = parts
         self._workbook_part = workbook_part
         self._workbook_rels_part = _relationship_part(workbook_part)
@@ -323,26 +474,43 @@ class Workbook:
         source = Path(path).resolve()
         if source.suffix.lower() != ".xlsx":
             raise UnsupportedWorkbook("v0.1 accepts .xlsx only; register an audited adapter for other formats")
+        source_stream: BinaryIO | None = None
+        archive: zipfile.ZipFile | None = None
+        transferred = False
         try:
-            archive = zipfile.ZipFile(source, "r")
-        except (OSError, zipfile.BadZipFile) as exc:
-            raise WorkbookError(f"cannot open workbook: {exc}") from exc
-        infos = archive.infolist()
-        names = [info.filename for info in infos]
-        if len(names) != len(set(names)):
-            archive.close()
-            raise UnsupportedWorkbook("duplicate package part names are not supported")
-        if sum(info.file_size for info in infos) > MAX_PACKAGE_BYTES:
-            archive.close()
-            raise UnsupportedWorkbook("workbook exceeds uncompressed size limit")
-        if (
-            "_rels/.rels" not in names
-            or "[Content_Types].xml" not in names
-        ):
-            archive.close()
-            raise WorkbookError("not a complete Open Packaging Convention package")
-        try:
-            parts = {name: archive.read(name) for name in names}
+            try:
+                source_stream = source.open("rb")
+                source_size = os.fstat(source_stream.fileno()).st_size
+            except OSError as exc:
+                raise WorkbookError(f"cannot open workbook: {exc}") from exc
+            if source_size > MAX_COMPRESSED_PACKAGE_BYTES:
+                raise UnsupportedWorkbook("compressed workbook exceeds size limit")
+            entry_count = _preflight_archive_directory(source_stream, source_size)
+            source_stream.seek(0)
+            try:
+                archive = zipfile.ZipFile(source_stream, "r")
+            except (OSError, zipfile.BadZipFile) as exc:
+                raise WorkbookError(f"cannot open workbook: {exc}") from exc
+            infos = archive.infolist()
+            if len(infos) != entry_count:
+                raise WorkbookError("workbook ZIP directory changed after preflight")
+            names = [info.filename for info in infos]
+            if len(names) != len(set(names)):
+                raise UnsupportedWorkbook("duplicate package part names are not supported")
+            if sum(info.file_size for info in infos) > MAX_PACKAGE_BYTES:
+                raise UnsupportedWorkbook("workbook exceeds uncompressed size limit")
+            if (
+                "_rels/.rels" not in names
+                or "[Content_Types].xml" not in names
+            ):
+                raise WorkbookError("not a complete Open Packaging Convention package")
+
+            parts: dict[str, bytes] = {}
+            total_bytes = 0
+            for info in infos:
+                content = _read_archive_part(archive, info, total_bytes)
+                parts[info.filename] = content
+                total_bytes += len(content)
             root_rels = _safe_xml(parts["_rels/.rels"], "_rels/.rels")
             if root_rels.tag != f"{{{PKG_REL}}}Relationships":
                 raise UnsupportedWorkbook("package root relationships use an unsupported namespace")
@@ -385,13 +553,30 @@ class Workbook:
             workbook_rels_part = _relationship_part(workbook_part)
             if workbook_rels_part not in parts:
                 raise WorkbookError(f"workbook relationships are absent: {workbook_rels_part}")
-            return cls(source, archive, parts, workbook_part, content_types)
-        except Exception:
-            archive.close()
-            raise
+            workbook = cls(
+                source,
+                archive,
+                source_stream,
+                parts,
+                workbook_part,
+                content_types,
+            )
+            transferred = True
+            return workbook
+        finally:
+            if not transferred:
+                try:
+                    if archive is not None:
+                        archive.close()
+                finally:
+                    if source_stream is not None:
+                        source_stream.close()
 
     def close(self) -> None:
-        self._archive.close()
+        try:
+            self._archive.close()
+        finally:
+            self._source_stream.close()
 
     def __enter__(self) -> Workbook:
         return self

@@ -16,7 +16,7 @@
   },
   "best_score": 6,
   "best_run": 1,
-  "current_run": 22,
+  "current_run": 23,
   "runs": [
     {
       "run": 0,
@@ -974,6 +974,56 @@
         "jev": "Shadow review confirmed Microsoft references support function signatures and broad result shape only; advisory and not evaluator validation.",
         "independent_review": "Independent semantic review cleared source-order error handling, finite binary64 outputs, unique hash/equality behavior, range-cap errors, and reversed-endpoint normalization. Catalog review cleared all schemas, 1,366 unique fixture IDs, source references, status counts, inventory markers, and MIT/Apache-only source policy.",
         "compatibility_limit": "SORT and UNIQUE return bounded, shape-preserving formula values without worksheet spill projection. Key ordering, equality, coercion, strict selector handling, binary64 output, range limit, and empty exactly_once behavior are Formula Atlas profiles where Microsoft documentation is incomplete. Shared fixtures establish Python/Rust parity only; no Excel Desktop checks were run."
+      }
+    },
+    {
+      "run": 23,
+      "score": 6,
+      "max_score": 6,
+      "validation_score": 6,
+      "operator": "harden-xlsx-package-preflight-and-checkout-local-cargo-gate",
+      "result": "ACCEPTED",
+      "timestamp": "2026-09-24T22:22:50-04:00",
+      "evidence": {
+        "python": "Python 3.13 full suite: 182 passed; compileall passed.",
+        "rust": "29 tests passed; cargo fmt --check, cargo check --locked, cargo test --locked, and cargo clippy --all-targets --locked -- -D warnings passed with CARGO_TARGET_DIR set to this checkout's rust/target.",
+        "catalog_schemas": "All three Draft 2020-12 schemas passed with format checking.",
+        "source_refs_resolved": true,
+        "all_implemented_functions_have_shared_fixtures": true,
+        "fixture_ids_unique": true,
+        "allowed_licenses": [
+          "MIT",
+          "Apache-2.0"
+        ],
+        "code_copied": false,
+        "python_runtime_dependencies": [],
+        "rust_runtime_dependencies": [],
+        "excel_spot_checks": 0,
+        "implemented_functions": 115,
+        "catalog_inventory_functions": 521,
+        "catalog_only_functions": 406,
+        "detailed_semantic_specs": 85,
+        "source_records": 110,
+        "open_source_patterns": 16,
+        "unique_shared_fixtures": 1366,
+        "package_limits": {
+          "compressed_bytes": 136314880,
+          "expanded_bytes": 134217728,
+          "xml_part_bytes": 33554432,
+          "central_directory_bytes": 33554432,
+          "entries": 10000,
+          "member_read_chunk_bytes": 65536
+        },
+        "package_regressions": [
+          "nonzero central-directory entry disk start rejected before ZipFile construction",
+          "low declared entry count reaches count-consistency rejection under the default cap",
+          "standard and ZIP64 directory counts preflighted before ZipFile construction",
+          "actual 10001-entry package rejected before ZipFile construction",
+          "bounded reads of real DEFLATE members and actual emitted-byte limits",
+          "archive and source streams closed after injected failures"
+        ],
+        "independent_review": "Independent package review found no remaining blocker in ZIP64 handling, central-directory validation, bounded member reads, cleanup, or regression coverage.",
+        "compatibility_limit": "Run 23 changes package safety and build isolation, not formula semantics. The adapter uses a guarded private CPython zipfile end-record helper and fails closed if unavailable. No Excel Desktop checks were performed; shared evaluator fixtures remain parity evidence rather than Excel conformance evidence."
       }
     }
   ],

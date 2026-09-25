@@ -25,9 +25,10 @@
     "Apache Commons Math ArithmeticUtils is an Apache-2.0 architectural reference only; no code is copied and no dependency is added.",
     "Run 18 accepted GCD and LCM after 57 exact/shared fixtures, independent semantic, parity, and catalog review, all schema/provenance checks, and the full Python/Rust gates; no direct Excel check is claimed.",
     "Run 19 preserves Microsoft-documented SEQUENCE defaults and result-array behavior separately from local dimension coercion, error, and 100000-cell resource profiles; worksheet spill placement remains unsupported.",
-    "Run 19 uses only pinned MIT/Apache-2.0 Formualizer v0.7.0 architecture/license references; no source code or runtime dependency is copied."
+    "Run 19 uses only pinned MIT/Apache-2.0 Formualizer v0.7.0 architecture/license references; no source code or runtime dependency is copied.",
+    "Rust checks use the checkout-local rust/target directory through CARGO_TARGET_DIR, avoiding Cargo artifacts shared by other checkouts."
   ],
-  "eval_command": "python3.13 -m pytest -q && python3.13 -m compileall -q python && (cd rust && cargo fmt --check && cargo check --locked && cargo test --locked && cargo clippy --all-targets --locked -- -D warnings)",
+  "eval_command": "python3.13 -m pytest -q && python3.13 -m compileall -q python && (cd rust && cargo fmt --check && CARGO_TARGET_DIR=\"$PWD/target\" cargo check --locked && CARGO_TARGET_DIR=\"$PWD/target\" cargo test --locked && CARGO_TARGET_DIR=\"$PWD/target\" cargo clippy --all-targets --locked -- -D warnings)",
   "validation_set": [
     "days-preserves-time-fraction",
     "round-negative-midpoint",
