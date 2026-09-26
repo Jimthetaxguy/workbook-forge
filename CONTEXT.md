@@ -1,8 +1,8 @@
 ---
 author: Codex
 created: 2026-09-24
-agent: claude-code/Claude
-date: '2026-09-26T00:52:52-04:00'
+agent: codex/Codex
+date: '2026-09-26T00:58:12-04:00'
 type: project-context
 task: Build a Python and Rust Excel formula catalog and evaluator
 status: active
@@ -20,7 +20,7 @@ open_questions: []
 ## Purpose
 Build a custom, reviewable glossary and evaluator for Excel formulas in Python and Rust. The glossary aims to enumerate Excel 365 syntax and worksheet functions; the engines make narrower, explicit claims about what they actually calculate.
 
-**Workbook Forge** is the planned public name (James, 2026-09-26). The Python distribution, its import package, and the Rust crate are already named `workbook_forge`. The repository folder, the git branch, and the Formula Atlas name in prose and data are unchanged for now.
+**Workbook Forge** is the planned public name (James, 2026-09-26). The Python distribution, its import package, and the Rust crate are named `workbook_forge`. The local `main` and `agent/codex-formula-atlas` branches point at the verified package/crate rename; the repository folder and Formula Atlas name in prose and data still need a release-prep pass.
 ## Terms
 - **Catalogued:** a formula feature or function has an entry with provenance and compatibility metadata.
 - **Parsed:** the engine recognizes the construct and produces a typed representation.
@@ -59,6 +59,12 @@ Runs 1–24 are accepted. Coverage stands at 115 implemented functions, 85 detai
 - Append each run's summary to `docs/run-history.md`. Keep `README.md` and this file limited to the current state.
 - Run the Rust gates with `CARGO_TARGET_DIR` inside the checkout, as `eval_command` does. The machine-wide `~/.cargo-target` mixes build artifacts between copies of the crate.
 ## Activity
+### 2026-09-26T00:58:12-04:00 — codex/Codex
+- Changed: independently verified the Workbook Forge package/crate rename, committed it as `8175b89`, and created local `main` at that commit. The existing agent branch remains at the same tip.
+- Why/where: James selected Workbook Forge and asked for the next step; this checkout had no `main` branch or configured remote.
+- Evidence: Python (190 tests, compileall), Rust (31 tests, fmt, check, Clippy) pass. `main` and `agent/codex-formula-atlas` both resolve to `8175b89`.
+- Next/remaining: no remote or publication exists. Complete the remaining name pass and public-release review listed above before creating a public repository.
+
 ### 2026-09-26T00:52:52-04:00 — claude-code/Claude
 - Changed: at James's request, the Python distribution and the Rust crate are now spelled `workbook_forge`, matching the import and library name. The installed catalog folder (`share/workbook_forge/catalog`) and the temporary-file prefix use the same spelling.
 - Why/where: James wants one spelling, `workbook_forge`, everywhere.
