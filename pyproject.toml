@@ -12,7 +12,7 @@ license = { text = "MIT" }
 dependencies = []
 
 [project.optional-dependencies]
-test = []
+test = ["pytest>=9", "jsonschema>=4.26", "packaging>=24"]
 
 [tool.setuptools]
 package-dir = {"" = "python"}

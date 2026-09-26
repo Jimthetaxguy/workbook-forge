@@ -1,20 +1,20 @@
 {
   "target": "One source-linked formula family slice across catalog/formulas.json, both evaluators, and shared fixtures",
   "scope": "Incrementally expand the Excel 365 formula glossary and bounded Python/Rust evaluator while preserving parity and explicit array-result shapes",
-  "context": "Keep the full source inventory distinct from implemented coverage. Preserve source provenance. Use only MIT or Apache-2.0 implementation references and dependencies; do not copy third-party code. Mark profile choices that have not been checked in Excel.",
+  "context": "Keep the full source inventory distinct from implemented coverage. Preserve source provenance. Use only permissively licensed (no copyleft) implementation references and dependencies; do not copy third-party code. Mark profile choices that have not been checked in Excel.",
   "criteria": [
     "Each newly implemented formula has a detailed argument, result, behavior, and source specification",
     "Python and Rust both implement each newly supported formula",
     "The shared corpus covers normal, boundary, and error cases for each new formula, and numeric expected values are grounded in Microsoft examples, independently derived equations, or a high-precision oracle",
     "All shared cases and existing project checks pass in both languages",
     "Every semantic source reference resolves, and implemented counts match catalog status",
-    "New implementation sources and dependencies satisfy the MIT or Apache-2.0 rule"
+    "New implementation sources and dependencies carry permissive licenses with no copyleft (README lists the accepted licenses)"
   ],
   "baseline_gates": [
     "The Run 18 accepted candidate has matching Python/Rust conformance fixtures for all 111 implemented functions.",
     "All semantic source references resolve and implemented counts match catalog status.",
     "The complete Python and Rust verification commands pass.",
-    "The source-pattern catalog enforces MIT/Apache-only references and no copied code.",
+    "The source-pattern catalog and python/tests/test_project_policy.py enforce permissive-only (no copyleft) references and dependencies, and no copied code.",
     "New numeric fixtures are checked against a published result, independent derivation, or high-precision oracle; Python/Rust parity alone is not treated as correctness evidence.",
     "Microsoft array/range behavior is source-backed, and local scalar range outputs are not labeled as Excel expected results.",
     "Run 16 preserves Microsoft-documented rules separately from local scalar and numeric profiles for FACT, COMBIN, and COMBINA.",

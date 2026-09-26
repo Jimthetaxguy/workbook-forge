@@ -12,7 +12,7 @@
       "type": "object",
       "required": ["allowed_licenses", "code_copied", "rule"],
       "properties": {
-        "allowed_licenses": {"const": ["MIT", "Apache-2.0"]},
+        "allowed_licenses": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"$ref": "#/$defs/permissiveLicense"}},
         "code_copied": {"const": false},
         "rule": {"type": "string", "minLength": 1}
       },
@@ -28,7 +28,7 @@
           "name": {"type": "string", "minLength": 1},
           "repository": {"type": "string", "format": "uri"},
           "license_evidence_url": {"type": "string", "format": "uri"},
-          "licenses": {"type": "array", "minItems": 1, "items": {"enum": ["MIT", "Apache-2.0"]}},
+          "licenses": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/permissiveLicense"}},
           "reference_urls": {"type": "array", "minItems": 1, "items": {"type": "string", "format": "uri"}},
           "scope_note": {"type": "string", "minLength": 1}
         },
@@ -50,6 +50,12 @@
         },
         "additionalProperties": false
       }
+    }
+  },
+  "$defs": {
+    "permissiveLicense": {
+      "description": "Permissive SPDX license with no copyleft terms.",
+      "enum": ["0BSD", "Apache-2.0", "BSD-2-Clause", "BSD-3-Clause", "BSL-1.0", "CC0-1.0", "ISC", "MIT", "MIT-0", "PSF-2.0", "Unicode-3.0", "Unicode-DFS-2016", "Unlicense", "Zlib"]
     }
   },
   "additionalProperties": false

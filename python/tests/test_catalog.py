@@ -2,6 +2,7 @@ import json
 from pathlib import Path
 
 from formula_atlas.catalog import (
+    PERMISSIVE_LICENSES,
     function_status,
     implementation_patterns,
     inventory_metadata,
@@ -202,13 +203,14 @@ def test_open_source_pattern_catalog_enforces_license_and_provenance_policy():
     root = Path(__file__).parents[2]
     patterns = implementation_patterns()
     schema = json.loads((root / "catalog" / "open-source-patterns.schema.json").read_text())
-    assert patterns["eligibility_policy"]["allowed_licenses"] == ["MIT", "Apache-2.0"]
+    assert set(patterns["eligibility_policy"]["allowed_licenses"]) == PERMISSIVE_LICENSES
+    assert set(schema["$defs"]["permissiveLicense"]["enum"]) == PERMISSIVE_LICENSES
     assert schema["properties"]["eligibility_policy"]["properties"]["code_copied"] == {"const": False}
     source_ids = {source["id"] for source in patterns["sources"]}
     assert len(source_ids) == len(patterns["sources"])
     for source in patterns["sources"]:
         assert source["licenses"]
-        assert set(source["licenses"]) <= {"MIT", "Apache-2.0"}
+        assert set(source["licenses"]) <= PERMISSIVE_LICENSES
         assert source["license_evidence_url"].startswith("https://")
     for pattern in patterns["patterns"]:
         assert set(pattern["source_refs"]) <= source_ids

@@ -11,6 +11,13 @@ from typing import Any
 
 _ROOT = Path(__file__).resolve().parents[2]
 
+# Permissive SPDX licenses with no copyleft terms. The same list appears in the
+# open-source pattern schema and the README license policy; tests keep them aligned.
+PERMISSIVE_LICENSES = frozenset({
+    "0BSD", "Apache-2.0", "BSD-2-Clause", "BSD-3-Clause", "BSL-1.0", "CC0-1.0", "ISC",
+    "MIT", "MIT-0", "PSF-2.0", "Unicode-3.0", "Unicode-DFS-2016", "Unlicense", "Zlib",
+})
+
 
 def _catalog_file(name: str) -> Path:
     """Find canonical source-tree data or its installed share-directory copy."""
@@ -108,7 +115,11 @@ def _load_open_source_patterns() -> dict[str, Any]:
 
     policy = patterns.get("eligibility_policy", {})
     allowed_licenses = set(policy.get("allowed_licenses", []))
-    if allowed_licenses != {"MIT", "Apache-2.0"} or policy.get("code_copied") is not False:
+    if (
+        not allowed_licenses
+        or not allowed_licenses <= PERMISSIVE_LICENSES
+        or policy.get("code_copied") is not False
+    ):
         raise CatalogError("open-source pattern catalog violates its license or code-copy policy")
     sources = patterns.get("sources", [])
     source_ids = {source.get("id") for source in sources if isinstance(source, dict)}
@@ -171,5 +182,5 @@ def function_status(name: str, language: str) -> str:
 
 
 def implementation_patterns() -> dict[str, Any]:
-    """Return the provenance-tracked MIT/Apache implementation-pattern catalog."""
+    """Return the provenance-tracked, permissively licensed implementation-pattern catalog."""
     return deepcopy(_load_open_source_patterns())
