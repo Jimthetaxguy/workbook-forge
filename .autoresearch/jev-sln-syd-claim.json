@@ -1,0 +1,12 @@
+{
+  "data_class": "public",
+  "claim": {
+    "text": "Formula Atlas Run 11 documents SLN and SYD with Microsoft Excel definitions, required argument signatures, SYD same-units guidance, and the published example values. The catalog separately labels nonnegative cost/salvage, positive life, fractional inputs, period-range behavior, coercion, and exact evaluator errors as local profiles where Microsoft Excel pages are silent.",
+    "subject_definition": "Formula Atlas Run 11 SLN/SYD semantic records and shared formula fixtures"
+  },
+  "source": {
+    "excerpt": "Microsoft Support describes SLN(cost,salvage,life) as straight-line depreciation for one period and shows cost 30000, salvage 7500, life 10 returning 2250. Microsoft describes SYD(cost,salvage,life,per) as sum-of-years-digits depreciation, requires per to use the same units as life, and shows first- and tenth-period results 4090.91 and 409.09.",
+    "subject_definition": "Microsoft Support documentation for Excel SLN and SYD",
+    "scope": "Official Microsoft Support pages retrieved 2026-09-24: https://support.microsoft.com/en-us/excel/functions/sln-function and https://support.microsoft.com/en-us/excel/functions/syd-function. Candidate records are catalog/formulas.json semantic_specs.SLN and semantic_specs.SYD; published examples and derived tests are fixtures/formula-cases.jsonl under sln-* and syd-* IDs."
+  }
+}

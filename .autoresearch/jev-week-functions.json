@@ -1,0 +1,12 @@
+{
+  "data_class": "public",
+  "claim": {
+    "text": "Excel WEEKDAY accepts return_type values 1, 2, 3, and 11 through 17 with their documented weekday numbering, and returns #NUM! for selectors outside that set.",
+    "subject_definition": "The WEEKDAY function in Excel for Microsoft 365 desktop"
+  },
+  "source": {
+    "excerpt": "Microsoft’s WEEKDAY page lists the numbering for 1 or omitted, 2, 3, and 11 through 17. It says an out-of-range return_type produces #NUM!.",
+    "subject_definition": "The WEEKDAY function in Excel for Microsoft 365 desktop",
+    "scope": "Official Microsoft Support function page, retrieved 2026-09-24"
+  }
+}

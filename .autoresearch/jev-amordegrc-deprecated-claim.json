@@ -1,0 +1,12 @@
+{
+  "data_class": "public",
+  "claim": {
+    "text": "Microsoft describes AMORDEGRC as deprecated and included only for compatibility with old workbooks. Formula Atlas marks the function deprecated-legacy and states that it is retained for old-workbook compatibility; this catalog wording accurately reflects Microsoft’s page.",
+    "subject_definition": "AMORDEGRC availability and deprecation metadata in Formula Atlas"
+  },
+  "source": {
+    "excerpt": "Microsoft says AMORDEGRC is deprecated and should no longer be used because of changes to French accounting depreciation; it is included for compatibility of old workbooks only. The page also describes its coefficient-based relation to AMORLINC.",
+    "subject_definition": "Microsoft Support AMORDEGRC function page",
+    "scope": "Public page retrieved 2026-09-24: https://support.microsoft.com/en-us/excel/functions/amordegrc-function. This assessment is limited to the deprecation/status wording, not local numerical compatibility."
+  }
+}

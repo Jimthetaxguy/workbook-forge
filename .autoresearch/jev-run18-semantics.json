@@ -1,0 +1,12 @@
+{
+  "data_class": "public",
+  "claim": {
+    "text": "Formula Atlas Run 18 records Microsoft-documented GCD/LCM arity, truncation, principal errors, examples, and distinct 2^53 input/result boundaries; it separately labels range handling, scalar coercion/order, negative-fraction order, all-zero GCD, and LCM zero handling as evaluator profiles where Excel context or source detail is missing.",
+    "subject_definition": "Formula Atlas Run 18 semantic specifications and shared fixtures for GCD and LCM"
+  },
+  "source": {
+    "excerpt": "Microsoft documents 1–255 arguments, truncation of nonintegers, #VALUE! for nonnumeric inputs, and #NUM! for negative inputs for both functions. GCD returns #NUM! when any argument is greater than or equal to 2^53 and includes examples GCD(5,2)=1, GCD(24,36)=12, GCD(7,1)=1, and GCD(5,0)=5. LCM returns #NUM! when the computed result is greater than or equal to 2^53 and includes examples LCM(5,2)=10 and LCM(24,36)=72. MS-OE376 lists all GCD and LCM arguments as range-capable. Microsoft does not specify all scalar coercion/order details or LCM's zero behavior.",
+    "subject_definition": "Official Microsoft Support GCD/LCM pages and MS-OE376 formula syntax specification",
+    "scope": "Retrieved 2026-09-24 from https://support.microsoft.com/en-us/excel/functions/gcd-function, https://support.microsoft.com/en-us/excel/functions/lcm-function, and https://learn.microsoft.com/en-us/openspecs/office_standards/ms-oe376/a099ce9e-4eaf-4664-8086-9649d11723cc. Candidate records are catalog/formulas.json semantic_specs.GCD and semantic_specs.LCM and matching rows in fixtures/formula-cases.jsonl."
+  }
+}

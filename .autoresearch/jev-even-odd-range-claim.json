@@ -1,0 +1,12 @@
+{
+  "data_class": "public",
+  "claim": {
+    "text": "The Microsoft Office formula specification distinguishes normal-formula implicit intersection from array-entered formulas that use full range arguments and can return arrays. It lists ISEVEN and ISODD as accepting range arguments. Formula Atlas records the narrower scalar evaluator boundary explicitly and labels its #VALUE! range outputs as local unsupported-range results rather than Excel expected values.",
+    "subject_definition": "Microsoft Office formula evaluation specification and the revised Formula Atlas semantic glossary for EVEN, ODD, ISEVEN, and ISODD"
+  },
+  "source": {
+    "excerpt": "Microsoft Office formula specification: normal formulas perform implicit intersection except for functions that allow range arguments; array-entered formulas interpret ranges fully and may return array results; Office returns #VALUE! when implicit intersection cannot be performed; ISEVEN and ISODD are listed as accepting ranges in all arguments. Formula Atlas currently evaluates scalar arguments only and does not carry formula-cell or array-result context.",
+    "subject_definition": "Microsoft Office formula syntax and range semantics specification",
+    "scope": "Official source: https://learn.microsoft.com/en-us/openspecs/office_standards/ms-oe376/a099ce9e-4eaf-4664-8086-9649d11723cc. Candidate: catalog/formulas.json, fixtures/formula-cases.jsonl, and scalar EVEN/ODD/ISEVEN/ISODD evaluators."
+  }
+}

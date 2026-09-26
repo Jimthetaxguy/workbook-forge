@@ -1,0 +1,12 @@
+{
+  "data_class": "public",
+  "claim": {
+    "text": "Formula Atlas Run 9 records IPMT and PPMT with Microsoft’s documented argument order, optional fv/type defaults, per-period rate units, period range, payment timing, cash-flow signs, and all four published example results rounded as displayed. Undocumented coercion, fractional-period, numerical and error behavior is separately marked as evaluator profile.",
+    "subject_definition": "Formula Atlas Run 9 IPMT/PPMT semantic records and shared formula fixtures"
+  },
+  "source": {
+    "excerpt": "Microsoft documents IPMT(rate,per,nper,pv,[fv],[type]) and PPMT(rate,per,nper,pv,[fv],[type]); fv and type default to zero, per ranges from 1 through nper, type 0 means end-of-period and 1 means beginning-of-period, and the pages publish two examples for each function.",
+    "subject_definition": "Microsoft Support documentation for Excel IPMT and PPMT",
+    "scope": "Official Microsoft Support pages retrieved 2026-09-24: https://support.microsoft.com/en-us/excel/functions/ipmt-function and https://support.microsoft.com/en-us/excel/functions/ppmt-function. Candidate records are catalog/formulas.json semantic_specs.IPMT and PPMT; published examples are fixtures/formula-cases.jsonl under ipmt-microsoft-* and ppmt-microsoft-* IDs."
+  }
+}

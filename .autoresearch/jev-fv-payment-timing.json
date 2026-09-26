@@ -1,0 +1,12 @@
+{
+  "data_class": "public",
+  "claim": {
+    "text": "The Microsoft FV documentation defines type 0 as payment at the end of the period and type 1 as payment at the beginning.",
+    "subject_definition": "The FV worksheet function in Excel for Microsoft 365 desktop"
+  },
+  "source": {
+    "excerpt": "Microsoft lists type as optional, says an omitted type is assumed to be 0, and defines 0 as payment at the end of the period and 1 as payment at the beginning.",
+    "subject_definition": "The FV worksheet function in Excel for Microsoft 365 desktop",
+    "scope": "Official Microsoft Support FV function page retrieved 2026-09-24: https://support.microsoft.com/en-us/excel/functions/fv-function . Formula Atlas records this in catalog/formulas.json semantic_specs.FV.semantics.payment_timing."
+  }
+}

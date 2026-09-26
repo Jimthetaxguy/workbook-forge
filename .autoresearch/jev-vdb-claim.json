@@ -1,0 +1,12 @@
+{
+  "data_class": "public",
+  "claim": {
+    "text": "Microsoft documents VDB syntax with optional factor and no_switch arguments. Factor defaults to 2. TRUE for no_switch prevents switching; FALSE or omission permits switching to straight-line when that depreciation exceeds declining-balance depreciation. The page publishes six numerical examples but does not specify a general fractional-interval equation or detailed error rules.",
+    "subject_definition": "Microsoft Excel VDB function contract"
+  },
+  "source": {
+    "excerpt": "The Microsoft VDB page gives VDB(cost,salvage,life,start_period,end_period,[factor],[no_switch]); factor defaults to 2; TRUE prevents the straight-line switch; FALSE or omitted enables it when straight-line depreciation is greater than declining balance. It describes partial-period support and gives daily, monthly, annual, multi-month, custom-factor, and 0-to-0.875 examples. It also says all arguments except no_switch must be positive, despite the same page allowing salvage 0 and showing start_period 0.",
+    "subject_definition": "Microsoft Support VDB function page, cross-checked with the Microsoft DDB equation page",
+    "scope": "Official sources retrieved 2026-09-24: https://support.microsoft.com/en-us/excel/functions/vdb-function and https://support.microsoft.com/en-us/excel/functions/ddb-function. This claim is about documented wording and examples only, not compatibility of the local evaluator."
+  }
+}

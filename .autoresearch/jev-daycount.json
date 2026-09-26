@@ -1,0 +1,12 @@
+{
+  "data_class": "public",
+  "claim": {
+    "text": "The Formula Atlas DAYS360 and YEARFRAC semantic specs distinguish the behavior Microsoft documents (the DAYS360 methods and negative direction; YEARFRAC basis 0-4, argument truncation, documented errors, and published examples) from explicit evaluator profiles for under-specified cases. Both Python and Rust have matching shared-fixture coverage for this contract.",
+    "subject_definition": "DAYS360 and YEARFRAC in the Formula Atlas Python and Rust evaluators, targeting Excel for Microsoft 365 desktop"
+  },
+  "source": {
+    "excerpt": "Microsoft Support documents the DAYS360 syntax, US NASD and European method rules, negative result for reversed dates, and three examples. Its YEARFRAC page maps basis 0 through 4, states all arguments are truncated to integers, specifies #VALUE! for invalid dates and #NUM! for basis outside 0-4, warns about US 30/360 when the start date is February month-end, and publishes results for bases 0, 1, and 3. The pages do not specify multi-year Actual/Actual segmentation or reversed YEARFRAC sign.",
+    "subject_definition": "DAYS360 and YEARFRAC in Excel for Microsoft 365 desktop",
+    "scope": "Official Microsoft Support pages retrieved 2026-09-24: https://support.microsoft.com/en-us/excel/functions/days360-function and https://support.microsoft.com/en-us/excel/functions/yearfrac-function. Candidate details: catalog/formulas.json; shared cases: fixtures/formula-cases.jsonl; implementations: python/formula_atlas/__init__.py and rust/src/lib.rs."
+  }
+}

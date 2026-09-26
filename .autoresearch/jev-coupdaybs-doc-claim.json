@@ -1,0 +1,12 @@
+{
+  "data_class": "public",
+  "claim": {
+    "text": "The Microsoft COUPDAYBS page specifies frequency values 1, 2, and 4, basis values 0 through 4, integer truncation for all arguments, and a #NUM! error for frequencies outside 1, 2, or 4.",
+    "subject_definition": "The COUPDAYBS worksheet function in Excel for Microsoft 365 desktop"
+  },
+  "source": {
+    "excerpt": "The COUPDAYBS documentation lists 1 for annual, 2 for semiannual, and 4 for quarterly frequency; maps basis 0/omitted through 4 to the five day-count conventions; states that all arguments are truncated to integers; and states that any other frequency returns #NUM!.",
+    "subject_definition": "The COUPDAYBS worksheet function in Excel for Microsoft 365 desktop",
+    "scope": "Official Microsoft Support COUPDAYBS page retrieved 2026-09-24: https://support.microsoft.com/en-us/excel/functions/coupdaybs-function . The Formula Atlas candidate spec is catalog/formulas.json semantic_specs.COUPDAYBS."
+  }
+}

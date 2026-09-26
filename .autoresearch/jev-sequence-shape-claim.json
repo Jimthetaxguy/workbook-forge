@@ -1,0 +1,12 @@
+{
+  "data_class": "public",
+  "claim": {
+    "text": "Formula Atlas documents Microsoft-specified SEQUENCE defaults and array output separately from its local 100000-cell cap, dimension coercion, non-finite error order, and unsupported worksheet spill projection. This distinction does not claim full Excel compatibility.",
+    "subject_definition": "Run 19 SEQUENCE and array-result scope statements in Formula Atlas"
+  },
+  "source": {
+    "excerpt": "Microsoft documents =SEQUENCE(rows,[columns],[start],[step]), says omitted optional arguments default to 1, describes the array dimensions, and says that a final array result spills into the worksheet grid. Microsoft documents worksheet grid limits separately.",
+    "subject_definition": "Microsoft Support SEQUENCE function and Excel specifications and limits",
+    "scope": "Public Microsoft pages retrieved 2026-09-24: https://support.microsoft.com/en-us/excel/functions/sequence-function and https://support.microsoft.com/en-us/excel/excel-specifications-and-limits. This assessment covers documented defaults/array output and the separation from Formula Atlas local resource/evaluation profiles; it does not assess the implementation code."
+  }
+}

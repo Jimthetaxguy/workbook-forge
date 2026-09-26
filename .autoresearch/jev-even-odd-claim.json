@@ -1,0 +1,12 @@
+{
+  "data_class": "public",
+  "claim": {
+    "text": "For Excel's EVEN and ODD functions, Microsoft documents rounding away from zero to the nearest even or odd integer and #VALUE! for nonnumeric input. For ISEVEN and ISODD, Microsoft documents truncation before the parity check and #VALUE! for nonnumeric input; the general IS-functions guidance says these arguments are not converted. Formula Atlas records documented behavior separately from scalar coercion and range profiles that still need Excel verification.",
+    "subject_definition": "Microsoft Excel function references and a proposed Formula Atlas semantic glossary for EVEN, ODD, ISEVEN, and ISODD"
+  },
+  "source": {
+    "excerpt": "Microsoft Support pages retrieved 2026-09-24: EVEN and ODD each say values are rounded away from zero regardless of sign, already-matching integers remain unchanged, and nonnumeric values return #VALUE!. ISEVEN and ISODD say fractional parts are truncated before parity is tested and nonnumeric input returns #VALUE!. The IS-functions overview describes ISEVEN and ISODD as IS functions and says their shared argument is not converted.",
+    "subject_definition": "Microsoft Excel 365 desktop documentation for EVEN, ODD, ISEVEN, ISODD, and the IS-functions group",
+    "scope": "Official sources: https://support.microsoft.com/en-us/excel/functions/even-function ; https://support.microsoft.com/en-us/excel/functions/odd-function ; https://support.microsoft.com/en-us/excel/functions/iseven-function ; https://support.microsoft.com/en-us/excel/functions/isodd-function ; https://support.microsoft.com/en-us/excel/functions/is-functions. Proposed catalog/evaluator candidate: catalog/formulas.json, python/formula_atlas/__init__.py, rust/src/lib.rs, and fixtures/formula-cases.jsonl."
+  }
+}

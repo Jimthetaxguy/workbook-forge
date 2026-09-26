@@ -1,0 +1,12 @@
+{
+  "data_class": "public",
+  "claim": {
+    "text": "Formula Atlas Run 17 records Microsoft-documented truncation, examples, and error classes for FACTDOUBLE, PERMUT, and PERMUTATIONA; it separately labels scalar range handling, result overflow, negative-fraction ordering, and PERMUTATIONA 0^0 as evaluator profiles where the sources are silent or the engine lacks cell context.",
+    "subject_definition": "Formula Atlas Run 17 semantic specifications and shared fixtures for FACTDOUBLE, PERMUT, and PERMUTATIONA"
+  },
+  "source": {
+    "excerpt": "Microsoft says FACTDOUBLE truncates non-integers, returns #VALUE! for nonnumeric values and #NUM! for negatives, and gives examples 6→48 and 7→105. PERMUT truncates both arguments, returns #VALUE! for nonnumeric values, and #NUM! for number≤0, number_chosen<0, or number<number_chosen; its examples include 3,2→6 and 100,3→970200. PERMUTATIONA truncates both arguments, returns #VALUE! for nonnumeric arguments, documents #NUM! for invalid numeric arguments including number=0 with a positive selection, and gives examples 3,2→9 and 2,2→4. The Office formula specification lists FACTDOUBLE as range-capable. It does not specify all scalar coercion, range-context, overflow, negative-fraction-order, or 0^0 behavior.",
+    "subject_definition": "Official Microsoft Support function pages and MS-OE376 formula syntax specification",
+    "scope": "Retrieved 2026-09-24 from https://support.microsoft.com/en-us/excel/functions/factdouble-function, https://support.microsoft.com/en-us/excel/functions/permut-function, https://support.microsoft.com/en-us/excel/functions/permutationa-function, and https://learn.microsoft.com/en-us/openspecs/office_standards/ms-oe376/a099ce9e-4eaf-4664-8086-9649d11723cc. Candidate records are catalog/formulas.json semantic_specs.FACTDOUBLE, semantic_specs.PERMUT, semantic_specs.PERMUTATIONA and the matching fixtures in fixtures/formula-cases.jsonl."
+  }
+}

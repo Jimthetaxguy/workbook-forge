@@ -1,0 +1,12 @@
+{
+  "data_class": "public",
+  "claim": {
+    "text": "Microsoft Support documents DB's fixed-declining method, its three-decimal rounded rate, first and final partial-period month formulas, and omitted month default of 12. Microsoft documents DDB's period depreciation as the lesser of declining-balance depreciation and remaining depreciable basis, with an omitted factor default of 2. This claim does not assert undocumented error, coercion, or fractional-period behavior.",
+    "subject_definition": "Microsoft Excel DB and DDB function contracts"
+  },
+  "source": {
+    "excerpt": "Microsoft's DB page defines DB(cost,salvage,life,period,[month]), month default 12, rate = 1 - ((salvage/cost)^(1/life)) rounded to three decimals, and special first/final partial-period formulas. Its published cost 1,000,000, salvage 100,000, life 6, month 7 example lists period values 186,083.33 through 15,845.10. Microsoft's DDB page defines DDB(cost,salvage,life,period,[factor]), factor default 2, and min((cost - prior depreciation)*(factor/life), cost - salvage - prior depreciation); examples include 480.00 in year one and 22.12 in year ten.",
+    "subject_definition": "Microsoft Support pages for Excel DB and DDB",
+    "scope": "Official pages retrieved 2026-09-24: https://support.microsoft.com/en-us/excel/functions/db-function and https://support.microsoft.com/en-us/excel/functions/ddb-function. Error codes, coercion, fractional inputs, and the conflicting DDB positive-argument note are excluded from the narrow claim."
+  }
+}

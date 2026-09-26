@@ -1,0 +1,12 @@
+{
+  "data_class": "public",
+  "claim": {
+    "text": "The Run 7 glossary entries for FV, PV, and PMT correctly reflect Microsoft's documented per-payment-period rate and nper units, type timing (0 or omitted means end; 1 means beginning), and cash-outflow-negative convention.",
+    "subject_definition": "Formula Atlas Run 7 semantic specifications for the Excel FV, PV, and PMT functions"
+  },
+  "source": {
+    "excerpt": "Microsoft's FV, PV, and PMT pages define the interest rate and number of payments using the payment period, specify type 0 or omitted for period-end payments and type 1 for beginning-of-period payments, and direct annuity cash paid out to be represented as negative. FV and PV state the cash sign convention; PMT links to PV for the fuller shared argument description.",
+    "subject_definition": "Microsoft Support documentation for Excel FV, PV, and PMT",
+    "scope": "Official Microsoft Support pages retrieved 2026-09-24: https://support.microsoft.com/en-us/excel/functions/fv-function ; https://support.microsoft.com/en-us/excel/functions/pv-function ; https://support.microsoft.com/en-us/excel/functions/pmt-function . The candidate claims are catalog/formulas.json semantic_specs.FV, semantic_specs.PV, and semantic_specs.PMT."
+  }
+}

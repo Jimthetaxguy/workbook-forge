@@ -1,0 +1,12 @@
+{
+  "data_class": "public",
+  "claim": {
+    "text": "Formula Atlas Run 10 records CUMIPMT and CUMPRINC with Microsoft's six required arguments, cumulative interest/principal meanings, payment timing, positive-input and period/type constraints, and all four published example results rounded as displayed. Undocumented fractional-period, range-limit, coercion, and numerical behavior is separately marked as evaluator profile.",
+    "subject_definition": "Formula Atlas Run 10 CUMIPMT/CUMPRINC semantic records and shared formula fixtures"
+  },
+  "source": {
+    "excerpt": "Microsoft documents CUMIPMT and CUMPRINC as cumulative loan interest and principal over a payment-period range, with six required arguments, type 0/1 timing, positive rate/nper/pv, period ordering, and examples.",
+    "subject_definition": "Microsoft Support documentation for Excel CUMIPMT and CUMPRINC",
+    "scope": "Official Microsoft Support pages retrieved 2026-09-24: https://support.microsoft.com/en-us/excel/functions/cumipmt-function and https://support.microsoft.com/en-us/excel/functions/cumprinc-function. Candidate records are catalog/formulas.json semantic_specs.CUMIPMT and CUMPRINC; published examples are fixtures/formula-cases.jsonl under cumipmt-microsoft-* and cumprinc-microsoft-* IDs."
+  }
+}

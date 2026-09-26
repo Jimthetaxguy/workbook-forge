@@ -7,3 +7,8 @@ target/
 dist/
 build/
 *.egg-info/
+
+# Local archives and ad-hoc backups; history lives in git commits.
+_archive-*/
+*.bak-*
+.autoresearch/backups/

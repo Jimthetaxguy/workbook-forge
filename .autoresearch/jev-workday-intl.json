@@ -1,0 +1,12 @@
+{
+  "data_class": "public",
+  "claim": {
+    "text": "Microsoft documents that WORKDAY.INTL accepts weekend selectors 1-7 and 11-17 or a seven-character Monday-first 0/1 mask, truncates noninteger day offsets, and returns #NUM! for out-of-range date results. Microsoft documents that NETWORKDAYS.INTL counts endpoints inclusively, returns negative counts for reversed ranges, and returns zero for the all-one weekend mask. Formula Atlas implements these documented rules in Python and Rust and keeps numeric-selector coercion, fractional dates, holiday-cell handling, and the exact WORKDAY.INTL all-one-mask error as unverified profiles.",
+    "subject_definition": "WORKDAY.INTL and NETWORKDAYS.INTL in Excel for Microsoft 365 desktop"
+  },
+  "source": {
+    "excerpt": "Microsoft Support function pages list the numeric weekend codes and mask encoding, document offset/count behavior and date-bound errors, and provide examples. They do not specify all coercion details or the exact error for WORKDAY.INTL's invalid all-one mask.",
+    "subject_definition": "WORKDAY.INTL and NETWORKDAYS.INTL in Excel for Microsoft 365 desktop",
+    "scope": "Official Microsoft Support pages retrieved 2026-09-24: https://support.microsoft.com/en-us/excel/functions/workday-intl-function and https://support.microsoft.com/en-us/excel/functions/networkdays-intl-function"
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "data_class": "public",
+  "claim": {
+    "text": "Formula Atlas's NPER semantic record matches Microsoft's documented argument order and defaults, type=0/omitted versus type=1 payment timing, period units, and three published example results, while preserving the documented prose inconsistency in the omitted-type example.",
+    "subject_definition": "Formula Atlas Run 8 NPER semantic specification and shared Microsoft example fixtures"
+  },
+  "source": {
+    "excerpt": "Microsoft documents NPER(rate,pmt,pv,[fv],[type]), with fv defaulting to zero and type 0 or omitted for end-of-period payments and 1 for beginning-of-period payments. Its examples report 59.6738657, 60.0821229, and -9.57859404. The second example omits type but its prose says beginning-of-period payments, despite the argument table's default of type 0.",
+    "subject_definition": "Microsoft Support documentation for Excel NPER and PV",
+    "scope": "Official Microsoft Support pages retrieved 2026-09-24: https://support.microsoft.com/en-us/excel/functions/nper-function and https://support.microsoft.com/en-us/excel/functions/pv-function. Candidate text is in catalog/formulas.json semantic_specs.NPER; published expected values are in fixtures/formula-cases.jsonl under nper-microsoft-* IDs."
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "data_class": "public",
+  "claim": {
+    "text": "Microsoft documents that WORKDAY truncates a non-integer days argument and that positive and negative day counts move forward and backward. The base NETWORKDAYS page does not define reversed-range sign, fractional holiday serials, or blank/text/error cells in the holiday range; Formula Atlas should keep those as explicit unverified profile choices until an Excel spot-check.",
+    "subject_definition": "WORKDAY and NETWORKDAYS in Excel for Microsoft 365 desktop"
+  },
+  "source": {
+    "excerpt": "Microsoft's WORKDAY remarks say a non-integer days value is truncated, and its argument description says positive values yield a future date and negative values a past date. NETWORKDAYS is described as returning the number of whole working days between dates, with an optional holidays list, but the page does not specify reversed-range sign or detailed cell coercion within that list.",
+    "subject_definition": "WORKDAY and NETWORKDAYS in Excel for Microsoft 365 desktop",
+    "scope": "Official Microsoft Support function pages retrieved 2026-09-24: https://support.microsoft.com/en-us/excel/functions/workday-function and https://support.microsoft.com/en-us/excel/functions/networkdays-function"
+  }
+}
