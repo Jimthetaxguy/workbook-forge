@@ -3,7 +3,7 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "formula-atlas"
+name = "workbook_forge"
 version = "0.1.0"
 description = "A versioned Excel formula glossary and bounded evaluator"
 readme = "README.md"
@@ -18,7 +18,7 @@ test = ["pytest>=9", "jsonschema>=4.26", "packaging>=24"]
 package-dir = {"" = "python"}
 
 [tool.setuptools.data-files]
-"share/formula-atlas/catalog" = [
+"share/workbook_forge/catalog" = [
   "catalog/formulas.json",
   "catalog/open_source_patterns.json",
   "catalog/open-source-patterns.schema.json",
@@ -29,6 +29,9 @@ package-dir = {"" = "python"}
 
 [tool.setuptools.packages.find]
 where = ["python"]
+# Ship only the library. Namespace discovery would also package python/tests.
+include = ["workbook_forge*"]
+namespaces = false
 
 [tool.pytest.ini_options]
 testpaths = ["python/tests"]

@@ -23,7 +23,7 @@ def _catalog_file(name: str) -> Path:
     """Find canonical source-tree data or its installed share-directory copy."""
     candidates = (
         _ROOT / "catalog" / name,
-        Path(sysconfig.get_path("data")) / "share" / "formula-atlas" / "catalog" / name,
+        Path(sysconfig.get_path("data")) / "share" / "workbook_forge" / "catalog" / name,
     )
     for candidate in candidates:
         if candidate.is_file():

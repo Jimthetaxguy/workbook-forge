@@ -6,8 +6,8 @@ from xml.etree import ElementTree as ET
 
 import pytest
 
-from formula_atlas import ErrorValue, analyze_formula
-from formula_atlas.workbook import (
+from workbook_forge import ErrorValue, analyze_formula
+from workbook_forge.workbook import (
     UnsupportedWorkbook,
     Workbook,
     WorkbookError,
@@ -326,7 +326,7 @@ def test_open_caps_bytes_emitted_by_archive_member(monkeypatch, tmp_path):
         return ReaderProxy(stream)
 
     monkeypatch.setattr(zipfile.ZipFile, "open", audited_open)
-    monkeypatch.setattr("formula_atlas.workbook.MAX_PACKAGE_BYTES", package_limit)
+    monkeypatch.setattr("workbook_forge.workbook.MAX_PACKAGE_BYTES", package_limit)
     with pytest.raises(UnsupportedWorkbook, match="actual uncompressed size limit"):
         Workbook.open(source)
 
@@ -389,9 +389,9 @@ def test_open_preflights_actual_package_entry_count(monkeypatch, tmp_path, archi
             stream.seek(-22, 2)
             stream.write(end_record)
     else:
-        monkeypatch.setattr("formula_atlas.workbook.MAX_PACKAGE_ENTRIES", entry_count - 1)
+        monkeypatch.setattr("workbook_forge.workbook.MAX_PACKAGE_ENTRIES", entry_count - 1)
     monkeypatch.setattr(
-        "formula_atlas.workbook.zipfile.ZipFile",
+        "workbook_forge.workbook.zipfile.ZipFile",
         lambda *_args, **_kwargs: pytest.fail("ZipFile was constructed before entry preflight"),
     )
 
@@ -433,7 +433,7 @@ def test_open_rejects_nonzero_disk_start_in_central_directory(monkeypatch, tmp_p
     source.write_bytes(payload)
 
     monkeypatch.setattr(
-        "formula_atlas.workbook.zipfile.ZipFile",
+        "workbook_forge.workbook.zipfile.ZipFile",
         lambda *_args, **_kwargs: pytest.fail("ZipFile was constructed before disk-start preflight"),
     )
     with pytest.raises(UnsupportedWorkbook, match="multi-disk package entries"):
@@ -447,7 +447,7 @@ def test_open_rejects_real_archive_over_entry_limit_before_zipfile(monkeypatch, 
             archive.writestr(f"part-{index:05}.bin", b"")
 
     monkeypatch.setattr(
-        "formula_atlas.workbook.zipfile.ZipFile",
+        "workbook_forge.workbook.zipfile.ZipFile",
         lambda *_args, **_kwargs: pytest.fail("ZipFile parsed an over-limit directory"),
     )
     with pytest.raises(UnsupportedWorkbook, match="package entries"):
@@ -505,7 +505,7 @@ def test_open_closes_source_stream_when_file_stat_fails(monkeypatch, tmp_path):
         raise OSError("injected stat failure")
 
     monkeypatch.setattr(type(source), "open", tracked_open)
-    monkeypatch.setattr("formula_atlas.workbook.os.fstat", fail_fstat)
+    monkeypatch.setattr("workbook_forge.workbook.os.fstat", fail_fstat)
 
     with pytest.raises(WorkbookError, match="injected stat failure"):
         Workbook.open(source)
@@ -832,7 +832,7 @@ def test_grouped_formula_range_analysis_has_a_work_budget(tmp_path, monkeypatch)
             "xl/worksheets/sheet1.xml": b'''<?xml version="1.0"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData><row r="1"><c r="A1"><f t="array" ref="A1:B1">1+1</f><v>2</v></c><c r="B1"><v>2</v></c><c r="C1"><f>B1+1</f></c></row></sheetData></worksheet>'''
         },
     )
-    monkeypatch.setattr("formula_atlas.workbook.MAX_CALCULATION_RANGE_CHECKS", 0)
+    monkeypatch.setattr("workbook_forge.workbook.MAX_CALCULATION_RANGE_CHECKS", 0)
     with Workbook.open(source) as workbook:
         with pytest.raises(UnsupportedWorkbook, match="range analysis exceeds"):
             workbook.calculate_cells_to(output, ["C1"])
@@ -851,7 +851,7 @@ def test_repeated_reference_ranges_count_toward_expansion_work_budget(
         },
     )
     monkeypatch.setattr(
-        "formula_atlas.workbook.MAX_CALCULATION_REFERENCE_EXPANSION_CELLS", 10
+        "workbook_forge.workbook.MAX_CALCULATION_REFERENCE_EXPANSION_CELLS", 10
     )
     with Workbook.open(source) as workbook:
         with pytest.raises(UnsupportedWorkbook, match="reference expansion exceeds"):
@@ -873,7 +873,7 @@ def test_formula_text_length_has_a_calculation_budget(tmp_path, monkeypatch):
             ).encode()
         },
     )
-    monkeypatch.setattr("formula_atlas.workbook.MAX_CALCULATION_FORMULA_CHARS", 8)
+    monkeypatch.setattr("workbook_forge.workbook.MAX_CALCULATION_FORMULA_CHARS", 8)
     with Workbook.open(source) as workbook:
         with pytest.raises(UnsupportedWorkbook, match="formula exceeds the 8-character"):
             workbook.calculate_cells_to(output, ["A1"])

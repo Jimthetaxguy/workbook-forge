@@ -1,5 +1,5 @@
 [package]
-name = "formula-atlas-rust"
+name = "workbook_forge"
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.88"
@@ -7,7 +7,7 @@ license = "MIT"
 description = "Bounded Excel formula evaluator for Formula Atlas"
 
 [lib]
-name = "formula_atlas"
+name = "workbook_forge"
 path = "src/lib.rs"
 
 [dependencies]

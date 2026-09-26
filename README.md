@@ -2,6 +2,8 @@
 
 Formula Atlas is a source-linked Excel formula glossary with small, independently implemented Python and Rust evaluators, a shared conformance corpus, and a conservative `.xlsx` reader/patch writer.
 
+The Python distribution, its import package, and the Rust crate are all named `workbook_forge`. Workbook Forge is the project's planned public name; the rest of this README still calls it Formula Atlas.
+
 The Microsoft function index currently contributes 521 named entries across its published categories. That inventory is a vocabulary and discovery aid, not a claim that every function has a complete behavioral specification or is supported by the evaluator. Availability labels are preserved when the source exposes them; desktop availability can vary by Excel build and rollout.
 
 ## Project map
@@ -12,7 +14,7 @@ The Microsoft function index currently contributes 521 named entries across its 
 - `catalog/open-source-patterns.schema.json` — schema for the permitted-source pattern catalog.
 - `catalog/formula-support.schema.json` — JSON Schema for the support catalog and semantic glossary.
 - `fixtures/formula-cases.jsonl` — language-neutral expected outcomes loaded by both evaluators.
-- `python/formula_atlas/` — standard-library formula evaluator, catalog API, and `.xlsx` adapter.
+- `python/workbook_forge/` — standard-library formula evaluator, catalog API, and `.xlsx` adapter.
 - `rust/` — dependency-free runtime formula evaluator and standard-library shared-fixture reader.
 - `docs/behavior-profiles.md` — behavior notes and Formula Atlas profiles by function family, plus workbook adapter limits.
 - `docs/run-history.md` — what each autoresearch run added, with the counts at that time.
@@ -52,7 +54,7 @@ Both evaluators cap formulas at 8,192 UTF-16 code units and function nesting at 
 From the repository root, install the package with `python -m pip install .`, then:
 
 ```python
-from formula_atlas import evaluate
+from workbook_forge import evaluate
 
 result = evaluate("=IF(A1>2, SUM(A1:A3), 0)", {"A1": 3, "A2": 4, "A3": 5})
 print(result)  # 12
@@ -61,7 +63,7 @@ print(result)  # 12
 For formulas that return rectangular arrays, use the shape-preserving API:
 
 ```python
-from formula_atlas import ArrayValue, evaluate_result
+from workbook_forge import ArrayValue, evaluate_result
 
 result = evaluate_result("=SEQUENCE(2, 3, 10, 10)")
 assert isinstance(result, ArrayValue)
@@ -87,7 +89,7 @@ print(result.rows)  # (("east", "apples"),)
 To inspect the function glossary:
 
 ```python
-from formula_atlas.catalog import function_status, implementation_patterns, lookup_function
+from workbook_forge.catalog import function_status, implementation_patterns, lookup_function
 
 print(lookup_function("XLOOKUP")["category"])
 print(function_status("SUM", "python"))  # conformance-tested
@@ -99,7 +101,7 @@ print(patterns["patterns"][0]["id"])
 The `.xlsx` adapter uses only Python's standard library:
 
 ```python
-from formula_atlas.workbook import Workbook
+from workbook_forge.workbook import Workbook
 
 with Workbook.open("source.xlsx") as book:
     print(book.get("Sheet1", "A1"))
@@ -138,4 +140,4 @@ uv run --no-project --python 3.14 --with pytest --with jsonschema -- python -m p
 
 ## License and source policy
 
-Original project code is MIT. Formula Atlas must stay usable in enterprise settings, so third-party components, whether used at runtime or only in development and including transitive dependencies, must carry a permissive open-source license with no copyleft terms. The accepted SPDX licenses are MIT, MIT-0, Apache-2.0, BSD-2-Clause, BSD-3-Clause, 0BSD, ISC, Zlib, PSF-2.0, Unicode-3.0, Unicode-DFS-2016, BSL-1.0, CC0-1.0, and Unlicense. A dual-licensed package qualifies when one of its options is on that list. Copyleft licenses (GPL, LGPL, AGPL, MPL, EPL, EUPL, CDDL) and source-available licenses (SSPL, BUSL) are excluded. `python/tests/test_project_policy.py` checks the installed Python dependency tree against this list, and it fails if a Rust crate is added without a license review. Neither runtime has third-party dependencies today. Microsoft documentation is linked as provenance; the catalog records names and categories rather than copying function descriptions. Open-source implementation patterns are separately catalogued with license evidence and an explicit adopt/defer decision; no third-party implementation code is copied. The Python wheel installs catalog JSON into `share/formula-atlas/catalog` and the API reads the source-tree copy during development. Jev is an advisory development-time critic and is not part of either package runtime.
+Original project code is MIT. Formula Atlas must stay usable in enterprise settings, so third-party components, whether used at runtime or only in development and including transitive dependencies, must carry a permissive open-source license with no copyleft terms. The accepted SPDX licenses are MIT, MIT-0, Apache-2.0, BSD-2-Clause, BSD-3-Clause, 0BSD, ISC, Zlib, PSF-2.0, Unicode-3.0, Unicode-DFS-2016, BSL-1.0, CC0-1.0, and Unlicense. A dual-licensed package qualifies when one of its options is on that list. Copyleft licenses (GPL, LGPL, AGPL, MPL, EPL, EUPL, CDDL) and source-available licenses (SSPL, BUSL) are excluded. `python/tests/test_project_policy.py` checks the installed Python dependency tree against this list, and it fails if a Rust crate is added without a license review. Neither runtime has third-party dependencies today. Microsoft documentation is linked as provenance; the catalog records names and categories rather than copying function descriptions. Open-source implementation patterns are separately catalogued with license evidence and an explicit adopt/defer decision; no third-party implementation code is copied. The Python wheel installs catalog JSON into `share/workbook_forge/catalog` and the API reads the source-tree copy during development. Jev is an advisory development-time critic and is not part of either package runtime.

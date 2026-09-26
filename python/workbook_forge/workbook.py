@@ -1587,7 +1587,7 @@ class Workbook:
                 self._workbook_part,
             )
         fd, temp_name = tempfile.mkstemp(
-            prefix=".formula-atlas-", suffix=".xlsx", dir=target.parent
+            prefix=".workbook_forge-", suffix=".xlsx", dir=target.parent
         )
         os.close(fd)
         temp = Path(temp_name)

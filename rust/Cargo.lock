@@ -3,5 +3,5 @@
 version = 4
 
 [[package]]
-name = "formula-atlas-rust"
+name = "workbook_forge"
 version = "0.1.0"

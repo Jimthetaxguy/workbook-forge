@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-from formula_atlas.catalog import (
+from workbook_forge.catalog import (
     PERMISSIVE_LICENSES,
     function_status,
     implementation_patterns,

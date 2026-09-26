@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from formula_atlas import ArrayValue, ErrorValue, evaluate, evaluate_result
+from workbook_forge import ArrayValue, ErrorValue, evaluate, evaluate_result
 
 
 @pytest.mark.parametrize(
@@ -288,7 +288,7 @@ def test_textjoin_limit_and_error_propagation():
 
 
 def test_string_builders_check_utf16_limit_before_join_or_replace(monkeypatch):
-    monkeypatch.setattr("formula_atlas.MAX_TEXT_LENGTH_UNITS", 8)
+    monkeypatch.setattr("workbook_forge.MAX_TEXT_LENGTH_UNITS", 8)
     cases = [
         ('=A1&A1', {"A1": "12345"}),
         ('=CONCAT(A1:A2)', {"A1": "12345", "A2": "67890"}),

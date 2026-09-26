@@ -16,7 +16,7 @@ import pytest
 from packaging.requirements import Requirement
 from packaging.utils import canonicalize_name
 
-from formula_atlas.catalog import PERMISSIVE_LICENSES
+from workbook_forge.catalog import PERMISSIVE_LICENSES
 
 ROOT = Path(__file__).parents[2]
 
@@ -145,7 +145,7 @@ def test_python_dependencies_use_permissive_licenses():
 def test_rust_crate_has_no_unreviewed_third_party_dependencies():
     lock = (ROOT / "rust" / "Cargo.lock").read_text(encoding="utf-8")
     crates = set(re.findall(r'^name = "([^"]+)"', lock, flags=re.MULTILINE))
-    unreviewed = sorted(crates - {"formula-atlas-rust"} - REVIEWED_RUST_CRATES)
+    unreviewed = sorted(crates - {"workbook_forge"} - REVIEWED_RUST_CRATES)
     assert not unreviewed, (
         f"Rust crates need a license review (permissive, no copyleft) before use: {unreviewed}. "
         "After the review, add them to REVIEWED_RUST_CRATES."
