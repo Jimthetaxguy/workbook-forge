@@ -88,7 +88,7 @@ Commit `42126ef` (Run 24) sat on `agent/codex-formula-atlas` with 26 tracked fil
 ## Rollback
 
 ```sh
-cd /Users/jamespustorino/code/formula-atlas
+cd ~/code/formula-atlas
 sh _archive-2026-09-25-L1/ROLLBACK.sh
 git restore README.md CONTEXT.md .gitignore
 ```
