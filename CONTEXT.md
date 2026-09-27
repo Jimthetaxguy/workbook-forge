@@ -2,7 +2,7 @@
 author: Codex
 created: 2026-09-24
 agent: codex/Codex
-date: '2026-09-27T14:47:01-04:00'
+date: '2026-09-27T14:52:20-04:00'
 type: project-context
 task: Build a Python and Rust Excel formula catalog and evaluator
 status: active
@@ -59,11 +59,11 @@ Runs 1–24 are accepted. Coverage stands at 115 implemented functions, 85 detai
 - Append each run's summary to `docs/run-history.md`. Keep `README.md` and this file limited to the current state.
 - Run the Rust gates with `CARGO_TARGET_DIR` inside the checkout, as `eval_command` does. The machine-wide `~/.cargo-target` mixes build artifacts between copies of the crate.
 ## Activity
-### 2026-09-27T14:47:01-04:00 — codex/Codex
+### 2026-09-27T14:52:20-04:00 — codex/Codex
 - Changed: completed the Workbook Forge prose/data rename, renamed the catalog decision field and schema IDs, switched Python project license metadata to SPDX string form, archived generated wheel-build copies, and moved the checkout to `~/code/workbook_forge`.
 - Why/where: James asked to continue repo cleanup, consolidate local work, confirm a remote, and remove duplicate source files.
-- Evidence: before cleanup, live `git ls-remote` confirmed remote `main` at `e4ce4ba` and remote agent branch at `8175b89`; GitHub metadata reports the repo is private. The merged local agent branch was removed while preserving the remote reference. Python (190 tests, compileall), Rust (31 tests, fmt, check, Clippy), schema/policy tests, wheel build, and `git diff --check` pass. Nine active source paths (eight tracked Python/Rust files plus one ignored tool scratch file) have zero byte-identical duplicates; eight generated build files are preserved under the ignored archive with SHA-256 manifest.
-- Next/remaining: commit and push the cleanup to the existing private `origin/main`; then keep the repository private pending the public-release privacy/provenance review and GitHub slug rename.
+- Evidence: live `git ls-remote` confirmed the pre-cleanup `main` at `e4ce4ba`; commit `15140a1` was pushed as a fast-forward to private `origin/main`. The remote agent branch remains at `8175b89`; its merged local pointer was removed. Python (190 tests, compileall), Rust (31 tests, fmt, check, Clippy), schema/policy tests, wheel build, and `git diff --check` pass. Nine active source paths (eight tracked Python/Rust files plus one ignored tool scratch file) have zero byte-identical duplicates; eight generated build files are preserved under the ignored archive with SHA-256 manifest.
+- Next/remaining: keep the repository private pending the public-release privacy/provenance review and GitHub slug rename; continue the Excel Desktop differential oracle separately.
 
 ### 2026-09-26T00:58:12-04:00 — codex/Codex
 - Changed: independently verified the Workbook Forge package/crate rename, committed it as `8175b89`, and created local `main` at that commit. The existing agent branch remains at the same tip.

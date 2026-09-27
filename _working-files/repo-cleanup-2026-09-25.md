@@ -5,10 +5,9 @@ agent: "codex/Codex"
 date: "2026-09-27T14:47:01-04:00"
 type: cleanup-record
 task: "Continue Workbook Forge release cleanup and consolidate the local checkpoint"
-status: checkpointed-local
-summary: "Completed the Workbook Forge name pass across product code, documentation, schemas, catalog, and fixtures; adopted SPDX license metadata; verified a package wheel; archived its generated source copies; confirmed the existing GitHub remote is private; and moved the checkout to ~/code/workbook_forge."
+status: checkpointed-private-remote
+summary: "Completed and pushed the Workbook Forge name pass across product code, documentation, schemas, catalog, and fixtures; adopted SPDX license metadata; verified a package wheel; archived its generated source copies; confirmed the existing GitHub remote is private; moved the checkout to ~/code/workbook_forge; and removed the merged local agent branch."
 next_steps:
-  - "Push the verified cleanup checkpoint to the existing private origin/main."
   - "Before public release, complete privacy/provenance review, rename the GitHub repository slug to workbook-forge, update origin, and deliberately change visibility."
   - "Continue with the Excel Desktop differential oracle before expanding formula coverage."
 remaining:
@@ -22,6 +21,7 @@ workspace: "/Users/jamespustorino/code/workbook_forge"
 ## Current checkpoint
 
 - Before this cleanup, local `main` and the live private `origin/main` both pointed to `e4ce4ba`; the live remote agent branch `agent/codex-formula-atlas` pointed to `8175b89`, an ancestor already included in `main`.
+- Commit `15140a1` contains the Workbook Forge rebrand and metadata cleanup. It was pushed to private `origin/main` by fast-forward; the local `agent/codex-formula-atlas` branch was removed after confirming its commit was in `main`, while the remote branch reference remains.
 - The Python distribution/import package and Rust crate use `workbook_forge`. Workbook Forge branding now covers the README, evaluator docstrings/errors, behavior and run-history docs, semantic catalog, source-pattern catalog, JSON Schemas, and shared fixtures. The source-pattern key is `workbook_forge_decision`; schema `$id` values use `workbook-forge.local`.
 - `pyproject.toml` declares `license = "MIT"`, the SPDX string form. The package wheel reports `Name: workbook_forge` and `License-Expression: MIT`, carries six catalog JSON files, and excludes the test package.
 - The checkout now lives at `/Users/jamespustorino/code/workbook_forge`. The existing GitHub repository `Jimthetaxguy/formula-atlas` is confirmed private; changing its slug and visibility is release work, not part of this local checkpoint.
@@ -36,7 +36,7 @@ workspace: "/Users/jamespustorino/code/workbook_forge"
 
 ## Next
 
-Commit and push this cleanup to the private `origin/main`; the already-merged local agent branch has been removed while its remote reference remains. Keep the remote private until the public-release review and repository slug rename are complete.
+Keep the remote private until the public-release review and repository slug rename are complete. Continue the Excel Desktop differential oracle as the next evaluator milestone.
 
 ---
 # Repo cleanup — 2026-09-25
