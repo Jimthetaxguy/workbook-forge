@@ -2,18 +2,42 @@
 author: "claude-code/Claude"
 created: "2026-09-25T11:25:00-04:00"
 agent: "codex/Codex"
-date: "2026-09-25T23:57:00-04:00"
+date: "2026-09-27T14:47:01-04:00"
 type: cleanup-record
-task: "Clean up the formula-atlas working tree while Codex is paused"
+task: "Continue Workbook Forge release cleanup and consolidate the local checkpoint"
 status: checkpointed-local
-summary: "Archived 453 untracked pre-git backup and build files (37.1 MB) into a git-ignored archive with a checksum manifest and rollback script. Moved per-run history and long behavior notes out of README/CONTEXT into docs/ word for word. Expanded the license policy to permissive licenses without copyleft and added Python/Rust policy gates. Independently reran the full gate: 190 Python tests and 31 Rust tests pass."
+summary: "Completed the Workbook Forge name pass across product code, documentation, schemas, catalog, and fixtures; adopted SPDX license metadata; verified a package wheel; archived its generated source copies; confirmed the existing GitHub remote is private; and moved the checkout to ~/code/workbook_forge."
 next_steps:
+  - "Push the verified cleanup checkpoint to the existing private origin/main."
+  - "Before public release, complete privacy/provenance review, rename the GitHub repository slug to workbook-forge, update origin, and deliberately change visibility."
   - "Continue with the Excel Desktop differential oracle before expanding formula coverage."
-  - "Codex: append future run notes to docs/run-history.md; checkpoint with git instead of *.bak-* copies."
 remaining:
-  - "Deferred items are listed below; none block Codex's next run (the Excel Desktop differential oracle)."
+  - "Workbook spill projection, broad formula semantics, and Excel 365 coverage remain future evaluator work."
+  - "Public visibility and the GitHub repository slug change remain deferred until release review."
 open_questions: []
-workspace: "/Users/jamespustorino/code/formula-atlas"
+workspace: "/Users/jamespustorino/code/workbook_forge"
+---
+# Workbook Forge cleanup continuation — 2026-09-27
+
+## Current checkpoint
+
+- Before this cleanup, local `main` and the live private `origin/main` both pointed to `e4ce4ba`; the live remote agent branch `agent/codex-formula-atlas` pointed to `8175b89`, an ancestor already included in `main`.
+- The Python distribution/import package and Rust crate use `workbook_forge`. Workbook Forge branding now covers the README, evaluator docstrings/errors, behavior and run-history docs, semantic catalog, source-pattern catalog, JSON Schemas, and shared fixtures. The source-pattern key is `workbook_forge_decision`; schema `$id` values use `workbook-forge.local`.
+- `pyproject.toml` declares `license = "MIT"`, the SPDX string form. The package wheel reports `Name: workbook_forge` and `License-Expression: MIT`, carries six catalog JSON files, and excludes the test package.
+- The checkout now lives at `/Users/jamespustorino/code/workbook_forge`. The existing GitHub repository `Jimthetaxguy/formula-atlas` is confirmed private; changing its slug and visibility is release work, not part of this local checkpoint.
+
+## Verification and duplicate-file audit
+
+- Python: 190 tests passed; `compileall` passed.
+- Rust: 31 tests passed; `fmt --check`, `check --locked`, and Clippy with warnings denied passed using the checkout-local Cargo target directory.
+- Catalog schemas and the dependency license policy passed through the Python suite; `git diff --check` passed.
+- Eight tracked Python/Rust source files plus one ignored `.remember/tmp/last-ndc.ts` tool scratch file were SHA-256 scanned: zero byte-identical source-file groups.
+- The wheel build created eight ignored files under `build/` and `python/workbook_forge.egg-info/`, including three exact package-source copies. They were moved under `_archive-2026-09-27-L1/package-build/`; `MANIFEST.sha256.tsv` records their hashes. The active tree has no generated package-source copies.
+
+## Next
+
+Commit and push this cleanup to the private `origin/main`; the already-merged local agent branch has been removed while its remote reference remains. Keep the remote private until the public-release review and repository slug rename are complete.
+
 ---
 # Repo cleanup — 2026-09-25
 

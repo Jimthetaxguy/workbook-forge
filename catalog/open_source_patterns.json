@@ -119,7 +119,7 @@
         "apache-commons-math"
       ],
       "observation": "ArithmeticUtils uses Euclidean remainder steps for GCD and divides by the GCD before multiplying when forming an LCM.",
-      "formula_atlas_decision": "Implement independent language-native Euclidean loops and check the Microsoft LCM result boundary before multiplication; preserve unresolved Excel behavior as explicit profiles.",
+      "workbook_forge_decision": "Implement independent language-native Euclidean loops and check the Microsoft LCM result boundary before multiplication; preserve unresolved Excel behavior as explicit profiles.",
       "next_application": "Reuse this pattern for other bounded integer-math families only when their documented input and output limits are separately specified.",
       "code_copied": false
     },
@@ -129,7 +129,7 @@
         "formualizer"
       ],
       "observation": "Pinned Formualizer v0.7.0 checks SEQUENCE/RANDARRAY row, column, total-cell and multiplication bounds before allocation. Its calculation-cycle handling and regression test separately clear stale spill projections and region reservations.",
-      "formula_atlas_decision": "Return validated rectangular formula values from the evaluator; a future workbook layer owns spill projection, blockers, grid coordinates and cleanup. The local result cap is 100000 cells. FILTER selection now returns a bounded ArrayValue while spill projection remains separate. No third-party code is copied.",
+      "workbook_forge_decision": "Return validated rectangular formula values from the evaluator; a future workbook layer owns spill projection, blockers, grid coordinates and cleanup. The local result cap is 100000 cells. FILTER selection now returns a bounded ArrayValue while spill projection remains separate. No third-party code is copied.",
       "next_application": "Use the same result/projection boundary for SORT, UNIQUE, RANDARRAY, spill references, and dynamic-array recalculation. Treat the pinned Formualizer FILTER implementation as an architecture comparison, not a full semantics oracle.",
       "code_copied": false
     },
@@ -139,7 +139,7 @@
         "apache-poi"
       ],
       "observation": "Keep weekend selection, weekday classification, holiday exclusion, and working-day range counts as distinct steps so one calendar rule can serve both date-count and date-shift functions.",
-      "formula_atlas_decision": "Adopt the separation with an explicit Monday-first mask and a bounded binary search for date shifts. Microsoft documentation, not POI behavior, defines the Excel contract. No source code is copied.",
+      "workbook_forge_decision": "Adopt the separation with an explicit Monday-first mask and a bounded binary search for date shifts. Microsoft documentation, not POI behavior, defines the Excel contract. No source code is copied.",
       "next_application": "Reuse the mask and count primitives for future business-calendar formula families while keeping function-specific error rules at dispatch boundaries.",
       "code_copied": false
     },
@@ -149,7 +149,7 @@
         "excel-financial-functions"
       ],
       "observation": "A shared maturity-anchored coupon schedule can provide previous and next dates and remaining coupon count, while each formula applies its own basis-specific output calculation.",
-      "formula_atlas_decision": "Adopt the separation in independent Python and Rust evaluators. Microsoft pages define documented inputs, output meanings, and stated errors; the Apache-2.0 implementation informs architecture and highlights compatibility gaps only. No source code is copied.",
+      "workbook_forge_decision": "Adopt the separation in independent Python and Rust evaluators. Microsoft pages define documented inputs, output meanings, and stated errors; the Apache-2.0 implementation informs architecture and highlights compatibility gaps only. No source code is copied.",
       "next_application": "Spot-check schedule generation, equality boundaries, February and month-end maturities, and leap-year COUPDAYS cases against the target Excel build. Keep each output calculation independent.",
       "code_copied": false
     },
@@ -159,7 +159,7 @@
         "excel-financial-functions"
       ],
       "observation": "The Apache loan module exposes cumulative interest and principal as aggregates of their per-period payment components over a validated inclusive range.",
-      "formula_atlas_decision": "Adopt the component-sum relationship, then derive a stable O(1) geometric-series expression independently, including a near-zero-rate limit so range work does not grow with the number of periods or lose precision through cancellation. The Apache-2.0 source informs equations and organization only; no source code is copied.",
+      "workbook_forge_decision": "Adopt the component-sum relationship, then derive a stable O(1) geometric-series expression independently, including a near-zero-rate limit so range work does not grow with the number of periods or lose precision through cancellation. The Apache-2.0 source informs equations and organization only; no source code is copied.",
       "next_application": "Reuse component identities for other bounded financial aggregates while keeping function-specific range and timing contracts explicit.",
       "code_copied": false
     },
@@ -169,7 +169,7 @@
         "apache-poi"
       ],
       "observation": "Keep day-count basis selection separate from date normalization and the final numerator/denominator calculation.",
-      "formula_atlas_decision": "Adopt as an independent implementation pattern: use separate US and European 30/360 helpers and explicit Actual/Actual, Actual/360, and Actual/365 basis paths. Microsoft documentation defines the supported Excel claim; Apache POI only informs organization and comparison. No source code is copied.",
+      "workbook_forge_decision": "Adopt as an independent implementation pattern: use separate US and European 30/360 helpers and explicit Actual/Actual, Actual/360, and Actual/365 basis paths. Microsoft documentation defines the supported Excel claim; Apache POI only informs organization and comparison. No source code is copied.",
       "next_application": "Compare each profile against Excel output for month-end, February, reversed-interval, and multi-year boundary cases.",
       "code_copied": false
     },
@@ -179,7 +179,7 @@
         "formualizer"
       ],
       "observation": "Track formula precedents and dependents so a workbook edit recalculates only affected cells, while cycle detection and evaluation order are explicit.",
-      "formula_atlas_decision": "Adopt incrementally. The Python workbook adapter derives a static dependency closure from parsed references, calculates requested scalar formulas in dependency order, ignores stored formula caches as inputs, and refuses cycles. It does not yet track dirty dependents after arbitrary value/formula edits or retain a result cache.",
+      "workbook_forge_decision": "Adopt incrementally. The Python workbook adapter derives a static dependency closure from parsed references, calculates requested scalar formulas in dependency order, ignores stored formula caches as inputs, and refuses cycles. It does not yet track dirty dependents after arbitrary value/formula edits or retain a result cache.",
       "next_application": "Extend toward mutation-driven dirty propagation and cache invalidation, with tests for edited precedents, dependent chains, cycles, and grouped formula boundaries. Current formula-group and array-result support remains deliberately conservative.",
       "code_copied": false
     },
@@ -189,7 +189,7 @@
         "formualizer"
       ],
       "observation": "Keep parsing and ASTs, shared value and reference types, evaluation, and workbook I/O in distinct layers.",
-      "formula_atlas_decision": "Adopt incrementally. Preserve the current independent Python and Rust implementations; split modules when a boundary can be moved without changing behavior.",
+      "workbook_forge_decision": "Adopt incrementally. Preserve the current independent Python and Rust implementations; split modules when a boundary can be moved without changing behavior.",
       "next_application": "Keep OOXML package handling behind the workbook adapter instead of mixing it into formula evaluation.",
       "code_copied": false
     },
@@ -199,7 +199,7 @@
         "apache-poi"
       ],
       "observation": "Changing a value or formula can stale previously computed intermediate results; mutation and evaluator cache invalidation need a defined contract.",
-      "formula_atlas_decision": "Adopt incrementally. The adapter writes persisted OOXML formula-result caches and requests Excel recalculation after edits. Formula Atlas has no in-memory evaluator result cache or mutation-driven dependency invalidation.",
+      "workbook_forge_decision": "Adopt incrementally. The adapter writes persisted OOXML formula-result caches and requests Excel recalculation after edits. Workbook Forge has no in-memory evaluator result cache or mutation-driven dependency invalidation.",
       "next_application": "If an in-memory result cache or incremental recalculation is introduced, every value/formula edit must invalidate affected results before reads or saves.",
       "code_copied": false
     },
@@ -209,7 +209,7 @@
         "formualizer"
       ],
       "observation": "A shared Rust calculation core can provide consistent Python and other language APIs.",
-      "formula_atlas_decision": "Do not adopt for evaluator internals yet. Independent Python and Rust engines are intentional differential implementations; shared behavior belongs in the language-neutral catalog and fixtures.",
+      "workbook_forge_decision": "Do not adopt for evaluator internals yet. Independent Python and Rust engines are intentional differential implementations; shared behavior belongs in the language-neutral catalog and fixtures.",
       "next_application": "Keep public argument, value, and error behavior aligned through shared fixture cases.",
       "code_copied": false
     },
@@ -219,7 +219,7 @@
         "excel-financial-functions"
       ],
       "observation": "Represent interest and principal as components of the same periodic payment: IPMT computes period interest, and PPMT is PMT minus IPMT.",
-      "formula_atlas_decision": "Adopt the component identity independently in Python and Rust, using Formula Atlas’s PMT calculation for the payment amount and stable prior-period growth factors for interest. Microsoft pages define documented inputs, timing, signs, and examples; the Apache-2.0 source informs equation organization only. No source code is copied.",
+      "workbook_forge_decision": "Adopt the component identity independently in Python and Rust, using Workbook Forge’s PMT calculation for the payment amount and stable prior-period growth factors for interest. Microsoft pages define documented inputs, timing, signs, and examples; the Apache-2.0 source informs equation organization only. No source code is copied.",
       "next_application": "Reuse the payment-component identity for future cumulative interest/principal functions, while retaining their function-specific argument, sign, and range rules.",
       "code_copied": false
     },
@@ -229,7 +229,7 @@
         "excel-financial-functions"
       ],
       "observation": "Build periodic growth and annuity factors once, then express FV, PV, and PMT as related cash-flow equations; give the zero-rate case its exact limiting equation.",
-      "formula_atlas_decision": "Adopt the factor-reuse organization independently in Python and Rust with log1p/expm1 for small periodic rates. Treat the Apache-2.0 code as architecture evidence only; no source code is copied.",
+      "workbook_forge_decision": "Adopt the factor-reuse organization independently in Python and Rust with log1p/expm1 for small periodic rates. Treat the Apache-2.0 code as architecture evidence only; no source code is copied.",
       "next_application": "Reuse the same semantic factor definitions when adding related periodic financial functions, then differential-check equations, signs, payment timing, zero-rate limits, and overflow boundaries.",
       "code_copied": false
     },
@@ -241,7 +241,7 @@
         "apache-openoffice"
       ],
       "observation": "Keep compact depreciation equations as pure calculation kernels, map argument and range rules at the function boundary, and keep golden cases in separate human-readable data. The Apache reference separates DB rate rounding and first/final month periods from DDB's salvage cap; the dual MIT/Apache Formualizer module is a second comparison for explicit profiles and financial-kernel organization. The French-accounting AMORDEGRC references also show why date-basis, whole-unit rounding, coefficient-band, and terminal rules must remain separately stated.",
-      "formula_atlas_decision": "Adopt the separation in independent Python and Rust evaluators. Microsoft documentation supplies Excel meanings and examples; Apache-2.0 and MIT/Apache-2.0 implementations inform organization and compatibility probes only. Undocumented domain and fractional-number behavior remains an evaluator profile. No source code is copied. VDB independently applies the same pure-kernel boundary using a geometric sum, a binary-searched switch period, and explicit fractional-interval profiles; the Apache code and tests remain comparison references only. AMORLINC and AMORDEGRC are implemented as distinct date-based kernels; the Apache references are comparison evidence only. No source code is copied.",
+      "workbook_forge_decision": "Adopt the separation in independent Python and Rust evaluators. Microsoft documentation supplies Excel meanings and examples; Apache-2.0 and MIT/Apache-2.0 implementations inform organization and compatibility probes only. Undocumented domain and fractional-number behavior remains an evaluator profile. No source code is copied. VDB independently applies the same pure-kernel boundary using a geometric sum, a binary-searched switch period, and explicit fractional-interval profiles; the Apache code and tests remain comparison references only. AMORLINC and AMORDEGRC are implemented as distinct date-based kernels; the Apache references are comparison evidence only. No source code is copied.",
       "next_application": "Directly compare AMORLINC period indexing, basis/day-count cases, and AMORDEGRC coefficient endpoints, rounding and terminal schedules with Excel before broadening compatibility claims.",
       "code_copied": false
     },
@@ -251,7 +251,7 @@
         "excel-financial-functions"
       ],
       "observation": "NPER can invert a periodic cash-flow equation through a logarithm ratio, but direct ratio formation can overflow and zero or opposite-sign terms can leave the real domain.",
-      "formula_atlas_decision": "Adopt the equation independently. Normalize cash flows, check signs and zeros before logarithms, use log1p near a unit ratio and a difference of logs for extreme ratios, and keep the exact zero-rate limit separate. No third-party code is copied.",
+      "workbook_forge_decision": "Adopt the equation independently. Normalize cash flows, check signs and zeros before logarithms, use log1p near a unit ratio and a difference of logs for extreme ratios, and keep the exact zero-rate limit separate. No third-party code is copied.",
       "next_application": "Reuse sign-aware logarithm checks and an explicit zero-rate limit for future inverse financial functions; retain shared cases for no-root, non-unique, near-zero, and extreme inputs.",
       "code_copied": false
     },
@@ -261,7 +261,7 @@
         "apache-commons-math"
       ],
       "observation": "CombinatoricsUtils handles identity cases directly, replaces k with min(k, n-k), and computes a binomial coefficient through a multiplicative recurrence instead of factorial quotients. It distinguishes invalid-domain checks from finite floating-point result limits.",
-      "formula_atlas_decision": "Use the reference for architectural ideas only: identity shortcuts, symmetry reduction, and multiplicative counting. Formula Atlas currently accumulates exact integer binomial results and rounds once to binary64 with ties-to-even; it does not adopt the reference’s binary64 ratio accumulation. The new double-factorial and permutation kernels likewise use independently implemented bounded exact integer arithmetic. Microsoft documentation remains authoritative for Excel semantics. No source code is copied and no dependency is added.",
+      "workbook_forge_decision": "Use the reference for architectural ideas only: identity shortcuts, symmetry reduction, and multiplicative counting. Workbook Forge currently accumulates exact integer binomial results and rounds once to binary64 with ties-to-even; it does not adopt the reference’s binary64 ratio accumulation. The new double-factorial and permutation kernels likewise use independently implemented bounded exact integer arithmetic. Microsoft documentation remains authoritative for Excel semantics. No source code is copied and no dependency is added.",
       "next_application": "Consider the recurrence for MULTINOMIAL or related counting functions only after their individual argument, range, precision, and error contracts are researched.",
       "code_copied": false
     },
@@ -271,7 +271,7 @@
         "formualizer"
       ],
       "observation": "Pinned Formualizer v0.7.0 keeps dynamic FILTER selection and workbook spill projection in separate layers. Its FILTER implementation is an architecture comparison with a narrower row-only predicate shape; it is not a complete semantics oracle.",
-      "formula_atlas_decision": "Validate a bounded source and one-dimensional include mask, select rows or columns into an ArrayValue, and leave spill placement to a workbook layer. Python and Rust kernels are independent implementations; no source code or dependency is adopted.",
+      "workbook_forge_decision": "Validate a bounded source and one-dimensional include mask, select rows or columns into an ArrayValue, and leave spill placement to a workbook layer. Python and Rust kernels are independent implementations; no source code or dependency is adopted.",
       "next_application": "For SORT and UNIQUE, specify comparison, stability, empty-result, and error behavior from Microsoft sources before implementation; preserve the formula-result versus spill boundary.",
       "code_copied": false
     }

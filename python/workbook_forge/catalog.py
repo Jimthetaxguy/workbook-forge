@@ -28,7 +28,7 @@ def _catalog_file(name: str) -> Path:
     for candidate in candidates:
         if candidate.is_file():
             return candidate
-    raise FileNotFoundError(f"Formula Atlas catalog file is missing: {name}")
+    raise FileNotFoundError(f"Workbook Forge catalog file is missing: {name}")
 
 
 class CatalogError(ValueError):

@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "A versioned Excel formula glossary and bounded evaluator"
 readme = "README.md"
 requires-python = ">=3.12"
-license = { text = "MIT" }
+license = "MIT"
 dependencies = []
 
 [project.optional-dependencies]

@@ -785,7 +785,7 @@ class Workbook:
                     status = function_status(function, "python")
                 except KeyError as error:
                     raise UnsupportedWorkbook(
-                        f"function {function} is not in the Formula Atlas catalog at {sheet}!{address}"
+                        f"function {function} is not in the Workbook Forge catalog at {sheet}!{address}"
                     ) from error
                 if status != "conformance-tested":
                     raise UnsupportedWorkbook(

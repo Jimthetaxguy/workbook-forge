@@ -47,7 +47,7 @@ def test_filter_glossary_records_bounded_implementation_and_sources():
     assert "ms-array-formula-examples" in spec["source_refs"]
     assert "one column" in spec["semantics"]["shape_profile"]
     assert "blank and empty text" in spec["semantics"]["include_coercion_profile"]
-    assert "array fallback shape are Formula Atlas profiles" in spec["semantics"]["empty_result_profile"]
+    assert "array fallback shape are Workbook Forge profiles" in spec["semantics"]["empty_result_profile"]
     assert "100000 cells" in spec["semantics"]["allocation_profile"]
     assert "No direct Excel spot-checks" in spec["semantics"]["compatibility_limit"]
 

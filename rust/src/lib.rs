@@ -2162,7 +2162,7 @@ fn integer_formula_call(
         if integers.iter().any(|number| *number < 0) {
             return Err(FormulaError::Num);
         }
-        // Microsoft does not document LCM's zero behavior. Formula Atlas uses
+        // Microsoft does not document LCM's zero behavior. Workbook Forge uses
         // the conventional zero-absorbing identity as a local evaluator profile.
         if integers.contains(&0) {
             return Ok(Value::Number(0.0));

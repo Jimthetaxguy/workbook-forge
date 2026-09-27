@@ -1,4 +1,4 @@
-"""Small, explicit Excel formula evaluator for Formula Atlas.
+"""Small, explicit Excel formula evaluator for Workbook Forge.
 
 This module is an original implementation using only the Python standard
 library. Unsupported syntax and functions return :class:`ErrorValue`.
@@ -201,7 +201,7 @@ class _Parser:
             if token.value == "(":
                 if len(stack) >= MAX_EXPRESSION_NESTING:
                     raise _FormulaSyntaxError(
-                        "parenthesis nesting exceeds the Formula Atlas evaluator limit"
+                        "parenthesis nesting exceeds the Workbook Forge evaluator limit"
                     )
                 is_function = index > 0 and self.tokens[index - 1].kind == "IDENT"
                 if is_function:
@@ -1318,7 +1318,7 @@ class _CouponSchedule:
 
 
 def _coupon_schedule(settlement: int, maturity: int, frequency: int) -> _CouponSchedule:
-    """Build a maturity-anchored coupon schedule under Formula Atlas' date profile."""
+    """Build a maturity-anchored coupon schedule under Workbook Forge' date profile."""
     settlement_year, settlement_month, _ = _excel_serial_ymd(settlement)
     maturity_year, maturity_month, maturity_day = _excel_serial_ymd(maturity)
     period_months = 12 // frequency
@@ -1820,7 +1820,7 @@ def _wildcard_matches(
         if not budget.consume(cost):
             return ErrorValue(
                 "#VALUE!",
-                f"wildcard work exceeds the Formula Atlas {MAX_WILDCARD_WORK}-step limit",
+                f"wildcard work exceeds the Workbook Forge {MAX_WILDCARD_WORK}-step limit",
             )
         return len(pattern.tokens) == width and all(
             token.literal is not None and token.literal == character.lower()
@@ -1831,7 +1831,7 @@ def _wildcard_matches(
     if not budget.consume(cost):
         return ErrorValue(
             "#VALUE!",
-            f"wildcard work exceeds the Formula Atlas {MAX_WILDCARD_WORK}-step limit",
+            f"wildcard work exceeds the Workbook Forge {MAX_WILDCARD_WORK}-step limit",
         )
 
     previous = [False] * (width + 1)
@@ -2605,7 +2605,7 @@ def _integer_formula_call(name: str, args: tuple[object, ...]) -> object:
     if name == "LCM":
         if any(number < 0 for number in integers):
             return ErrorValue("#NUM!", "LCM requires nonnegative arguments")
-        # Microsoft does not document LCM's zero behavior. Formula Atlas uses
+        # Microsoft does not document LCM's zero behavior. Workbook Forge uses
         # the conventional zero-absorbing identity as a local evaluator profile.
         if any(number == 0 for number in integers):
             return 0

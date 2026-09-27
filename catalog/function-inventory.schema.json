@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://formula-atlas.local/catalog/function-inventory.schema.json",
-  "title": "Formula Atlas function inventory snapshot",
+  "$id": "https://workbook-forge.local/catalog/function-inventory.schema.json",
+  "title": "Workbook Forge function inventory snapshot",
   "type": "object",
   "required": ["inventory_version", "profile", "snapshot", "retrieved", "refresh_required", "source", "function_count", "category_counts", "functions"],
   "properties": {
