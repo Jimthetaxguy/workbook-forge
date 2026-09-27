@@ -2,18 +2,19 @@
 author: Codex
 created: 2026-09-24
 agent: codex/Codex
-date: '2026-09-27T14:52:20-04:00'
+date: '2026-09-27T16:47:03-04:00'
 type: project-context
 task: Build a Python and Rust Excel formula catalog and evaluator
 status: active
 summary: Language-neutral formula inventory with independently implemented Python and Rust evaluators, shared fixtures, and a bounded XLSX adapter.
 next_steps:
+  - Prepare a public-only release export and choose a Git-history policy after reviewing tracked autoresearch receipts and working notes.
   - Build an Excel Desktop differential harness for accepted scalar and array formulas, beginning with high-risk documented boundaries.
   - Use observed Excel results to validate Workbook Forge profiles and update shared fixtures before expanding formula-family coverage.
   - After oracle coverage is reliable, prioritize the next formula slice by documented usage and dependency value.
 remaining:
   - Workbook spill projection, general worksheet formula semantics beyond targeted scalar dependency closures, and broad Excel 365 coverage are staged, not complete.
-  - "Public release needs a final privacy and provenance review, a rename of the private GitHub repository from formula-atlas to workbook-forge, an origin URL update, and a deliberate visibility change when approved."
+  - "The GitHub repository is Jimthetaxguy/workbook-forge and remains private; local origin tracks the renamed repository. Public visibility is deferred."
 open_questions: []
 ---
 # Workbook Forge Context
@@ -59,6 +60,12 @@ Runs 1–24 are accepted. Coverage stands at 115 implemented functions, 85 detai
 - Append each run's summary to `docs/run-history.md`. Keep `README.md` and this file limited to the current state.
 - Run the Rust gates with `CARGO_TARGET_DIR` inside the checkout, as `eval_command` does. The machine-wide `~/.cargo-target` mixes build artifacts between copies of the crate.
 ## Activity
+### 2026-09-27T16:47:03-04:00 — codex/Codex
+- Changed: updated local `origin` to `https://github.com/Jimthetaxguy/workbook-forge.git` after GitHub began returning the renamed repository; confirmed `main` is clean and synced at `6dba619`.
+- Why/where: continued Workbook Forge release preparation while keeping GitHub visibility private.
+- Evidence: GitHub metadata reports canonical name `workbook-forge`, visibility `private`, and admin permission. A read-only scan of the tracked tree and reachable Git history found no email or recognized credential patterns; it flagged absolute local paths in two `_working-files` notes. The tracked `.autoresearch/` receipts and `_working-files/` notes remain a release curation decision.
+- Next/remaining: prepare a public-only export and decide history treatment before any visibility change; continue the Excel Desktop differential oracle as the next evaluator milestone.
+
 ### 2026-09-27T14:52:20-04:00 — codex/Codex
 - Changed: completed the Workbook Forge prose/data rename, renamed the catalog decision field and schema IDs, switched Python project license metadata to SPDX string form, archived generated wheel-build copies, and moved the checkout to `~/code/workbook_forge`.
 - Why/where: James asked to continue repo cleanup, consolidate local work, confirm a remote, and remove duplicate source files.

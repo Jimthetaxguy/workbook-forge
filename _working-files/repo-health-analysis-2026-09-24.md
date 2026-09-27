@@ -17,7 +17,7 @@ remaining:
 open_questions:
   - "Did Codex skip the Excel comparisons because its sandbox could not drive Excel, or did it skip them for another reason?"
 model: "claude-opus-5-5"
-workspace: "/Users/jamespustorino/code/formula-atlas"
+workspace: "."
 ---
 # Formula Atlas: repo health analysis (2026-09-24)
 

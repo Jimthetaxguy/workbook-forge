@@ -2,21 +2,29 @@
 author: "claude-code/Claude"
 created: "2026-09-25T11:25:00-04:00"
 agent: "codex/Codex"
-date: "2026-09-27T14:47:01-04:00"
+date: "2026-09-27T16:47:03-04:00"
 type: cleanup-record
 task: "Continue Workbook Forge release cleanup and consolidate the local checkpoint"
-status: checkpointed-private-remote
-summary: "Completed and pushed the Workbook Forge name pass across product code, documentation, schemas, catalog, and fixtures; adopted SPDX license metadata; verified a package wheel; archived its generated source copies; confirmed the existing GitHub remote is private; moved the checkout to ~/code/workbook_forge; and removed the merged local agent branch."
+status: private-release-review
+summary: "Completed and pushed the Workbook Forge name pass; the GitHub repository now uses the workbook-forge slug and remains private, and the local origin URL tracks it. Completed an initial public-safety scan and recorded the remaining release curation decision."
 next_steps:
-  - "Before public release, complete privacy/provenance review, rename the GitHub repository slug to workbook-forge, update origin, and deliberately change visibility."
+  - "Prepare a public-only release export and choose a Git-history policy after reviewing tracked autoresearch receipts and working notes."
+  - "Change repository visibility only as a separate, deliberate release action."
   - "Continue with the Excel Desktop differential oracle before expanding formula coverage."
 remaining:
   - "Workbook spill projection, broad formula semantics, and Excel 365 coverage remain future evaluator work."
-  - "Public visibility and the GitHub repository slug change remain deferred until release review."
+  - "Public visibility remains deferred; the current public-safety scan found local absolute paths in two working notes, and internal autoresearch/working-file history needs curation."
 open_questions: []
-workspace: "/Users/jamespustorino/code/workbook_forge"
+workspace: "."
 ---
 # Workbook Forge cleanup continuation — 2026-09-27
+
+## Release-prep continuation — 2026-09-27 16:47 EDT
+
+- GitHub now reports the canonical repository as `Jimthetaxguy/workbook-forge`; visibility is still private. The local `origin` was updated and fetched successfully. `main`, `HEAD`, and `origin/main` are aligned at `6dba619`.
+- The read-only privacy scan checked tracked files and all reachable local/remote-tracking Git history. It found no email addresses or recognized GitHub, AWS, Google, Slack, or private-key credential patterns. It found absolute local paths in this note and `repo-health-analysis-2026-09-24.md`; the current files now use repository-relative wording, while older commits retain the historical paths.
+- `.autoresearch/` receipts and `_working-files/` reports are tracked in the current branch and history. A public-only export and a Git-history policy remain necessary before changing visibility.
+- No visibility change was made.
 
 ## Current checkpoint
 
@@ -24,7 +32,7 @@ workspace: "/Users/jamespustorino/code/workbook_forge"
 - Commit `15140a1` contains the Workbook Forge rebrand and metadata cleanup. It was pushed to private `origin/main` by fast-forward; the local `agent/codex-formula-atlas` branch was removed after confirming its commit was in `main`, while the remote branch reference remains.
 - The Python distribution/import package and Rust crate use `workbook_forge`. Workbook Forge branding now covers the README, evaluator docstrings/errors, behavior and run-history docs, semantic catalog, source-pattern catalog, JSON Schemas, and shared fixtures. The source-pattern key is `workbook_forge_decision`; schema `$id` values use `workbook-forge.local`.
 - `pyproject.toml` declares `license = "MIT"`, the SPDX string form. The package wheel reports `Name: workbook_forge` and `License-Expression: MIT`, carries six catalog JSON files, and excludes the test package.
-- The checkout now lives at `/Users/jamespustorino/code/workbook_forge`. The existing GitHub repository `Jimthetaxguy/formula-atlas` is confirmed private; changing its slug and visibility is release work, not part of this local checkpoint.
+- The checkout now lives at `~/code/workbook_forge`. At this cleanup checkpoint, the GitHub repository was `Jimthetaxguy/formula-atlas` and private; the later rename and origin update are recorded in the release-prep continuation above.
 
 ## Verification and duplicate-file audit
 
