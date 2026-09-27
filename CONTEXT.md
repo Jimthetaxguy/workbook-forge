@@ -2,7 +2,7 @@
 author: Codex
 created: 2026-09-24
 agent: codex/Codex
-date: '2026-09-27T16:47:03-04:00'
+date: '2026-09-27T16:55:53-04:00'
 type: project-context
 task: Build a Python and Rust Excel formula catalog and evaluator
 status: active
@@ -63,7 +63,7 @@ Runs 1–24 are accepted. Coverage stands at 115 implemented functions, 85 detai
 ### 2026-09-27T16:47:03-04:00 — codex/Codex
 - Changed: updated local `origin` to `https://github.com/Jimthetaxguy/workbook-forge.git` after GitHub began returning the renamed repository; confirmed `main` is clean and synced at `6dba619`.
 - Why/where: continued Workbook Forge release preparation while keeping GitHub visibility private.
-- Evidence: GitHub metadata reports canonical name `workbook-forge`, visibility `private`, and admin permission. A read-only scan of the tracked tree and reachable Git history found no email or recognized credential patterns; it flagged absolute local paths in two `_working-files` notes. The tracked `.autoresearch/` receipts and `_working-files/` notes remain a release curation decision.
+- Evidence: GitHub metadata reports canonical name `workbook-forge`, visibility `private`, and admin permission. A read-only scan of the tracked tree and reachable Git history found no email or recognized credential patterns; it flagged absolute local paths in two `_working-files` notes. The current files now use relative paths, though older commits retain those historical paths. Upstream license evidence was checked for all five source projects in the pattern catalog; recorded licenses match the live source pages. The tracked `.autoresearch/` receipts and `_working-files/` notes remain a release curation decision.
 - Next/remaining: prepare a public-only export and decide history treatment before any visibility change; continue the Excel Desktop differential oracle as the next evaluator milestone.
 
 ### 2026-09-27T14:52:20-04:00 — codex/Codex

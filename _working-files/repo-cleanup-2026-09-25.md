@@ -2,11 +2,11 @@
 author: "claude-code/Claude"
 created: "2026-09-25T11:25:00-04:00"
 agent: "codex/Codex"
-date: "2026-09-27T16:47:03-04:00"
+date: "2026-09-27T16:55:53-04:00"
 type: cleanup-record
 task: "Continue Workbook Forge release cleanup and consolidate the local checkpoint"
 status: private-release-review
-summary: "Completed and pushed the Workbook Forge name pass; the GitHub repository now uses the workbook-forge slug and remains private, and the local origin URL tracks it. Completed an initial public-safety scan and recorded the remaining release curation decision."
+summary: "Completed and pushed the Workbook Forge name pass; the GitHub repository now uses the workbook-forge slug and remains private, and the local origin URL tracks it. Scanned tracked files and history, verified upstream license evidence, and recorded the remaining release curation decision."
 next_steps:
   - "Prepare a public-only release export and choose a Git-history policy after reviewing tracked autoresearch receipts and working notes."
   - "Change repository visibility only as a separate, deliberate release action."
@@ -19,10 +19,11 @@ workspace: "."
 ---
 # Workbook Forge cleanup continuation — 2026-09-27
 
-## Release-prep continuation — 2026-09-27 16:47 EDT
+## Release-prep continuation — 2026-09-27 16:55 EDT
 
 - GitHub now reports the canonical repository as `Jimthetaxguy/workbook-forge`; visibility is still private. The local `origin` was updated and fetched successfully. `main`, `HEAD`, and `origin/main` are aligned at `6dba619`.
 - The read-only privacy scan checked tracked files and all reachable local/remote-tracking Git history. It found no email addresses or recognized GitHub, AWS, Google, Slack, or private-key credential patterns. It found absolute local paths in this note and `repo-health-analysis-2026-09-24.md`; the current files now use repository-relative wording, while older commits retain the historical paths.
+- The five source repositories in `catalog/open_source_patterns.json` were checked against their upstream license evidence: Apache Commons Math, Apache OpenOffice, Apache POI, and ExcelFinancialFunctions list Apache-2.0; Formualizer v0.7.0 lists MIT and Apache-2.0. These match the project’s permissive, no-copyleft policy.
 - `.autoresearch/` receipts and `_working-files/` reports are tracked in the current branch and history. A public-only export and a Git-history policy remain necessary before changing visibility.
 - No visibility change was made.
 
