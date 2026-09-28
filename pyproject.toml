@@ -34,6 +34,8 @@ package-dir = {"" = "python"}
   "catalog/agent-operations.json",
   "catalog/extraction-patterns.json",
   "catalog/extraction-report.schema.json",
+  "catalog/primitive-catalog.json",
+  "catalog/primitive-expression.schema.json",
 ]
 
 [tool.setuptools.packages.find]

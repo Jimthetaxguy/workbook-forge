@@ -1605,42 +1605,32 @@
                   ]
                 },
                 "formula": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
+                  "type": "string"
                 },
                 "style": {
-                  "anyOf": [
-                    {
-                      "type": "object",
-                      "properties": {
-                        "number_format": {
-                          "type": "string"
-                        },
-                        "bold": {
-                          "type": "boolean"
-                        },
-                        "font_color": {
-                          "type": "string"
-                        },
-                        "fill_color": {
-                          "type": "string"
-                        },
-                        "horizontal": {
-                          "enum": [
-                            "left",
-                            "center",
-                            "right"
-                          ]
-                        }
-                      },
-                      "additionalProperties": false
+                  "type": "object",
+                  "properties": {
+                    "number_format": {
+                      "type": "string"
                     },
-                    {
-                      "type": "null"
+                    "bold": {
+                      "type": "boolean"
+                    },
+                    "font_color": {
+                      "type": "string"
+                    },
+                    "fill_color": {
+                      "type": "string"
+                    },
+                    "horizontal": {
+                      "enum": [
+                        "left",
+                        "center",
+                        "right"
+                      ]
                     }
-                  ]
+                  },
+                  "additionalProperties": false
                 }
               },
               "required": [

@@ -646,6 +646,13 @@ fn decode_mode(
                         return Err(err(format!("cell {name} cannot contain child elements")));
                     }
                 }
+                if xml.child(source, "is").is_some()
+                    && (xml.child(source, "v").is_some() || xml.child(source, "f").is_some())
+                {
+                    return Err(err(
+                        "inline-string payload cannot coexist with a value or formula",
+                    ));
+                }
                 let value = stored_value(&xml, source, &strings)?;
                 let mut cell = Cell::default();
                 if let Some(formula) = xml.child(source, "f") {

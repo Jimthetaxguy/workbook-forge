@@ -23,6 +23,7 @@ from workbook_forge.toolkit import operating_scenario
 from workbook_forge.xlsx import export_xlsx, import_xlsx
 from workbook_forge.agent import AgentWorkbook, operation_catalog
 from workbook_forge.extraction import extract_xlsx, pattern_catalog
+from workbook_forge import primitives as xl
 
 
 def main() -> None:
@@ -39,6 +40,20 @@ def main() -> None:
     assert evaluate_result("=SEQUENCE(2,2)").shape == (2, 2)
     assert lookup_function("SUM")["name"] == "SUM"
     assert workbook_capabilities()["profile"] == "workbook-toolkit-v1"
+    native_catalog = xl.primitive_catalog()
+    assert native_catalog["profile"] == "spreadsheet-primitives-v1"
+    assert len(native_catalog["functions"]) == 9
+    assert xl.primitive_expression_schema()["$defs"]["node"]
+    assert native_catalog["expression_schema_api"]["python"].endswith("primitive_expression_schema")
+    volumes = xl.range_values([[100], [120], [150]])
+    assert xl.sum(volumes) == 370
+    quantity = xl.call("SUM", xl.input("volumes"))
+    profit = quantity * (xl.input("unit_price") - xl.input("unit_cost")) - 3 * xl.input("fixed_cost")
+    native_inputs = {"volumes": volumes, "unit_price": 25, "unit_cost": 8, "fixed_cost": 1000}
+    assert profit.evaluate(native_inputs) == 3290
+    assert xl.Expression.from_dict(profit.to_dict()).evaluate(native_inputs) == 3290
+    assert "excel.SUM" in profit.inspect()["operations"]
+    assert xl.call("IF", True, 42, xl.literal(1) / 0).evaluate() == 42
     expression = Expression.reference(CellReference(1, 1, column_absolute=True))
     assert "$A2" in expression.copy(rows=1, columns=1).formula
     model = operating_scenario(backend=args.backend)
@@ -94,7 +109,7 @@ def main() -> None:
     replies = [json.loads(line) for line in process.stdout.splitlines()]
     assert len(replies) == len(requests) and all(item["ok"] for item in replies)
     assert replies[-1]["result"]["outputs"] == result["outputs"]
-    receipt = {"status": "passed", "python": sys.version.split()[0], "backend": args.backend, "package": importlib.metadata.version("workbook_forge"), "outputs": result["outputs"], "checks": ["independent engine", "legacy APIs", "installed catalogs", "typed expressions", "CLI", "XLSX generation and reimport", "agent operation discovery", "agent preview/edit/explain/export", "agent JSON-lines transport", "XML pattern extraction and formula mappings"]}
+    receipt = {"status": "passed", "python": sys.version.split()[0], "backend": args.backend, "package": importlib.metadata.version("workbook_forge"), "outputs": result["outputs"], "checks": ["independent engine", "legacy APIs", "installed catalogs", "typed expressions", "CLI", "XLSX generation and reimport", "agent operation discovery", "agent preview/edit/explain/export", "agent JSON-lines transport", "XML pattern extraction and formula mappings", "independent Python primitives and named-input composition"]}
     (args.output / "receipt.json").write_text(json.dumps(receipt, indent=2) + "\n")
     print(json.dumps(receipt))
 

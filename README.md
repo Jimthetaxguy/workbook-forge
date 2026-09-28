@@ -56,6 +56,31 @@ implementations. See the [agent interface direction](docs/toolkit-delivery.md#ag
 and the [versioned operation contract](docs/agent-protocol.md) for the interface
 and its acceptance evidence.
 
+## Native spreadsheet primitives
+
+Spreadsheet calculations are also available without creating a workbook. The
+`primitives` modules expose nine native functions in each language and
+inspectable compositions of calls, named inputs and operators. They reuse each
+language's independent evaluator directly; no Excel file, cell addresses or
+formula-string translation is required.
+
+```python
+from workbook_forge import primitives as xl
+
+quantity = xl.call("SUM", xl.input("volumes"))
+revenue = quantity * xl.input("unit_price")
+result = revenue.evaluate({"volumes": xl.range_values([[100], [120], [150]]), "unit_price": 25})
+assert result == 9250
+assert "excel.SUM" in revenue.inspect()["operations"]
+```
+
+The [primitive contract](docs/primitives.md) explains direct calls, composition,
+value types and known compatibility differences. The catalog identifies both
+public language entry points and distinguishes inherited reference documentation
+from the implemented behavior. Extraction, programmatic workbook creation and
+editable Excel output remain part of the platform; a spreadsheet-like interface
+is a later use of the same foundation.
+
 ## Agent SDK quick start
 
 After installing the Python package, an agent host can register the schemas from
@@ -229,6 +254,7 @@ The Microsoft function index currently contributes 521 named entries across its 
 - `python/workbook_forge/` — independent standard-library formula and workbook engines, typed expressions, catalog API, and `.xlsx` adapter.
 - `rust/` — standalone Rust formula evaluator, typed model, calculation sessions, independent `.xlsx` adapter, and examples.
 - `native/` — optional PyO3 bridge to the Rust engine; pure Python does not require it.
+- `catalog/primitive-catalog.json` and `docs/primitives.md` — native operation identities, language entry points, composition and explicit behavior profiles.
 - `catalog/workbook-capabilities.json` — primitive support across read, construct, calculate, transform, and export.
 - `catalog/agent-operations.json` — versioned operation descriptions and request/response schemas; a checked identical copy is embedded in the Rust crate.
 - `catalog/extraction-patterns.json` and `catalog/extraction-report.schema.json` — structural patterns, formula mappings, and the extraction report contract.
@@ -259,6 +285,7 @@ toolkit adds model and adapter capabilities without expanding the function count
 | Functions implemented and conformance-tested in both engines | 115 |
 | Inventory functions that are still catalog-only | 406 of 521 |
 | Shared fixture cases | 1,371 |
+| Native primitive interface | 9 functions and 10 binary operators in each language |
 | Detailed semantic specs | 85 |
 | Formula and compatibility source records | 110 |
 | Direct Excel Desktop observations | 3 targeted formula checks; full workbook roundtrip outstanding |

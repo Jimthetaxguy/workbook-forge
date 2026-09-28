@@ -1305,6 +1305,10 @@ class Workbook:
                     raise UnsupportedWorkbook(f"duplicate cell {name} element")
                 if name in {"f", "v"} and children and len(children[0]):
                     raise UnsupportedWorkbook(f"cell {name} element must not contain child elements")
+            if cell.find(_q("is")) is not None and (
+                cell.find(_q("v")) is not None or cell.find(_q("f")) is not None
+            ):
+                raise UnsupportedWorkbook("inline-string payload cannot coexist with a value or formula")
             address = cell.attrib.get("r")
             if address:
                 normalized = _normal_address(address)

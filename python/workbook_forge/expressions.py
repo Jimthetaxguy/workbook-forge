@@ -18,6 +18,7 @@ from . import (
     MAX_FUNCTION_NESTING,
     _Node,
     _Parser,
+    _canonical_function_name,
 )
 
 _REFERENCE = re.compile(r"(\$?)([A-Za-z]{1,3})(\$?)([1-9][0-9]*)\Z")
@@ -236,7 +237,7 @@ def analyze_formula(formula: str) -> dict[str, Any]:
     while pending:
         node = pending.pop()
         if node.kind == "call":
-            functions.add(str(node.value))
+            functions.add(_canonical_function_name(str(node.value)))
         pending.extend(node.children)
     return {
         "formula": formula,

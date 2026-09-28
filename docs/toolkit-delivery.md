@@ -2,13 +2,13 @@
 author: Codex
 created: 2026-09-28
 agent: codex/Codex
-date: 2026-09-28
+date: '2026-09-28T15:38:56-04:00'
 type: implementation-record
 task: Deliver the programmable workbook toolkit
-status: implementation-verified-excel-acceptance-outstanding
-summary: Independent Python and Rust agent operations and formula-aware XML extraction verified by contract tests and installed packages, with a live agent workbook task; full Excel acceptance remains outstanding.
-next_steps: [Complete live Excel acceptance, review and integrate the feature branch, expand agent tasks using concrete workbook cases]
-remaining: [Full live Excel scenario and generated-file roundtrip acceptance, wider optional native-wheel platform coverage]
+status: review-candidate-live-excel-pending
+summary: Independent Python and Rust native primitives, workbook workflows and review fixes pass local tests and installed-package checks; full Excel Desktop acceptance remains outstanding.
+next_steps: [Review the verified SDK candidate, complete live Excel acceptance before integration, expand primitives through concrete application cases]
+remaining: [Full live Excel acceptance, wider optional native-wheel platform coverage, hosted CI evidence]
 open_questions: []
 ---
 
@@ -22,6 +22,36 @@ The product direction is **an SDK for Excel in agent-ready formats**, as clarifi
 by James. Workbook primitives and independent language implementations provide
 the foundation. The agent interface direction below defines how to expose those
 capabilities without making unsupported Excel or agent-integration claims.
+
+## Current native primitive delivery
+
+James clarified that the same foundation must support extracting Excel content,
+building editable Excel workbooks, composing ordinary programs, and later an
+Excel-like application. The dataset records operation intent, typed arguments,
+blank/error rules, dependencies, native entry points and evidence. It is backed
+by executable Python and Rust code, not just descriptions or formula strings.
+
+The new primitive layer has nine function identities and ten binary operators.
+Native calls and inspectable compositions reuse each language's own evaluator.
+The canonical catalog and expression schema are available in both package APIs.
+The integrated suite passes 923 Python and 88 Rust tests. Fresh installed wheels
+and a packaged Rust consumer pass outside the checkout. Known aggregate coercion
+differences are explicit Forge behavior.
+A stricter application-oriented numeric profile remains a future design choice;
+it is not implemented by silently changing the current spreadsheet profile.
+
+| Contributor | Owned work | Verified result | Remaining |
+| --- | --- | --- | --- |
+| codex/agent_consumer | Python primitives, example/tests, prefix handling and Python packaging | 37 focused primitive/prefix tests and 14 expression tests pass; fresh pure/native wheels pass outside the checkout on Python 3.12/3.14 | No assigned work remains |
+| codex/xlsx_adapter | Rust primitives, standalone runners, prefix handling and Rust packaging | All 88 Rust tests pass on stable and Rust 1.88; packaged external consumer verifies calculations, schema discovery and workbook workflows | No assigned work remains |
+| codex/architecture_review | Independent contract and PR regression review | 233 initial primitive cases and 12 PR regressions pass; final direct-call size and schema-export findings independently closed | No review findings remain |
+| codex/Codex | Shared catalog/schema, integration, reference analysis and shared records | Full gates pass 923 Python and 88 Rust tests, including the additional schema test and direct-call regressions; package receipts inspected | Full Excel Desktop acceptance and hosted CI remain outstanding |
+
+This record has one coordinating writer, codex/Codex. Contributors report what
+changed, actual checks and unresolved work at meaningful milestones. Their
+reports are attributed here; an assignment does not count as verification.
+The feature branch preserves prior work and local evidence. No merge or package
+publication is authorized by the implementation checkpoint.
 
 ## Agent interface direction
 
@@ -114,6 +144,29 @@ The packaged Rust extractor is exercised by an external consumer without Python.
 No dependencies were added. The scenario produces matching records for 12
 formulas and 3 validations; local evidence is retained in .verification/xml-engine
 and .verification/xml-packages. No broader Excel compatibility is inferred.
+
+## Reference-project analysis
+
+The following public project descriptions were checked on 2026-09-28. These are
+architecture comparisons and future investigation targets, not selected runtime
+dependencies or proof of Excel compatibility. No third-party code was copied.
+Existing pinned implementation references remain in `catalog/open_source_patterns.json`.
+
+| Reference | Useful concept | Forge decision |
+| --- | --- | --- |
+| [Formualizer](https://github.com/PSU3D0/formualizer) | Separate values, parser, evaluation, workbook and typed application interfaces | Keep clear module boundaries, while retaining independent Python and Rust implementations |
+| [LogiSheets](https://github.com/logisky/LogiSheets) | Named, schema-aware blocks and fields let agents address business data rather than guess coordinates | Extend explicit semantic bindings only through concrete extraction/application cases |
+| [IronCalc](https://github.com/ironcalc/IronCalc) | A reusable engine can serve several application interfaces | Keep presentation outside calculation |
+| [Calamine](https://github.com/tafia/calamine) and [umya-spreadsheet](https://github.com/MathNya/umya-spreadsheet) | Reader and read/write document-model boundaries | Compare extraction cases and preservation limits; neither replaces the current adapters in this delivery |
+| [rust_xlsxwriter](https://github.com/jmcnamara/rust_xlsxwriter) | Deliberate authoring and format fidelity for new workbooks | Study richer output APIs independently of imported-file patching |
+| [RevoGrid](https://github.com/revolist/revogrid) and [Univer](https://github.com/dream-num/univer) | Grid interaction, extensions and presentation architecture | Defer UI selection until a reference interaction design exists; package-specific licenses/features need review before adoption |
+| [xlstream](https://docs.rs/crate/xlstream/latest) | Streaming calculation with bounded memory | Measure dependency patterns before selecting a streaming strategy |
+
+Luckysheet's own repository now recommends Univer; it is a historical UI
+reference. The spoken name "XLRS" did not identify a spreadsheet project
+unambiguously and remains unresolved rather than being mapped to an unrelated
+repository. The new [primitive contract](primitives.md) records the immediate
+implementation; these broader references do not expand its acceptance claims.
 
 ## Ownership and boundaries
 
@@ -227,6 +280,28 @@ unavailable Rust bridge raises `NativeUnavailableError`.
 
 ## Verification record
 
+The native primitive checkpoint passes **923 Python tests and 88 Rust tests**.
+The primitive contract file contains 234 cases, including real standalone Rust
+execution; 12 focused PR regressions cover compatibility prefixes, null-only
+edits and conflicting XML payloads. The final independent review also caught a
+Rust direct-call size gap. Both direct calls and compositions now enforce the
+same combined payload budget, with matching 31/32-string regressions. Catalog
+and embedded-schema synchronization runs in the standard verification gate.
+Full-gate evidence: .verification/primitives/final-gates.log.
+
+Fresh pure and optional-native wheels pass outside the checkout on Python
+3.12.13 and 3.14.3. All packaged Python modules and primitive resources match
+the final source. The source archive includes both implementations and Rust's
+embedded catalog/schema. A separate consumer compiles the packaged Rust crate
+on Rust 1.88, verifies all nine native functions, expression inspection and
+round trips, the corrected direct-call limit, and XLSX generation/edit/reimport/
+extraction. The full 88-test Rust suite also passes on Rust 1.88. Receipts:
+.verification/primitives-packages-python/receipt.json and
+.verification/primitives-packages-rust/receipt.md. Native-wheel platform evidence
+remains macOS arm64; no package publication or new Excel observation occurred.
+
+Earlier checkpoints follow for continuity; their counts describe those stages.
+
 Baseline: source main fd2c313, clean and aligned before implementation; Python
 190 tests and Rust 31 tests passed during discovery. The final verification
 entry point is `WORKBOOK_PYTHON=.venv/bin/python bash tools/verify_toolkit.sh`:
@@ -296,6 +371,12 @@ reviews cover 32 package/version pairs, including both upstream-required Syn
 major versions. Updating a transitive crate across an incompatible major is not
 forced. The Python runtime remains standard-library-only.
 
+Native primitive work adds no packages or lockfile changes. It enables the
+existing serde_json dependency's `unbounded_depth` feature only for the bounded
+expression transport: input bytes and raw nesting are checked before decoding,
+then the expression's stricter node/depth limits apply. Python remains free of
+runtime package dependencies.
+
 Version sources: [PyPI](https://pypi.org/project/pytest/),
 [PyO3](https://docs.rs/pyo3/0.29.2/pyo3/),
 [quick-xml](https://docs.rs/quick-xml/0.42.0/quick_xml/),
@@ -354,6 +435,36 @@ cases. Persistence requires measured recovery/workload requirements first;
 collaboration requires actual conflict cases. Neither has been selected here.
 
 ## Activity
+
+### 2026-09-28T15:38:56-04:00 — codex/Codex — native primitive verification and review closure
+
+- Changed: delivered independent native calls and inspectable compositions,
+  installed discovery/schema access, documented behavior profiles, and both
+  standalone scenario examples. Fixed all three reported PR boundaries.
+- Review: separate Python/Rust owners and an independent reviewer closed numeric
+  normalization, combined payload, direct-call limit and metadata findings.
+  The coordinator maintained this shared record; contributor receipts retain
+  commands, results and remaining boundaries in the ignored evidence directory.
+- Verified: 923 Python tests, 88 Rust tests, formatting, compilation, strict
+  Clippy, schema synchronization and license policy; all four installed Python
+  runs and the packaged Rust 1.88 consumer pass. Documentation links resolve.
+- Remaining: full Excel Desktop open/edit/recalculate/save/reimport acceptance,
+  hosted CI evidence and wider optional-native platform coverage. No merge or
+  registry publication is part of this checkpoint.
+
+### 2026-09-28T15:16:22-04:00 — codex/Codex — native primitive work and review fixes
+
+- Changed: assigned independent Python and Rust implementations and a separate
+  contract reviewer. Added canonical native-operation metadata, an expression
+  schema and synchronized Rust catalog. Corrected conflicting inline XML
+  payload acceptance and removed null-only formula/style edits from discovery.
+- Evidence: Python contributor reports native-call and interchange smoke checks;
+  Rust implementation and independent tests are in progress. Catalog projection
+  and Python compilation pass. Full regression and packaging gates have not run
+  for this new work yet.
+- Remaining: verify the new primitive contract and all three review findings,
+  refresh installed-package evidence, and preserve Excel Desktop acceptance as
+  an outstanding requirement.
 
 ### 2026-09-28 — codex/Codex — branch organization
 

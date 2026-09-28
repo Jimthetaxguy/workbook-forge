@@ -654,7 +654,7 @@ impl Expression {
         while let Some(expr) = pending.pop() {
             match expr {
                 Expr::Call(name, args) => {
-                    functions.insert(name.clone());
+                    functions.insert(crate::canonical_function_name(name).to_string());
                     pending.extend(args);
                 }
                 Expr::Unary(_, e) => pending.push(e),
@@ -690,6 +690,12 @@ fn render_expr(expr: &Expr, dr: i32, dc: i32) -> Result<String, ToolkitError> {
         Expr::Bool(b) => if *b { "TRUE" } else { "FALSE" }.into(),
         Expr::Error(error) => error.to_string(),
         Expr::Missing => String::new(),
+        Expr::Native(_) => {
+            return Err(ToolkitError::new(
+                "unsupported_operation",
+                "native primitive values cannot be rendered as worksheet formulas",
+            ));
+        }
         Expr::Ref(sheet, address) => CellReference::parse(
             if sheet.is_empty() {
                 None

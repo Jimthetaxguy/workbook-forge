@@ -5,6 +5,7 @@ cd "$(dirname "$0")/.."
 WORKBOOK_PYTHON="${WORKBOOK_PYTHON:-python3.13}"
 "$WORKBOOK_PYTHON" -c 'from workbook_forge import _native; assert _native.Session'
 "$WORKBOOK_PYTHON" -c 'from workbook_forge.python_engine import Session; assert Session'
+"$WORKBOOK_PYTHON" tools/sync_primitive_catalog.py
 "$WORKBOOK_PYTHON" -m pytest -q
 "$WORKBOOK_PYTHON" -m compileall -q python tools examples setup.py
 cargo fmt --manifest-path rust/Cargo.toml --check

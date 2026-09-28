@@ -2,13 +2,13 @@
 author: Codex
 created: 2026-09-24
 agent: codex/Codex
-date: '2026-09-28T14:55:07-04:00'
+date: '2026-09-28T15:37:33-04:00'
 type: project-context
 task: Build an SDK for Excel in agent-ready formats using independent Python and Rust implementations
 status: active
-summary: Independent Python and Rust Excel SDKs expose agent operations and formula-aware XML extraction, with bounded structural patterns, source provenance and verified installed packages.
+summary: Independent Python and Rust SDKs expose verified workbook workflows and native spreadsheet compositions; full Excel Desktop acceptance remains outstanding.
 next_steps:
-  - Complete the live Excel acceptance gate tracked in docs/toolkit-delivery.md, then review and integrate the verified independent implementations.
+  - Complete the separate live Excel acceptance gate before integration; native primitives, review fixes and verification are tracked in docs/toolkit-delivery.md.
   - Expand the verified agent operation contract against concrete workbook tasks; keep framework/MCP adapters thin and retain source/revision-aware results.
   - Use tools/excel_oracle.py to observe the generated scenario after an input edit and save; diagnose the current Excel automation failures.
   - Use observed Excel results to validate Workbook Forge profiles and update shared fixtures before expanding formula-family coverage.
@@ -24,6 +24,9 @@ Build an **SDK for Excel in agent-ready formats**: expose supported workbook dat
 
 **Workbook Forge** is the product name selected for public release (James, 2026-09-26). The Python distribution, import package, and Rust core crate are named `workbook_forge`. The canonical checkout tracks GitHub `main`; GitHub visibility is public as of the live 2026-09-28 check. The toolkit implementation is isolated on `agent/codex-workbook-toolkit` until integration.
 ## Terms
+- **Spreadsheet primitive:** an identifiable operation with typed arguments, native implementations, explicit behavior limits and compatibility evidence. It can be used without a workbook.
+- **Composition:** a structured calculation combining primitive calls, named inputs and operators while retaining operation identities for inspection. It can power scripts, agents or a later application interface.
+- **Semantic profile:** the declared rules for coercion, blanks, errors and result types. An Excel function name identifies a correspondence; it does not prove complete compatibility.
 - **XML structural pattern:** an exact namespace-qualified path through an OOXML part; same-named tags inside unrelated extensions do not match worksheet cells.
 - **Extraction record:** a bounded read-only observation carrying package part, XML path, worksheet/cell location, original text and interpreted metadata. Formula function status comes from the existing catalogs.
 - **Derived shared formula:** an inspection expression copied from a validated shared-group master; it does not enable calculation or editing of grouped cells.
@@ -58,12 +61,14 @@ Build an **SDK for Excel in agent-ready formats**: expose supported workbook dat
 - Jev is a development-time reviewer only. It is not linked into runtime, and its results are advisory.
 - Macros and external data are never executed or fetched.
 ## Current State
-Runs 1–24 are accepted. Coverage stands at 115 implemented functions, 85 detailed semantic specs, 110 source records, and 1,371 shared fixtures. Run 24 bounds formula size, nesting, and wildcard work. The toolkit adds independently implemented typed authoring, calculation sessions and Excel adapters in Python and Rust, installed examples, and reviewed parallel calculation. Both SDKs now expose nine schema-described agent operations and JSON-lines runners, verified through installed packages and a live agent task. Formula-aware XML extraction adds ten structural patterns, typed references and catalog mappings; the complete suite now passes 640 Python and 78 Rust tests. Three direct formula checks succeeded in Excel 16.113.2; the generated-file roundtrip and full scenario remain unverified because automation failed. The 521-entry source inventory remains broader than implementation coverage; 406 functions remain catalog-only. FILTER, SORT, and UNIQUE return bounded, shape-preserving arrays; worksheet spill projection remains unsupported. SORT/UNIQUE comparison, equality, coercion, and output precision include explicit Workbook Forge profiles. Do not describe the package as Excel-complete.
+The native primitive interface adds nine functions and ten binary operators, typed native values, named-input composition and inspectable operation identities without requiring a workbook. Both packages provide the canonical catalog and expression schema. All three PR boundary findings are fixed; final independent review also closed a direct-call size-limit mismatch. Contributor evidence and the outstanding Excel acceptance gate are recorded in `docs/toolkit-delivery.md`.
+Runs 1–24 are accepted. Coverage stands at 115 implemented functions, 85 detailed semantic specs, 110 source records, and 1,371 shared fixtures. Run 24 bounds formula size, nesting, and wildcard work. The toolkit adds independently implemented typed authoring, calculation sessions and Excel adapters in Python and Rust, installed examples, and reviewed parallel calculation. Both SDKs now expose nine schema-described agent operations and JSON-lines runners, verified through installed packages and a live agent task. Formula-aware XML extraction adds ten structural patterns, typed references and catalog mappings; the complete suite now passes 923 Python and 88 Rust tests. Three direct formula checks succeeded in Excel 16.113.2; the generated-file roundtrip and full scenario remain unverified because automation failed. The 521-entry source inventory remains broader than implementation coverage; 406 functions remain catalog-only. FILTER, SORT, and UNIQUE return bounded, shape-preserving arrays; worksheet spill projection remains unsupported. SORT/UNIQUE comparison, equality, coercion, and output precision include explicit Workbook Forge profiles. Do not describe the package as Excel-complete.
 - The source-linked function inventory contains 521 records; it is a versioned discovery catalog, not an evaluator coverage claim.
 - The Python and Rust evaluators implement the same bounded scalar, reference, operator, common-function, conditional-aggregation, and rectangular formula-result slice. Both load `fixtures/formula-cases.jsonl`. The toolkit adds reviewed Serde dependencies and a separate PyO3 bridge; exact license receipts cover both lockfiles.
 - `catalog/formulas.json` records per-language status; a function is `conformance-tested` only when shared fixture coverage passes in both engines.
 - The Python wheel installs the JSON catalogs under `share/workbook_forge/catalog`; the API resolves either installed data or the source-tree catalog. `catalog/open_source_patterns.json` records only permissively licensed (no copyleft) implementation references, license evidence, and adoption decisions; no third-party source code is copied.
 ## Where things are
+- `docs/primitives.md`: native function calls, inspectable compositions, package discovery and explicit behavior limits.
 - `docs/toolkit-delivery.md`: architecture, ownership, milestone checklist, acceptance model and implementation evidence.
 - `docs/extraction-patterns.md`: independent XML parsing/extraction contract, limits, formula mappings and source provenance.
 - `docs/agent-protocol.md`: the versioned operation, pagination, error, provenance and JSON-lines transport contract; catalog/agent-operations.json owns its discoverable schemas.
@@ -78,7 +83,7 @@ Runs 1–24 are accepted. Coverage stands at 115 implemented functions, 85 detai
 - Append each run's summary to `docs/run-history.md`. Keep `README.md` and this file limited to the current state.
 - Run the Rust gates with `CARGO_TARGET_DIR` inside the checkout, as `eval_command` does. The machine-wide `~/.cargo-target` mixes build artifacts between copies of the crate.
 ## Latest maintenance
-### 2026-09-28 — codex/Codex — branch organization
-- Moved prior activity entries intact to [project history](docs/run-history.md#project-activity), keeping this glossary focused on current vocabulary, ownership and boundaries.
-- Completed README navigation for extraction, verification tools and delivery evidence. Package boundaries, canonical catalogs and implementation behavior are unchanged.
-- Verification and the outstanding Excel Desktop acceptance gate remain recorded in [toolkit delivery](docs/toolkit-delivery.md).
+### 2026-09-28 — codex/Codex — native primitives and reviewed boundaries
+- Added reusable calculations without workbooks, preserving the four product uses: extraction, software execution, programmatic Excel generation and a later application interface.
+- Recorded independent contributor verification and reference-project analysis in [toolkit delivery](docs/toolkit-delivery.md). Known behavior differences remain explicit.
+- Prior branch organization and implementation checkpoints remain in the delivery record and [project history](docs/run-history.md#project-activity).
