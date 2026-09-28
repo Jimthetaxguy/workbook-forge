@@ -2,13 +2,14 @@
 author: Codex
 created: 2026-09-24
 agent: codex/Codex
-date: '2026-09-28T11:19:00-04:00'
+date: '2026-09-28T13:07:32-04:00'
 type: project-context
-task: Deliver a programmable workbook toolkit using the existing Python and Rust formula foundation
+task: Build an SDK for Excel in agent-ready formats using independent Python and Rust implementations
 status: active
-summary: Independent hand-written Python and Rust workbook implementations; the Python package runs without Rust, and an optional bridge compares engines.
+summary: An Excel SDK exposing workbook meaning and operations in agent-ready formats; independent Python and Rust implementations provide the calculation and XLSX foundation.
 next_steps:
   - Complete the live Excel acceptance gate tracked in docs/toolkit-delivery.md, then review and integrate the verified independent implementations.
+  - Formalize agent operation schemas and focused workbook views against the existing SDK, with source/revision-aware results; see the agent interface direction in docs/toolkit-delivery.md.
   - Use tools/excel_oracle.py to observe the generated scenario after an input edit and save; diagnose the current Excel automation failures.
   - Use observed Excel results to validate Workbook Forge profiles and update shared fixtures before expanding formula-family coverage.
   - After oracle coverage is reliable, prioritize the next formula slice by documented usage and dependency value.
@@ -19,10 +20,12 @@ open_questions: []
 ---
 # Workbook Forge Context
 ## Purpose
-Build a programmable workbook toolkit that extracts supported Excel models, runs reusable tools through Python and Rust, and generates editable Excel workbooks. The formula glossary aims to enumerate Excel 365 syntax and functions; evaluator and workbook capabilities make narrower, explicit claims.
+Build an **SDK for Excel in agent-ready formats**: expose supported workbook data, formulas, dependencies, presentation and explicit business bindings as structured objects that agents can inspect, calculate, compose and deliver back as editable Excel workbooks. Independent Python and Rust implementations own these operations. The formula glossary aims to enumerate Excel 365 syntax and functions; evaluator and workbook capabilities make narrower, explicit claims.
 
 **Workbook Forge** is the product name selected for public release (James, 2026-09-26). The Python distribution, import package, and Rust core crate are named `workbook_forge`. The canonical checkout tracks GitHub `main`; GitHub visibility is public as of the live 2026-09-28 check. The toolkit implementation is isolated on `agent/codex-workbook-toolkit` until integration.
 ## Terms
+- **Agent-ready format:** a structured representation with explicit types, identities, operations, revisions and diagnostics, preserving the supported workbook meaning needed for an agent task. JSON alone does not establish that contract.
+- **Agent tool adapter:** a thin interface mapping an agent framework's tool calls to SDK operations. Operation schemas, focused views and framework/MCP adapters remain planned; they do not own calculation semantics.
 - **Workbook model:** sparse sheets, authored content, formulas, styles, and explicit input/output bindings, implemented independently in each language and separate from XML.
 - **Application binding:** a named input or output attached to an explicit cell; not an Excel defined-name expression.
 - **Calculation snapshot:** an immutable model revision used by full or incremental calculation; stale work cannot replace current published results.
@@ -68,6 +71,11 @@ Runs 1–24 are accepted. Coverage stands at 115 implemented functions, 85 detai
 - Append each run's summary to `docs/run-history.md`. Keep `README.md` and this file limited to the current state.
 - Run the Rust gates with `CARGO_TARGET_DIR` inside the checkout, as `eval_command` does. The machine-wide `~/.cargo-target` mixes build artifacts between copies of the crate.
 ## Activity
+### 2026-09-28 — codex/Codex — Excel SDK product direction
+- Changed: adopted James's framing, "SDK for Excel in Agent Ready Formats," as the product purpose; linked the implemented engines and file workflows to an explicit agent interface direction.
+- Evidence: existing versioned model JSON, named bindings, bounded edits and calculation reports are the foundation. Discoverable operation schemas, focused context views and source/revision-aware explanations are the next contract work, not newly implemented features.
+- Next/remaining: prove an agent can inspect the scenario, identify explicit bindings, run a bounded change, explain the resulting outputs and export the workbook through the SDK. Complete the existing live Excel acceptance gate; retain independent Python/Rust ownership and explicit unsupported-feature reports.
+
 ### 2026-09-28 — codex/Codex — clarified language independence
 - Changed: James clarified that Python and Rust must each contain complete implementations. Both now independently implement workbook calculation and OOXML workflows; Python defaults to its own engine and the Rust bridge is optional.
 - Evidence: 375 Python tests, 62 Rust tests, strict lint/format checks and Rust 1.88 gates pass. Pure Python and optional native wheels pass on Python 3.12/3.14 outside the checkout; a packaged Rust consumer generates/edits/reimports XLSX without Python. The 1,371-case corpus and seven file-interchange tests cover agreement. Current stable dependency versions and permissive licenses are locked and reviewed.

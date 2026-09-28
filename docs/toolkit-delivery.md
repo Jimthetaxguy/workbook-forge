@@ -7,7 +7,7 @@ type: implementation-record
 task: Deliver the programmable workbook toolkit
 status: implementation-verified-excel-acceptance-outstanding
 summary: Independent hand-written Python and Rust workbook and XLSX implementations verified from installed packages, with refreshed stable dependencies.
-next_steps: [Complete live Excel acceptance, review and integrate the feature branch]
+next_steps: [Complete live Excel acceptance, review and integrate the feature branch, formalize the agent interface contract]
 remaining: [Full live Excel scenario and generated-file roundtrip acceptance, wider optional native-wheel platform coverage]
 open_questions: []
 ---
@@ -17,6 +17,49 @@ open_questions: []
 This living record tracks the approved first delivery. Storage, distributed
 collaboration, general structural editing, and a full grid application remain
 future work; the model is an in-process computation library, not a database.
+
+The product direction is **an SDK for Excel in agent-ready formats**, as clarified
+by James. Workbook primitives and independent language implementations provide
+the foundation. The agent interface direction below defines how to expose those
+capabilities without making unsupported Excel or agent-integration claims.
+
+## Agent interface direction
+
+Agents should be able to discover supported workbook operations, obtain enough
+context for a task, execute typed changes or calculations, and return a useful
+Excel artifact with an explanation of the result. Preserve formulas, references,
+types, source locations and unsupported-feature evidence alongside values.
+Application business meaning comes from explicit bindings and author metadata;
+colors and cell position alone do not establish it.
+
+The current foundation includes independent Python/Rust SDKs, versioned workbook
+JSON, named input/output bindings, bounded atomic edits, inspection reports,
+revisioned calculation reports, a JSON CLI and XLSX adapters. The following is
+the next work package, not a description of additional shipped interfaces:
+
+| Contract | Required evidence |
+| --- | --- |
+| Discoverable operations | Versioned schemas and examples for inspect, read, calculate, edit and export, including constraints, errors and support boundaries |
+| Focused workbook context | Sheet/range/output-dependency views with declared size bounds and explicit truncation or continuation; preserve source identity without requiring a full-workbook prompt |
+| Explained results and changes | Trace requested outputs to formulas, inputs, source cells and model revision; distinguish imported caches from calculated values and show supported changes before export |
+| SDK-backed agent tools | One thin tool adapter over the SDK contract, exercised by an actual agent against the synthetic scenario; framework/MCP transports can follow the same contract |
+
+Order: define the operation and result contracts against existing SDK behavior,
+implement focused views and provenance, then connect one real agent tool adapter.
+An SDK-only deterministic replay must reproduce the same operation results, so
+agent reasoning is never substituted for spreadsheet calculation.
+
+Acceptance: given the operating scenario and explicit bindings, an agent
+discovers the supported inputs, changes unit price to 25, obtains revenue 9250
+and profit 3290, explains their source formulas and revision, and exports the
+editable workbook. The unsupported variant must produce a structured reason
+when an output depends on unsupported content while retaining that content in
+permitted exports. Repeat the operation sequence against both language engines.
+
+This direction does not select a durable storage format, live-data architecture,
+collaboration mechanism or full grid interface. Those retain their existing
+evidence gates. Complete live Excel acceptance remains a separate requirement
+from the agent-tool demonstration.
 
 ## Ownership and boundaries
 
@@ -232,6 +275,14 @@ cases. Persistence requires measured recovery/workload requirements first;
 collaboration requires actual conflict cases. Neither has been selected here.
 
 ## Activity
+
+### 2026-09-28 — codex/Codex — agent-ready Excel SDK framing
+
+Updated the product purpose and vocabulary to reflect James's SDK direction.
+Recorded the existing structured interfaces separately from the next operation
+schema, focused-context, provenance and real-agent acceptance work. No new tool
+server, operation schema or calculation behavior is claimed by this documentation
+change. Independent Python and Rust implementations remain required.
 
 ### 2026-09-28 — codex/Codex — independent implementation correction
 

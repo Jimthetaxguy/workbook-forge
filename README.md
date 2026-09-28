@@ -1,6 +1,14 @@
 # Workbook Forge
 
-Workbook Forge implements spreadsheet primitives and workbook calculation independently in Python and Rust. Each language has its own formula evaluator, typed expressions, workbook validation, dependency calculation, editing sessions, and conservative `.xlsx` reader, generator, and patch writer.
+**Workbook Forge is an SDK for Excel in formats agents can use.** Its goal is to
+make supported workbook data, formulas, dependencies, presentation, and business
+inputs available as structured objects that agents can inspect, calculate,
+compose, and deliver back as editable Excel workbooks.
+
+The SDK implements spreadsheet primitives and workbook calculation independently
+in Python and Rust. Each language has its own formula evaluator, typed
+expressions, workbook validation, dependency calculation, editing sessions, and
+conservative `.xlsx` reader, generator, and patch writer.
 
 The Python distribution, import package, and Rust crate use the consistent name `workbook_forge`.
 
@@ -17,6 +25,29 @@ The operating scenario demonstrates the behavior with public synthetic data:
 
 Each language computes those results using its own code. Shared test data checks
 agreement and established expected values; it does not replace either implementation.
+
+## What agent-ready means
+
+The product contract is to preserve workbook meaning across three surfaces:
+
+| Surface | Purpose | Current status |
+| --- | --- | --- |
+| Python and Rust SDKs | Construct and execute workbook operations through typed primitives | Independent implementations for the supported profile |
+| Structured interchange and reports | Give agents cell identities, formulas, named bindings, constraints, calculated values, revisions, and diagnostics | Versioned workbook JSON, inspection/calculation reports, and a JSON CLI exist |
+| Editable Excel files | Exchange workbooks with people and existing Excel workflows | Bounded generation/import/export exist; complete live Excel roundtrip acceptance remains outstanding |
+
+The next agent-facing layer will formalize operation schemas, focused context
+views, and calculation/change explanations tied to source cells and revisions.
+SDK-backed tool adapters can then expose those contracts to agent frameworks,
+including MCP. These interfaces are planned; no MCP server or automatic business
+meaning inference is currently shipped. Application names such as `unit_price`
+remain explicit bindings supplied by the author or caller.
+
+The core promise is a workbook's supported meaning and executable behavior,
+with clear reports for features that can only be preserved. JSON, human-readable
+views, and tool calls are interfaces to that meaning, not separate calculation
+implementations. See the [agent interface direction](docs/toolkit-delivery.md#agent-interface-direction)
+for the next acceptance target.
 
 ## Programmable workbooks
 
