@@ -4,6 +4,7 @@
 //! and a small set of frequently used worksheet functions. Unsupported syntax
 //! is reported rather than guessed.
 
+pub mod agent;
 pub mod toolkit;
 pub mod xlsx;
 pub use toolkit::{

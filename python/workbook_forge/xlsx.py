@@ -1,4 +1,4 @@
-"""Preservation-aware XLSX boundary for the Rust-owned workbook toolkit.
+"""Preservation-aware XLSX boundary for the independent workbook implementations.
 
 The legacy adapter remains the bounded OOXML package reader and patch writer.
 Imported bytes form an immutable baseline; export never reloads a mutable input

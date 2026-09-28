@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "workbook_forge"
 version = "0.2.0"
-description = "Independent Python workbook engine and preservation-aware Excel toolkit"
+description = "Agent-ready Excel SDK with an independent Python workbook engine"
 readme = "README.md"
 requires-python = ">=3.12"
 license = "MIT"
@@ -31,6 +31,7 @@ package-dir = {"" = "python"}
   "catalog/function_inventory.json",
   "catalog/workbook-capabilities.json",
   "catalog/dependency-licenses.json",
+  "catalog/agent-operations.json",
 ]
 
 [tool.setuptools.packages.find]

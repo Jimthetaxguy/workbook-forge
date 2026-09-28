@@ -1083,8 +1083,8 @@ impl ImportedWorkbook {
     pub fn calculate(&self, workers: usize) -> CalculationReport {
         self.session.calculate(workers)
     }
-    pub fn apply(&self, edits: Vec<Edit>, expected_revision: Option<u64>) -> Result<u64> {
-        for edit in &edits {
+    pub(crate) fn validate_edits(&self, edits: &[Edit]) -> Result<()> {
+        for edit in edits {
             if self.date1904 && edit.formula.is_some() {
                 return Err(err("1904 formula edits are unsupported"));
             }
@@ -1102,6 +1102,10 @@ impl ImportedWorkbook {
                 return Err(err("new-cell insertion on import is unsupported"));
             }
         }
+        Ok(())
+    }
+    pub fn apply(&self, edits: Vec<Edit>, expected_revision: Option<u64>) -> Result<u64> {
+        self.validate_edits(&edits)?;
         Ok(self.session.apply(edits, expected_revision)?)
     }
     pub fn set_inputs(

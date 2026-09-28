@@ -3,8 +3,8 @@
   "profile": "workbook-toolkit-v1",
   "backends": {
     "python-reference": "Independent legacy Python formula evaluator",
-    "python": "Independent Python formula, expression, workbook and calculation implementation; default Python API",
-    "rust": "Independent Rust formula, expression, workbook and calculation implementation",
+    "python": "Independent Python formula, expression, workbook, calculation and agent-operation implementation; default Python API",
+    "rust": "Independent Rust formula, expression, workbook, calculation and agent-operation implementation",
     "python-native": "Optional interoperability bridge selecting the Rust implementation explicitly",
     "python-ooxml": "Independent standard-library package reader, generator and preservation-aware patch writer",
     "rust-ooxml": "Independent package reader, generator and preservation-aware patch writer using low-level ZIP/XML libraries; imported edits require existing cells"
@@ -23,7 +23,8 @@
     {"id":"presentation","read":true,"construct":true,"calculate":false,"transform":true,"export":true,"boundary":"number format, basic font/fill/alignment and column widths; imported unsupported styles retained"},
     {"id":"input-validation","read":true,"construct":true,"calculate":true,"transform":false,"export":true,"boundary":"scalar types, required values, numeric bounds and short choice lists; existing unsupported Excel validation is preserved only"},
     {"id":"names-and-tables","read":true,"construct":false,"calculate":false,"transform":false,"export":true,"boundary":"inspect/preserve metadata; no defined-name expressions or structured table formula evaluation"},
-    {"id":"package-preservation","read":true,"construct":false,"calculate":false,"transform":false,"export":true,"boundary":"untouched part payloads remain unchanged; affected unsupported structures reject edits; Rust imported edits require existing cells"}
+    {"id":"package-preservation","read":true,"construct":false,"calculate":false,"transform":false,"export":true,"boundary":"untouched part payloads remain unchanged; affected unsupported structures reject edits; Rust imported edits require existing cells"},
+    {"id":"agent-operations","read":true,"construct":false,"calculate":true,"transform":true,"export":true,"boundary":"nine schema-described operations over one host-selected model; paginated provenance views, detached previews and revision-checked mutations; imported agent edits require existing-cell content changes; JSON-lines transport, no MCP server"}
   ],
   "deferred": ["durable state store","distributed collaboration","offline merges","live external feeds","general structural editing","worksheet spill placement","charts and full grid UI","macros and external-link execution"]
 }

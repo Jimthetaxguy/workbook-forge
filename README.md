@@ -36,18 +36,74 @@ The product contract is to preserve workbook meaning across three surfaces:
 | Structured interchange and reports | Give agents cell identities, formulas, named bindings, constraints, calculated values, revisions, and diagnostics | Versioned workbook JSON, inspection/calculation reports, and a JSON CLI exist |
 | Editable Excel files | Exchange workbooks with people and existing Excel workflows | Bounded generation/import/export exist; complete live Excel roundtrip acceptance remains outstanding |
 
-The next agent-facing layer will formalize operation schemas, focused context
-views, and calculation/change explanations tied to source cells and revisions.
-SDK-backed tool adapters can then expose those contracts to agent frameworks,
-including MCP. These interfaces are planned; no MCP server or automatic business
-meaning inference is currently shipped. Application names such as `unit_price`
-remain explicit bindings supplied by the author or caller.
+The agent SDK exposes nine schema-described operations through independent
+Python and Rust adapters: discover, describe, read, calculate, explain,
+preview_inputs, set_inputs, edit, and export. Focused views page through a sheet,
+range, or output's dependency closure. Previews calculate before/after results
+without mutating the session; edits and exports require an expected revision.
+Explanations retain source formulas and distinguish calculated values from
+imported caches. Application names such as `unit_price` remain explicit bindings
+supplied by the author or caller.
+
+Both implementations provide a JSON-lines tool transport, and Python exposes
+the same operations as callable dictionaries for agent-framework integration.
+An MCP server and automatic business meaning inference remain future work.
 
 The core promise is a workbook's supported meaning and executable behavior,
 with clear reports for features that can only be preserved. JSON, human-readable
 views, and tool calls are interfaces to that meaning, not separate calculation
 implementations. See the [agent interface direction](docs/toolkit-delivery.md#agent-interface-direction)
-for the next acceptance target.
+and the [versioned operation contract](docs/agent-protocol.md) for the interface
+and its acceptance evidence.
+
+## Agent SDK quick start
+
+After installing the Python package, an agent host can register the schemas from
+`operation_catalog()` and route chosen calls through one owned adapter:
+
+```python
+from workbook_forge.agent import AgentWorkbook, operation_catalog
+from workbook_forge.toolkit import operating_scenario
+
+tools = operation_catalog()["operations"]
+workbook = AgentWorkbook(operating_scenario(), output_dir="exports")
+context = workbook.call("read", {"output": "profit", "limit": 10})
+proposal = {"values": {"unit_price": 25}, "expected_revision": 0}
+preview = workbook.call("preview_inputs", proposal)
+assert preview["ok"] and not preview["result"]["applied"]
+changed = workbook.call("set_inputs", proposal)
+assert changed["ok"]
+result = workbook.call("explain", {"output": "profit", "expected_revision": 1})
+assert result["ok"] and result["result"]["value"] == 3290
+exported = workbook.call("export", {"filename": "scenario.xlsx", "expected_revision": 1})
+assert exported["ok"]
+```
+
+For a process boundary, start either independent runner and write one JSON
+request per line to stdin. Replies carry the call ID, revision, and either a
+structured result or an error. EOF closes the transient session.
+
+```sh
+workbook-forge agent --scenario --output-dir exports-python
+cargo run --manifest-path rust/Cargo.toml --example agent_workbook -- --scenario --output-dir exports-rust
+```
+
+```json
+{"id":"step-1","operation":"discover","arguments":{}}
+{"id":"step-2","operation":"describe","arguments":{}}
+{"id":"step-3","operation":"read","arguments":{"output":"profit","limit":10}}
+```
+
+To load a workbook, replace `--scenario` with its path and add `--bindings` with
+an explicit input/output JSON file. The host selects the source and export
+directory; tool calls cannot read arbitrary paths. Imported agent edits allow
+existing-cell value/formula changes, and reject unsupported changes before
+committing. Requests are bounded to 1 MiB, responses to 256 KiB, and context
+pages to 100 cells, with explicit continuation and truncation metadata.
+
+`python examples/agent_scenario.py NEW_DIRECTORY` records a deterministic replay
+and verifies the exported workbook by reimport. It is a reproducible SDK example,
+not an LLM agent. Live-agent evidence is tracked separately in the delivery record.
 
 ## Programmable workbooks
 
@@ -144,6 +200,8 @@ The Microsoft function index currently contributes 521 named entries across its 
 - `rust/` — standalone Rust formula evaluator, typed model, calculation sessions, independent `.xlsx` adapter, and examples.
 - `native/` — optional PyO3 bridge to the Rust engine; pure Python does not require it.
 - `catalog/workbook-capabilities.json` — primitive support across read, construct, calculate, transform, and export.
+- `catalog/agent-operations.json` — versioned operation descriptions and request/response schemas; a checked identical copy is embedded in the Rust crate.
+- `docs/agent-protocol.md` — agent operation semantics, provenance, pagination, errors, and transport limits.
 - `docs/behavior-profiles.md` — behavior notes and Workbook Forge profiles by function family, plus workbook adapter limits.
 - `docs/run-history.md` — what each autoresearch run added, with the counts at that time.
 - `.autoresearch/` — loop configuration (`config.json`), the accepted-run ledger (`state.json`), and Jev advisory receipts.

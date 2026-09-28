@@ -2,7 +2,7 @@ include LICENSE
 include THIRD_PARTY_NOTICES.txt
 include requirements-dev.lock
 include rust/Cargo.toml rust/Cargo.lock native/Cargo.toml native/Cargo.lock
-recursive-include rust/src *.rs
+recursive-include rust/src *.rs *.json
 recursive-include native/src *.rs
 recursive-include catalog *.json
 recursive-include rust/examples *.rs

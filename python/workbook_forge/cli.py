@@ -38,6 +38,40 @@ def _model(path: Path, bindings: Path | None, backend: str):
     return WorkbookModel(document=document, backend=backend)
 
 
+def _agent_loop(adapter, source, destination) -> int:
+    """Serve bounded JSON lines; a bad request never becomes multiple requests."""
+    maximum = 1024 * 1024
+
+    def reject(code: str, message: str) -> dict:
+        return {
+            "schema_version": 1, "id": None, "operation": None, "ok": False,
+            "revision": adapter.revision, "error": {"code": code, "message": message},
+        }
+
+    def reject_constant(value: str):
+        raise ValueError(f"nonfinite JSON constant: {value}")
+
+    while raw := source.readline(maximum + 2):
+        payload = raw.removesuffix(b"\n")
+        if len(payload) > maximum:
+            # Discard only the rest of this oversized line, using bounded reads.
+            while not raw.endswith(b"\n"):
+                raw = source.readline(maximum + 2)
+                if not raw:
+                    break
+            response = reject("resource_limit", "request exceeds 1 MiB UTF-8")
+        else:
+            try:
+                request = json.loads(payload.decode("utf-8"), parse_constant=reject_constant)
+            except (ValueError, UnicodeError, RecursionError):
+                response = reject("invalid_request", "request must be one valid UTF-8 JSON object")
+            else:
+                response = adapter.handle(request)
+        destination.write(json.dumps(response, ensure_ascii=False, allow_nan=False, separators=(",", ":")) + "\n")
+        destination.flush()
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Inspect, execute, and export typed workbook models")
     commands = parser.add_subparsers(dest="command", required=True)
@@ -50,7 +84,12 @@ def main(argv: list[str] | None = None) -> int:
     run = commands.add_parser("run", help="calculate a model or supported XLSX output closure")
     run.add_argument("source", type=Path)
     run.add_argument("--bindings", type=Path, help="JSON containing explicit input/output bindings")
-    for command in (inspect, scenario, run):
+    agent = commands.add_parser("agent", help="serve bounded SDK operations over JSON lines")
+    agent.add_argument("source", type=Path, nargs="?")
+    agent.add_argument("--scenario", action="store_true", help="start with the synthetic operating planner")
+    agent.add_argument("--bindings", type=Path, help="explicit input/output bindings for a source")
+    agent.add_argument("--output-dir", type=Path, required=True, help="host-selected directory for new XLSX exports")
+    for command in (inspect, scenario, run, agent):
         command.add_argument("--backend", choices=("python", "rust"), default="python")
     for command in (scenario, run):
         command.add_argument("--inputs", default="{}", help="JSON object of named scenario inputs")
@@ -58,6 +97,17 @@ def main(argv: list[str] | None = None) -> int:
         command.add_argument("--xlsx", type=Path, help="write a new Excel workbook")
     args = parser.parse_args(argv)
     try:
+        if args.command == "agent":
+            from .agent import AgentWorkbook
+            from .toolkit import operating_scenario
+
+            if bool(args.source) == args.scenario:
+                raise ValueError("agent requires exactly one source or --scenario")
+            if args.scenario and args.bindings:
+                raise ValueError("--bindings requires a source workbook")
+            model = operating_scenario(backend=args.backend) if args.scenario else _model(args.source, args.bindings, args.backend)
+            adapter = AgentWorkbook(model, output_dir=args.output_dir)
+            return _agent_loop(adapter, sys.stdin.buffer, sys.stdout)
         if args.command == "capabilities":
             result = workbook_capabilities()
         elif args.command == "inspect":

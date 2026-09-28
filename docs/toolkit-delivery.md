@@ -6,8 +6,8 @@ date: 2026-09-28
 type: implementation-record
 task: Deliver the programmable workbook toolkit
 status: implementation-verified-excel-acceptance-outstanding
-summary: Independent hand-written Python and Rust workbook and XLSX implementations verified from installed packages, with refreshed stable dependencies.
-next_steps: [Complete live Excel acceptance, review and integrate the feature branch, formalize the agent interface contract]
+summary: Independent Python and Rust agent SDK operations verified by contract tests, installed packages and a live discovery-led workbook task; full Excel acceptance remains outstanding.
+next_steps: [Complete live Excel acceptance, review and integrate the feature branch, expand agent tasks using concrete workbook cases]
 remaining: [Full live Excel scenario and generated-file roundtrip acceptance, wider optional native-wheel platform coverage]
 open_questions: []
 ---
@@ -34,20 +34,21 @@ colors and cell position alone do not establish it.
 
 The current foundation includes independent Python/Rust SDKs, versioned workbook
 JSON, named input/output bindings, bounded atomic edits, inspection reports,
-revisioned calculation reports, a JSON CLI and XLSX adapters. The following is
-the next work package, not a description of additional shipped interfaces:
+revisioned calculation reports, a JSON CLI and XLSX adapters. The agent layer now
+implements the following contracts; see [agent protocol](agent-protocol.md) for
+exact schemas, pagination, provenance and error semantics:
 
 | Contract | Required evidence |
 | --- | --- |
-| Discoverable operations | Versioned schemas and examples for inspect, read, calculate, edit and export, including constraints, errors and support boundaries |
-| Focused workbook context | Sheet/range/output-dependency views with declared size bounds and explicit truncation or continuation; preserve source identity without requiring a full-workbook prompt |
-| Explained results and changes | Trace requested outputs to formulas, inputs, source cells and model revision; distinguish imported caches from calculated values and show supported changes before export |
-| SDK-backed agent tools | One thin tool adapter over the SDK contract, exercised by an actual agent against the synthetic scenario; framework/MCP transports can follow the same contract |
+| Discoverable operations | Nine operations with versioned input/output schemas, side-effect classifications, examples and limits; shared schemas are checked across both packages |
+| Focused workbook context | Sheet/range/output-dependency views, 100-cell maximum pages, revision-checked continuations and explicit diagnostic/dependency clipping |
+| Explained results and changes | Source formulas, input bindings and cell provenance; imported caches remain separate; preview_inputs shows before/after results without mutation |
+| SDK-backed agent tools | Independently implemented adapters and JSON-lines runners in both languages; Python callable dictionaries can be registered with agent frameworks; MCP remains future work |
 
-Order: define the operation and result contracts against existing SDK behavior,
-implement focused views and provenance, then connect one real agent tool adapter.
-An SDK-only deterministic replay must reproduce the same operation results, so
-agent reasoning is never substituted for spreadsheet calculation.
+The implemented adapters reuse each language's workbook engine and XLSX adapter.
+The deterministic replay in examples/agent_scenario.py reproduces operation
+results through the SDK. Agent reasoning is never substituted for spreadsheet
+calculation. This script is labeled separately from live-agent evidence.
 
 Acceptance: given the operating scenario and explicit bindings, an agent
 discovers the supported inputs, changes unit price to 25, obtains revenue 9250
@@ -60,6 +61,29 @@ This direction does not select a durable storage format, live-data architecture,
 collaboration mechanism or full grid interface. Those retain their existing
 evidence gates. Complete live Excel acceptance remains a separate requirement
 from the agent-tool demonstration.
+
+## Live agent acceptance
+
+On 2026-09-28, an independent Codex consumer used the actual Python JSON-lines
+runner with a synthetic imported workbook. It learned operations from discover
+and bindings from describe, without reading implementation code, documentation
+or the binding file. It chose ten requests to inspect the profit dependency
+closure, preview price 25, apply the input at revision 0, calculate and explain
+revision 1, and export a new workbook. The same ten requests succeeded against
+the standalone Rust runner.
+
+Both returned revenue **9250**, profit **3290**, and break-even units **1000/17**.
+The explanation exposed the contributing cells and formulas; the old imported
+profit cache of 1440 remained separate from the calculated 3290. Preview left
+the original revision unchanged. Both exports reopened through the SDK with
+matching supported content and the unrelated unsupported LET formula intact.
+Raw package preservation is covered by separate tests, not this consumer trace.
+
+Local evidence is retained in .verification/agent-sdk-live/consumer-report.md,
+consumer-transcript.json and the two output subdirectories. This is one actual
+agent acceptance exercise, not a general model benchmark. Opaque sheet IDs,
+optional null cache fields, evaluation counts, diagnostic prose and ZIP byte
+sizes differed; business results and operation semantics agreed.
 
 ## Ownership and boundaries
 
@@ -114,6 +138,8 @@ diagnostic. It does not expand Forge's supported functions.
 - [ ] D acceptance: generated workbook opens without repair, edited input
   recalculates in Excel, saved file reimports with matching results
 - [x] E: installed Python/Rust/CLI examples and measured parallel calculation
+- [x] Agent SDK: discovery, bounded context, preview/change/explanation/export
+  operations in both languages, shared contract tests and live agent acceptance
 - [x] Existing regressions, policy/license checks and independent final review
 
 The implementation is a reviewable delivery candidate. The complete milestone's
@@ -129,6 +155,8 @@ are narrower evidence. See [Excel observations](excel-observations.md).
 | Independent Python authoring and calculation | `workbook_forge.toolkit.WorkbookModel` (default `backend="python"`) |
 | Python typed expression construction | `workbook_forge.expressions` |
 | Independent Python Excel extraction and production | `workbook_forge.xlsx.import_xlsx` / `export_xlsx` |
+| Agent adapters | `workbook_forge.agent.AgentWorkbook`, `workbook_forge::agent::AgentWorkbook` |
+| Agent transports | `workbook-forge agent`, Rust `agent_workbook` example |
 | CLI | `workbook-forge scenario`, `inspect`, `run`, `capabilities` |
 | Capability report | `workbook_forge.catalog.workbook_capabilities()` |
 
@@ -175,9 +203,15 @@ entry point is `WORKBOOK_PYTHON=.venv/bin/python bash tools/verify_toolkit.sh`:
 Python tests and compilation, Rust fmt/check/test/Clippy, native bridge
 fmt/check/Clippy, catalog schemas, and exact-version dependency-license receipts.
 The initial Rust-owned delivery passed 230 Python tests and 53 Rust tests.
-The clarified independent implementation passes **375 Python tests and 62 Rust
-tests**, including seven actual Rust-process/Python XLSX interchange checks.
-Rust's complete suite also passes on the declared minimum Rust 1.88.0.
+The clarified independent implementation checkpoint passed 375 Python tests and
+62 Rust tests, including seven actual Rust-process/Python XLSX interchange checks.
+The agent SDK checkpoint passes **512 Python tests and 69 Rust tests**. Its 91
+shared agent contract tests exercise the actual standalone Rust process without
+PyO3 and validate every operation's response against the discovery schemas.
+All 69 Rust tests also pass with the declared minimum compiler, Rust 1.88.
+The final gate ran with a fresh checkout-local Rust target directory after a
+stale cached library caused an unresolved module error. The previous target
+was preserved; package verification now uses a separate target directory.
 
 All 1,371 fixtures are exercised through each workbook engine: 1,368 retain
 their expected results, while three oversized cases receive the documented
@@ -190,10 +224,19 @@ an optional ABI3 bridge wheel, and a source distribution containing both
 implementations. Fresh Python 3.12.13 and 3.14.3 environments run
 `tools/verify_installed.py` outside the source checkout for both wheel variants.
 The pure environments contain no extension. Checks cover legacy APIs, installed
-catalogs, expressions, CLI, results and generated XLSX reimport. The optional
+catalogs, expressions, CLI, results, agent discovery/preview/edit/explain/export,
+JSON-lines transport and generated XLSX reimport. All four installations pass.
+The optional
 binary wheel verified here is macOS arm64; other native platforms are unverified.
-The packaged Rust crate separately generates a workbook, edits price to 25,
-exports it and inspects the result from an external consumer without Python.
+The packaged Rust crate passes the original independent generation workflow and
+an external consumer that replays the live agent's ten requests without Python.
+Its export reopens successfully through both the packaged Rust runner and the
+installed pure Python package, retaining the unsupported formula. The crate
+contains the agent source, embedded discovery schemas and runner example, with
+no build directories. Wheels and source distributions also contain the required
+agent module and catalog. Receipts are retained under
+.verification/agent-sdk-packages; its rust-consumer-path.txt identifies the
+external temporary consumer.
 No registry publication is part of this delivery.
 
 Independent review led to regression coverage for unrelated oversized formulas,
@@ -275,6 +318,18 @@ cases. Persistence requires measured recovery/workload requirements first;
 collaboration requires actual conflict cases. Neither has been selected here.
 
 ## Activity
+
+### 2026-09-28 — codex/Codex — independent agent SDK implementation
+
+Added the nine-operation discovery contract, paged dependency context, calculated
+provenance, input previews, atomic revision-checked mutations and constrained
+exports to both independent language SDKs. Shared conformance tests cover schema
+validity, error codes, pagination, request/response limits, imported-content
+restrictions and preservation. Malformed/oversized JSON lines recover without
+executing a discarded fragment. Full gates pass with 512 Python and 69 Rust
+tests; fresh installed packages and the live discovery-led consumer pass.
+No dependencies were added. The feature branch remains a draft delivery
+candidate pending the separate live Excel edit/save/reimport acceptance.
 
 ### 2026-09-28 — codex/Codex — agent-ready Excel SDK framing
 
