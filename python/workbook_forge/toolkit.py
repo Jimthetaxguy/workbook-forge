@@ -1,7 +1,7 @@
-"""Python authoring facade for the Rust-owned programmable workbook model.
+"""Workbook authoring with an independent Python engine by default.
 
-Snapshots are detached JSON data, never a second calculation engine. Mutations
-always cross the native session boundary and advance its revision atomically.
+The optional Rust bridge selects the separately implemented Rust engine.
+Both engines use the same interchange contract and own their editing sessions.
 """
 
 from __future__ import annotations
@@ -22,10 +22,19 @@ def _native():
         return importlib.import_module("workbook_forge._native")
     except ImportError as exc:
         raise NativeUnavailableError(
-            "Programmable workbook APIs require workbook_forge._native. "
-            "Install a native Workbook Forge wheel, or build the package with "
-            "a Rust toolchain using pip install .; legacy formula APIs remain available."
+            "The explicit Rust backend requires workbook_forge._native. "
+            "Install a native Workbook Forge wheel or build with "
+            "WORKBOOK_FORGE_BUILD_NATIVE=1 and --no-build-isolation. "
+            "The default Python backend works independently without Rust."
         ) from exc
+
+
+def _engine(backend: str):
+    if backend == "python":
+        return importlib.import_module("workbook_forge.python_engine")
+    if backend == "rust":
+        return _native()
+    raise ValueError("backend must be 'python' or 'rust'")
 
 
 def _digest(document: Any) -> str:
@@ -37,7 +46,7 @@ def _encode(value: Any) -> str:
 
 
 class WorkbookModel:
-    """Author, inspect, and calculate one native workbook session.
+    """Author, inspect, and calculate one independent workbook session.
 
     ``document`` accepts the versioned workbook JSON contract. Otherwise
     ``sheets`` is a sequence of names (default: ``Sheet1``). Input and output
@@ -53,6 +62,7 @@ class WorkbookModel:
         document: Mapping[str, Any] | None = None,
         inputs: Mapping[str, Any] | None = None,
         outputs: Mapping[str, Any] | None = None,
+        backend: str = "python",
     ):
         if document is not None and sheets is not None:
             raise ValueError("specify sheets or document, not both")
@@ -75,9 +85,15 @@ class WorkbookModel:
             data["inputs"] = dict(inputs)
         if outputs is not None:
             data["outputs"] = dict(outputs)
-        self._session = _native().Session(_encode(data))
+        self._engine = _engine(backend)
+        self._backend = backend
+        self._session = self._engine.Session(_encode(data))
         self._source_baseline = None
         self._import_metadata = None
+
+    @property
+    def backend(self) -> str:
+        return self._backend
 
     @property
     def revision(self) -> int:
@@ -113,19 +129,21 @@ class WorkbookModel:
         return self.apply([{"sheet": sheet, "address": address, "style": style}])
 
     def set_inputs(self, values: Mapping[str, Any], *, expected_revision: int | None = None) -> int:
-        """Validate application inputs and apply them in a single native commit."""
+        """Validate application inputs and apply them in a single atomic commit."""
         return self._session.set_inputs(_encode(dict(values)), expected_revision)
 
     def calculate(self, *, workers: int = 1) -> dict[str, Any]:
         """Calculate outputs and their dependencies from a coherent snapshot."""
         snapshot = self.to_dict()
         report = json.loads(self._session.calculate(workers))
+        report["backend"] = self.backend
         if report["revision"] == snapshot["revision"]:
             report["model_digest"] = _digest(snapshot)
         return report
 
     def inspect(self) -> dict[str, Any]:
-        report = json.loads(_native().inspect(_encode(self.to_dict())))
+        report = json.loads(self._engine.inspect(_encode(self.to_dict())))
+        report["backend"] = self.backend
         if self._import_metadata is not None:
             report["xlsx"] = json.loads(_encode(self._import_metadata))
         return report
@@ -146,13 +164,13 @@ class WorkbookModel:
             raise ValueError(f"source is not a formula cell: {sheet}!{source}")
         source_column, source_row = _cell_position(source)
         target_column, target_row = _cell_position(target)
-        copied = _native().copy_formula(formula, target_row - source_row, target_column - source_column)
+        copied = self._engine.copy_formula(formula, target_row - source_row, target_column - source_column)
         return self.apply(
             [{"sheet": target_sheet or sheet, "address": target, "formula": copied}],
             expected_revision=snapshot["revision"],
         )
 
 
-def operating_scenario() -> WorkbookModel:
+def operating_scenario(*, backend: str = "python") -> WorkbookModel:
     """Return the synthetic two-sheet operating-scenario tool."""
-    return WorkbookModel(document=json.loads(_native().scenario()))
+    return WorkbookModel(document=json.loads(_engine(backend).scenario()), backend=backend)

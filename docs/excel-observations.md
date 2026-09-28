@@ -20,7 +20,7 @@ python tools/excel_oracle.py --run-excel --live-scenario
 ```
 
 The first two commands need only Python's standard library. The live-scenario
-mode also needs the installed toolkit/native extension: it creates the actual
+mode also needs the installed Python toolkit: it creates the actual
 `operating_scenario()` cells and formulas in Excel, reads baseline outputs, edits
 the unit price from 20 to 25, and reads the outputs again. It does not save files,
 and cannot validate generated XLSX, formatting, or validation rules.

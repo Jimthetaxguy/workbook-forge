@@ -1,11 +1,11 @@
 [build-system]
-requires = ["setuptools>=68", "setuptools-rust>=1.13,<2"]
+requires = ["setuptools>=84.0.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "workbook_forge"
 version = "0.2.0"
-description = "Typed workbook models, native calculation, and preservation-aware Excel adapters"
+description = "Independent Python workbook engine and preservation-aware Excel toolkit"
 readme = "README.md"
 requires-python = ">=3.12"
 license = "MIT"
@@ -13,16 +13,10 @@ license-files = ["LICENSE", "THIRD_PARTY_NOTICES.txt"]
 dependencies = []
 
 [project.optional-dependencies]
-test = ["pytest>=9", "jsonschema>=4.26", "packaging>=24", "setuptools>=68", "setuptools-rust>=1.13,<2"]
+test = ["pytest>=9.1.1", "jsonschema>=4.26.0", "packaging>=26.3", "setuptools>=84.0.0", "setuptools-rust>=1.13.0,<2", "build>=1.6.1"]
 
 [project.scripts]
 workbook-forge = "workbook_forge.cli:main"
-
-[[tool.setuptools-rust.ext-modules]]
-target = "workbook_forge._native"
-path = "native/Cargo.toml"
-binding = "PyO3"
-py-limited-api = "auto"
 
 [tool.setuptools]
 package-dir = {"" = "python"}

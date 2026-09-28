@@ -1,8 +1,9 @@
-"""Real native model plus bounded OOXML integration tests (no fallback engine)."""
+"""Run the same bounded OOXML workflow through each independent engine."""
 
 from __future__ import annotations
 
 import importlib.util
+from functools import partial
 import zipfile
 from xml.etree import ElementTree as ET
 
@@ -14,7 +15,13 @@ from workbook_forge.workbook import MAIN, UnsupportedWorkbook, Workbook, Workboo
 from workbook_forge.xlsx import export_xlsx, import_xlsx
 from test_workbook import make_xlsx, make_table_xlsx, write_parts
 
-native = pytest.mark.skipif(importlib.util.find_spec("workbook_forge._native") is None, reason="native extension must be built for toolkit integration")
+@pytest.fixture(autouse=True, params=["python", pytest.param("rust", marks=pytest.mark.skipif(
+    importlib.util.find_spec("workbook_forge._native") is None,
+    reason="optional bridge is needed to compare the Rust implementation",
+))])
+def engine_backend(request, monkeypatch):
+    for name in ("WorkbookModel", "operating_scenario", "import_xlsx"):
+        monkeypatch.setitem(globals(), name, partial(globals()[name], backend=request.param))
 
 
 def test_missing_native_is_explicit_and_legacy_api_stays_available(monkeypatch):
@@ -25,11 +32,10 @@ def test_missing_native_is_explicit_and_legacy_api_stays_available(monkeypatch):
 
     monkeypatch.setattr(toolkit.importlib, "import_module", missing)
     with pytest.raises(NativeUnavailableError, match="native Workbook Forge wheel"):
-        WorkbookModel()
+        WorkbookModel(backend="rust")
     assert evaluate("=SUM(1,2,3)") == 6
 
 
-@native
 def test_scenario_native_generation_edit_and_reimport(tmp_path):
     model = operating_scenario()
     initial = model.calculate()
@@ -62,7 +68,6 @@ def test_scenario_native_generation_edit_and_reimport(tmp_path):
         export_xlsx(extracted, edited)
 
 
-@native
 def test_snapshot_ownership_formula_copy_and_atomic_validation():
     model = WorkbookModel(["Input Data", "Result"])
     model.apply([
@@ -87,7 +92,6 @@ def test_snapshot_ownership_formula_copy_and_atomic_validation():
     assert model.to_dict()["sheets"][0]["cells"]["A1"]["value"] is None
 
 
-@native
 def test_import_preserves_opaque_content_and_immutable_source(tmp_path):
     source = tmp_path / "import.xlsx"
     parts = make_xlsx(source)
@@ -117,7 +121,6 @@ def test_import_preserves_opaque_content_and_immutable_source(tmp_path):
     assert not rejected.exists()
 
 
-@native
 @pytest.mark.parametrize("kind", ["array", "table"])
 def test_nonformula_result_cells_never_become_authored_inputs(tmp_path, kind):
     source = tmp_path / "special.xlsx"
@@ -141,7 +144,6 @@ def test_nonformula_result_cells_never_become_authored_inputs(tmp_path, kind):
     assert not (tmp_path / "blocked.xlsx").exists()
 
 
-@native
 def test_stale_and_foreign_reports_and_imported_style_edits_fail(tmp_path):
     model = operating_scenario()
     report = model.calculate()
@@ -161,7 +163,6 @@ def test_stale_and_foreign_reports_and_imported_style_edits_fail(tmp_path):
     assert not (tmp_path / "style.xlsx").exists()
 
 
-@native
 def test_1904_formula_caches_are_preserved_but_not_calculated(tmp_path):
     source = tmp_path / "date1904.xlsx"
     parts = make_xlsx(source)
@@ -172,7 +173,6 @@ def test_1904_formula_caches_are_preserved_but_not_calculated(tmp_path):
     assert model.calculate()["diagnostics"]
 
 
-@native
 def test_new_input_constraints_cannot_silently_replace_imported_validation(tmp_path):
     source = tmp_path / "source.xlsx"
     make_xlsx(source)
@@ -187,7 +187,6 @@ def test_new_input_constraints_cannot_silently_replace_imported_validation(tmp_p
     assert not (tmp_path / "unvalidated.xlsx").exists()
 
 
-@native
 def test_input_constraints_are_native_and_generate_explicit_excel_rules(tmp_path):
     document = {
         "sheets": [{"id": "inputs", "name": "Inputs", "cells": {
@@ -217,7 +216,6 @@ def test_input_constraints_are_native_and_generate_explicit_excel_rules(tmp_path
     export_xlsx(imported, tmp_path / "validation-roundtrip.xlsx")
 
 
-@native
 def test_scalar_error_caches_roundtrip_but_array_spills_refuse_output(tmp_path):
     model = WorkbookModel(document={
         "sheets": [{"id": "one", "name": "Sheet1", "cells": {
@@ -239,7 +237,6 @@ def test_scalar_error_caches_roundtrip_but_array_spills_refuse_output(tmp_path):
     assert not destination.exists()
 
 
-@native
 def test_unrelated_unsupported_error_values_and_caches_are_preserved(tmp_path):
     source = tmp_path / "unsupported-errors.xlsx"
     parts = make_xlsx(source)
@@ -267,7 +264,6 @@ def test_unrelated_unsupported_error_values_and_caches_are_preserved(tmp_path):
     assert not rejected.exists()
 
 
-@native
 def test_imported_1904_policy_blocks_new_and_replacement_formulas_atomically(tmp_path):
     source = tmp_path / "date1904-input.xlsx"
     parts = make_xlsx(source)
@@ -302,7 +298,6 @@ def test_imported_1904_policy_blocks_new_and_replacement_formulas_atomically(tmp
     assert not (tmp_path / "date1904-wrong-cache.xlsx").exists()
 
 
-@native
 @pytest.mark.parametrize("mutation", ["change", "delete", "add"])
 def test_caller_owned_reports_cannot_authorize_wrong_formula_caches(tmp_path, mutation):
     model = operating_scenario()
@@ -314,7 +309,7 @@ def test_caller_owned_reports_cannot_authorize_wrong_formula_caches(tmp_path, mu
     else:
         report["values"]["Forecast!Z100"] = 123
     destination = tmp_path / f"tampered-{mutation}.xlsx"
-    with pytest.raises(WorkbookError, match="authoritative native results"):
+    with pytest.raises(WorkbookError, match="authoritative engine results"):
         export_xlsx(model, destination, report=report)
     assert not destination.exists()
     assert model.calculate()["outputs"]["revenue"] == 7400

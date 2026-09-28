@@ -1,4 +1,4 @@
-"""Exercise the installed native boundary and the public tool entry points."""
+"""Exercise public Python toolkit and command-line entry points."""
 
 import json
 from pathlib import Path
@@ -12,13 +12,13 @@ from workbook_forge.catalog import workbook_capabilities
 
 def test_capability_map_distinguishes_backends_and_preserved_content():
     catalog = workbook_capabilities()
-    assert set(catalog["backends"]) == {"python-reference", "rust", "python-native", "python-ooxml"}
+    assert set(catalog["backends"]) == {"python-reference", "python", "rust", "python-native", "python-ooxml", "rust-ooxml"}
     primitives = {entry["id"]: entry for entry in catalog["primitives"]}
     assert primitives["arrays"]["calculate"] and not primitives["arrays"]["export"]
     assert primitives["names-and-tables"]["read"] and not primitives["names-and-tables"]["calculate"]
 
 
-def test_native_expression_builder_preserves_copy_anchors():
+def test_python_expression_builder_preserves_copy_anchors():
     from workbook_forge.expressions import CellReference, Expression
 
     expression = Expression.reference(CellReference(1, 1, column_absolute=True))
@@ -36,7 +36,7 @@ def test_native_expression_builder_preserves_copy_anchors():
         Expression.literal(float("inf"))
 
 
-def test_native_model_scenario_and_detached_snapshots():
+def test_python_model_scenario_and_detached_snapshots():
     from workbook_forge.toolkit import operating_scenario
 
     model = operating_scenario()
@@ -55,7 +55,7 @@ def test_native_model_scenario_and_detached_snapshots():
     assert updated["revision"] > initial["revision"]
 
 
-def test_native_inputs_are_atomic_and_errors_cross_boundary():
+def test_python_inputs_are_atomic_and_errors_cross_boundary():
     from workbook_forge.toolkit import operating_scenario
 
     model = operating_scenario()

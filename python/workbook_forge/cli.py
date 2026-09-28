@@ -1,4 +1,4 @@
-"""Command-line access to the same native models used by Python and Rust."""
+"""Command-line access to independent Python and optional Rust engines."""
 
 from __future__ import annotations
 
@@ -24,7 +24,7 @@ def _read(path: Path) -> dict:
     return _object(path.read_text(encoding="utf-8"))
 
 
-def _model(path: Path, bindings: Path | None):
+def _model(path: Path, bindings: Path | None, backend: str):
     from .toolkit import WorkbookModel
     from .xlsx import import_xlsx
 
@@ -32,10 +32,10 @@ def _model(path: Path, bindings: Path | None):
     if set(selected) - {"inputs", "outputs"}:
         raise ValueError("bindings accept only inputs and outputs")
     if path.suffix.lower() == ".xlsx":
-        return import_xlsx(path, **selected)
+        return import_xlsx(path, backend=backend, **selected)
     document = _read(path)
     document.update(selected)
-    return WorkbookModel(document=document)
+    return WorkbookModel(document=document, backend=backend)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -50,6 +50,8 @@ def main(argv: list[str] | None = None) -> int:
     run = commands.add_parser("run", help="calculate a model or supported XLSX output closure")
     run.add_argument("source", type=Path)
     run.add_argument("--bindings", type=Path, help="JSON containing explicit input/output bindings")
+    for command in (inspect, scenario, run):
+        command.add_argument("--backend", choices=("python", "rust"), default="python")
     for command in (scenario, run):
         command.add_argument("--inputs", default="{}", help="JSON object of named scenario inputs")
         command.add_argument("--workers", type=int, default=1)
@@ -59,12 +61,12 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "capabilities":
             result = workbook_capabilities()
         elif args.command == "inspect":
-            result = _model(args.source, args.bindings).inspect()
+            result = _model(args.source, args.bindings, args.backend).inspect()
         else:
             from .toolkit import operating_scenario
             from .xlsx import export_xlsx
 
-            model = operating_scenario() if args.command == "scenario" else _model(args.source, args.bindings)
+            model = operating_scenario(backend=args.backend) if args.command == "scenario" else _model(args.source, args.bindings, args.backend)
             inputs = _object(args.inputs)
             if inputs:
                 model.set_inputs(inputs)

@@ -1,19 +1,34 @@
 # Workbook Forge
 
-Workbook Forge provides typed workbook models, a Rust calculation engine, Python authoring APIs, and a conservative `.xlsx` reader, generator, and patch writer. Its source-linked formula glossary and independent Python and Rust evaluators remain available.
+Workbook Forge implements spreadsheet primitives and workbook calculation independently in Python and Rust. Each language has its own formula evaluator, typed expressions, workbook validation, dependency calculation, editing sessions, and conservative `.xlsx` reader, generator, and patch writer.
 
 The Python distribution, import package, and Rust crate use the consistent name `workbook_forge`.
+
+The enhancement connects previously separate formula evaluators into complete
+workbook workflows: build sheets and named inputs, calculate dependent outputs,
+change inputs safely, and exchange supported workbook content with Excel.
+The operating scenario demonstrates the behavior with public synthetic data:
+
+| Named output | Unit price 20 | Unit price 25 |
+| --- | ---: | ---: |
+| Total revenue | 7,400 | 9,250 |
+| Total profit | 1,440 | 3,290 |
+| Break-even units per period | 83.3333 | 58.8235 |
+
+Each language computes those results using its own code. Shared test data checks
+agreement and established expected values; it does not replace either implementation.
 
 ## Programmable workbooks
 
 The toolkit supports three connected workflows: extract a supported model from
 Excel, build and execute a tool without Excel, and produce an editable workbook.
-Rust owns model edits and calculation; Python handles the authoring interface
-and OOXML adaptation. Application input names bind to cells and are distinct
-from Excel defined-name formulas.
+Python runs its own implementation by default and does not call Rust. The Rust
+crate independently implements the same model and calculation contract. Shared
+cases compare their behavior. Application input names bind to cells and are
+distinct from Excel defined-name formulas.
 
-Install with `pip install .` (a Rust toolchain is required when building from
-source), then run the same model through Python or the command line:
+Install the pure Python package with `pip install .`; no Rust toolchain or native
+extension is required. Run the same model through Python or the command line:
 
 ```python
 from workbook_forge.toolkit import operating_scenario
@@ -35,9 +50,11 @@ workbook-forge scenario --inputs '{"unit_price":25}' --xlsx scenario.xlsx
 workbook-forge inspect scenario.xlsx
 workbook-forge capabilities
 cargo run --manifest-path rust/Cargo.toml --example operating_scenario
+cargo run --manifest-path rust/Cargo.toml --example xlsx_scenario -- generate rust-scenario.xlsx
+cargo run --manifest-path rust/Cargo.toml --example xlsx_scenario -- edit rust-scenario.xlsx rust-updated.xlsx 25
 ```
 
-Typed expressions expose separate copy anchors and use the native parser:
+Python typed expressions expose separate copy anchors and use the Python parser:
 
 ```python
 from workbook_forge.expressions import CellReference, Expression
@@ -53,6 +70,20 @@ names, explicit input/output bindings, and atomic cell edits. `to_dict()` return
 a detached snapshot. Calculation reports identify their model revision,
 evaluated cells, diagnostics, and stale status. Incremental sessions operate in
 process; there is no durable database or distributed synchronization promise.
+
+An optional PyO3 bridge permits explicit comparison with the Rust implementation.
+Install development requirements first, then build the bridge with
+`WORKBOOK_FORGE_BUILD_NATIVE=1 pip install --no-build-isolation -e .`.
+Select it with `operating_scenario(backend="rust")`,
+`WorkbookModel(..., backend="rust")`, or `workbook-forge scenario --backend rust`.
+Selecting an unavailable Rust bridge raises an explicit error; Python never
+silently substitutes Rust for its own implementation.
+
+Rust's `workbook_forge::xlsx` module provides its own import/export workflow and
+uses only low-level ZIP/XML libraries. The Rust examples run without Python.
+Fresh generation supports sparse authored models in either language. Rust's
+preservation-aware imported editing currently requires existing cells; inserting
+new cells into imported packages is explicitly rejected.
 
 Imported packages retain an immutable baseline. Supported edits and results
 are patched into a private reconstruction, preserving untouched part payloads.
@@ -78,9 +109,9 @@ The Microsoft function index currently contributes 521 named entries across its 
 - `catalog/open-source-patterns.schema.json` — schema for the permitted-source pattern catalog.
 - `catalog/formula-support.schema.json` — JSON Schema for the support catalog and semantic glossary.
 - `fixtures/formula-cases.jsonl` — language-neutral expected outcomes loaded by both evaluators.
-- `python/workbook_forge/` — standard-library formula evaluator, catalog API, and `.xlsx` adapter.
-- `rust/` — standalone Rust formula evaluator, typed model, calculation sessions, and examples.
-- `native/` — PyO3 bridge; calculation releases the Python interpreter.
+- `python/workbook_forge/` — independent standard-library formula and workbook engines, typed expressions, catalog API, and `.xlsx` adapter.
+- `rust/` — standalone Rust formula evaluator, typed model, calculation sessions, independent `.xlsx` adapter, and examples.
+- `native/` — optional PyO3 bridge to the Rust engine; pure Python does not require it.
 - `catalog/workbook-capabilities.json` — primitive support across read, construct, calculate, transform, and export.
 - `docs/behavior-profiles.md` — behavior notes and Workbook Forge profiles by function family, plus workbook adapter limits.
 - `docs/run-history.md` — what each autoresearch run added, with the counts at that time.
@@ -196,27 +227,39 @@ python3.13 -m compileall -q python
 (cd rust && cargo fmt --check && CARGO_TARGET_DIR="$PWD/target" cargo check --locked && CARGO_TARGET_DIR="$PWD/target" cargo test --locked && CARGO_TARGET_DIR="$PWD/target" cargo clippy --all-targets --locked -- -D warnings)
 ```
 
-The Rust core uses Serde for the typed interchange model. The Python extension
-uses PyO3, while the original Python formula evaluator remains standard-library
-only. Exact dependency versions, permissive licenses, and source checksums are
+The Rust core uses Serde for the typed interchange model and quick-xml/zip for
+low-level file decoding. The optional Python extension uses PyO3. The complete
+Python runtime uses only the standard library. Exact dependency versions,
+permissive licenses, and source checksums are
 recorded in `catalog/dependency-licenses.json` and checked against both lockfiles.
-Build and install the native extension before running the new integration tests:
+The complete development gate compares both independent engines. Install the
+verified development lock and explicitly build the optional bridge first:
 
 ```sh
-python3.13 -m pip install -e '.[test]'
+python3.13 -m pip install -r requirements-dev.lock
+WORKBOOK_FORGE_BUILD_NATIVE=1 python3.13 -m pip install --no-build-isolation -e .
 python3.13 -m pytest -q
 WORKBOOK_PYTHON=python3.13 bash tools/verify_toolkit.sh
 ```
 
 The Python tests need the `test` extra in `pyproject.toml`, including build tools
-for the dependency-license checks. `rust/Cargo.toml` declares Rust 1.88 as the
-minimum supported version; the suite passes on 1.88.0 and 1.98.1. Build and install
-the native extension in each environment before running toolkit integration tests.
+for the dependency-license checks. Pure Python tests also run without the bridge;
+only cross-engine comparisons are skipped then. `rust/Cargo.toml` declares Rust 1.88 as the
+minimum supported version; the suite passes on 1.88.0 and 1.98.1. Build the optional
+native extension when running comparisons between language engines.
 Installed-wheel smoke checks must run outside the checkout:
 
 ```sh
-python tools/verify_installed.py /new/output/directory
+python tools/verify_installed.py /new/output/directory --require-pure
 ```
+
+For an optional native wheel, select `--backend rust` instead of `--require-pure`.
+
+Dependency updates target current stable releases. Refresh the development lock
+with `uv pip compile pyproject.toml --extra test --upgrade --generate-hashes -o requirements-dev.lock`,
+refresh both Cargo lockfiles, review changed licenses, and rerun the complete gate.
+The lockfiles identify tested versions; minimum Python/Rust language versions
+describe compatibility and do not mean old dependency packages are selected.
 
 ## License and source policy
 

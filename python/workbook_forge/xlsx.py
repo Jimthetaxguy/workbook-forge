@@ -104,7 +104,7 @@ def _block_range(cells: dict[str, Any], bounds: tuple[int, int, int, int], reaso
             cell["blocked_reason"] = reason
 
 
-def import_xlsx(path: str | Path, *, inputs=None, outputs=None) -> WorkbookModel:
+def import_xlsx(path: str | Path, *, inputs=None, outputs=None, backend: str = "python") -> WorkbookModel:
     """Extract an XLSX with explicit optional application input/output bindings.
 
     Styles, names, tables, validation, and opaque package content are preserved.
@@ -200,7 +200,7 @@ def import_xlsx(path: str | Path, *, inputs=None, outputs=None) -> WorkbookModel
                         widths[_cell_address(column, 1)[:-1]] = width
             document["sheets"].append({"id": f"sheet-{index}", "name": sheet, "cells": cells, "column_widths": widths})
             metadata["sheets"].append({"name": sheet, "part": part, "stored_cells": len(workbook._cells[sheet]), "blocked_cells": sum(bool(cell.get("blocked_reason")) for cell in cells.values()), "validation": [ET.tostring(item, encoding="unicode") for item in root.findall("m:dataValidations/m:dataValidation", NS)]})
-        model = WorkbookModel(document=document)
+        model = WorkbookModel(document=document, backend=backend)
         model._source_baseline = _Baseline(workbook.source, tuple(workbook._parts.items()), tuple(copy.copy(info) for info in workbook._archive.infolist()), workbook._archive.comment, json.dumps(model.to_dict(), allow_nan=False), workbook._uses_1904_date_system)
         model._import_metadata = metadata
         return model
@@ -496,7 +496,7 @@ def export_xlsx(model: WorkbookModel, output: str | Path, *, report: dict[str, A
         raise WorkbookError("calculation report is stale or belongs to a different model snapshot")
     if report is not None:
         # Caller-owned dictionaries are evidence, not cache authority. A second
-        # native calculation reuses the session cache but verifies every supplied
+        # engine calculation reuses the session cache but verifies every supplied
         # value against the current snapshot before any package is published.
         authoritative = model.calculate()
         if (
@@ -509,7 +509,7 @@ def export_xlsx(model: WorkbookModel, output: str | Path, *, report: dict[str, A
         if _digest({key: calculation.get(key) for key in fields}) != _digest(
             {key: authoritative.get(key) for key in fields}
         ):
-            raise WorkbookError("supplied calculation report differs from authoritative native results")
+            raise WorkbookError("supplied calculation report differs from authoritative engine results")
         calculation = authoritative
     if calculation.get("diagnostics"):
         raise UnsupportedWorkbook("cannot export calculation diagnostics: " + "; ".join(item["message"] for item in calculation["diagnostics"]))

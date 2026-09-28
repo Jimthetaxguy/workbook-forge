@@ -8,13 +8,16 @@ description = "Typed workbook models and bounded Excel-compatible formula calcul
 repository = "https://github.com/Jimthetaxguy/workbook-forge"
 readme = "../README.md"
 license-file = "../LICENSE"
+include = ["/src/**", "/examples/**", "/Cargo.toml", "/Cargo.lock"]
 
 [lib]
 name = "workbook_forge"
 path = "src/lib.rs"
 
 [dependencies]
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.151"
+quick-xml = "0.42.0"
+zip = { version = "8.6.0", default-features = false, features = ["deflate-flate2-zlib-rs"] }
 
 [dev-dependencies]

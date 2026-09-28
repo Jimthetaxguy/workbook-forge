@@ -6,9 +6,9 @@ date: '2026-09-28T11:19:00-04:00'
 type: project-context
 task: Deliver a programmable workbook toolkit using the existing Python and Rust formula foundation
 status: active
-summary: Native typed workbook model, Python authoring and Excel adapters, with independent legacy evaluators and explicit compatibility evidence.
+summary: Independent hand-written Python and Rust workbook implementations; the Python package runs without Rust, and an optional bridge compares engines.
 next_steps:
-  - Complete the outstanding live Excel acceptance gate tracked in docs/toolkit-delivery.md.
+  - Complete the live Excel acceptance gate tracked in docs/toolkit-delivery.md, then review and integrate the verified independent implementations.
   - Use tools/excel_oracle.py to observe the generated scenario after an input edit and save; diagnose the current Excel automation failures.
   - Use observed Excel results to validate Workbook Forge profiles and update shared fixtures before expanding formula-family coverage.
   - After oracle coverage is reliable, prioritize the next formula slice by documented usage and dependency value.
@@ -23,11 +23,12 @@ Build a programmable workbook toolkit that extracts supported Excel models, runs
 
 **Workbook Forge** is the product name selected for public release (James, 2026-09-26). The Python distribution, import package, and Rust core crate are named `workbook_forge`. The canonical checkout tracks GitHub `main`; GitHub visibility is public as of the live 2026-09-28 check. The toolkit implementation is isolated on `agent/codex-workbook-toolkit` until integration.
 ## Terms
-- **Workbook model:** Rust-owned sparse sheets, authored content, formulas, styles, and explicit input/output bindings, independent of XML.
+- **Workbook model:** sparse sheets, authored content, formulas, styles, and explicit input/output bindings, implemented independently in each language and separate from XML.
 - **Application binding:** a named input or output attached to an explicit cell; not an Excel defined-name expression.
 - **Calculation snapshot:** an immutable model revision used by full or incremental calculation; stale work cannot replace current published results.
 - **Preservation baseline:** immutable imported package content used to patch supported changes without rereading or rewriting the original file.
-- **Native backend:** Python APIs delegating model ownership and calculation to Rust through PyO3; distinct from the independent Python reference evaluator.
+- **Python engine:** the hand-written Python expression, validation, graph-calculation and session implementation; default for Python APIs, with no native execution dependency.
+- **Native backend:** optional Python interoperability bridge selecting the separately implemented Rust engine through PyO3. It is not the Python implementation.
 - **Catalogued:** a formula feature or function has an entry with provenance and compatibility metadata.
 - **Parsed:** the engine recognizes the construct and produces a typed representation.
 - **Evaluated:** the engine calculates the construct for its documented input domain.
@@ -43,13 +44,13 @@ Build a programmable workbook toolkit that extracts supported Excel models, runs
 - **FormulaResult / evaluate_result:** the shape-preserving result contract shared by Python and Rust; the scalar `evaluate` APIs keep a local `#VALUE!` boundary for top-level arrays and ranges.
 ## Boundaries
 - Target: Excel for Microsoft 365 desktop, with availability/version metadata retained.
-- Languages: independent legacy Python and Rust formula evaluators; new workbook ownership and calculation live in Rust, with Python bindings and OOXML adapters.
+- Languages: independent hand-written Python and Rust implementations of formula primitives, workbook models, validation, dependency calculation, editing sessions and OOXML adapters. Shared fixtures compare behavior; neither engine calls the other. The optional native bridge is explicit interoperability.
 - Primary workbook format: `.xlsx`; other formats require separately audited adapters.
 - Third-party code and dependencies: permissive open-source licenses only, with no copyleft, so the project stays enterprise-friendly. The rule covers development and transitive dependencies; `README.md` lists the accepted licenses and `python/tests/test_project_policy.py` enforces them.
 - Jev is a development-time reviewer only. It is not linked into runtime, and its results are advisory.
 - Macros and external data are never executed or fetched.
 ## Current State
-Runs 1–24 are accepted. Coverage stands at 115 implemented functions, 85 detailed semantic specs, 110 source records, and 1,371 shared fixtures. Run 24 bounds formula size, nesting, and wildcard work. The toolkit adds typed authoring, native calculation sessions, Excel adapters, installed Python/Rust/CLI examples, and reviewed parallel calculation. Three direct formula checks succeeded in Excel 16.113.2; the generated-file roundtrip and full scenario remain unverified because automation failed. The 521-entry source inventory remains broader than implementation coverage; 406 functions remain catalog-only. FILTER, SORT, and UNIQUE return bounded, shape-preserving arrays; worksheet spill projection remains unsupported. SORT/UNIQUE comparison, equality, coercion, and output precision include explicit Workbook Forge profiles. Do not describe the package as Excel-complete.
+Runs 1–24 are accepted. Coverage stands at 115 implemented functions, 85 detailed semantic specs, 110 source records, and 1,371 shared fixtures. Run 24 bounds formula size, nesting, and wildcard work. The toolkit adds independently implemented typed authoring, calculation sessions and Excel adapters in Python and Rust, installed examples, and reviewed parallel calculation. Three direct formula checks succeeded in Excel 16.113.2; the generated-file roundtrip and full scenario remain unverified because automation failed. The 521-entry source inventory remains broader than implementation coverage; 406 functions remain catalog-only. FILTER, SORT, and UNIQUE return bounded, shape-preserving arrays; worksheet spill projection remains unsupported. SORT/UNIQUE comparison, equality, coercion, and output precision include explicit Workbook Forge profiles. Do not describe the package as Excel-complete.
 - The source-linked function inventory contains 521 records; it is a versioned discovery catalog, not an evaluator coverage claim.
 - The Python and Rust evaluators implement the same bounded scalar, reference, operator, common-function, conditional-aggregation, and rectangular formula-result slice. Both load `fixtures/formula-cases.jsonl`. The toolkit adds reviewed Serde dependencies and a separate PyO3 bridge; exact license receipts cover both lockfiles.
 - `catalog/formulas.json` records per-language status; a function is `conformance-tested` only when shared fixture coverage passes in both engines.
@@ -67,8 +68,13 @@ Runs 1–24 are accepted. Coverage stands at 115 implemented functions, 85 detai
 - Append each run's summary to `docs/run-history.md`. Keep `README.md` and this file limited to the current state.
 - Run the Rust gates with `CARGO_TARGET_DIR` inside the checkout, as `eval_command` does. The machine-wide `~/.cargo-target` mixes build artifacts between copies of the crate.
 ## Activity
+### 2026-09-28 — codex/Codex — clarified language independence
+- Changed: James clarified that Python and Rust must each contain complete implementations. Both now independently implement workbook calculation and OOXML workflows; Python defaults to its own engine and the Rust bridge is optional.
+- Evidence: 375 Python tests, 62 Rust tests, strict lint/format checks and Rust 1.88 gates pass. Pure Python and optional native wheels pass on Python 3.12/3.14 outside the checkout; a packaged Rust consumer generates/edits/reimports XLSX without Python. The 1,371-case corpus and seven file-interchange tests cover agreement. Current stable dependency versions and permissive licenses are locked and reviewed.
+- Next/remaining: live Excel edit/save/reimport acceptance remains outstanding; implementation is on the feature branch, not merged. Rust imported edits require existing cells. Python worker threads show no useful heavy-workload CPU speedup on the measured GIL build.
+
 ### 2026-09-28 — codex/Codex
-- Changed: implemented the programmable workbook delivery candidate on an isolated feature branch; Rust owns models/sessions, Python owns authoring and OOXML adaptation.
+- Changed: initial programmable workbook delivery candidate used Rust-owned models/sessions and Python authoring/OOXML adaptation. The later clarification above supersedes that ownership split.
 - Evidence: full regression and package checks, minimum Rust compiler, fresh Python 3.12/3.14 wheel installations, independent semantic review and three live Excel formula observations; details in docs/toolkit-delivery.md.
 - Next/remaining: generated-XLSX Excel edit/save/reimport acceptance remains outstanding. GitHub visibility is now verified public. Storage and distributed editing are deferred.
 
