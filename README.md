@@ -1,8 +1,72 @@
 # Workbook Forge
 
-Workbook Forge is a source-linked Excel formula glossary with small, independently implemented Python and Rust evaluators, a shared conformance corpus, and a conservative `.xlsx` reader/patch writer.
+Workbook Forge provides typed workbook models, a Rust calculation engine, Python authoring APIs, and a conservative `.xlsx` reader, generator, and patch writer. Its source-linked formula glossary and independent Python and Rust evaluators remain available.
 
 The Python distribution, import package, and Rust crate use the consistent name `workbook_forge`.
+
+## Programmable workbooks
+
+The toolkit supports three connected workflows: extract a supported model from
+Excel, build and execute a tool without Excel, and produce an editable workbook.
+Rust owns model edits and calculation; Python handles the authoring interface
+and OOXML adaptation. Application input names bind to cells and are distinct
+from Excel defined-name formulas.
+
+Install with `pip install .` (a Rust toolchain is required when building from
+source), then run the same model through Python or the command line:
+
+```python
+from workbook_forge.toolkit import operating_scenario
+from workbook_forge.xlsx import export_xlsx, import_xlsx
+
+model = operating_scenario()
+model.set_inputs({"unit_price": 25})
+result = model.calculate()
+print(result["outputs"])  # revenue 9250, profit 3290, break_even_units 1000/17
+export_xlsx(model, "scenario.xlsx", report=result)  # requires a new path
+
+definition = model.to_dict()
+restored = import_xlsx("scenario.xlsx", inputs=definition["inputs"], outputs=definition["outputs"])
+assert restored.calculate()["outputs"] == result["outputs"]
+```
+
+```sh
+workbook-forge scenario --inputs '{"unit_price":25}' --xlsx scenario.xlsx
+workbook-forge inspect scenario.xlsx
+workbook-forge capabilities
+cargo run --manifest-path rust/Cargo.toml --example operating_scenario
+```
+
+Typed expressions expose separate copy anchors and use the native parser:
+
+```python
+from workbook_forge.expressions import CellReference, Expression
+
+price = Expression.reference(CellReference(1, 2, "Assumptions", True, True))
+quantity = Expression.reference(CellReference(2, 2))
+formula = price * quantity
+print(formula.copy(rows=1).formula)
+```
+
+`WorkbookModel` accepts a versioned interchange document or a sequence of sheet
+names, explicit input/output bindings, and atomic cell edits. `to_dict()` returns
+a detached snapshot. Calculation reports identify their model revision,
+evaluated cells, diagnostics, and stale status. Incremental sessions operate in
+process; there is no durable database or distributed synchronization promise.
+
+Imported packages retain an immutable baseline. Supported edits and results
+are patched into a private reconstruction, preserving untouched part payloads.
+Unsupported formulas outside the selected output closure remain preserved;
+dependencies on unsupported content fail explicitly. Export refuses array spill
+placement, stale results, and unsupported changes to imported structure/styles.
+Input bindings are explicit application metadata and must be supplied again
+when importing an XLSX. Nonpositive scenario contribution margin produces
+`#N/A` for break-even units. Imported 1904-date workbooks preserve formula text
+but cannot receive new formulas or calculated caches through this toolkit.
+
+See [toolkit delivery](docs/toolkit-delivery.md), the
+[capability map](catalog/workbook-capabilities.json), and
+[Excel observations](docs/excel-observations.md) for supported boundaries and evidence.
 
 The Microsoft function index currently contributes 521 named entries across its published categories. That inventory is a vocabulary and discovery aid, not a claim that every function has a complete behavioral specification or is supported by the evaluator. Availability labels are preserved when the source exposes them; desktop availability can vary by Excel build and rollout.
 
@@ -15,7 +79,9 @@ The Microsoft function index currently contributes 521 named entries across its 
 - `catalog/formula-support.schema.json` — JSON Schema for the support catalog and semantic glossary.
 - `fixtures/formula-cases.jsonl` — language-neutral expected outcomes loaded by both evaluators.
 - `python/workbook_forge/` — standard-library formula evaluator, catalog API, and `.xlsx` adapter.
-- `rust/` — dependency-free runtime formula evaluator and standard-library shared-fixture reader.
+- `rust/` — standalone Rust formula evaluator, typed model, calculation sessions, and examples.
+- `native/` — PyO3 bridge; calculation releases the Python interpreter.
+- `catalog/workbook-capabilities.json` — primitive support across read, construct, calculate, transform, and export.
 - `docs/behavior-profiles.md` — behavior notes and Workbook Forge profiles by function family, plus workbook adapter limits.
 - `docs/run-history.md` — what each autoresearch run added, with the counts at that time.
 - `.autoresearch/` — loop configuration (`config.json`), the accepted-run ledger (`state.json`), and Jev advisory receipts.
@@ -23,7 +89,8 @@ The Microsoft function index currently contributes 521 named entries across its 
 
 ## Status
 
-As of the Run 24 checkpoint (commit `42126ef`):
+Formula coverage retains the Run 24 checkpoint (commit `42126ef`); the workbook
+toolkit adds model and adapter capabilities without expanding the function count.
 
 | Measure | Count |
 |---|---|
@@ -32,7 +99,7 @@ As of the Run 24 checkpoint (commit `42126ef`):
 | Shared fixture cases | 1,371 |
 | Detailed semantic specs | 85 |
 | Formula and compatibility source records | 110 |
-| Direct Excel Desktop observations | none yet |
+| Direct Excel Desktop observations | 3 targeted formula checks; full workbook roundtrip outstanding |
 
 The Python and Rust evaluators currently cover 115 functions, including scalar arithmetic, references, text and logical functions, the periodic financial functions FV, PV, PMT, NPER, IPMT, PPMT, CUMIPMT, CUMPRINC, SLN, SYD, DB, DDB, VDB, AMORLINC, and AMORDEGRC (deprecated legacy), dates, lookups, `TEXTBEFORE`/`TEXTAFTER`, error predicates (`ISNA`, `ISERR`, `ISERROR`), `NA`, `COUNTBLANK`, six conditional aggregations (`COUNTIF(S)`, `SUMIF(S)`, `AVERAGEIF(S)`), conditional extrema (`MINIFS`, `MAXIFS`), date/time functions (`HOUR`, `MINUTE`, `SECOND`, `TIME`, `WEEKDAY`, `WEEKNUM`, `ISOWEEKNUM`, `DAYS360`, `YEARFRAC`, `WORKDAY`, `NETWORKDAYS`, `WORKDAY.INTL`, `NETWORKDAYS.INTL`, `COUPDAYBS`, `COUPDAYS`, `COUPDAYSNC`, `COUPNCD`, `COUPNUM`, `COUPPCD`), and scalar rounding/remainder functions (`EVEN`, `ODD`, `INT`, `TRUNC`, `ROUND`, `ROUNDUP`, `ROUNDDOWN`, `MOD`, and `QUOTIENT`), plus parity predicates (`ISEVEN` and `ISODD`), plus factorial and combinatorics (`FACT`, `FACTDOUBLE`, `COMBIN`, `COMBINA`, `PERMUT`, and `PERMUTATIONA`), plus integer math (`GCD` and `LCM`), and bounded array generation with `SEQUENCE`, row/column ordering with `SORT`, and stable distinct-row/column selection with `UNIQUE`.
 
@@ -129,15 +196,28 @@ python3.13 -m compileall -q python
 (cd rust && cargo fmt --check && CARGO_TARGET_DIR="$PWD/target" cargo check --locked && CARGO_TARGET_DIR="$PWD/target" cargo test --locked && CARGO_TARGET_DIR="$PWD/target" cargo clippy --all-targets --locked -- -D warnings)
 ```
 
-The Rust runtime and test suite have no third-party dependencies; tests use a small standard-library JSON reader for the shared fixture file. Python runtime dependencies are empty.
-
-The Python tests need the `test` extra in `pyproject.toml` (pytest, jsonschema, packaging). `rust/Cargo.toml` declares Rust 1.88 as the minimum supported version; the suite passes on 1.88.0 and on current stable 1.98.1. To cover both ends of the declared Python range, run the suite on 3.12 and on the newest release:
+The Rust core uses Serde for the typed interchange model. The Python extension
+uses PyO3, while the original Python formula evaluator remains standard-library
+only. Exact dependency versions, permissive licenses, and source checksums are
+recorded in `catalog/dependency-licenses.json` and checked against both lockfiles.
+Build and install the native extension before running the new integration tests:
 
 ```sh
-uv run --no-project --python 3.12 --with pytest --with jsonschema -- python -m pytest -q
-uv run --no-project --python 3.14 --with pytest --with jsonschema -- python -m pytest -q
+python3.13 -m pip install -e '.[test]'
+python3.13 -m pytest -q
+WORKBOOK_PYTHON=python3.13 bash tools/verify_toolkit.sh
+```
+
+The Python tests need the `test` extra in `pyproject.toml`, including build tools
+for the dependency-license checks. `rust/Cargo.toml` declares Rust 1.88 as the
+minimum supported version; the suite passes on 1.88.0 and 1.98.1. Build and install
+the native extension in each environment before running toolkit integration tests.
+Installed-wheel smoke checks must run outside the checkout:
+
+```sh
+python tools/verify_installed.py /new/output/directory
 ```
 
 ## License and source policy
 
-Original project code is MIT. Workbook Forge must stay usable in enterprise settings, so third-party components, whether used at runtime or only in development and including transitive dependencies, must carry a permissive open-source license with no copyleft terms. The accepted SPDX licenses are MIT, MIT-0, Apache-2.0, BSD-2-Clause, BSD-3-Clause, 0BSD, ISC, Zlib, PSF-2.0, Unicode-3.0, Unicode-DFS-2016, BSL-1.0, CC0-1.0, and Unlicense. A dual-licensed package qualifies when one of its options is on that list. Copyleft licenses (GPL, LGPL, AGPL, MPL, EPL, EUPL, CDDL) and source-available licenses (SSPL, BUSL) are excluded. `python/tests/test_project_policy.py` checks the installed Python dependency tree against this list, and it fails if a Rust crate is added without a license review. Neither runtime has third-party dependencies today. Microsoft documentation is linked as provenance; the catalog records names and categories rather than copying function descriptions. Open-source implementation patterns are separately catalogued with license evidence and an explicit adopt/defer decision; no third-party implementation code is copied. The Python wheel installs catalog JSON into `share/workbook_forge/catalog` and the API reads the source-tree copy during development. Jev is an advisory development-time critic and is not part of either package runtime.
+Original project code is MIT. Workbook Forge must stay usable in enterprise settings, so third-party components, whether used at runtime or only in development and including transitive dependencies, must carry a permissive open-source license with no copyleft terms. The accepted SPDX licenses are MIT, MIT-0, Apache-2.0, BSD-2-Clause, BSD-3-Clause, 0BSD, ISC, Zlib, PSF-2.0, Unicode-3.0, Unicode-DFS-2016, BSL-1.0, CC0-1.0, and Unlicense. A dual-licensed package qualifies when one of its options is on that list. Copyleft licenses (GPL, LGPL, AGPL, MPL, EPL, EUPL, CDDL) and source-available licenses (SSPL, BUSL) are excluded. `python/tests/test_project_policy.py` checks the installed Python dependency tree against this list, and it fails if a Rust crate is added without a license review. The original Python formula evaluator remains standard-library-only; the native workbook engine and bridge use the reviewed dependencies recorded with the catalog. Microsoft documentation is linked as provenance; the catalog records names and categories rather than copying function descriptions. Open-source implementation patterns are separately catalogued with license evidence and an explicit adopt/defer decision; no third-party implementation code is copied. The Python wheel installs catalog JSON into `share/workbook_forge/catalog` and the API reads the source-tree copy during development. Jev is an advisory development-time critic and is not part of either package runtime.

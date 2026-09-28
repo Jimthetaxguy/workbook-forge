@@ -1,18 +1,28 @@
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=68", "setuptools-rust>=1.13,<2"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "workbook_forge"
-version = "0.1.0"
-description = "A versioned Excel formula glossary and bounded evaluator"
+version = "0.2.0"
+description = "Typed workbook models, native calculation, and preservation-aware Excel adapters"
 readme = "README.md"
 requires-python = ">=3.12"
 license = "MIT"
+license-files = ["LICENSE", "THIRD_PARTY_NOTICES.txt"]
 dependencies = []
 
 [project.optional-dependencies]
-test = ["pytest>=9", "jsonschema>=4.26", "packaging>=24"]
+test = ["pytest>=9", "jsonschema>=4.26", "packaging>=24", "setuptools>=68", "setuptools-rust>=1.13,<2"]
+
+[project.scripts]
+workbook-forge = "workbook_forge.cli:main"
+
+[[tool.setuptools-rust.ext-modules]]
+target = "workbook_forge._native"
+path = "native/Cargo.toml"
+binding = "PyO3"
+py-limited-api = "auto"
 
 [tool.setuptools]
 package-dir = {"" = "python"}
@@ -25,6 +35,8 @@ package-dir = {"" = "python"}
   "catalog/function-inventory.schema.json",
   "catalog/formula-support.schema.json",
   "catalog/function_inventory.json",
+  "catalog/workbook-capabilities.json",
+  "catalog/dependency-licenses.json",
 ]
 
 [tool.setuptools.packages.find]

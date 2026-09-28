@@ -2,27 +2,32 @@
 author: Codex
 created: 2026-09-24
 agent: codex/Codex
-date: '2026-09-28T00:34:00-04:00'
+date: '2026-09-28T11:19:00-04:00'
 type: project-context
-task: Build a Python and Rust Excel formula catalog and evaluator
+task: Deliver a programmable workbook toolkit using the existing Python and Rust formula foundation
 status: active
-summary: Language-neutral formula inventory with independently implemented Python and Rust evaluators, shared fixtures, and a bounded XLSX adapter.
+summary: Native typed workbook model, Python authoring and Excel adapters, with independent legacy evaluators and explicit compatibility evidence.
 next_steps:
-  - Review the main-only candidate at `~/code/_working-files/workbook-forge-public-candidate-2026-09-28/RELEASE-CANDIDATE.md`; decide whether it should seed a fresh public repository with clean history.
-  - Build an Excel Desktop differential harness for accepted scalar and array formulas, beginning with high-risk documented boundaries.
+  - Complete the outstanding live Excel acceptance gate tracked in docs/toolkit-delivery.md.
+  - Use tools/excel_oracle.py to observe the generated scenario after an input edit and save; diagnose the current Excel automation failures.
   - Use observed Excel results to validate Workbook Forge profiles and update shared fixtures before expanding formula-family coverage.
   - After oracle coverage is reliable, prioritize the next formula slice by documented usage and dependency value.
 remaining:
   - Workbook spill projection, general worksheet formula semantics beyond targeted scalar dependency closures, and broad Excel 365 coverage are staged, not complete.
-  - "The GitHub repository is Jimthetaxguy/workbook-forge and remains private; local origin tracks the renamed repository. Public visibility is deferred."
+  - "GitHub reports Jimthetaxguy/workbook-forge as public, verified 2026-09-28; historical private-release preparation notes below describe their original checkpoints."
 open_questions: []
 ---
 # Workbook Forge Context
 ## Purpose
-Build a custom, reviewable glossary and evaluator for Excel formulas in Python and Rust. The glossary aims to enumerate Excel 365 syntax and worksheet functions; the engines make narrower, explicit claims about what they actually calculate.
+Build a programmable workbook toolkit that extracts supported Excel models, runs reusable tools through Python and Rust, and generates editable Excel workbooks. The formula glossary aims to enumerate Excel 365 syntax and functions; evaluator and workbook capabilities make narrower, explicit claims.
 
-**Workbook Forge** is the product name selected for public release (James, 2026-09-26). The Python distribution, its import package, and the Rust crate are named `workbook_forge`. The canonical checkout is on local `main`, tracking the private GitHub repository's `main`; package, crate, prose, catalog, schemas, fixtures, and SPDX license metadata use the Workbook Forge name and current packaging form.
+**Workbook Forge** is the product name selected for public release (James, 2026-09-26). The Python distribution, import package, and Rust core crate are named `workbook_forge`. The canonical checkout tracks GitHub `main`; GitHub visibility is public as of the live 2026-09-28 check. The toolkit implementation is isolated on `agent/codex-workbook-toolkit` until integration.
 ## Terms
+- **Workbook model:** Rust-owned sparse sheets, authored content, formulas, styles, and explicit input/output bindings, independent of XML.
+- **Application binding:** a named input or output attached to an explicit cell; not an Excel defined-name expression.
+- **Calculation snapshot:** an immutable model revision used by full or incremental calculation; stale work cannot replace current published results.
+- **Preservation baseline:** immutable imported package content used to patch supported changes without rereading or rewriting the original file.
+- **Native backend:** Python APIs delegating model ownership and calculation to Rust through PyO3; distinct from the independent Python reference evaluator.
 - **Catalogued:** a formula feature or function has an entry with provenance and compatibility metadata.
 - **Parsed:** the engine recognizes the construct and produces a typed representation.
 - **Evaluated:** the engine calculates the construct for its documented input domain.
@@ -38,18 +43,20 @@ Build a custom, reviewable glossary and evaluator for Excel formulas in Python a
 - **FormulaResult / evaluate_result:** the shape-preserving result contract shared by Python and Rust; the scalar `evaluate` APIs keep a local `#VALUE!` boundary for top-level arrays and ranges.
 ## Boundaries
 - Target: Excel for Microsoft 365 desktop, with availability/version metadata retained.
-- Languages: independent Python and Rust implementations against one catalog and fixture corpus.
+- Languages: independent legacy Python and Rust formula evaluators; new workbook ownership and calculation live in Rust, with Python bindings and OOXML adapters.
 - Primary workbook format: `.xlsx`; other formats require separately audited adapters.
 - Third-party code and dependencies: permissive open-source licenses only, with no copyleft, so the project stays enterprise-friendly. The rule covers development and transitive dependencies; `README.md` lists the accepted licenses and `python/tests/test_project_policy.py` enforces them.
 - Jev is a development-time reviewer only. It is not linked into runtime, and its results are advisory.
 - Macros and external data are never executed or fetched.
 ## Current State
-Runs 1–24 are accepted. Coverage stands at 115 implemented functions, 85 detailed semantic specs, 110 source records, and 1,371 shared fixtures. Run 24, the latest, bounds formula size, nesting, and wildcard work, and passed the full Python/Rust and schema gates. No direct Microsoft Excel checks have been performed. The 521-entry source inventory remains much broader than implementation coverage; 406 functions remain catalog-only. FILTER, SORT, and UNIQUE return bounded, shape-preserving array results; worksheet spill projection remains unsupported. SORT/UNIQUE comparison, equality, coercion, and output precision include explicit Workbook Forge profiles. Do not describe the package as Excel-complete.
+Runs 1–24 are accepted. Coverage stands at 115 implemented functions, 85 detailed semantic specs, 110 source records, and 1,371 shared fixtures. Run 24 bounds formula size, nesting, and wildcard work. The toolkit adds typed authoring, native calculation sessions, Excel adapters, installed Python/Rust/CLI examples, and reviewed parallel calculation. Three direct formula checks succeeded in Excel 16.113.2; the generated-file roundtrip and full scenario remain unverified because automation failed. The 521-entry source inventory remains broader than implementation coverage; 406 functions remain catalog-only. FILTER, SORT, and UNIQUE return bounded, shape-preserving arrays; worksheet spill projection remains unsupported. SORT/UNIQUE comparison, equality, coercion, and output precision include explicit Workbook Forge profiles. Do not describe the package as Excel-complete.
 - The source-linked function inventory contains 521 records; it is a versioned discovery catalog, not an evaluator coverage claim.
-- The Python and Rust evaluators implement the same bounded scalar, reference, operator, common-function, conditional-aggregation, and rectangular formula-result slice. Both load `fixtures/formula-cases.jsonl`; Rust runtime dependencies are empty.
+- The Python and Rust evaluators implement the same bounded scalar, reference, operator, common-function, conditional-aggregation, and rectangular formula-result slice. Both load `fixtures/formula-cases.jsonl`. The toolkit adds reviewed Serde dependencies and a separate PyO3 bridge; exact license receipts cover both lockfiles.
 - `catalog/formulas.json` records per-language status; a function is `conformance-tested` only when shared fixture coverage passes in both engines.
 - The Python wheel installs the JSON catalogs under `share/workbook_forge/catalog`; the API resolves either installed data or the source-tree catalog. `catalog/open_source_patterns.json` records only permissively licensed (no copyleft) implementation references, license evidence, and adoption decisions; no third-party source code is copied.
 ## Where things are
+- `docs/toolkit-delivery.md`: architecture, ownership, milestone checklist, acceptance model and implementation evidence.
+- `docs/excel-observations.md`: observation meanings, harness usage and actual Excel evidence.
 - `docs/run-history.md`: per-run history for Runs 1–24 and the pre-loop baseline, moved here from this file and `README.md` on 2026-09-25.
 - `docs/behavior-profiles.md`: current behavior and profile notes by function family, plus workbook adapter details.
 - `.autoresearch/state.json`: the authoritative accepted-run ledger. `.autoresearch/config.json` holds the loop criteria and `eval_command`.
@@ -60,6 +67,11 @@ Runs 1–24 are accepted. Coverage stands at 115 implemented functions, 85 detai
 - Append each run's summary to `docs/run-history.md`. Keep `README.md` and this file limited to the current state.
 - Run the Rust gates with `CARGO_TARGET_DIR` inside the checkout, as `eval_command` does. The machine-wide `~/.cargo-target` mixes build artifacts between copies of the crate.
 ## Activity
+### 2026-09-28 — codex/Codex
+- Changed: implemented the programmable workbook delivery candidate on an isolated feature branch; Rust owns models/sessions, Python owns authoring and OOXML adaptation.
+- Evidence: full regression and package checks, minimum Rust compiler, fresh Python 3.12/3.14 wheel installations, independent semantic review and three live Excel formula observations; details in docs/toolkit-delivery.md.
+- Next/remaining: generated-XLSX Excel edit/save/reimport acceptance remains outstanding. GitHub visibility is now verified public. Storage and distributed editing are deferred.
+
 ### 2026-09-28T00:34:00-04:00 — codex/Codex
 - Changed: staged a 22-file main-only public candidate at `~/code/_working-files/workbook-forge-public-candidate-2026-09-28/`; curated its README and created a file-hash manifest plus a history-free tarball.
 - Why/where: continue public release preparation without exposing the private development log or prior Git history.

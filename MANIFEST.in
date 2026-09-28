@@ -1,0 +1,13 @@
+include LICENSE
+include THIRD_PARTY_NOTICES.txt
+include rust/Cargo.toml rust/Cargo.lock native/Cargo.toml native/Cargo.lock
+recursive-include rust/src *.rs
+recursive-include native/src *.rs
+recursive-include catalog *.json
+recursive-include rust/examples *.rs
+recursive-include fixtures *.json *.jsonl
+recursive-include tools *.py *.sh
+recursive-include examples *.py
+recursive-include docs *.md
+exclude python/workbook_forge/*.so
+exclude python/workbook_forge/*.dylib

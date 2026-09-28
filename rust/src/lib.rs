@@ -1,8 +1,15 @@
-//! A deliberately bounded, dependency-free Excel formula evaluator.
+//! A deliberately bounded Excel formula evaluator and programmable workbook toolkit.
 //!
 //! This crate focuses on scalar values, A1 references/ranges, common operators,
 //! and a small set of frequently used worksheet functions. Unsupported syntax
 //! is reported rather than guessed.
+
+pub mod toolkit;
+pub use toolkit::{
+    CalculationReport, CellAddress, CellValue, Edit, InputBinding, Session, Sheet, Style,
+    ToolkitError, WorkbookModel, analyze_formula, calculate, copy_formula, inspect,
+    operating_scenario, validate_inputs,
+};
 
 use std::cell::Cell;
 use std::collections::{HashMap, HashSet};

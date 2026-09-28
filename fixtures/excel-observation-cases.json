@@ -1,0 +1,300 @@
+{
+  "schema_version": 1,
+  "description": "Public synthetic candidate expectations. No fixture is itself an Excel observation; the opt-in harness records those separately.",
+  "date_system": "1900",
+  "sheets": {
+    "Primitives": {
+      "A1": {
+        "value": 2
+      },
+      "A2": {
+        "value": 4
+      },
+      "B2": {
+        "value": 6
+      },
+      "C2": {
+        "value": 8
+      },
+      "D4": {
+        "formula": "=$A1+B$2+'Rates Sheet'!$C$3"
+      },
+      "B10": {
+        "formula": "=A10"
+      },
+      "B11": {
+        "formula": "=\"\""
+      },
+      "B12": {
+        "formula": "=ISBLANK(A10)"
+      },
+      "B13": {
+        "formula": "=ISBLANK(B11)"
+      },
+      "B14": {
+        "formula": "=1/0"
+      },
+      "B15": {
+        "formula": "=0.1+0.2"
+      },
+      "B16": {
+        "formula": "=2+3*4"
+      },
+      "B17": {
+        "formula": "=IF(FALSE,1/0,42)"
+      }
+    },
+    "Rates Sheet": {
+      "C3": {
+        "value": 10
+      }
+    },
+    "Scenario": {
+      "B2": {
+        "value": 120
+      },
+      "B3": {
+        "value": 25
+      },
+      "B4": {
+        "value": 9
+      },
+      "B5": {
+        "value": 1000
+      },
+      "B7": {
+        "formula": "=B2*B3"
+      },
+      "B8": {
+        "formula": "=B2*B4"
+      },
+      "B9": {
+        "formula": "=SUM(B8,B5)"
+      },
+      "B10": {
+        "formula": "=B7-B9"
+      },
+      "B11": {
+        "formula": "=IF(B10>0,\"Profitable\",\"Review\")"
+      }
+    }
+  },
+  "copies": [
+    {
+      "sheet": "Primitives",
+      "source": "D4",
+      "destination": "E5",
+      "expected_formula": "=$A2+C$2+'Rates Sheet'!$C$3"
+    }
+  ],
+  "cases": [
+    {
+      "id": "arithmetic_precedence",
+      "sheet": "Primitives",
+      "cell": "B16",
+      "expected": {
+        "type": "number",
+        "value": 14
+      },
+      "expectation_basis": {
+        "kind": "independently_derived",
+        "detail": "Multiplication precedes addition: 2 + (3 * 4) = 14."
+      }
+    },
+    {
+      "id": "division_by_zero",
+      "sheet": "Primitives",
+      "cell": "B14",
+      "expected": {
+        "type": "error",
+        "value": "#DIV/0!"
+      },
+      "expectation_basis": {
+        "kind": "independently_derived",
+        "detail": "Candidate Excel error behavior; the actual observed error is recorded independently."
+      }
+    },
+    {
+      "id": "unpopulated_cell",
+      "sheet": "Primitives",
+      "cell": "A10",
+      "expected": {
+        "type": "blank"
+      },
+      "expectation_basis": {
+        "kind": "independently_derived",
+        "detail": "A10 has no cell content in the synthetic source."
+      }
+    },
+    {
+      "id": "blank_reference",
+      "sheet": "Primitives",
+      "cell": "B10",
+      "expected": {
+        "type": "number",
+        "value": 0
+      },
+      "expectation_basis": {
+        "kind": "independently_derived",
+        "detail": "Candidate Excel reference-to-blank behavior; observation confirms or contradicts it."
+      }
+    },
+    {
+      "id": "explicit_empty_string",
+      "sheet": "Primitives",
+      "cell": "B11",
+      "expected": {
+        "type": "text",
+        "value": ""
+      },
+      "expectation_basis": {
+        "kind": "independently_derived",
+        "detail": "The formula contains a zero-length string literal, distinct from an absent cell."
+      }
+    },
+    {
+      "id": "isblank_empty_cell",
+      "sheet": "Primitives",
+      "cell": "B12",
+      "expected": {
+        "type": "boolean",
+        "value": true
+      },
+      "expectation_basis": {
+        "kind": "independently_derived",
+        "detail": "An absent cell has no content."
+      }
+    },
+    {
+      "id": "isblank_empty_string",
+      "sheet": "Primitives",
+      "cell": "B13",
+      "expected": {
+        "type": "boolean",
+        "value": false
+      },
+      "expectation_basis": {
+        "kind": "independently_derived",
+        "detail": "A formula producing empty text still occupies its cell."
+      }
+    },
+    {
+      "id": "binary64_decimal",
+      "sheet": "Primitives",
+      "cell": "B15",
+      "expected": {
+        "type": "number",
+        "value": 0.3
+      },
+      "expectation_basis": {
+        "kind": "independently_derived",
+        "detail": "Decimal identity 1/10 + 2/10 = 3/10, allowing bounded floating-point roundoff."
+      },
+      "absolute_tolerance": 1e-12
+    },
+    {
+      "id": "lazy_if",
+      "sheet": "Primitives",
+      "cell": "B17",
+      "expected": {
+        "type": "number",
+        "value": 42
+      },
+      "expectation_basis": {
+        "kind": "independently_derived",
+        "detail": "The false branch selects 42; the unselected division must not produce the result."
+      }
+    },
+    {
+      "id": "mixed_anchors_original",
+      "sheet": "Primitives",
+      "cell": "D4",
+      "expected": {
+        "type": "number",
+        "value": 18
+      },
+      "expectation_basis": {
+        "kind": "independently_derived",
+        "detail": "Original references resolve to 2 + 6 + 10."
+      }
+    },
+    {
+      "id": "mixed_anchors_excel_copy",
+      "sheet": "Primitives",
+      "cell": "E5",
+      "expected": {
+        "type": "number",
+        "value": 22
+      },
+      "expectation_basis": {
+        "kind": "independently_derived",
+        "detail": "A one-row, one-column copy is expected to resolve to 4 + 8 + 10; Excel performs the copy."
+      }
+    },
+    {
+      "id": "scenario_revenue",
+      "sheet": "Scenario",
+      "cell": "B7",
+      "expected": {
+        "type": "number",
+        "value": 3000
+      },
+      "expectation_basis": {
+        "kind": "independently_derived",
+        "detail": "120 units at 25 each."
+      }
+    },
+    {
+      "id": "scenario_variable_cost",
+      "sheet": "Scenario",
+      "cell": "B8",
+      "expected": {
+        "type": "number",
+        "value": 1080
+      },
+      "expectation_basis": {
+        "kind": "independently_derived",
+        "detail": "120 units at 9 each."
+      }
+    },
+    {
+      "id": "scenario_total_cost",
+      "sheet": "Scenario",
+      "cell": "B9",
+      "expected": {
+        "type": "number",
+        "value": 2080
+      },
+      "expectation_basis": {
+        "kind": "independently_derived",
+        "detail": "1080 variable plus 1000 fixed cost."
+      }
+    },
+    {
+      "id": "scenario_profit",
+      "sheet": "Scenario",
+      "cell": "B10",
+      "expected": {
+        "type": "number",
+        "value": 920
+      },
+      "expectation_basis": {
+        "kind": "independently_derived",
+        "detail": "3000 revenue less 2080 total cost."
+      }
+    },
+    {
+      "id": "scenario_status",
+      "sheet": "Scenario",
+      "cell": "B11",
+      "expected": {
+        "type": "text",
+        "value": "Profitable"
+      },
+      "expectation_basis": {
+        "kind": "independently_derived",
+        "detail": "Profit 920 is greater than zero."
+      }
+    }
+  ]
+}
