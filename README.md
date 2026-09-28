@@ -231,11 +231,23 @@ The Microsoft function index currently contributes 521 named entries across its 
 - `native/` — optional PyO3 bridge to the Rust engine; pure Python does not require it.
 - `catalog/workbook-capabilities.json` — primitive support across read, construct, calculate, transform, and export.
 - `catalog/agent-operations.json` — versioned operation descriptions and request/response schemas; a checked identical copy is embedded in the Rust crate.
+- `catalog/extraction-patterns.json` and `catalog/extraction-report.schema.json` — structural patterns, formula mappings, and the extraction report contract.
 - `docs/agent-protocol.md` — agent operation semantics, provenance, pagination, errors, and transport limits.
+- `docs/extraction-patterns.md` — extraction semantics, provenance, shared-formula inspection, and resource limits.
+- `docs/toolkit-delivery.md` — architecture, delivery evidence, dependency audit, and remaining acceptance gates.
+- `docs/excel-observations.md` — independent Excel observation harness and its recorded evidence.
+- `tools/` — complete verification gate, installed-package checks, Excel observations, and extraction catalog synchronization.
 - `docs/behavior-profiles.md` — behavior notes and Workbook Forge profiles by function family, plus workbook adapter limits.
-- `docs/run-history.md` — what each autoresearch run added, with the counts at that time.
+- `docs/run-history.md` — dated project activity and what each autoresearch run added, preserving the facts at each checkpoint.
 - `.autoresearch/` — loop configuration (`config.json`), the accepted-run ledger (`state.json`), and Jev advisory receipts.
 - `_working-files/` — dated checkpoint and review notes.
+
+Catalogs under `catalog/` are the maintained sources. Rust embeds the operation
+and extraction catalogs so the crate works independently of this checkout;
+contract tests check those copies for drift. After changing formula mappings,
+run `python tools/sync_extraction_catalog.py --write` to refresh the extraction
+projection and its Rust copy. Build outputs, local verification receipts, and
+archives are ignored; they are not part of the distributed source.
 
 ## Status
 
@@ -357,7 +369,6 @@ verified development lock and explicitly build the optional bridge first:
 ```sh
 python3.13 -m pip install -r requirements-dev.lock
 WORKBOOK_FORGE_BUILD_NATIVE=1 python3.13 -m pip install --no-build-isolation -e .
-python3.13 -m pytest -q
 WORKBOOK_PYTHON=python3.13 bash tools/verify_toolkit.sh
 ```
 

@@ -6,7 +6,7 @@ date: 2026-09-28
 type: implementation-record
 task: Deliver the programmable workbook toolkit
 status: implementation-verified-excel-acceptance-outstanding
-summary: Independent Python and Rust agent SDK operations verified by contract tests, installed packages and a live discovery-led workbook task; full Excel acceptance remains outstanding.
+summary: Independent Python and Rust agent operations and formula-aware XML extraction verified by contract tests and installed packages, with a live agent workbook task; full Excel acceptance remains outstanding.
 next_steps: [Complete live Excel acceptance, review and integrate the feature branch, expand agent tasks using concrete workbook cases]
 remaining: [Full live Excel scenario and generated-file roundtrip acceptance, wider optional native-wheel platform coverage]
 open_questions: []
@@ -354,6 +354,20 @@ cases. Persistence requires measured recovery/workload requirements first;
 collaboration requires actual conflict cases. Neither has been selected here.
 
 ## Activity
+
+### 2026-09-28 — codex/Codex — branch organization
+
+Moved prior context activity intact into the existing project history, leaving
+CONTEXT.md focused on current guidance. Completed the README navigation and
+recorded canonical versus embedded catalog ownership. The tracked-file audit
+found no build outputs, backups, conflict markers, absolute local paths or broken
+relative document links. Local verification receipts and archives remain ignored
+and preserved. No engine behavior or package dependencies changed. The full gate
+passed again: 640 Python tests, 78 Rust tests, compilation, formatting, checks
+and strict Clippy. The log is retained in
+.verification/branch-cleanup/full-gates.log. Cargo still emits its existing
+advisory about declaring both SPDX license metadata and the external license
+file; both are retained here to preserve the verified crate packaging.
 
 ### 2026-09-28 — codex/Codex — formula-aware XML extraction
 
