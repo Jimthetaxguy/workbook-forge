@@ -2,12 +2,12 @@
 author: Codex
 created: 2026-09-28
 agent: codex/Codex
-date: '2026-09-28T15:38:56-04:00'
+date: '2026-09-28T15:51:28-04:00'
 type: implementation-record
 task: Deliver the programmable workbook toolkit
 status: review-candidate-live-excel-pending
 summary: Independent Python and Rust native primitives, workbook workflows and review fixes pass local tests and installed-package checks; full Excel Desktop acceptance remains outstanding.
-next_steps: [Review the verified SDK candidate, complete live Excel acceptance before integration, expand primitives through concrete application cases]
+next_steps: [Review the verified SDK candidate and current-state findings, complete live Excel acceptance before integration, define explicit composition-to-workbook bindings for the next milestone]
 remaining: [Full live Excel acceptance, wider optional native-wheel platform coverage, hosted CI evidence]
 open_questions: []
 ---
@@ -52,6 +52,129 @@ changed, actual checks and unresolved work at meaningful milestones. Their
 reports are attributed here; an assignment does not count as verification.
 The feature branch preserves prior work and local evidence. No merge or package
 publication is authorized by the implementation checkpoint.
+
+## Current-state findings
+
+Assessment dated 2026-09-28, based on implementation checkpoint `32f49e2`.
+Workbook Forge now supplies reusable calculations, workbook operations and
+Excel adapters in both languages. Its strongest asset is the connection between
+executable behavior and metadata that an agent can inspect. The main remaining
+integration gap is an explicit path from a named native composition into a
+workbook model. That path is a proposed next milestone, not a delivered feature.
+
+The coverage counts describe different things: 521 inventoried functions,
+115 implemented formula functions, nine directly callable primitive functions,
+ten primitive binary operators, ten XML extraction patterns and nine workbook
+agent operations. None of these counts implies complete Excel support.
+
+| Capability | Established result | Practical boundary |
+| --- | --- | --- |
+| Extract workbook meaning | Both readers expose supported content, formulas, references, structures and source locations | Business roles still require explicit bindings; finding a formula does not establish that it can be calculated |
+| Calculate within ordinary programs | Both handwritten primitive implementations run the revenue/profit scenario without workbook objects or formula parsing | The direct interface exposes nine functions, a subset of the larger formula evaluator |
+| Inspect a calculation | Versioned expressions retain operation identities, named dependencies, value kinds and profile limits | Inspection describes declared structure; it is not a trace of which conditional branches ran |
+| Build and modify Excel | Both workbook SDKs generate supported XLSX and preserve permitted imported content | Native compositions and cell-based workbook expressions remain separate authoring interfaces |
+| Support an agent task | Discovery, focused reads, previews, edits, calculation, explanation and export work through real SDK operations | The live consumer exercise covers one synthetic task; it is not a general agent reliability benchmark |
+| Support an application interface | Native values and inspectable expressions can serve application code | No spreadsheet grid, forms application or automatic script-equivalence detector is implemented |
+
+### What the implementation teaches us
+
+**A familiar function identity needs an explicit behavior contract.** The catalog
+connects operation intent, Python/Rust entry points, accepted arguments, errors,
+limits and evidence. This makes implemented operations discoverable and their
+behavior explicit.
+The existing SUM profile, for example, ignores text and Boolean arguments even
+when supplied directly. Its identity remains recognizable, but that behavior
+must remain visible to callers. A future stricter numeric application profile
+would need a separate contract; changing modes cannot silently reinterpret a
+stored composition. See [primitive behavior](primitives.md#meaning-values-and-errors).
+
+**Composition and workbook authoring are not yet one authoring path.** Native
+expressions bind names to values; workbook expressions bind references to cells.
+The [native Python scenario](../examples/primitives_scenario.py) and
+[Rust scenario](../rust/examples/primitives_scenario.rs) reproduce the workbook's
+revenue and profit, but those calculations are authored separately. There is no
+public operation that converts the native composition into workbook formulas.
+Rust explicitly refuses to render native-value nodes as worksheet formulas.
+Matching scenario outputs therefore establish agreement, not a completed
+single-definition authoring/export pipeline.
+
+The reverse mapping also remains open: extraction identifies supported formula
+syntax and dependencies, but does not turn an arbitrary imported workbook into
+named native compositions. Such recovery would need explicit business bindings,
+a supported translation subset and retained source provenance. Reimporting a
+generated workbook checks its supported workbook meaning; it does not by itself
+prove recovery of the original native composition.
+
+**Evidence must remain attached to the claim it supports.** Shared cases establish
+agreement between implementations. Independently derived arithmetic checks the
+scenario's business result. Installed consumers establish package usability.
+Three live Excel formula observations establish only those observed cases and
+settings. They do not establish generated-file validity, copied-formula behavior,
+validation enforcement or the complete edit/save/reimport cycle. The full
+Excel Desktop gate and hosted CI evidence remain outstanding; see
+[Excel observations](excel-observations.md).
+
+**Conservative extraction is useful even when calculation is unavailable.**
+Original formula text, imported caches and calculated values have distinct roles.
+A reconstructed shared formula is an inspection result, not permission to edit
+or calculate its group. Preservation safeguards reject changes that would
+invalidate unsupported content. Extending extraction coverage must keep these
+boundaries explicit rather than broadening calculation claims indirectly.
+See [extraction contract](extraction-patterns.md).
+
+**Independent implementations need checks at every public boundary.** Reusing
+each language's evaluator limits internal semantic duplication, while shared
+contracts expose language drift. The late direct-call size mismatch showed why
+composition tests alone were insufficient: the Rust direct entry point initially
+bypassed a limit enforced by Python. Direct calls, serialized compositions,
+workbook operations and installed packages now have distinct checks. Continuing
+this pattern is the cost of maintaining independent implementations.
+
+### Next integration milestone: one authored calculation
+
+This is a proposed bounded milestone. It does not expand the current PR's
+implemented scope or remove the outstanding Excel acceptance requirement.
+
+1. **Define the binding contract.** Start with the existing numeric operating
+   scenario. Keep the native composition as the calculation definition, with a
+   separate explicit mapping from named scalar/range inputs and outputs to
+   workbook locations. Include supported types and constraints. Detect missing
+   bindings, conflicting locations and incompatible shapes before changing a
+   model. Do not infer these mappings from colors or labels.
+2. **Implement equivalent transformations independently.** Python and Rust should
+   each consume the same versioned definition and binding plan, generate supported
+   workbook expressions, and retain a mapping back to operation/input identities.
+   Reuse the existing workbook models and adapters. Reject behavior that cannot
+   be preserved for the declared input domain; serialization or a familiar
+   function name alone cannot justify exporting it as an Excel formula.
+3. **Prove the complete supported path.** Author the scenario once; inspect its
+   operations; run that definition independently in Python and Rust; generate
+   editable workbooks; change a bound input; calculate and reimport. Compare
+   against independently derived outputs at prices 20 and 25. Repeat the actual
+   Excel open/edit/recalculate/save/reimport acceptance and record its version,
+   settings and results separately from SDK checks. Python-to-Excel-to-Rust is
+   an optional interoperability check, not a required execution architecture.
+4. **Expand only where the example exposes a need.** Select additional primitive
+   functions from a concrete application requirement. A later interface can use
+   the same names, constraints and operation identities to explain calculations;
+   its design must not introduce another source of calculation rules.
+
+The first binding milestone covers generation from the numeric composition and
+reimport as a workbook model. Recovering native compositions from imported
+formulas is a subsequent transformation with its own acceptance cases.
+
+Dependency order: binding contract → independent transformations → supported
+software/workbook comparison. Excel observations and hosted CI setup can proceed
+alongside implementation, but successful Excel acceptance is required before
+claiming that the complete delivery survives an Excel Desktop round trip.
+
+Acceptance must include refusals: unknown or missing bindings, invalid values,
+unsupported semantics, incompatible ranges and resource limits must fail without
+partial model changes or a misleading success report. Export continues to write
+a new path, and imported unsupported content retains the existing preservation
+rules. Passing this milestone would connect the working interfaces; it would
+not establish arbitrary script translation, broad formula equivalence, a full
+spreadsheet UI, durable storage or distributed collaboration.
 
 ## Agent interface direction
 
@@ -430,11 +553,29 @@ live arithmetic/IF/SUM results; file-mode automation returned an unpopulated
 cache set, and the complete live scenario encountered Apple-event error `-50`.
 These failures do not count as a passing roundtrip.
 
-After that acceptance gate, choose richer primitives from concrete workbook
-cases. Persistence requires measured recovery/workload requirements first;
-collaboration requires actual conflict cases. Neither has been selected here.
+The proposed [next integration milestone](#next-integration-milestone-one-authored-calculation)
+connects native compositions to workbook authoring through explicit bindings.
+Further function coverage should follow concrete application needs. Persistence
+requires measured recovery/workload requirements first; collaboration requires
+actual conflict cases. Neither has been selected here.
 
 ## Activity
+
+### 2026-09-28T15:51:28-04:00 — codex/Codex — extended current-state findings
+
+- Changed: consolidated the capability assessment, evidence limits and remaining
+  composition-to-workbook gap in this record; linked it from the glossary and
+  primitive guide. Defined a proposed next milestone with explicit bindings,
+  independent transformations, refusal cases and separate Excel evidence.
+- Basis: inspected both expression interfaces, the standalone examples, package
+  receipts and the Excel observation record at implementation checkpoint
+  `32f49e2`. The binding/transformation milestone is not implemented by this edit.
+- Verified: independent factual/scope review found no material issues; local
+  links and heading anchors pass. The full toolkit gate passes 923 Python and
+  88 Rust tests, compilation, formatting, strict Clippy and catalog/license
+  checks. Receipt: .verification/state-findings/full-gates.log.
+- Remaining: full Excel Desktop acceptance, hosted CI evidence and the proposed
+  integration milestone. Existing runtime behavior and dependencies are unchanged.
 
 ### 2026-09-28T15:38:56-04:00 — codex/Codex — native primitive verification and review closure
 

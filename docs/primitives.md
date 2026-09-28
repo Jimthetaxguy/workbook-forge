@@ -2,12 +2,12 @@
 author: codex/Codex
 created: 2026-09-28
 agent: codex/Codex
-date: '2026-09-28T15:37:33-04:00'
+date: '2026-09-28T15:51:28-04:00'
 type: public-api-guide
 task: Explain workbook-free spreadsheet primitives
 status: verified-review-candidate
 summary: Independent Python and Rust calls and inspectable expressions share tested spreadsheet contracts, installed metadata and explicit compatibility limits.
-next_steps: [Select further primitives through concrete application cases and independent behavior evidence]
+next_steps: [Define explicit composition-to-workbook bindings, select further primitives through concrete application cases and independent behavior evidence]
 remaining: [Broader primitive coverage, independent Excel behavior observations, later application interfaces]
 open_questions: []
 ---
@@ -126,7 +126,14 @@ An agent can reliably identify declared primitive calls and inspect expression
 trees. Recognizing equivalent behavior in unrelated scripts requires separate
 analysis and evidence.
 
-The next expansion should demonstrate a concrete composition that the first
+Native compositions and cell-based workbook expressions currently use separate
+authoring interfaces. Matching scenario outputs do not mean a native expression
+can already be exported as workbook formulas. The proposed
+[next integration milestone](toolkit-delivery.md#next-integration-milestone-one-authored-calculation)
+adds explicit input/output bindings and independent transformations, with refusal
+when the declared behavior cannot be preserved in Excel.
+
+Further function coverage should follow a concrete composition that the first
 nine functions cannot express, then add its typed contract, native implementations
 and independent expected results. A spreadsheet-like UI is a later consumer of
 these operations and explanations, rather than a new source of calculation rules.
