@@ -12,9 +12,8 @@ conservative `.xlsx` reader, generator, and patch writer.
 
 The Python distribution, import package, and Rust crate use the consistent name `workbook_forge`.
 
-The enhancement connects previously separate formula evaluators into complete
-workbook workflows: build sheets and named inputs, calculate dependent outputs,
-change inputs safely, and exchange supported workbook content with Excel.
+Workbook workflows connect sheets and named inputs, calculate dependent outputs,
+apply validated input changes, and exchange supported workbook content with Excel.
 The operating scenario demonstrates the behavior with public synthetic data:
 
 | Named output | Unit price 20 | Unit price 25 |
@@ -25,6 +24,29 @@ The operating scenario demonstrates the behavior with public synthetic data:
 
 Each language computes those results using its own code. Shared test data checks
 agreement and established expected values; it does not replace either implementation.
+
+## Choose an entry point
+
+| Task | Start here |
+| --- | --- |
+| Run a formula against supplied cell values | [Python evaluator](#python-quick-start) |
+| Compose calculations with named inputs and no workbook | [Native primitives](docs/primitives.md) |
+| Author or modify a workbook and calculate its outputs | [Programmable workbooks](#programmable-workbooks) |
+| Inspect XML records, formulas and source locations | [Extraction guide](docs/extraction-patterns.md) |
+| Give an agent bounded workbook operations | [Agent quick start](#agent-sdk-quick-start) and [operation contract](docs/agent-protocol.md) |
+| Assess behavior and verification limits | [Behavior profiles](docs/behavior-profiles.md) and [delivery evidence](docs/toolkit-delivery.md#current-state-findings) |
+
+Use Python 3.12 or later for the Python package. From a source checkout:
+
+```sh
+python3 -m venv .venv
+. .venv/bin/activate
+python -m pip install .
+```
+
+Rust consumers need Rust 1.88 or later. The standalone examples under `rust/examples/`
+run with Cargo; they do not require Python. The examples below use synthetic data
+and write only to new output paths.
 
 ## What agent-ready means
 
@@ -62,7 +84,9 @@ Spreadsheet calculations are also available without creating a workbook. The
 `primitives` modules expose nine native functions in each language and
 inspectable compositions of calls, named inputs and operators. They reuse each
 language's independent evaluator directly; no Excel file, cell addresses or
-formula-string translation is required.
+formula-string translation is required. Native compositions and cell-based
+workbook expressions are currently separate APIs. Explicit transformation between
+them is the [next proposed milestone](docs/toolkit-delivery.md#next-integration-milestone-one-authored-calculation).
 
 ```python
 from workbook_forge import primitives as xl
@@ -138,6 +162,7 @@ names, tables and their column formulas, validations, merged ranges and columns.
 A formula record retains original text and source location, then uses the existing
 formula parser to expose typed references, function categories and implementation
 status from the 521-function catalog. Catalogued functions can remain unsupported.
+Generate a new input with `workbook-forge scenario --xlsx scenario.xlsx`, then inspect it:
 
 ```python
 from workbook_forge.extraction import extract_xlsx, pattern_catalog
@@ -268,11 +293,13 @@ The Microsoft function index currently contributes 521 named entries across its 
 - `.autoresearch/` — loop configuration (`config.json`), the accepted-run ledger (`state.json`), and Jev advisory receipts.
 - `_working-files/` — dated checkpoint and review notes.
 
-Catalogs under `catalog/` are the maintained sources. Rust embeds the operation
-and extraction catalogs so the crate works independently of this checkout;
-contract tests check those copies for drift. After changing formula mappings,
-run `python tools/sync_extraction_catalog.py --write` to refresh the extraction
-projection and its Rust copy. Build outputs, local verification receipts, and
+Catalogs under `catalog/` are the maintained sources. Rust embeds the agent-operation,
+extraction and primitive catalogs, along with the primitive expression schema,
+so the crate works independently of this checkout. Contract tests check the
+embedded copies for drift. After changing formula mappings, run
+`python tools/sync_extraction_catalog.py --write` and
+`python tools/sync_primitive_catalog.py --write` to refresh their projections
+and Rust copies. Build outputs, local verification receipts, and
 archives are ignored; they are not part of the distributed source.
 
 ## Status
@@ -286,6 +313,8 @@ toolkit adds model and adapter capabilities without expanding the function count
 | Inventory functions that are still catalog-only | 406 of 521 |
 | Shared fixture cases | 1,371 |
 | Native primitive interface | 9 functions and 10 binary operators in each language |
+| Agent workbook operations | 9 |
+| XML extraction patterns | 10 |
 | Detailed semantic specs | 85 |
 | Formula and compatibility source records | 110 |
 | Direct Excel Desktop observations | 3 targeted formula checks; full workbook roundtrip outstanding |
@@ -380,13 +409,13 @@ Package limits, dependency-closure bounds, and the adapter's supported scope are
 ## Verification
 
 ```sh
-python3.13 -m pytest -q
-python3.13 -m compileall -q python
+python -m pytest -q
+python -m compileall -q python
 (cd rust && cargo fmt --check && CARGO_TARGET_DIR="$PWD/target" cargo check --locked && CARGO_TARGET_DIR="$PWD/target" cargo test --locked && CARGO_TARGET_DIR="$PWD/target" cargo clippy --all-targets --locked -- -D warnings)
 ```
 
 The Rust core uses Serde for the typed interchange model and quick-xml/zip for
-low-level file decoding. The optional Python extension uses PyO3. The complete
+low-level file decoding. The optional Python extension uses PyO3. The default
 Python runtime uses only the standard library. Exact dependency versions,
 permissive licenses, and source checksums are
 recorded in `catalog/dependency-licenses.json` and checked against both lockfiles.
@@ -394,9 +423,9 @@ The complete development gate compares both independent engines. Install the
 verified development lock and explicitly build the optional bridge first:
 
 ```sh
-python3.13 -m pip install -r requirements-dev.lock
-WORKBOOK_FORGE_BUILD_NATIVE=1 python3.13 -m pip install --no-build-isolation -e .
-WORKBOOK_PYTHON=python3.13 bash tools/verify_toolkit.sh
+python -m pip install -r requirements-dev.lock
+WORKBOOK_FORGE_BUILD_NATIVE=1 python -m pip install --no-build-isolation -e .
+WORKBOOK_PYTHON=python bash tools/verify_toolkit.sh
 ```
 
 The Python tests need the `test` extra in `pyproject.toml`, including build tools
@@ -404,13 +433,20 @@ for the dependency-license checks. Pure Python tests also run without the bridge
 only cross-engine comparisons are skipped then. `rust/Cargo.toml` declares Rust 1.88 as the
 minimum supported version; the suite passes on 1.88.0 and 1.98.1. Build the optional
 native extension when running comparisons between language engines.
-Installed-wheel smoke checks must run outside the checkout:
+Installed-wheel smoke checks use a fresh environment containing the built wheel,
+with no editable installation. With that environment activated, copy the checker
+out of the source checkout and run it there:
 
 ```sh
-python tools/verify_installed.py /new/output/directory --require-pure
+WORKBOOK_SMOKE_DIR="$(mktemp -d)"
+cp tools/verify_installed.py "$WORKBOOK_SMOKE_DIR/"
+cd "$WORKBOOK_SMOKE_DIR"
+python verify_installed.py results --require-pure
 ```
 
-For an optional native wheel, select `--backend rust` instead of `--require-pure`.
+The output directory must be new. For an optional native wheel, select
+`--backend rust` instead of `--require-pure`. The checker verifies that imports
+come from the installed package and exercises its bundled catalogs.
 
 Dependency updates target current stable releases. Refresh the development lock
 with `uv pip compile pyproject.toml --extra test --upgrade --generate-hashes -o requirements-dev.lock`,

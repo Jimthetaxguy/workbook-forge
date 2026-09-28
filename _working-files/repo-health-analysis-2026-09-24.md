@@ -1,25 +1,27 @@
 ---
 author: "claude-code/Claude"
 created: "2026-09-24T19:22:00-04:00"
-agent: "claude-code/Claude"
-date: "2026-09-24T21:30:00-04:00"
+agent: codex/agent_consumer
+date: '2026-09-28T16:05:17-04:00'
 type: analysis
 task: "In-depth health analysis of Formula Atlas: what is going well and what is not (read-only review)"
-status: complete
+status: historical-review
 summary: "Python and Rust agree on all fixtures, but both give non-Excel answers on everyday semantics and have crash or hang paths. The loop never ran the plan's Excel check. Runs 21–22 fixed 3 of 21 disagreement classes, added 4, and pinned new non-Excel SORT behavior. Only 37% of the new fixtures match LibreOffice exactly."
 next_steps:
-  - "James: decide whether to pause new-family runs and whether to allow local-only commits (plan step 6)."
-  - "Codex: run acceptance gates with a private CARGO_TARGET_DIR; the global ~/.cargo-target mixes build output from different checkouts."
+  - "Confirm whether to pause new-family runs and allow local-only commits (plan step 6)."
+  - "Run acceptance gates with a checkout-local CARGO_TARGET_DIR; the shared target directory mixed build output from different checkouts."
   - "Build the Excel cached-value oracle (plan step 4) before changing core semantics; Run 21's calculate_cells_to could compare against cached values."
 remaining:
   - "The first findings were measured on an 18:19 EDT snapshot; the progress check used a 21:00 snapshot taken while Runs 21–22 were still unaccepted."
   - "Many preserved harness files hard-code scratchpad paths; parameterize them before reuse."
 open_questions:
-  - "Did Codex skip the Excel comparisons because its sandbox could not drive Excel, or did it skip them for another reason?"
+  - "Was the omitted Excel comparison blocked by sandbox automation limits, or by another cause?"
 model: "claude-opus-5-5"
 workspace: "."
 ---
 # Formula Atlas: repo health analysis (2026-09-24)
+
+This report describes the 2026-09-24 review snapshots, when the project was named Formula Atlas. Its results and recommendations were not rerun for the 2026-09-28 documentation review. Personal conversation references and machine-specific locations were removed; original technical findings, author, creation time, and checkpoint history remain. See [CONTEXT.md](../CONTEXT.md) for current project state. The ignored evidence archive below is local recovery material and is not shipped with the repository.
 
 ## Progress check after Runs 21–22 (snapshot taken 21:00 EDT; both runs unaccepted)
 
@@ -32,7 +34,7 @@ workspace: "."
   - Python: 166 passed. Formatting and all three schemas also pass.
   - Rust: 25 passed and 1 failed. The failing test asserts SORT is unsupported (`lib.rs:6878`).
   - Clippy fails on `collapsible_if` at `lib.rs:737`.
-- **New environment finding.** `~/.cargo/config.toml` sets a global `target-dir` (`~/.cargo-target`). Copies of this crate in different folders overwrite each other's artifacts there. A `cargo test` run from the frozen snapshot executed a binary built from the live tree (the panic was at `lib.rs:6921`, which exists only in the live file). Acceptance gates should use a private `CARGO_TARGET_DIR`. This review's earlier un-isolated gate runs also wrote to that shared directory.
+- **New environment finding.** The review host configured one Cargo `target-dir` for multiple checkouts. Copies of this crate in different folders overwrote each other's artifacts there. A `cargo test` run from the frozen snapshot executed a binary built from the live tree (the panic was at `lib.rs:6921`, which exists only in the live file). Acceptance gates should use a checkout-local `CARGO_TARGET_DIR`. This review's earlier un-isolated gate runs also wrote to that shared directory.
 - **Parity delta** (seed 20260924, run on the same corpus):
 
   | Part | Before | After |
@@ -301,7 +303,7 @@ Microsoft 365 target.
 These are ordered by dependency, not effort. The critical path runs from step 0 to 1 to 2 to 5;
 steps 3 and 4 can run in parallel with step 1.
 
-0. **Decide (James).**
+0. **Confirm the checkpoint policy.**
    - Pause new-family runs; the loop is at Run 20 of 30.
    - Consider amending plan step 6 to allow local-only commits for each accepted run (no push). That gives you diffs and rollback and lets the 78 backup copies retire.
 1. **Build the Excel oracle (plan step 4).** The pieces already exist.
@@ -366,21 +368,21 @@ that archive's `MANIFEST.tsv` and `ROLLBACK.sh`). Originally 46 files (1.6 MB), 
 directories, crafted malicious `.xlsx` samples and install trees were not copied.
 
 - `diff-fuzz/` — the Python-vs-Rust differential fuzzer: `gen_corpus.py`, `run_fuzz.py`, `analyze.py`, `classify.py`, the Rust runner, `root_causes.json`, `clusters.json` and verified `repros*.jsonl`. Seeds 20260924 and 7 were used.
-- `lo-oracle/` — the LibreOffice harness: headless, isolated profile, run as an in-process Python macro because LibreOffice's bundled Python is killed at launch on this Mac. Also `results.jsonl` (per-case verdicts), `disagreements.tsv` and `family_table.tsv`.
+- `lo-oracle/` — the LibreOffice harness: headless, isolated profile, run as an in-process Python macro because LibreOffice's bundled Python was killed at launch on the macOS review host. Also `results.jsonl` (per-case verdicts), `disagreements.tsv` and `family_table.tsv`.
 - `rust-review/` — the isolated-process probe crate (with a capped allocator), the depth bisector, the JSON-reader checks and the Python comparison scripts.
 - `py-review/` — the Python probes: the ReDoS timing, the recursion thresholds, the AST statistics, and generators for hostile `.xlsx` files (generated files not included).
-- Caveat: 19 of these files hard-code the session's scratchpad path, and the Cargo manifests point at a snapshot path. Before reuse, repoint them at `../../rust` and `../../python`.
+- Caveat: 19 of these files hard-code temporary review paths, and the Cargo manifests point at a snapshot path. Before reuse, repoint them at `../../rust` and `../../python`.
 
 ## Activity
 
 ### 2026-09-24T21:30:00-04:00 — claude-code/Claude
 - Changed: added the progress check for Runs 21–22 at the top of this file and refreshed the header. Added `repo-health-evidence-2026-09-24/remeasure-after-runs-21-22/` (25 scripts and summaries).
-- Why/where: James asked for a check on Codex's Run 22 status. The measurements used a 21:00 snapshot with isolated cargo target dirs.
+- Why/where: recheck Run 22 progress against a 21:00 snapshot with isolated Cargo target directories.
 - Evidence: gates were re-run, the differential fuzz was replayed on the same corpus, a 3,000-case SORT/UNIQUE differential was run, and LibreOffice was run on the 76 new fixtures. I reproduced the headline checks in both engines myself.
 - Next/remaining: Runs 21–22 were still unaccepted at the time of the check. Re-measure after Codex records them.
 
 ### 2026-09-24T19:22:00-04:00 — claude-code/Claude
 - Changed: created this analysis record and the evidence folder next to it. No other repo files were touched.
-- Why/where: James asked for an in-depth analysis of what is going well and what is not, then shared the original research brief and build plan; the analysis is scored against both.
+- Why/where: assess repository health against the original research brief and build plan.
 - Evidence: project gates re-run on the snapshot; four independent reviewers; headline claims reproduced (marked ✔).
-- Next/remaining: James's decisions in step 0; Codex, as coordinating writer, may integrate findings into `CONTEXT.md` after Run 20.
+- Next/remaining: resolve the checkpoint-policy decisions in step 0; Codex, as coordinating writer, may integrate findings into `CONTEXT.md` after Run 20.

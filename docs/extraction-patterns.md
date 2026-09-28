@@ -23,7 +23,26 @@ in force. Formula text, literals and cached results remain distinct. Python reta
 XML encodings accepted by its existing adapter; Rust retains its UTF-8 profile.
 Neither engine claims full OOXML schema validation. Duplicate direct f/v/is
 payloads, nested elements under f/v, invalid stored indices, invalid name scope
-and multiple owners for one table part are rejected explicitly.
+and multiple owners for one table part are rejected explicitly. Inline strings
+(`is`) cannot coexist with a value (`v`) or formula (`f`); the valid formula and
+cached-value pair (`f`/`v`) remains accepted. Package validation runs before
+pattern filtering, so a narrow selection cannot hide malformed cells.
+
+## Start with a supported workbook
+
+After [installing the package](../README.md#choose-an-entry-point), generate a
+synthetic input at a new path and request only its formula records:
+
+```sh
+workbook-forge scenario --xlsx scenario.xlsx
+workbook-forge extract scenario.xlsx --pattern formula --limit 20
+cargo run --manifest-path rust/Cargo.toml --example extract_xlsx -- scenario.xlsx --pattern formula --limit 20
+```
+
+The last command runs from the source checkout and uses the independent Rust
+reader. Extraction reports stored content and formula structure; use
+[workbook calculation](../README.md#programmable-workbooks) to obtain freshly
+evaluated outputs, or [agent operations](agent-protocol.md) to inspect a session.
 
 ## Catalog and API
 
@@ -103,7 +122,11 @@ references: [...], categories: [...]}. Successful parsing uses the existing
 formula AST; references preserve absolute/relative row/column flags. Function
 records are {name, known: bool, category: string|null, python: status,
 rust: status}, with statuses from the support catalog or catalogued/unknown.
-Function records and categories are sorted uniquely. An unsupported parse keeps
+Known function names under OOXML compatibility prefixes `_xlfn.`, `_xlws.` and
+`_xlfn._xlws.` use their canonical catalog identities for support lookup and
+evaluation. The original formula text retains its spelling. Unknown names are
+not made executable by removing a prefix. Function records and categories are
+sorted uniquely. An unsupported parse keeps
 raw text, empty analysis collections and a formula_syntax diagnostic. An
 unresolved shared group has no effective_formula and shared_formula diagnostics.
 Do not guess references or functions from text in string literals.
@@ -128,12 +151,15 @@ reference and structural patterns from SpreadsheetML documentation:
 - [SpreadsheetML structure](https://learn.microsoft.com/en-us/office/open-xml/spreadsheet/structure-of-a-spreadsheetml-document)
 - [Shared strings](https://learn.microsoft.com/en-us/office/open-xml/spreadsheet/working-with-the-shared-string-table)
 
-The 82 cross-language checks cover namespace-prefix variation, extension decoys,
+Cross-language checks cover namespace-prefix variation, extension decoys,
 entities/CDATA/rich strings, shared master/follower copying with mixed references,
 malformed groups, unsupported syntax/functions, table/name/validation extraction,
-pagination/filtering and resource limits. Existing reader, calculation, agent
-and preservation regressions pass in the complete 640-test Python and 78-test Rust
-suites. Minimum Rust 1.88 tests also pass. The generated scenario yields identical
-Python/Rust records for 12 formulas and 3 validations. Local reports and gate
-logs are in .verification/xml-engine. Installed-package receipts are under
-.verification/xml-packages. Excel Desktop acceptance remains separate.
+pagination/filtering and resource limits. Regression cases also cover compatibility
+prefixes and mutually exclusive cell payloads. The generated scenario yields
+matching Python/Rust records for 12 formulas and 3 validations.
+
+The [delivery record](toolkit-delivery.md) owns current suite totals and installed
+package evidence. Its earlier extraction checkpoint records 82 contract checks;
+that count describes the checkpoint, not the complete project suite. Test agreement
+establishes the implemented extraction contract. It does not establish full OOXML
+schema coverage or [Excel Desktop acceptance](excel-observations.md).

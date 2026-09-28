@@ -2,7 +2,7 @@
 author: Codex
 created: 2026-09-24
 agent: codex/Codex
-date: '2026-09-28T15:51:28-04:00'
+date: '2026-09-28T16:11:18-04:00'
 type: project-context
 task: Build an SDK for Excel in agent-ready formats using independent Python and Rust implementations
 status: active
@@ -23,7 +23,7 @@ open_questions: []
 ## Purpose
 Build an **SDK for Excel in agent-ready formats**: expose supported workbook data, formulas, dependencies, presentation and explicit business bindings as structured objects that agents can inspect, calculate, compose and deliver back as editable Excel workbooks. Independent Python and Rust implementations own these operations. The formula glossary aims to enumerate Excel 365 syntax and functions; evaluator and workbook capabilities make narrower, explicit claims.
 
-**Workbook Forge** is the product name selected for public release (James, 2026-09-26). The Python distribution, import package, and Rust core crate are named `workbook_forge`. The canonical checkout tracks GitHub `main`; GitHub visibility is public as of the live 2026-09-28 check. The toolkit implementation is isolated on `agent/codex-workbook-toolkit` until integration.
+**Workbook Forge** is the product name selected for public release on 2026-09-26. The Python distribution, import package, and Rust core crate are named `workbook_forge`. The canonical checkout tracks GitHub `main`; GitHub visibility is public as of the live 2026-09-28 check. The toolkit implementation is isolated on `agent/codex-workbook-toolkit` until integration.
 ## Terms
 - **Spreadsheet primitive:** an identifiable operation with typed arguments, native implementations, explicit behavior limits and compatibility evidence. It can be used without a workbook.
 - **Composition:** a structured calculation combining primitive calls, named inputs and operators while retaining operation identities for inspection. It can power scripts, agents or a later application interface.
@@ -81,10 +81,15 @@ Runs 1–24 are accepted. Coverage stands at 115 implemented functions, 85 detai
 - `_working-files/`: dated checkpoint and review notes.
 - `_archive-2026-09-25-L1/`: a git-ignored archive of the pre-git backup copies (`*.bak-*`, `.autoresearch/_archive-*`, `.autoresearch/backups/`), with `MANIFEST.tsv` and `ROLLBACK.sh`.
 ## Working conventions
+- Keep public examples and records portable: use repository-relative paths or documented environment variables, synthetic data, and project-focused decisions. Do not copy home-directory paths, personal conversations, private contact details or local tool credentials into tracked files.
+- Preserve license and source attribution. Before publishing a privacy cleanup, inspect reachable Git history and commit metadata as well as current files; an ordinary cleanup commit does not erase earlier versions.
 - Checkpoint accepted work with local git commits. The ignore rules exclude `*.bak-*`, `_archive-*/`, and `.autoresearch/backups/`, so ad-hoc backup copies are no longer needed.
 - Append each run's summary to `docs/run-history.md`. Keep `README.md` and this file limited to the current state.
-- Run the Rust gates with `CARGO_TARGET_DIR` inside the checkout, as `eval_command` does. The machine-wide `~/.cargo-target` mixes build artifacts between copies of the crate.
+- Run the Rust gates with `CARGO_TARGET_DIR` inside the checkout, as `eval_command` does. A shared target directory can mix build artifacts between copies of the crate.
 ## Latest maintenance
+### 2026-09-28 — codex/Codex — public documentation review
+- Reviewed all project guides and historical notes, verified portable examples, and removed unnecessary personal context and machine locations.
+- Recorded the contributor checks and separate published-history decision in [toolkit delivery](docs/toolkit-delivery.md#activity).
 ### 2026-09-28 — codex/Codex — native primitives and reviewed boundaries
 - Added reusable calculations without workbooks, preserving the four product uses: extraction, software execution, programmatic Excel generation and a later application interface.
 - Recorded independent contributor verification and reference-project analysis in [toolkit delivery](docs/toolkit-delivery.md). Known behavior differences remain explicit.

@@ -14,6 +14,10 @@ directory. It exposes deterministic SDK operations; it does not run an LLM or
 execute workbook text as instructions. Python and Rust implement the adapter
 independently. This JSON-lines transport is framework-neutral, not an MCP server.
 
+These nine operations act on a cell-based workbook model. Workbook-free native
+compositions use the separate [primitive API](primitives.md). See the
+[README quick start](../README.md#agent-sdk-quick-start) for an executable host example.
+
 ## Envelope and limits
 
 Request: `{"id":"call-1","operation":"describe","arguments":{}}`.
@@ -102,9 +106,12 @@ atomically. Return previous_revision, revision and changed_cells
 `edit {edits, expected_revision}` applies 1–100 engine Edit records atomically.
 Each record has sheet/address and supported value/formula/style fields; unknown
 fields are invalid. At least one of value/formula/style is required; value and
-formula cannot appear together. Return previous_revision, revision and changed_cells
+formula cannot appear together. The discovery schema requires formula to be a
+string and style to be an object: null-only formula/style edits are not supported.
+Use value:null to clear cell content; an empty style object resets an authored
+cell's supported style. Return previous_revision, revision and changed_cells
 with the submitted fields. The common agent import profile permits only existing
-original-cell value/formula changes. Imported style edits (including null), new
+original-cell value/formula changes. Imported style edits, new
 cells, grouped/table results and 1904 formulas are rejected before mutation.
 These restrictions also apply to set_inputs and preview_inputs. The lower-level
 Python adapter may support additional edits outside this shared agent profile.
@@ -140,16 +147,30 @@ Both runners load one host-selected source or the synthetic scenario at startup.
 Agents cannot select arbitrary input files through operations. Python command:
 `workbook-forge agent SOURCE --bindings BINDINGS --output-dir DIRECTORY`, or
 `workbook-forge agent --scenario --output-dir DIRECTORY`.
-Rust example: `agent_workbook --scenario --output-dir DIRECTORY`, or
-`agent_workbook SOURCE --bindings BINDINGS --output-dir DIRECTORY`.
+From the repository root, the corresponding Rust command is:
+
+```sh
+cargo run --manifest-path rust/Cargo.toml --example agent_workbook -- --scenario --output-dir exports
+```
+
+Replace `--scenario` with `SOURCE --bindings BINDINGS` to load an imported model.
 Each line is one request; EOF closes the transient session. Request errors return
 structured responses and leave the process usable for the next request.
+
+The bindings file is a JSON object with `inputs` and `outputs` maps. It uses the
+same explicit cell bindings as `WorkbookModel`; the scenario example exposes
+its bindings through `model.to_dict()`. Importing XLSX alone does not recover
+application input names or constraints automatically.
 
 ## Acceptance
 
 Discover operations and bindings, read the profit closure, preview unit_price=25
 without changing revision, apply at the observed revision, calculate revenue
-9250/profit3290/break_even_units1000/17, explain profit through source cells,
+9,250, profit 3,290 and break-even units 1000/17; explain profit through source cells,
 export, and reimport. Reject a stale edit, invalid input, unknown property,
 oversized request, unsafe export path and unsupported output without partial
 changes. Run against both independent implementations and installed packages.
+
+These acceptance checks establish the shared SDK contract. Full Excel Desktop
+open/edit/recalculate/save/reimport acceptance remains separate; see
+[Excel observations](excel-observations.md).

@@ -2,7 +2,7 @@
 author: codex/Codex
 created: 2026-09-28
 agent: codex/Codex
-date: '2026-09-28T15:51:28-04:00'
+date: '2026-09-28'
 type: public-api-guide
 task: Explain workbook-free spreadsheet primitives
 status: verified-review-candidate
@@ -22,6 +22,18 @@ The interface does not require a workbook, cell addresses or formula strings.
 Python and Rust implement this layer independently, each reusing its own
 handwritten evaluator. They do not call each other. The shared catalog describes
 meaning and public entry points; it does not replace executable implementations.
+
+## Choose the expression API
+
+| API | Inputs and purpose |
+| --- | --- |
+| `workbook_forge.primitives.Expression` / Rust `primitives::Expression` | Named values, reusable calls and operators, with no workbook |
+| `workbook_forge.expressions.Expression` / Rust `toolkit::Expression` | Cell and range references, formula rendering and reference copying |
+
+The two expression types are not interchangeable. Their scenario examples share
+expected results, but exporting a native composition to workbook formulas still
+requires the proposed [binding and transformation contract](toolkit-delivery.md#next-integration-milestone-one-authored-calculation).
+For installation and workbook authoring, see the [README](../README.md#choose-an-entry-point).
 
 ## Direct calls and composition
 
@@ -54,7 +66,7 @@ The first function set is SUM, AVERAGE, MIN, MAX, COUNT, IF, IFERROR, ROUND and
 ABS. Python exposes `sum`, `average`, `min`, `max`, `count`, `if_`, `iferror`,
 `round` and `abs` in the `primitives` module. Rust exposes the corresponding
 functions in `workbook_forge::primitives`, taking slices of `PrimitiveValue`.
-Both expression APIs support arithmetic and comparison operators. Python
+Both expression APIs support `+`, `-`, `*`, `/`, `=`, `<>`, `<`, `<=`, `>` and `>=`. Python
 comparisons use `Expression.binary("<=", left, right)` rather than overloaded
 comparison syntax.
 
@@ -62,6 +74,27 @@ Rust's `Expression` constructors return checked results. `PrimitiveValue`
 distinguishes a scalar, range, array and omitted argument; evaluation accepts a
 map of named native values. The standalone `primitives_scenario` example builds
 and runs the same revenue/profit calculation without Python or a workbook.
+A minimal Rust composition is:
+
+```rust
+use std::collections::BTreeMap;
+use workbook_forge::primitives::{Expression, PrimitiveValue, result_json};
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let total = Expression::call("SUM", vec![Expression::input("quantity")?])?;
+    let inputs = BTreeMap::from([("quantity".into(), PrimitiveValue::from(370.0))]);
+    let value = total.evaluate(&inputs)?;
+    assert_eq!(result_json(&value)?.as_f64(), Some(370.0));
+    Ok(())
+}
+```
+
+From the repository root, run either complete scenario:
+
+```sh
+python examples/primitives_scenario.py
+cargo run --manifest-path rust/Cargo.toml --example primitives_scenario
+```
 
 ## Meaning, values and errors
 
@@ -74,7 +107,11 @@ and runs the same revenue/profit calculation without Python or a workbook.
 - Numbers use finite binary64 values. Calculated overflow becomes `#NUM!` at
   this new boundary. Nonfinite inputs are rejected. Legacy APIs are unchanged.
 - Spreadsheet errors are returned as values. Invalid API input, unsupported
-  operations and resource limits produce `PrimitiveError` with a stable code.
+  operations and resource limits produce `PrimitiveError`. Its stable codes are
+  `invalid_expression`, `invalid_input`, `unsupported_operation` and `resource_limit`.
+  Accepted spreadsheet error values are `#VALUE!`, `#DIV/0!`, `#REF!`, `#NAME?`,
+  `#NUM!`, `#N/A` and `#CALC!`; the native boundary does not accept every error
+  spelling that an imported workbook may preserve.
 - Named inputs are case-sensitive ASCII identifiers. Every declared input is
   required; extra inputs are refused. This includes inputs in an untaken branch.
 - Composed IF and IFERROR retain lazy branch evaluation. Python and Rust still

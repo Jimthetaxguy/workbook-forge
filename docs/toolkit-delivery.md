@@ -2,7 +2,7 @@
 author: Codex
 created: 2026-09-28
 agent: codex/Codex
-date: '2026-09-28T15:51:28-04:00'
+date: '2026-09-28T16:11:18-04:00'
 type: implementation-record
 task: Deliver the programmable workbook toolkit
 status: review-candidate-live-excel-pending
@@ -18,14 +18,14 @@ This living record tracks the approved first delivery. Storage, distributed
 collaboration, general structural editing, and a full grid application remain
 future work; the model is an in-process computation library, not a database.
 
-The product direction is **an SDK for Excel in agent-ready formats**, as clarified
-by James. Workbook primitives and independent language implementations provide
+The product direction is **an SDK for Excel in agent-ready formats**.
+Workbook primitives and independent language implementations provide
 the foundation. The agent interface direction below defines how to expose those
 capabilities without making unsupported Excel or agent-integration claims.
 
 ## Current native primitive delivery
 
-James clarified that the same foundation must support extracting Excel content,
+The same foundation must support extracting Excel content,
 building editable Excel workbooks, composing ordinary programs, and later an
 Excel-like application. The dataset records operation intent, typed arguments,
 blank/error rules, dependencies, native entry points and evidence. It is backed
@@ -561,6 +561,30 @@ actual conflict cases. Neither has been selected here.
 
 ## Activity
 
+### 2026-09-28T16:11:18-04:00 — codex/Codex — public documentation and privacy review
+
+- Changed: removed unnecessary personal conversation context and host-specific
+  locations from current documentation; reviewed all project guides and retained
+  technical chronology, source attribution and reproducible commands.
+- Scope: tracked files, reachable Git history and current PR text. Scanner
+  output and detailed remediation material remain in ignored local evidence;
+  sensitive values are not copied into this record.
+- Contributors: codex/documentation_editor reviewed six public guides;
+  codex/agent_consumer reviewed four historical notes; codex/architecture_review
+  audited history and reviewed the changes independently. codex/Codex owns
+  context, this record and integration.
+- Verification: all 12 Markdown documents were reviewed; 59 local links and
+  anchors resolve, Python examples pass, and the Rust example compiles and runs.
+  The full gate passes 923 Python and 88 Rust tests, compilation, formatting,
+  Clippy, catalog and dependency-license checks. Gitleaks reported no findings
+  in reachable history or the updated tracked files; targeted content checks
+  found no remaining unnecessary personal or machine-location details. This
+  scoped review is not a guarantee that every sensitive pattern was detected.
+  Current-file cleanup does not remove information in published ancestors.
+- Remaining: any published-history rewrite requires separate approval for the
+  affected refs and changed commit identifiers. No history rewrite is included
+  in the current documentation edits.
+
 ### 2026-09-28T15:51:28-04:00 — codex/Codex — extended current-state findings
 
 - Changed: consolidated the capability assessment, evidence limits and remaining
@@ -645,7 +669,7 @@ candidate pending the separate live Excel edit/save/reimport acceptance.
 
 ### 2026-09-28 — codex/Codex — agent-ready Excel SDK framing
 
-Updated the product purpose and vocabulary to reflect James's SDK direction.
+Updated the product purpose and vocabulary to reflect the SDK direction.
 Recorded the existing structured interfaces separately from the next operation
 schema, focused-context, provenance and real-agent acceptance work. No new tool
 server, operation schema or calculation behavior is claimed by this documentation
@@ -653,7 +677,7 @@ change. Independent Python and Rust implementations remain required.
 
 ### 2026-09-28 — codex/Codex — independent implementation correction
 
-James clarified that each language must contain its own complete implementation.
+The implementation requirement is a complete, independent engine in each language.
 Python's existing independent formula evaluator now has its own typed
 expressions, graph calculation and sessions. Rust also has its own XLSX adapter.
 Pure Python packaging is the default; native execution is explicit. Installed
