@@ -1,0 +1,719 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Jimthetaxguy/workbook-forge/schema/extraction-report-v1",
+  "title": "Workbook Forge OOXML extraction report",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "profile": {
+      "const": "xlsx-extraction-v1"
+    },
+    "records": {
+      "type": "array",
+      "maxItems": 100,
+      "items": {
+        "$ref": "#/$defs/record"
+      }
+    },
+    "counts": {
+      "type": "object",
+      "properties": {
+        "cell": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 18446744073709551615
+        },
+        "formula": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 18446744073709551615
+        },
+        "defined_name": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 18446744073709551615
+        },
+        "table": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 18446744073709551615
+        },
+        "table_column": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 18446744073709551615
+        },
+        "table_formula": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 18446744073709551615
+        },
+        "validation": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 18446744073709551615
+        },
+        "merged_range": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 18446744073709551615
+        },
+        "shared_string": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 18446744073709551615
+        },
+        "column": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 18446744073709551615
+        }
+      },
+      "required": [],
+      "additionalProperties": false
+    },
+    "total_records": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 18446744073709551615
+    },
+    "offset": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 18446744073709551615
+    },
+    "limit": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 100
+    },
+    "next_offset": {
+      "anyOf": [
+        {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 18446744073709551615
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "truncated": {
+      "type": "boolean"
+    },
+    "diagnostics": {
+      "type": "array",
+      "maxItems": 100,
+      "items": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "part": {
+            "type": "string"
+          },
+          "sheet": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "cell": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "code",
+          "message",
+          "part",
+          "sheet",
+          "cell"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "diagnostic_count": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 18446744073709551615
+    },
+    "diagnostics_truncated": {
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "schema_version",
+    "profile",
+    "records",
+    "counts",
+    "total_records",
+    "offset",
+    "limit",
+    "next_offset",
+    "truncated",
+    "diagnostics",
+    "diagnostic_count",
+    "diagnostics_truncated"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "reference": {
+      "type": "object",
+      "properties": {
+        "sheet": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "row": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1048576
+        },
+        "column": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 16384
+        },
+        "absolute_row": {
+          "type": "boolean"
+        },
+        "absolute_column": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "sheet",
+        "row",
+        "column",
+        "absolute_row",
+        "absolute_column"
+      ],
+      "additionalProperties": false
+    },
+    "function": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "known": {
+          "type": "boolean"
+        },
+        "category": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "python": {
+          "enum": [
+            "catalogued",
+            "parsed",
+            "evaluated",
+            "conformance-tested",
+            "unknown"
+          ]
+        },
+        "rust": {
+          "enum": [
+            "catalogued",
+            "parsed",
+            "evaluated",
+            "conformance-tested",
+            "unknown"
+          ]
+        }
+      },
+      "required": [
+        "name",
+        "known",
+        "category",
+        "python",
+        "rust"
+      ],
+      "additionalProperties": false
+    },
+    "analysis": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "enum": [
+            "parsed",
+            "unsupported",
+            "unresolved"
+          ]
+        },
+        "functions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/function"
+          }
+        },
+        "references": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "start": {
+                "$ref": "#/$defs/reference"
+              },
+              "end": {
+                "$ref": "#/$defs/reference"
+              }
+            },
+            "required": [
+              "start"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "categories": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "status",
+        "functions",
+        "references",
+        "categories"
+      ],
+      "additionalProperties": false
+    },
+    "record": {
+      "type": "object",
+      "properties": {
+        "pattern": {
+          "enum": [
+            "cell",
+            "formula",
+            "defined_name",
+            "table",
+            "table_column",
+            "table_formula",
+            "validation",
+            "merged_range",
+            "shared_string",
+            "column"
+          ]
+        },
+        "part": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "sheet": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "cell": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "attributes": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "text": {
+          "type": "string"
+        },
+        "data": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "pattern",
+        "part",
+        "path",
+        "sheet",
+        "cell",
+        "attributes",
+        "text",
+        "data"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "pattern": {
+                "const": "cell"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "data": {
+                "type": "object",
+                "properties": {
+                  "value": {
+                    "anyOf": [
+                      {
+                        "type": [
+                          "null",
+                          "string",
+                          "boolean",
+                          "number"
+                        ]
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "error": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "error"
+                        ],
+                        "additionalProperties": false
+                      }
+                    ]
+                  },
+                  "cached_value": {
+                    "anyOf": [
+                      {
+                        "type": [
+                          "null",
+                          "string",
+                          "boolean",
+                          "number"
+                        ]
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "error": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "error"
+                        ],
+                        "additionalProperties": false
+                      }
+                    ]
+                  },
+                  "cell_type": {
+                    "type": "string"
+                  },
+                  "style_id": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ],
+                    "minimum": 0
+                  }
+                },
+                "required": [
+                  "value",
+                  "cached_value",
+                  "cell_type",
+                  "style_id"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "pattern": {
+                "const": "formula"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "data": {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string"
+                  },
+                  "shared_index": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "group_range": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "master_cell": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "effective_formula": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "analysis": {
+                    "$ref": "#/$defs/analysis"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "shared_index",
+                  "group_range",
+                  "master_cell",
+                  "effective_formula",
+                  "analysis"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "pattern": {
+                "const": "defined_name"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "data": {
+                "type": "object",
+                "properties": {
+                  "analysis": {
+                    "$ref": "#/$defs/analysis"
+                  }
+                },
+                "required": [
+                  "analysis"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "pattern": {
+                "const": "table"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "data": {
+                "type": "object",
+                "properties": {},
+                "required": [],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "pattern": {
+                "const": "table_column"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "data": {
+                "type": "object",
+                "properties": {},
+                "required": [],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "pattern": {
+                "const": "table_formula"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "data": {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string"
+                  },
+                  "shared_index": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "group_range": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "master_cell": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "effective_formula": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "analysis": {
+                    "$ref": "#/$defs/analysis"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "shared_index",
+                  "group_range",
+                  "master_cell",
+                  "effective_formula",
+                  "analysis"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "pattern": {
+                "const": "validation"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "data": {
+                "type": "object",
+                "properties": {
+                  "formula1": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "formula2": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                },
+                "required": [
+                  "formula1",
+                  "formula2"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "pattern": {
+                "const": "merged_range"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "data": {
+                "type": "object",
+                "properties": {},
+                "required": [],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "pattern": {
+                "const": "shared_string"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "data": {
+                "type": "object",
+                "properties": {
+                  "value": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "value"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "pattern": {
+                "const": "column"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "data": {
+                "type": "object",
+                "properties": {},
+                "required": [],
+                "additionalProperties": false
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

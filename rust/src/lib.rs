@@ -5,8 +5,10 @@
 //! is reported rather than guessed.
 
 pub mod agent;
+pub mod extraction;
 pub mod toolkit;
 pub mod xlsx;
+pub mod xml_patterns;
 pub use toolkit::{
     CalculationReport, CellAddress, CellValue, Edit, InputBinding, Session, Sheet, Style,
     ToolkitError, WorkbookModel, analyze_formula, calculate, copy_formula, inspect,

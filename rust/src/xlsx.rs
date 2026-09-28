@@ -7,7 +7,7 @@ use crate::toolkit::{
     self, CalculationReport, Cell, CellAddress, CellValue, Edit, InputBinding, Session, Sheet,
     Style, WorkbookModel,
 };
-use quick_xml::{Reader, events::Event};
+use crate::xml_patterns::{Node, Xml};
 use serde_json::{Value as Json, json};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs::{self, OpenOptions};
@@ -51,215 +51,6 @@ fn err(message: impl Into<String>) -> XlsxError {
 }
 type Result<T> = std::result::Result<T, XlsxError>;
 
-#[derive(Clone, Debug)]
-struct Node {
-    name: String,
-    local: String,
-    ns: String,
-    attrs: BTreeMap<String, String>,
-    start: usize,
-    close_start: usize,
-    end: usize,
-    children: Vec<usize>,
-    text: String,
-}
-#[derive(Clone, Debug)]
-struct Xml {
-    bytes: Vec<u8>,
-    nodes: Vec<Node>,
-}
-impl Xml {
-    fn parse(bytes: &[u8]) -> Result<Self> {
-        if bytes.len() > MAX_XML {
-            return Err(err("XML part exceeds 32 MiB"));
-        }
-        let source =
-            std::str::from_utf8(bytes).map_err(|_| err("only UTF-8 OOXML is supported"))?;
-        let mut reader = Reader::from_str(source);
-        reader.config_mut().check_end_names = true;
-        let mut nodes: Vec<Node> = Vec::new();
-        let mut stack: Vec<(usize, BTreeMap<String, String>)> = Vec::new();
-        let mut roots = 0;
-        loop {
-            let start = reader.buffer_position() as usize;
-            let event = reader
-                .read_event()
-                .map_err(|e| err(format!("invalid XML: {e}")))?;
-            let end = reader.buffer_position() as usize;
-            match event {
-                Event::Start(ref e) | Event::Empty(ref e) => {
-                    if nodes.len() >= 1_000_000 {
-                        return Err(err("XML node count exceeds 1000000"));
-                    }
-                    if stack.len() >= 128 {
-                        return Err(err("XML nesting exceeds 128"));
-                    }
-                    let name = e.name().as_ref().to_string();
-                    let mut namespaces = stack.last().map(|(_, ns)| ns.clone()).unwrap_or_default();
-                    namespaces.insert("xml".into(), "http://www.w3.org/XML/1998/namespace".into());
-                    let mut raw = BTreeMap::new();
-                    for a in e.attributes() {
-                        let a = a.map_err(|e| err(e.to_string()))?;
-                        let key = a.key.as_ref().to_string();
-                        let value = a
-                            .normalized_value(quick_xml::XmlVersion::Implicit1_0)
-                            .map_err(|e| err(e.to_string()))?
-                            .into_owned();
-                        if raw.insert(key.clone(), value.clone()).is_some() {
-                            return Err(err("duplicate XML attribute"));
-                        }
-                        if key == "xmlns" {
-                            if matches!(
-                                value.as_str(),
-                                "http://www.w3.org/XML/1998/namespace"
-                                    | "http://www.w3.org/2000/xmlns/"
-                            ) {
-                                return Err(err("invalid default namespace binding"));
-                            }
-                            namespaces.insert(String::new(), value);
-                        } else if let Some(prefix) = key.strip_prefix("xmlns:") {
-                            if prefix == "xmlns"
-                                || value.is_empty()
-                                || value == "http://www.w3.org/2000/xmlns/"
-                                || (prefix != "xml"
-                                    && value == "http://www.w3.org/XML/1998/namespace")
-                                || (prefix == "xml"
-                                    && value != "http://www.w3.org/XML/1998/namespace")
-                            {
-                                return Err(err("invalid reserved XML namespace binding"));
-                            }
-                            namespaces.insert(prefix.into(), value);
-                        }
-                    }
-                    let (prefix, local) = name.split_once(':').unwrap_or(("", &name));
-                    let ns = namespaces.get(prefix).cloned().unwrap_or_default();
-                    if !prefix.is_empty() && ns.is_empty() {
-                        return Err(err("unbound XML namespace"));
-                    }
-                    let mut attrs = raw.clone();
-                    for (key, value) in raw {
-                        if let Some((prefix, local)) = key.split_once(':')
-                            && prefix != "xmlns"
-                        {
-                            let uri = namespaces
-                                .get(prefix)
-                                .ok_or_else(|| err("unbound attribute namespace"))?;
-                            if attrs.insert(format!("{{{uri}}}{local}"), value).is_some() {
-                                return Err(err("duplicate expanded XML attribute"));
-                            }
-                        }
-                    }
-                    let id = nodes.len();
-                    nodes.push(Node {
-                        name: name.clone(),
-                        local: local.into(),
-                        ns,
-                        attrs,
-                        start,
-                        close_start: end,
-                        end,
-                        children: Vec::new(),
-                        text: String::new(),
-                    });
-                    if let Some((parent, _)) = stack.last() {
-                        nodes[*parent].children.push(id);
-                    } else {
-                        roots += 1;
-                    }
-                    if matches!(event, Event::Start(_)) {
-                        stack.push((id, namespaces));
-                    }
-                }
-                Event::End(_) => {
-                    let (id, _) = stack
-                        .pop()
-                        .ok_or_else(|| err("unexpected XML closing tag"))?;
-                    nodes[id].close_start = start;
-                    nodes[id].end = end;
-                }
-                Event::Text(e) => {
-                    let text = e.as_ref();
-                    let text = quick_xml::escape::unescape(text).map_err(|e| err(e.to_string()))?;
-                    if let Some((id, _)) = stack.last() {
-                        nodes[*id].text.push_str(&text);
-                    } else if !text.trim().is_empty() {
-                        return Err(err("text outside XML root"));
-                    }
-                }
-                Event::CData(e) => {
-                    let text = e.as_ref();
-                    if let Some((id, _)) = stack.last() {
-                        nodes[*id].text.push_str(text);
-                    } else {
-                        return Err(err("CDATA outside root"));
-                    }
-                }
-                Event::GeneralRef(e) => {
-                    let text = e.as_ref();
-                    let escaped = format!("&{text};");
-                    let decoded = quick_xml::escape::unescape(&escaped)
-                        .map_err(|_| err("unknown XML entity"))?;
-                    if let Some((id, _)) = stack.last() {
-                        nodes[*id].text.push_str(&decoded);
-                    } else {
-                        return Err(err("entity outside root"));
-                    }
-                }
-                Event::DocType(_) => return Err(err("DTD/entity declarations are forbidden")),
-                Event::Decl(e) => {
-                    if let Some(encoding) = e.encoding() {
-                        let encoding = encoding.map_err(|e| err(e.to_string()))?;
-                        if !encoding.eq_ignore_ascii_case("utf-8") {
-                            return Err(err("only UTF-8 OOXML is supported"));
-                        }
-                    }
-                }
-                Event::Eof => break,
-                _ => {}
-            }
-        }
-        if roots != 1 || !stack.is_empty() {
-            return Err(err("XML must contain one balanced root"));
-        }
-        Ok(Self {
-            bytes: bytes.to_vec(),
-            nodes,
-        })
-    }
-    fn root(&self, ns: &str, name: &str) -> Result<&Node> {
-        let root = &self.nodes[0];
-        if root.ns != ns || root.local != name {
-            return Err(err(format!("unsupported XML root: {}", root.name)));
-        }
-        Ok(root)
-    }
-    fn children<'a>(
-        &'a self,
-        node: &'a Node,
-        ns: &'a str,
-        name: &'a str,
-    ) -> impl Iterator<Item = &'a Node> {
-        node.children
-            .iter()
-            .map(|id| &self.nodes[*id])
-            .filter(move |n| n.ns == ns && n.local == name)
-    }
-    fn child<'a>(&'a self, node: &'a Node, name: &str) -> Option<&'a Node> {
-        node.children
-            .iter()
-            .map(|id| &self.nodes[*id])
-            .find(|n| n.ns == MAIN && n.local == name)
-    }
-    #[cfg(test)]
-    fn all<'a>(&'a self, ns: &'a str, name: &'a str) -> impl Iterator<Item = &'a Node> {
-        self.nodes
-            .iter()
-            .filter(move |n| n.ns == ns && n.local == name)
-    }
-    fn raw(&self, node: &Node) -> &[u8] {
-        &self.bytes[node.start..node.end]
-    }
-}
 fn attr<'a>(node: &'a Node, name: &str) -> Result<&'a str> {
     node.attrs
         .get(name)
@@ -567,7 +358,7 @@ fn block_range(sheet: &mut Sheet, reference: &str, reason: &str, work: &mut usiz
     }
     Ok(())
 }
-fn rich_text(xml: &Xml, node: &Node) -> String {
+pub(crate) fn rich_text(xml: &Xml, node: &Node) -> String {
     let mut out = String::new();
     for child in &node.children {
         let child = &xml.nodes[*child];
@@ -585,7 +376,7 @@ fn rich_text(xml: &Xml, node: &Node) -> String {
     out
 }
 
-fn stored_value(xml: &Xml, node: &Node, strings: &[String]) -> Result<CellValue> {
+pub(crate) fn stored_value(xml: &Xml, node: &Node, strings: &[String]) -> Result<CellValue> {
     let value = xml.child(node, "v").map(|v| v.text.as_str());
     match node.attrs.get("t").map(String::as_str).unwrap_or("n") {
         "inlineStr" => Ok(CellValue::Text(
@@ -727,10 +518,18 @@ fn decode(
     inputs: BTreeMap<String, InputBinding>,
     outputs: BTreeMap<String, CellAddress>,
 ) -> Result<Decoded> {
+    decode_mode(package, inputs, outputs, false)
+}
+fn decode_mode(
+    package: &Package,
+    inputs: BTreeMap<String, InputBinding>,
+    outputs: BTreeMap<String, CellAddress>,
+    inspect_shared: bool,
+) -> Result<Decoded> {
     let ct = Xml::parse(package.get("[Content_Types].xml")?)?;
-    let root = ct.root(CT, "Types")?;
+    ct.root(CT, "Types")?;
     let mut types = BTreeMap::new();
-    for node in ct.children(root, CT, "Override") {
+    for node in ct.select(CT, &["Types", "Override"]) {
         let kind = attr(node, "ContentType")?;
         if kind.to_ascii_lowercase().contains("macroenabled")
             || kind.to_ascii_lowercase().contains("vba")
@@ -742,7 +541,7 @@ fn decode(
             return Err(err("duplicate content type"));
         }
     }
-    for node in ct.children(root, CT, "Default") {
+    for node in ct.select(CT, &["Types", "Default"]) {
         let kind = attr(node, "ContentType")?.to_ascii_lowercase();
         if kind.contains("macroenabled") || kind.contains("vba") {
             return Err(err("macro content is forbidden"));
@@ -798,10 +597,10 @@ fn decode(
     let mut width_work = 0;
     let mut table_metadata = Vec::new();
     let mut validation_metadata = Vec::new();
-    let sheets = wb
+    let _sheets = wb
         .child(wbroot, "sheets")
         .ok_or_else(|| err("workbook has no worksheets"))?;
-    for node in wb.children(sheets, MAIN, "sheet") {
+    for node in wb.select(MAIN, &["workbook", "sheets", "sheet"]) {
         let name = attr(node, "name")?;
         let rel_id = attr(node, &format!("{{{REL}}}id"))?;
         let (kind, target, external) = rels
@@ -836,6 +635,17 @@ fn decode(
                 if r as usize != row_number || reference != address(col, r) {
                     return Err(err("cell/row coordinates must be canonical and consistent"));
                 }
+                // Ambiguous scalar/formula payloads have no stable meaning to
+                // extract or patch. Foreign extension payloads remain opaque.
+                for name in ["f", "v", "is"] {
+                    let children = xml.children(source, MAIN, name).collect::<Vec<_>>();
+                    if children.len() > 1 {
+                        return Err(err(format!("duplicate cell {name} element")));
+                    }
+                    if name != "is" && children.iter().any(|node| !node.children.is_empty()) {
+                        return Err(err(format!("cell {name} cannot contain child elements")));
+                    }
+                }
                 let value = stored_value(&xml, source, &strings)?;
                 let mut cell = Cell::default();
                 if let Some(formula) = xml.child(source, "f") {
@@ -853,7 +663,9 @@ fn decode(
                         cell.blocked_reason =
                             Some("1904 date-system formula calculation is unsupported".into());
                     }
-                    if matches!(kind, "array" | "dataTable" | "shared") {
+                    if matches!(kind, "array" | "dataTable" | "shared")
+                        && !(inspect_shared && kind == "shared")
+                    {
                         if let Some(reference) = formula.attrs.get("ref") {
                             bounds(reference)?;
                             groups.push(reference.clone());
@@ -887,7 +699,7 @@ fn decode(
                 }
             }
         }
-        if followers.iter().any(|id| !masters.contains(id)) {
+        if !inspect_shared && followers.iter().any(|id| !masters.contains(id)) {
             return Err(err("shared formula follower missing master"));
         }
         for reference in groups {
@@ -1040,6 +852,65 @@ fn decode(
         sheet_parts,
         date1904,
         capabilities,
+    })
+}
+
+/// One validated read for inspection, retaining the strict importer for editing.
+pub(crate) struct ExtractionSource {
+    pub parts: BTreeMap<String, Vec<u8>>,
+    pub part_kinds: BTreeMap<String, String>,
+    pub part_sheets: BTreeMap<String, String>,
+    pub sheets: Vec<String>,
+    pub strings: Vec<String>,
+}
+pub(crate) fn extraction_source(path: &Path) -> Result<ExtractionSource> {
+    let package = Package::read(path)?;
+    let decoded = decode_mode(&package, BTreeMap::new(), BTreeMap::new(), true)?;
+    let mut kinds = BTreeMap::from([(decoded.workbook_part, "workbook".into())]);
+    let mut owners = BTreeMap::new();
+    for (sheet, part) in decoded.sheet_parts {
+        kinds.insert(part.clone(), "worksheet".into());
+        owners.insert(part, sheet);
+    }
+    for table in decoded.capabilities["tables"]
+        .as_array()
+        .into_iter()
+        .flatten()
+    {
+        let part = table["part"].as_str().expect("decoded table part");
+        let sheet = table["sheet"].as_str().expect("decoded table sheet");
+        if owners.insert(part.into(), sheet.into()).is_some() {
+            return Err(err("table part has more than one worksheet owner"));
+        }
+    }
+    let ct = Xml::parse(package.get("[Content_Types].xml")?)?;
+    let mut strings = Vec::new();
+    for node in ct.select(CT, &["Types", "Override"]) {
+        let part = attr(node, "PartName")?.trim_start_matches('/');
+        let kind = attr(node, "ContentType")?;
+        if kind.ends_with("spreadsheetml.table+xml") {
+            let xml = Xml::parse(package.get(part)?)?;
+            xml.root(MAIN, "table")?;
+            kinds.insert(part.into(), "table".into());
+        } else if kind.ends_with("spreadsheetml.sharedStrings+xml") {
+            let xml = Xml::parse(package.get(part)?)?;
+            for node in xml.select(MAIN, &["sst", "si"]) {
+                strings.push(rich_text(&xml, node));
+            }
+            kinds.insert(part.into(), "shared_strings".into());
+        }
+    }
+    Ok(ExtractionSource {
+        parts: package.parts,
+        part_kinds: kinds,
+        part_sheets: owners,
+        sheets: decoded
+            .model
+            .sheets
+            .into_iter()
+            .map(|sheet| sheet.name)
+            .collect(),
+        strings,
     })
 }
 

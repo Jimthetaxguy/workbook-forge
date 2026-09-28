@@ -79,6 +79,12 @@ def main(argv: list[str] | None = None) -> int:
     inspect = commands.add_parser("inspect", help="inspect an XLSX or a model interchange document")
     inspect.add_argument("source", type=Path)
     inspect.add_argument("--bindings", type=Path)
+    extract = commands.add_parser("extract", help="extract namespace-aware XLSX patterns and formula mappings")
+    extract.add_argument("source", type=Path)
+    extract.add_argument("--pattern", dest="patterns", action="append", help="pattern ID; repeat to select multiple patterns")
+    extract.add_argument("--sheet", help="limit extraction to one worksheet")
+    extract.add_argument("--offset", type=int, default=0)
+    extract.add_argument("--limit", type=int, default=100)
     scenario = commands.add_parser("scenario", help="run the operating-scenario example")
     scenario.add_argument("--model", type=Path, help="write a new model interchange document")
     run = commands.add_parser("run", help="calculate a model or supported XLSX output closure")
@@ -97,6 +103,14 @@ def main(argv: list[str] | None = None) -> int:
         command.add_argument("--xlsx", type=Path, help="write a new Excel workbook")
     args = parser.parse_args(argv)
     try:
+        if args.command == "extract":
+            from .extraction import extract_xlsx
+
+            result = extract_xlsx(args.source, patterns=args.patterns, sheet=args.sheet,
+                                  offset=args.offset, limit=args.limit)
+            # Keep the wire encoding within the extractor's checked byte budget.
+            print(json.dumps(result, ensure_ascii=False, allow_nan=False, separators=(",", ":")))
+            return 0
         if args.command == "agent":
             from .agent import AgentWorkbook
             from .toolkit import operating_scenario

@@ -26,6 +26,7 @@ from xml.sax.saxutils import quoteattr
 
 from . import ArrayValue, ErrorValue, analyze_formula, evaluate_result
 from .catalog import function_status
+from .xml_patterns import XMLLimitError, XMLPatternError, parse_xml, rich_text, select_path
 
 MAIN = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
 REL_DOC = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
@@ -109,21 +110,11 @@ def _q(name: str) -> str:
 
 
 def _safe_xml(data: bytes, part: str) -> ET.Element:
-    if len(data) > MAX_XML_PART_BYTES:
-        raise UnsupportedWorkbook(f"XML part exceeds size limit: {part}")
-    upper = data.upper()
-    declarations = ("<!DOCTYPE", "<!ENTITY")
-    forbidden = any(token.encode("ascii") in upper for token in declarations)
-    if not forbidden:
-        for encoding in ("utf-16-le", "utf-16-be", "utf-32-le", "utf-32-be"):
-            if any(token.encode(encoding) in upper for token in declarations):
-                forbidden = True
-                break
-    if forbidden:
-        raise UnsupportedWorkbook(f"DTD/entity declarations are not accepted: {part}")
     try:
-        return ET.fromstring(data)
-    except ET.ParseError as exc:
+        return parse_xml(data, max_bytes=MAX_XML_PART_BYTES)
+    except XMLLimitError as exc:
+        raise UnsupportedWorkbook(f"{exc}: {part}") from exc
+    except XMLPatternError as exc:
         raise WorkbookError(f"invalid XML in {part}: {exc}") from exc
 
 
@@ -1307,7 +1298,13 @@ class Workbook:
     @staticmethod
     def _index_cells(root: ET.Element) -> dict[str, ET.Element]:
         result: dict[str, ET.Element] = {}
-        for cell in root.iter(_q("c")):
+        for cell in select_path(root, MAIN, ("worksheet", "sheetData", "row", "c")):
+            for name in ("f", "v", "is"):
+                children = cell.findall(_q(name))
+                if len(children) > 1:
+                    raise UnsupportedWorkbook(f"duplicate cell {name} element")
+                if name in {"f", "v"} and children and len(children[0]):
+                    raise UnsupportedWorkbook(f"cell {name} element must not contain child elements")
             address = cell.attrib.get("r")
             if address:
                 normalized = _normal_address(address)
@@ -1328,6 +1325,8 @@ class Workbook:
         value: Any = value_node.text if value_node is not None else None
         if cell_type == "s" and value is not None:
             try:
+                if re.fullmatch(r"[0-9]+", value) is None:
+                    raise ValueError("shared-string index must be nonnegative")
                 value = self._shared_strings[int(value)]
             except (ValueError, IndexError) as exc:
                 raise WorkbookError("invalid shared-string index") from exc
@@ -1355,6 +1354,8 @@ class Workbook:
         formula_kind = formula_node.attrib.get("t") if formula_node is not None else None
         try:
             style_id = int(element.attrib["s"]) if "s" in element.attrib else None
+            if style_id is not None and style_id < 0:
+                raise ValueError("style index must be nonnegative")
         except ValueError as exc:
             raise WorkbookError(f"invalid style index at {address}") from exc
         formula_attributes = (
@@ -1364,15 +1365,7 @@ class Workbook:
 
     @staticmethod
     def _inline_text(inline: ET.Element) -> str:
-        chunks: list[str] = []
-        for item in inline:
-            if item.tag == _q("t"):
-                chunks.append(item.text or "")
-            elif item.tag == _q("r"):
-                text = item.find(_q("t"))
-                if text is not None:
-                    chunks.append(text.text or "")
-        return "".join(chunks)
+        return rich_text(inline, MAIN)
 
     def set_value(self, sheet: str, address: str, value: str | float | int | bool | None) -> None:
         if value is not None and not isinstance(value, (str, int, float, bool)):

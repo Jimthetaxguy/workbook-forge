@@ -85,6 +85,36 @@ agent acceptance exercise, not a general model benchmark. Opaque sheet IDs,
 optional null cache fields, evaluation counts, diagnostic prose and ZIP byte
 sizes differed; business results and operation semantics agreed.
 
+## Formula-aware XML extraction
+
+Both SDKs now expose namespace-aware XML parsing and structural-path primitives,
+used by the existing workbook readers and the new extraction API. Ten catalogued
+patterns expose cells, formulas, shared strings, names, tables, table columns and
+formulas, validations, merged ranges and column metadata. Records retain package
+part, XML path, worksheet/cell location, attributes and original text. Supported
+formula syntax reuses the independent ASTs for references and function mappings
+from the existing 521-function inventory and implementation status catalog.
+
+Shared-formula expressions are reconstructed for inspection using their master
+and copy offsets. Original text and caches remain separate; grouped calculation
+and edit restrictions stay active. Invalid groups yield diagnostics rather than
+guessed expressions. Import and extraction now consistently reject duplicate
+primary scalar payloads and nested XML inside formula/value nodes. Exact paths
+exclude extension decoys; invalid indices/scopes and ambiguous table ownership
+are refused. See [extraction contract](extraction-patterns.md) and its linked
+schema for limits and deliberate boundaries.
+
+The final extraction checkpoint passes **640 Python tests and 78 Rust tests**,
+including 82 actual Python/standalone-Rust contract checks and 39 focused Python
+extraction tests. Rust 1.88, full formatting/check/Clippy, compilation, policy and
+license gates pass. Pure and optional native wheels pass the expanded installed
+smoke checks outside the checkout on Python 3.12/3.14. Extraction itself is
+independent in each language; the native wheel's extraction API remains Python.
+The packaged Rust extractor is exercised by an external consumer without Python.
+No dependencies were added. The scenario produces matching records for 12
+formulas and 3 validations; local evidence is retained in .verification/xml-engine
+and .verification/xml-packages. No broader Excel compatibility is inferred.
+
 ## Ownership and boundaries
 
 The clarified requirement is two full, hand-written language implementations.
@@ -251,8 +281,14 @@ unchanged extension bytes separately.
 
 ## Dependency freshness
 
-Official registry checks on 2026-09-28 confirmed all 15 packages in
-`requirements-dev.lock` are current stable releases. Direct Rust dependencies
+Official PyPI and crates.io registry checks were repeated at 2026-09-28 18:10 UTC
+after the XML extraction implementation. All 15 packages in
+`requirements-dev.lock` are current stable non-yanked releases. All 32 locked
+Rust package/version pairs are current within their upstream compatibility lines;
+31 are also the globally latest stable versions. Syn 2.0.119 remains required by
+the latest pyo3-macros and pyo3-macros-backend 0.29.2; Syn 3.0.6 is already used
+by the dependency branch that supports it. No version change was needed. The
+exact response-derived receipt is .verification/xml-engine/dependency-freshness.json. Direct Rust dependencies
 use Serde 1.0.229, serde_json 1.0.151, quick-xml 0.42.0 and zip 8.6.0; the optional
 bridge uses PyO3 0.29.2. Python build/test dependencies include setuptools 84.0.0,
 setuptools-rust 1.13.0 and pytest 9.1.1. Exact Cargo checksums and permissive-license
@@ -318,6 +354,16 @@ cases. Persistence requires measured recovery/workload requirements first;
 collaboration requires actual conflict cases. Neither has been selected here.
 
 ## Activity
+
+### 2026-09-28 — codex/Codex — formula-aware XML extraction
+
+Implemented independent namespace/path parsing primitives and XLSX extraction
+engines in Python and Rust, with catalog-derived formula mappings, shared-formula
+inspection, bounded records and source provenance. Existing importers reuse the
+new primitives. Independent review closed ambiguous scalar XML, negative-index,
+invalid-scope and shared-range consistency defects. Full gates pass at 640 Python
+and 78 Rust tests; installed resources and external consumers are verified.
+The first delivery's Excel Desktop acceptance remains outstanding.
 
 ### 2026-09-28 — codex/Codex — independent agent SDK implementation
 

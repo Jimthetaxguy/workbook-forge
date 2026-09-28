@@ -105,6 +105,36 @@ pages to 100 cells, with explicit continuation and truncation metadata.
 and verifies the exported workbook by reimport. It is a reproducible SDK example,
 not an LLM agent. Live-agent evidence is tracked separately in the delivery record.
 
+## Formula-aware XML extraction
+
+Both languages have an independent OOXML pattern engine that matches namespace
+and structural path. Ten built-in patterns cover cells, formulas, shared strings,
+names, tables and their column formulas, validations, merged ranges and columns.
+A formula record retains original text and source location, then uses the existing
+formula parser to expose typed references, function categories and implementation
+status from the 521-function catalog. Catalogued functions can remain unsupported.
+
+```python
+from workbook_forge.extraction import extract_xlsx, pattern_catalog
+
+patterns = pattern_catalog()["patterns"]
+report = extract_xlsx("scenario.xlsx", patterns=["formula"], sheet="Forecast", limit=20)
+for record in report["records"]:
+    print(record["cell"], record["text"], record["data"]["analysis"])
+```
+
+```sh
+workbook-forge extract scenario.xlsx --pattern formula --pattern validation --limit 20
+cargo run --manifest-path rust/Cargo.toml --example extract_xlsx -- scenario.xlsx --pattern formula --limit 20
+```
+
+Shared-formula followers can expose a derived expression using the master's
+relative and absolute references. This is inspection only: the existing grouped
+formula calculation/edit protections remain. Invalid groups return diagnostics
+and original text. Extraction is read-only, paginated, and bounded; extension XML
+with cell-shaped tags cannot become worksheet data. See the [extraction contract](docs/extraction-patterns.md)
+and [report schema](catalog/extraction-report.schema.json).
+
 ## Programmable workbooks
 
 The toolkit supports three connected workflows: extract a supported model from

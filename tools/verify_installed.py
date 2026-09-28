@@ -22,6 +22,7 @@ from workbook_forge.expressions import CellReference, Expression
 from workbook_forge.toolkit import operating_scenario
 from workbook_forge.xlsx import export_xlsx, import_xlsx
 from workbook_forge.agent import AgentWorkbook, operation_catalog
+from workbook_forge.extraction import extract_xlsx, pattern_catalog
 
 
 def main() -> None:
@@ -48,6 +49,17 @@ def main() -> None:
     assert result["outputs"]["profit"] == 3290
     assert math.isclose(result["outputs"]["break_even_units"], 1000 / 17)
     output = export_xlsx(model, args.output / "scenario.xlsx", report=result)
+    extracted = extract_xlsx(output, patterns=["formula"], sheet="forecast", limit=100)
+    assert not extracted["diagnostics"] and extracted["total_records"] == 12
+    assert all(item["data"]["analysis"]["status"] == "parsed" for item in extracted["records"])
+    assert pattern_catalog()["functions"]["SUM"]["python"] == "conformance-tested"
+    extraction_cli = subprocess.run(
+        [sys.executable, "-m", "workbook_forge.cli", "extract", str(output),
+         "--pattern", "formula", "--limit", "2"],
+        check=True, capture_output=True, text=True,
+    )
+    extraction_page = json.loads(extraction_cli.stdout)
+    assert len(extraction_page["records"]) == 2 and extraction_page["next_offset"] == 2
     document = model.to_dict()
     imported = import_xlsx(output, inputs=document["inputs"], outputs=document["outputs"], backend=args.backend)
     assert imported.calculate()["outputs"] == result["outputs"]
@@ -82,7 +94,7 @@ def main() -> None:
     replies = [json.loads(line) for line in process.stdout.splitlines()]
     assert len(replies) == len(requests) and all(item["ok"] for item in replies)
     assert replies[-1]["result"]["outputs"] == result["outputs"]
-    receipt = {"status": "passed", "python": sys.version.split()[0], "backend": args.backend, "package": importlib.metadata.version("workbook_forge"), "outputs": result["outputs"], "checks": ["independent engine", "legacy APIs", "installed catalogs", "typed expressions", "CLI", "XLSX generation and reimport", "agent operation discovery", "agent preview/edit/explain/export", "agent JSON-lines transport"]}
+    receipt = {"status": "passed", "python": sys.version.split()[0], "backend": args.backend, "package": importlib.metadata.version("workbook_forge"), "outputs": result["outputs"], "checks": ["independent engine", "legacy APIs", "installed catalogs", "typed expressions", "CLI", "XLSX generation and reimport", "agent operation discovery", "agent preview/edit/explain/export", "agent JSON-lines transport", "XML pattern extraction and formula mappings"]}
     (args.output / "receipt.json").write_text(json.dumps(receipt, indent=2) + "\n")
     print(json.dumps(receipt))
 
