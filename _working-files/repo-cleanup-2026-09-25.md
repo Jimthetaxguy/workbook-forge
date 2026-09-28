@@ -2,13 +2,13 @@
 author: "claude-code/Claude"
 created: "2026-09-25T11:25:00-04:00"
 agent: "codex/Codex"
-date: "2026-09-27T16:55:53-04:00"
+date: "2026-09-28T00:34:00-04:00"
 type: cleanup-record
 task: "Continue Workbook Forge release cleanup and consolidate the local checkpoint"
 status: private-release-review
-summary: "Completed and pushed the Workbook Forge name pass; the GitHub repository now uses the workbook-forge slug and remains private, and the local origin URL tracks it. Scanned tracked files and history, verified upstream license evidence, and recorded the remaining release curation decision."
+summary: "Completed and pushed the Workbook Forge name pass; the GitHub repository uses the workbook-forge slug and remains private. Staged a verified, main-only public candidate without internal work records or Git history."
 next_steps:
-  - "Prepare a public-only release export and choose a Git-history policy after reviewing tracked autoresearch receipts and working notes."
+  - "Review ~/code/_working-files/workbook-forge-public-candidate-2026-09-28/RELEASE-CANDIDATE.md and decide whether to seed a fresh public repository from its snapshot."
   - "Change repository visibility only as a separate, deliberate release action."
   - "Continue with the Excel Desktop differential oracle before expanding formula coverage."
 remaining:
@@ -18,6 +18,13 @@ open_questions: []
 workspace: "."
 ---
 # Workbook Forge cleanup continuation — 2026-09-27
+
+## Main-only public candidate — 2026-09-28 00:34 EDT
+
+- Staged a 22-file candidate at `~/code/_working-files/workbook-forge-public-candidate-2026-09-28/`, from main commit `6f4d4470cef55e72909f2359877bd83b9ae1b352`.
+- The snapshot includes source, tests, catalogs, fixtures, license, and behavior documentation. It excludes `.autoresearch/`, `_working-files/`, `CONTEXT.md`, `docs/run-history.md`, all non-main refs, and Git history. Its README no longer points to excluded files or the private checkpoint SHA.
+- Validation: 22 files, 1,875,405 bytes; checksum manifest and tarball match; no broken local Markdown links; no email, recognized credential, absolute path, internal artifact reference, or old Formula Atlas branding matches in the candidate.
+- Review record: `~/code/_working-files/workbook-forge-public-candidate-2026-09-28/RELEASE-CANDIDATE.md`. No new GitHub repository or visibility change was made; the existing repo remains private.
 
 ## Release-prep continuation — 2026-09-27 16:55 EDT
 

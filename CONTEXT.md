@@ -2,13 +2,13 @@
 author: Codex
 created: 2026-09-24
 agent: codex/Codex
-date: '2026-09-27T16:55:53-04:00'
+date: '2026-09-28T00:34:00-04:00'
 type: project-context
 task: Build a Python and Rust Excel formula catalog and evaluator
 status: active
 summary: Language-neutral formula inventory with independently implemented Python and Rust evaluators, shared fixtures, and a bounded XLSX adapter.
 next_steps:
-  - Prepare a public-only release export and choose a Git-history policy after reviewing tracked autoresearch receipts and working notes.
+  - Review the main-only candidate at `~/code/_working-files/workbook-forge-public-candidate-2026-09-28/RELEASE-CANDIDATE.md`; decide whether it should seed a fresh public repository with clean history.
   - Build an Excel Desktop differential harness for accepted scalar and array formulas, beginning with high-risk documented boundaries.
   - Use observed Excel results to validate Workbook Forge profiles and update shared fixtures before expanding formula-family coverage.
   - After oracle coverage is reliable, prioritize the next formula slice by documented usage and dependency value.
@@ -60,6 +60,12 @@ Runs 1–24 are accepted. Coverage stands at 115 implemented functions, 85 detai
 - Append each run's summary to `docs/run-history.md`. Keep `README.md` and this file limited to the current state.
 - Run the Rust gates with `CARGO_TARGET_DIR` inside the checkout, as `eval_command` does. The machine-wide `~/.cargo-target` mixes build artifacts between copies of the crate.
 ## Activity
+### 2026-09-28T00:34:00-04:00 — codex/Codex
+- Changed: staged a 22-file main-only public candidate at `~/code/_working-files/workbook-forge-public-candidate-2026-09-28/`; curated its README and created a file-hash manifest plus a history-free tarball.
+- Why/where: continue public release preparation without exposing the private development log or prior Git history.
+- Evidence: source snapshot is from `main` at `6f4d4470cef55e72909f2359877bd83b9ae1b352`; checksum manifest and tarball match all 22 files. Relative Markdown links resolve; scans found no email, recognized credential, absolute local path, internal artifact path, or legacy Formula Atlas branding matches. Product source files were not edited.
+- Next/remaining: review the candidate and decide whether to create a fresh public repository. The existing GitHub repo remains private, and its non-main branch and history are unchanged.
+
 ### 2026-09-27T16:47:03-04:00 — codex/Codex
 - Changed: updated local `origin` to `https://github.com/Jimthetaxguy/workbook-forge.git` after GitHub began returning the renamed repository; confirmed `main` is clean and synced at `6dba619`.
 - Why/where: continued Workbook Forge release preparation while keeping GitHub visibility private.
