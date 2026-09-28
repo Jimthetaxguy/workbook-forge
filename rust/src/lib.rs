@@ -1,8 +1,20 @@
-//! A deliberately bounded, dependency-free Excel formula evaluator.
+//! A deliberately bounded Excel formula evaluator and programmable workbook toolkit.
 //!
 //! This crate focuses on scalar values, A1 references/ranges, common operators,
 //! and a small set of frequently used worksheet functions. Unsupported syntax
 //! is reported rather than guessed.
+
+pub mod agent;
+pub mod extraction;
+pub mod primitives;
+pub mod toolkit;
+pub mod xlsx;
+pub mod xml_patterns;
+pub use toolkit::{
+    CalculationReport, CellAddress, CellValue, Edit, InputBinding, Session, Sheet, Style,
+    ToolkitError, WorkbookModel, analyze_formula, calculate, copy_formula, inspect,
+    operating_scenario, validate_inputs,
+};
 
 use std::cell::Cell;
 use std::collections::{HashMap, HashSet};
@@ -178,7 +190,8 @@ enum Expr {
     Bool(bool),
     Error(FormulaError),
     Missing,
-    Ref(String, String),           // sheet, A1
+    Native(CalcValue), // typed primitive values; never emitted by the formula parser
+    Ref(String, String), // sheet, A1
     Range(String, String, String), // sheet, start, end
     Unary(char, Box<Expr>),
     Binary(String, Box<Expr>, Box<Expr>),
@@ -609,6 +622,33 @@ fn validate_cell_ref(address: &str) -> Result<(), FormulaError> {
     Ok(())
 }
 
+/// Excel compatibility prefixes affect dispatch, not the original formula or
+/// copied expression text. Only recognized prefix forms and inventory names
+/// normalize; unknown/repeated/reversed prefixes remain unsupported.
+fn canonical_function_name(name: &str) -> &str {
+    let suffix = name
+        .strip_prefix("_XLFN._XLWS.")
+        .or_else(|| name.strip_prefix("_XLFN."))
+        .or_else(|| name.strip_prefix("_XLWS."));
+    let Some(suffix) = suffix else {
+        return name;
+    };
+    static INVENTORY: std::sync::OnceLock<HashSet<String>> = std::sync::OnceLock::new();
+    let inventory = INVENTORY.get_or_init(|| {
+        crate::extraction::pattern_catalog()["functions"]
+            .as_object()
+            .expect("function inventory")
+            .keys()
+            .cloned()
+            .collect()
+    });
+    if inventory.contains(suffix) {
+        suffix
+    } else {
+        name
+    }
+}
+
 fn eval(expr: &Expr, env: &Environment<'_>) -> Result<CalcValue, FormulaError> {
     match expr {
         Expr::Number(n, _) if n.is_finite() => Ok(scalar(Value::Number(*n))),
@@ -617,6 +657,7 @@ fn eval(expr: &Expr, env: &Environment<'_>) -> Result<CalcValue, FormulaError> {
         Expr::Bool(b) => Ok(scalar(Value::Bool(*b))),
         Expr::Error(error) => Ok(scalar(Value::Error(error.clone()))),
         Expr::Missing => Err(FormulaError::Value),
+        Expr::Native(value) => Ok(value.clone()),
         Expr::Ref(sheet, addr) => Ok(scalar(read_cell(env, sheet, addr))),
         Expr::Range(sheet, start, end) => Ok(CalcValue::Range(read_range(env, sheet, start, end)?)),
         Expr::Unary(_, _) => {
@@ -656,18 +697,17 @@ fn eval(expr: &Expr, env: &Environment<'_>) -> Result<CalcValue, FormulaError> {
             }
             value
         }
-        Expr::Call(name, args) if name == "SEQUENCE" => {
-            sequence_call(args, env).map(CalcValue::Array)
+        Expr::Call(source_name, args) => {
+            let name = canonical_function_name(source_name);
+            match name {
+                "SEQUENCE" => sequence_call(args, env).map(CalcValue::Array),
+                "FILTER" => filter_call(args, env),
+                "SORT" => sort_call(args, env),
+                "UNIQUE" => unique_call(args, env),
+                "IF" | "IFERROR" | "IFNA" | "IFS" | "SWITCH" => selection_call(name, args, env),
+                _ => eval_call(name, args, env).map(scalar),
+            }
         }
-        Expr::Call(name, args) if name == "FILTER" => filter_call(args, env),
-        Expr::Call(name, args) if name == "SORT" => sort_call(args, env),
-        Expr::Call(name, args) if name == "UNIQUE" => unique_call(args, env),
-        Expr::Call(name, args)
-            if matches!(name.as_str(), "IF" | "IFERROR" | "IFNA" | "IFS" | "SWITCH") =>
-        {
-            selection_call(name, args, env)
-        }
-        Expr::Call(name, args) => eval_call(name, args, env).map(scalar),
     }
 }
 

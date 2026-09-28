@@ -164,6 +164,18 @@ class _FormulaSyntaxError(ValueError):
     pass
 
 
+def _canonical_function_name(name: str) -> str:
+    """Recognize known OOXML compatibility prefixes without changing source text."""
+    upper = name.upper()
+    for prefix in ("_XLFN._XLWS.", "_XLFN.", "_XLWS."):
+        if upper.startswith(prefix):
+            from .catalog import lookup_function
+
+            candidate = upper[len(prefix):]
+            return candidate if lookup_function(candidate) is not None else upper
+    return upper
+
+
 def _tokenize(source: str) -> list[_Token]:
     tokens: list[_Token] = []
     position = 0
@@ -400,7 +412,7 @@ def analyze_formula(formula: str) -> FormulaAnalysis:
             start, end, sheet = node.value
             references.append(FormulaReference(start, end, sheet))
         elif node.kind == "call":
-            functions.append(str(node.value))
+            functions.append(_canonical_function_name(str(node.value)))
         pending.extend(reversed(node.children))
     return FormulaAnalysis(tuple(references), tuple(functions))
 
@@ -2050,7 +2062,7 @@ def _eval(
 ) -> object:
     if node.kind == "missing":
         return ErrorValue("#VALUE!", "required argument was omitted")
-    if node.kind == "literal":
+    if node.kind in {"literal", "native_value"}:
         return node.value
     if node.kind == "cell":
         address, sheet = node.value  # type: ignore[misc]
@@ -2094,7 +2106,7 @@ def _eval(
             left = _apply_binary_values(operator, left, right)
         return left
     if node.kind == "call":
-        name = str(node.value)
+        name = _canonical_function_name(str(node.value))
         if name == "SEQUENCE":
             return _sequence_call(node.children, cells, sheet_name, budget)
         if name == "FILTER":

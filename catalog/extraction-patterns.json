@@ -1,0 +1,3796 @@
+{
+  "schema_version": 1,
+  "profile": "xlsx-extraction-v1",
+  "namespace": "http://schemas.openxmlformats.org/spreadsheetml/2006/main",
+  "source_catalogs": {
+    "inventory_version": "1.0.0",
+    "support_version": "0.22.0"
+  },
+  "limits": {
+    "max_xml_bytes": 33554432,
+    "max_xml_nodes": 1000000,
+    "max_xml_depth": 128,
+    "max_records": 100000,
+    "max_page_records": 100,
+    "max_response_bytes": 1048576,
+    "max_diagnostics": 100
+  },
+  "patterns": [
+    {
+      "id": "cell",
+      "part_kind": "worksheet",
+      "paths": [
+        [
+          "worksheet",
+          "sheetData",
+          "row",
+          "c"
+        ]
+      ],
+      "description": "Stored scalar content with formulas and caches distinguished."
+    },
+    {
+      "id": "formula",
+      "part_kind": "worksheet",
+      "paths": [
+        [
+          "worksheet",
+          "sheetData",
+          "row",
+          "c",
+          "f"
+        ]
+      ],
+      "description": "Formula text, group identity, references and mapped function support."
+    },
+    {
+      "id": "defined_name",
+      "part_kind": "workbook",
+      "paths": [
+        [
+          "workbook",
+          "definedNames",
+          "definedName"
+        ]
+      ],
+      "description": "Defined-name expression and explicit scope; not an application binding."
+    },
+    {
+      "id": "table",
+      "part_kind": "table",
+      "paths": [
+        [
+          "table"
+        ]
+      ],
+      "description": "Table boundary and attributes from its related package part."
+    },
+    {
+      "id": "table_column",
+      "part_kind": "table",
+      "paths": [
+        [
+          "table",
+          "tableColumns",
+          "tableColumn"
+        ]
+      ],
+      "description": "Explicit table-column identity and metadata."
+    },
+    {
+      "id": "table_formula",
+      "part_kind": "table",
+      "paths": [
+        [
+          "table",
+          "tableColumns",
+          "tableColumn",
+          "calculatedColumnFormula"
+        ],
+        [
+          "table",
+          "tableColumns",
+          "tableColumn",
+          "totalsRowFormula"
+        ]
+      ],
+      "description": "Column or totals formula expression retained for inspection."
+    },
+    {
+      "id": "validation",
+      "part_kind": "worksheet",
+      "paths": [
+        [
+          "worksheet",
+          "dataValidations",
+          "dataValidation"
+        ]
+      ],
+      "description": "Validation attributes and formula constraints."
+    },
+    {
+      "id": "merged_range",
+      "part_kind": "worksheet",
+      "paths": [
+        [
+          "worksheet",
+          "mergeCells",
+          "mergeCell"
+        ]
+      ],
+      "description": "Explicit merged-cell range."
+    },
+    {
+      "id": "shared_string",
+      "part_kind": "shared_strings",
+      "paths": [
+        [
+          "sst",
+          "si"
+        ]
+      ],
+      "description": "Shared string text with rich runs resolved and phonetics excluded."
+    },
+    {
+      "id": "column",
+      "part_kind": "worksheet",
+      "paths": [
+        [
+          "worksheet",
+          "cols",
+          "col"
+        ]
+      ],
+      "description": "Column span, width and presentation attributes."
+    }
+  ],
+  "functions": {
+    "ABS": {
+      "name": "ABS",
+      "known": true,
+      "category": "Math and trigonometry",
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
+    },
+    "ACCRINT": {
+      "name": "ACCRINT",
+      "known": true,
+      "category": "Financial",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "ACCRINTM": {
+      "name": "ACCRINTM",
+      "known": true,
+      "category": "Financial",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "ACOS": {
+      "name": "ACOS",
+      "known": true,
+      "category": "Math and trigonometry",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "ACOSH": {
+      "name": "ACOSH",
+      "known": true,
+      "category": "Math and trigonometry",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "ACOT": {
+      "name": "ACOT",
+      "known": true,
+      "category": "Math and trigonometry",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "ACOTH": {
+      "name": "ACOTH",
+      "known": true,
+      "category": "Math and trigonometry",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "ADDRESS": {
+      "name": "ADDRESS",
+      "known": true,
+      "category": "Lookup and reference",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "AGGREGATE": {
+      "name": "AGGREGATE",
+      "known": true,
+      "category": "Math and trigonometry",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "AMORDEGRC": {
+      "name": "AMORDEGRC",
+      "known": true,
+      "category": "Financial",
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
+    },
+    "AMORLINC": {
+      "name": "AMORLINC",
+      "known": true,
+      "category": "Financial",
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
+    },
+    "AND": {
+      "name": "AND",
+      "known": true,
+      "category": "Logical",
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
+    },
+    "ARABIC": {
+      "name": "ARABIC",
+      "known": true,
+      "category": "Math and trigonometry",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "AREAS": {
+      "name": "AREAS",
+      "known": true,
+      "category": "Lookup and reference",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "ARRAYTOTEXT": {
+      "name": "ARRAYTOTEXT",
+      "known": true,
+      "category": "Text",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "ASC": {
+      "name": "ASC",
+      "known": true,
+      "category": "Text",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "ASIN": {
+      "name": "ASIN",
+      "known": true,
+      "category": "Math and trigonometry",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "ASINH": {
+      "name": "ASINH",
+      "known": true,
+      "category": "Math and trigonometry",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "ATAN": {
+      "name": "ATAN",
+      "known": true,
+      "category": "Math and trigonometry",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "ATAN2": {
+      "name": "ATAN2",
+      "known": true,
+      "category": "Math and trigonometry",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "ATANH": {
+      "name": "ATANH",
+      "known": true,
+      "category": "Math and trigonometry",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "AVEDEV": {
+      "name": "AVEDEV",
+      "known": true,
+      "category": "Statistical",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "AVERAGE": {
+      "name": "AVERAGE",
+      "known": true,
+      "category": "Statistical",
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
+    },
+    "AVERAGEA": {
+      "name": "AVERAGEA",
+      "known": true,
+      "category": "Statistical",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "AVERAGEIF": {
+      "name": "AVERAGEIF",
+      "known": true,
+      "category": "Statistical",
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
+    },
+    "AVERAGEIFS": {
+      "name": "AVERAGEIFS",
+      "known": true,
+      "category": "Statistical",
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
+    },
+    "BAHTTEXT": {
+      "name": "BAHTTEXT",
+      "known": true,
+      "category": "Text",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "BASE": {
+      "name": "BASE",
+      "known": true,
+      "category": "Math and trigonometry",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "BESSELI": {
+      "name": "BESSELI",
+      "known": true,
+      "category": "Engineering",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "BESSELJ": {
+      "name": "BESSELJ",
+      "known": true,
+      "category": "Engineering",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "BESSELK": {
+      "name": "BESSELK",
+      "known": true,
+      "category": "Engineering",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "BESSELY": {
+      "name": "BESSELY",
+      "known": true,
+      "category": "Engineering",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "BETA.DIST": {
+      "name": "BETA.DIST",
+      "known": true,
+      "category": "Statistical",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "BETA.INVN": {
+      "name": "BETA.INVN",
+      "known": true,
+      "category": "Statistical",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "BETADIST": {
+      "name": "BETADIST",
+      "known": true,
+      "category": "Compatibility",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "BETAINV": {
+      "name": "BETAINV",
+      "known": true,
+      "category": "Compatibility",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "BIN2DEC": {
+      "name": "BIN2DEC",
+      "known": true,
+      "category": "Engineering",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "BIN2HEX": {
+      "name": "BIN2HEX",
+      "known": true,
+      "category": "Engineering",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "BIN2OCT": {
+      "name": "BIN2OCT",
+      "known": true,
+      "category": "Engineering",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "BINOM.DIST": {
+      "name": "BINOM.DIST",
+      "known": true,
+      "category": "Statistical",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "BINOM.DIST.RANGE": {
+      "name": "BINOM.DIST.RANGE",
+      "known": true,
+      "category": "Statistical",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "BINOM.INV": {
+      "name": "BINOM.INV",
+      "known": true,
+      "category": "Statistical",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "BINOMDIST": {
+      "name": "BINOMDIST",
+      "known": true,
+      "category": "Compatibility",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "BITAND": {
+      "name": "BITAND",
+      "known": true,
+      "category": "Engineering",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "BITLSHIFT": {
+      "name": "BITLSHIFT",
+      "known": true,
+      "category": "Engineering",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "BITOR": {
+      "name": "BITOR",
+      "known": true,
+      "category": "Engineering",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "BITRSHIFT": {
+      "name": "BITRSHIFT",
+      "known": true,
+      "category": "Engineering",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "BITXOR": {
+      "name": "BITXOR",
+      "known": true,
+      "category": "Engineering",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "BYCOL": {
+      "name": "BYCOL",
+      "known": true,
+      "category": "Logical",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "BYROW": {
+      "name": "BYROW",
+      "known": true,
+      "category": "Logical",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "CALL": {
+      "name": "CALL",
+      "known": true,
+      "category": "Add-in and Automation",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "CEILING": {
+      "name": "CEILING",
+      "known": true,
+      "category": "Compatibility",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "CEILING.MATH": {
+      "name": "CEILING.MATH",
+      "known": true,
+      "category": "Math and trigonometry",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "CEILING.PRECISE": {
+      "name": "CEILING.PRECISE",
+      "known": true,
+      "category": "Math and trigonometry",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "CELL": {
+      "name": "CELL",
+      "known": true,
+      "category": "Information",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "CHAR": {
+      "name": "CHAR",
+      "known": true,
+      "category": "Text",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "CHIDIST": {
+      "name": "CHIDIST",
+      "known": true,
+      "category": "Compatibility",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "CHIINV": {
+      "name": "CHIINV",
+      "known": true,
+      "category": "Compatibility",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "CHISQ.DIST": {
+      "name": "CHISQ.DIST",
+      "known": true,
+      "category": "Statistical",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "CHISQ.DIST.RT": {
+      "name": "CHISQ.DIST.RT",
+      "known": true,
+      "category": "Statistical",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "CHISQ.INV": {
+      "name": "CHISQ.INV",
+      "known": true,
+      "category": "Statistical",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "CHISQ.INV.RT": {
+      "name": "CHISQ.INV.RT",
+      "known": true,
+      "category": "Statistical",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "CHISQ.TEST": {
+      "name": "CHISQ.TEST",
+      "known": true,
+      "category": "Statistical",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "CHITEST": {
+      "name": "CHITEST",
+      "known": true,
+      "category": "Compatibility",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "CHOOSE": {
+      "name": "CHOOSE",
+      "known": true,
+      "category": "Lookup and reference",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "CHOOSECOLS": {
+      "name": "CHOOSECOLS",
+      "known": true,
+      "category": "Lookup and reference",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "CHOOSEROWS": {
+      "name": "CHOOSEROWS",
+      "known": true,
+      "category": "Lookup and reference",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "CLEAN": {
+      "name": "CLEAN",
+      "known": true,
+      "category": "Text",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "CODE": {
+      "name": "CODE",
+      "known": true,
+      "category": "Text",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "COLUMN": {
+      "name": "COLUMN",
+      "known": true,
+      "category": "Lookup and reference",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "COLUMNS": {
+      "name": "COLUMNS",
+      "known": true,
+      "category": "Lookup and reference",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "COMBIN": {
+      "name": "COMBIN",
+      "known": true,
+      "category": "Math and trigonometry",
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
+    },
+    "COMBINA": {
+      "name": "COMBINA",
+      "known": true,
+      "category": "Math and trigonometry",
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
+    },
+    "COMPLEX": {
+      "name": "COMPLEX",
+      "known": true,
+      "category": "Engineering",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "CONCAT": {
+      "name": "CONCAT",
+      "known": true,
+      "category": "Text",
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
+    },
+    "CONCATENATE": {
+      "name": "CONCATENATE",
+      "known": true,
+      "category": "Text",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "CONFIDENCE": {
+      "name": "CONFIDENCE",
+      "known": true,
+      "category": "Compatibility",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "CONFIDENCE.NORM": {
+      "name": "CONFIDENCE.NORM",
+      "known": true,
+      "category": "Statistical",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "CONFIDENCE.T": {
+      "name": "CONFIDENCE.T",
+      "known": true,
+      "category": "Statistical",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "CONVERT": {
+      "name": "CONVERT",
+      "known": true,
+      "category": "Engineering",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "CORREL": {
+      "name": "CORREL",
+      "known": true,
+      "category": "Statistical",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "COS": {
+      "name": "COS",
+      "known": true,
+      "category": "Math and trigonometry",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "COSH": {
+      "name": "COSH",
+      "known": true,
+      "category": "Math and trigonometry",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "COT": {
+      "name": "COT",
+      "known": true,
+      "category": "Math and trigonometry",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "COTH": {
+      "name": "COTH",
+      "known": true,
+      "category": "Math and trigonometry",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "COUNT": {
+      "name": "COUNT",
+      "known": true,
+      "category": "Statistical",
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
+    },
+    "COUNTA": {
+      "name": "COUNTA",
+      "known": true,
+      "category": "Statistical",
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
+    },
+    "COUNTBLANK": {
+      "name": "COUNTBLANK",
+      "known": true,
+      "category": "Statistical",
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
+    },
+    "COUNTIF": {
+      "name": "COUNTIF",
+      "known": true,
+      "category": "Statistical",
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
+    },
+    "COUNTIFS": {
+      "name": "COUNTIFS",
+      "known": true,
+      "category": "Statistical",
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
+    },
+    "COUPDAYBS": {
+      "name": "COUPDAYBS",
+      "known": true,
+      "category": "Financial",
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
+    },
+    "COUPDAYS": {
+      "name": "COUPDAYS",
+      "known": true,
+      "category": "Financial",
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
+    },
+    "COUPDAYSNC": {
+      "name": "COUPDAYSNC",
+      "known": true,
+      "category": "Financial",
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
+    },
+    "COUPNCD": {
+      "name": "COUPNCD",
+      "known": true,
+      "category": "Financial",
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
+    },
+    "COUPNUM": {
+      "name": "COUPNUM",
+      "known": true,
+      "category": "Financial",
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
+    },
+    "COUPPCD": {
+      "name": "COUPPCD",
+      "known": true,
+      "category": "Financial",
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
+    },
+    "COVAR": {
+      "name": "COVAR",
+      "known": true,
+      "category": "Compatibility",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "COVARIANCE.P": {
+      "name": "COVARIANCE.P",
+      "known": true,
+      "category": "Statistical",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "COVARIANCE.S": {
+      "name": "COVARIANCE.S",
+      "known": true,
+      "category": "Statistical",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "CRITBINOM": {
+      "name": "CRITBINOM",
+      "known": true,
+      "category": "Compatibility",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "CSC": {
+      "name": "CSC",
+      "known": true,
+      "category": "Math and trigonometry",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "CSCH": {
+      "name": "CSCH",
+      "known": true,
+      "category": "Math and trigonometry",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "CUBEKPIMEMBER": {
+      "name": "CUBEKPIMEMBER",
+      "known": true,
+      "category": "Cube",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "CUBEMEMBER": {
+      "name": "CUBEMEMBER",
+      "known": true,
+      "category": "Cube",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "CUBEMEMBERPROPERTY": {
+      "name": "CUBEMEMBERPROPERTY",
+      "known": true,
+      "category": "Cube",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "CUBERANKEDMEMBER": {
+      "name": "CUBERANKEDMEMBER",
+      "known": true,
+      "category": "Cube",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "CUBESET": {
+      "name": "CUBESET",
+      "known": true,
+      "category": "Cube",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "CUBESETCOUNT": {
+      "name": "CUBESETCOUNT",
+      "known": true,
+      "category": "Cube",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "CUBEVALUE": {
+      "name": "CUBEVALUE",
+      "known": true,
+      "category": "Cube",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "CUMIPMT": {
+      "name": "CUMIPMT",
+      "known": true,
+      "category": "Financial",
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
+    },
+    "CUMPRINC": {
+      "name": "CUMPRINC",
+      "known": true,
+      "category": "Financial",
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
+    },
+    "DATE": {
+      "name": "DATE",
+      "known": true,
+      "category": "Date and time",
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
+    },
+    "DATEDIF": {
+      "name": "DATEDIF",
+      "known": true,
+      "category": "Date and time",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "DATEVALUE": {
+      "name": "DATEVALUE",
+      "known": true,
+      "category": "Date and time",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "DAVERAGE": {
+      "name": "DAVERAGE",
+      "known": true,
+      "category": "Database",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "DAY": {
+      "name": "DAY",
+      "known": true,
+      "category": "Date and time",
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
+    },
+    "DAYS": {
+      "name": "DAYS",
+      "known": true,
+      "category": "Date and time",
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
+    },
+    "DAYS360": {
+      "name": "DAYS360",
+      "known": true,
+      "category": "Date and time",
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
+    },
+    "DB": {
+      "name": "DB",
+      "known": true,
+      "category": "Financial",
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
+    },
+    "DBCS": {
+      "name": "DBCS",
+      "known": true,
+      "category": "Text",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "DCOUNT": {
+      "name": "DCOUNT",
+      "known": true,
+      "category": "Database",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "DCOUNTA": {
+      "name": "DCOUNTA",
+      "known": true,
+      "category": "Database",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "DDB": {
+      "name": "DDB",
+      "known": true,
+      "category": "Financial",
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
+    },
+    "DEC2BIN": {
+      "name": "DEC2BIN",
+      "known": true,
+      "category": "Engineering",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "DEC2HEX": {
+      "name": "DEC2HEX",
+      "known": true,
+      "category": "Engineering",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "DEC2OCT": {
+      "name": "DEC2OCT",
+      "known": true,
+      "category": "Engineering",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "DECIMAL": {
+      "name": "DECIMAL",
+      "known": true,
+      "category": "Math and trigonometry",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "DEGREES": {
+      "name": "DEGREES",
+      "known": true,
+      "category": "Math and trigonometry",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "DELTA": {
+      "name": "DELTA",
+      "known": true,
+      "category": "Engineering",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "DETECTLANGUAGE": {
+      "name": "DETECTLANGUAGE",
+      "known": true,
+      "category": "Text",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "DEVSQ": {
+      "name": "DEVSQ",
+      "known": true,
+      "category": "Statistical",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "DGET": {
+      "name": "DGET",
+      "known": true,
+      "category": "Database",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "DISC": {
+      "name": "DISC",
+      "known": true,
+      "category": "Financial",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "DMAX": {
+      "name": "DMAX",
+      "known": true,
+      "category": "Database",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "DMIN": {
+      "name": "DMIN",
+      "known": true,
+      "category": "Database",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "DOLLAR": {
+      "name": "DOLLAR",
+      "known": true,
+      "category": "Text",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "DOLLARDE": {
+      "name": "DOLLARDE",
+      "known": true,
+      "category": "Financial",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "DOLLARFR": {
+      "name": "DOLLARFR",
+      "known": true,
+      "category": "Financial",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "DPRODUCT": {
+      "name": "DPRODUCT",
+      "known": true,
+      "category": "Database",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "DROP": {
+      "name": "DROP",
+      "known": true,
+      "category": "Lookup and reference",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "DSTDEV": {
+      "name": "DSTDEV",
+      "known": true,
+      "category": "Database",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "DSTDEVP": {
+      "name": "DSTDEVP",
+      "known": true,
+      "category": "Database",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "DSUM": {
+      "name": "DSUM",
+      "known": true,
+      "category": "Database",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "DURATION": {
+      "name": "DURATION",
+      "known": true,
+      "category": "Financial",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "DVAR": {
+      "name": "DVAR",
+      "known": true,
+      "category": "Database",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "DVARP": {
+      "name": "DVARP",
+      "known": true,
+      "category": "Database",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "EDATE": {
+      "name": "EDATE",
+      "known": true,
+      "category": "Date and time",
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
+    },
+    "EFFECT": {
+      "name": "EFFECT",
+      "known": true,
+      "category": "Financial",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "ENCODEURL": {
+      "name": "ENCODEURL",
+      "known": true,
+      "category": "Web",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "EOMONTH": {
+      "name": "EOMONTH",
+      "known": true,
+      "category": "Date and time",
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
+    },
+    "ERF": {
+      "name": "ERF",
+      "known": true,
+      "category": "Engineering",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "ERF.PRECISE": {
+      "name": "ERF.PRECISE",
+      "known": true,
+      "category": "Engineering",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "ERFC": {
+      "name": "ERFC",
+      "known": true,
+      "category": "Engineering",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "ERFC.PRECISE": {
+      "name": "ERFC.PRECISE",
+      "known": true,
+      "category": "Engineering",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "ERROR.TYPE": {
+      "name": "ERROR.TYPE",
+      "known": true,
+      "category": "Information",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "EUROCONVERT": {
+      "name": "EUROCONVERT",
+      "known": true,
+      "category": "Add-in and Automation",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "EVEN": {
+      "name": "EVEN",
+      "known": true,
+      "category": "Math and trigonometry",
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
+    },
+    "EXACT": {
+      "name": "EXACT",
+      "known": true,
+      "category": "Text",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "EXP": {
+      "name": "EXP",
+      "known": true,
+      "category": "Math and trigonometry",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "EXPAND": {
+      "name": "EXPAND",
+      "known": true,
+      "category": "Lookup and reference",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "EXPON.DIST": {
+      "name": "EXPON.DIST",
+      "known": true,
+      "category": "Statistical",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "EXPONDIST": {
+      "name": "EXPONDIST",
+      "known": true,
+      "category": "Compatibility",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "F.DIST": {
+      "name": "F.DIST",
+      "known": true,
+      "category": "Statistical",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "F.DIST.RT": {
+      "name": "F.DIST.RT",
+      "known": true,
+      "category": "Statistical",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "F.INV": {
+      "name": "F.INV",
+      "known": true,
+      "category": "Statistical",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "F.INV.RT": {
+      "name": "F.INV.RT",
+      "known": true,
+      "category": "Statistical",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "F.TEST": {
+      "name": "F.TEST",
+      "known": true,
+      "category": "Statistical",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "FACT": {
+      "name": "FACT",
+      "known": true,
+      "category": "Math and trigonometry",
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
+    },
+    "FACTDOUBLE": {
+      "name": "FACTDOUBLE",
+      "known": true,
+      "category": "Math and trigonometry",
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
+    },
+    "FALSE": {
+      "name": "FALSE",
+      "known": true,
+      "category": "Logical",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "FDIST": {
+      "name": "FDIST",
+      "known": true,
+      "category": "Compatibility",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "FILTER": {
+      "name": "FILTER",
+      "known": true,
+      "category": "Lookup and reference",
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
+    },
+    "FILTERXML": {
+      "name": "FILTERXML",
+      "known": true,
+      "category": "Web",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "FIND": {
+      "name": "FIND",
+      "known": true,
+      "category": "Text",
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
+    },
+    "FINDB": {
+      "name": "FINDB",
+      "known": true,
+      "category": "Text",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "FINV": {
+      "name": "FINV",
+      "known": true,
+      "category": "Compatibility",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "FISHER": {
+      "name": "FISHER",
+      "known": true,
+      "category": "Statistical",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "FISHERINV": {
+      "name": "FISHERINV",
+      "known": true,
+      "category": "Statistical",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "FIXED": {
+      "name": "FIXED",
+      "known": true,
+      "category": "Text",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "FLOOR": {
+      "name": "FLOOR",
+      "known": true,
+      "category": "Compatibility",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "FLOOR.MATH": {
+      "name": "FLOOR.MATH",
+      "known": true,
+      "category": "Math and trigonometry",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "FLOOR.PRECISE": {
+      "name": "FLOOR.PRECISE",
+      "known": true,
+      "category": "Math and trigonometry",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "FORECAST": {
+      "name": "FORECAST",
+      "known": true,
+      "category": "Statistical",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "FORECAST.ETS": {
+      "name": "FORECAST.ETS",
+      "known": true,
+      "category": "Statistical",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "FORECAST.ETS.CONFINT": {
+      "name": "FORECAST.ETS.CONFINT",
+      "known": true,
+      "category": "Statistical",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "FORECAST.ETS.SEASONALITY": {
+      "name": "FORECAST.ETS.SEASONALITY",
+      "known": true,
+      "category": "Statistical",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "FORECAST.ETS.STAT": {
+      "name": "FORECAST.ETS.STAT",
+      "known": true,
+      "category": "Statistical",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "FORECAST.LINEAR": {
+      "name": "FORECAST.LINEAR",
+      "known": true,
+      "category": "Statistical",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "FORMULATEXT": {
+      "name": "FORMULATEXT",
+      "known": true,
+      "category": "Lookup and reference",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "FREQUENCY": {
+      "name": "FREQUENCY",
+      "known": true,
+      "category": "Statistical",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "FTEST": {
+      "name": "FTEST",
+      "known": true,
+      "category": "Compatibility",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "FV": {
+      "name": "FV",
+      "known": true,
+      "category": "Financial",
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
+    },
+    "FVSCHEDULE": {
+      "name": "FVSCHEDULE",
+      "known": true,
+      "category": "Financial",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "GAMMA": {
+      "name": "GAMMA",
+      "known": true,
+      "category": "Statistical",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "GAMMA.DIST": {
+      "name": "GAMMA.DIST",
+      "known": true,
+      "category": "Statistical",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "GAMMA.INV": {
+      "name": "GAMMA.INV",
+      "known": true,
+      "category": "Statistical",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "GAMMADIST": {
+      "name": "GAMMADIST",
+      "known": true,
+      "category": "Compatibility",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "GAMMAINV": {
+      "name": "GAMMAINV",
+      "known": true,
+      "category": "Compatibility",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "GAMMALN": {
+      "name": "GAMMALN",
+      "known": true,
+      "category": "Statistical",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "GAMMALN.PRECISE": {
+      "name": "GAMMALN.PRECISE",
+      "known": true,
+      "category": "Statistical",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "GAUSS": {
+      "name": "GAUSS",
+      "known": true,
+      "category": "Statistical",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "GCD": {
+      "name": "GCD",
+      "known": true,
+      "category": "Math and trigonometry",
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
+    },
+    "GEOMEAN": {
+      "name": "GEOMEAN",
+      "known": true,
+      "category": "Statistical",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "GESTEP": {
+      "name": "GESTEP",
+      "known": true,
+      "category": "Engineering",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "GETPIVOTDATA": {
+      "name": "GETPIVOTDATA",
+      "known": true,
+      "category": "Lookup and reference",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "GROUPBY": {
+      "name": "GROUPBY",
+      "known": true,
+      "category": "Lookup and reference",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "GROWTH": {
+      "name": "GROWTH",
+      "known": true,
+      "category": "Statistical",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "HARMEAN": {
+      "name": "HARMEAN",
+      "known": true,
+      "category": "Statistical",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "HEX2BIN": {
+      "name": "HEX2BIN",
+      "known": true,
+      "category": "Engineering",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "HEX2DEC": {
+      "name": "HEX2DEC",
+      "known": true,
+      "category": "Engineering",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "HEX2OCT": {
+      "name": "HEX2OCT",
+      "known": true,
+      "category": "Engineering",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "HLOOKUP": {
+      "name": "HLOOKUP",
+      "known": true,
+      "category": "Lookup and reference",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "HOUR": {
+      "name": "HOUR",
+      "known": true,
+      "category": "Date and time",
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
+    },
+    "HSTACK": {
+      "name": "HSTACK",
+      "known": true,
+      "category": "Lookup and reference",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "HYPERLINK": {
+      "name": "HYPERLINK",
+      "known": true,
+      "category": "Lookup and reference",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "HYPGEOM.DIST": {
+      "name": "HYPGEOM.DIST",
+      "known": true,
+      "category": "Statistical",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "HYPGEOMDIST": {
+      "name": "HYPGEOMDIST",
+      "known": true,
+      "category": "Compatibility",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "IF": {
+      "name": "IF",
+      "known": true,
+      "category": "Logical",
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
+    },
+    "IFERROR": {
+      "name": "IFERROR",
+      "known": true,
+      "category": "Logical",
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
+    },
+    "IFNA": {
+      "name": "IFNA",
+      "known": true,
+      "category": "Logical",
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
+    },
+    "IFS": {
+      "name": "IFS",
+      "known": true,
+      "category": "Logical",
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
+    },
+    "IMABS": {
+      "name": "IMABS",
+      "known": true,
+      "category": "Engineering",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "IMAGE": {
+      "name": "IMAGE",
+      "known": true,
+      "category": "Lookup and reference",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "IMAGINARY": {
+      "name": "IMAGINARY",
+      "known": true,
+      "category": "Engineering",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "IMARGUMENT": {
+      "name": "IMARGUMENT",
+      "known": true,
+      "category": "Engineering",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "IMCONJUGATE": {
+      "name": "IMCONJUGATE",
+      "known": true,
+      "category": "Engineering",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "IMCOS": {
+      "name": "IMCOS",
+      "known": true,
+      "category": "Engineering",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "IMCOSH": {
+      "name": "IMCOSH",
+      "known": true,
+      "category": "Engineering",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "IMCOT": {
+      "name": "IMCOT",
+      "known": true,
+      "category": "Engineering",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "IMCSC": {
+      "name": "IMCSC",
+      "known": true,
+      "category": "Engineering",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "IMCSCH": {
+      "name": "IMCSCH",
+      "known": true,
+      "category": "Engineering",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "IMDIV": {
+      "name": "IMDIV",
+      "known": true,
+      "category": "Engineering",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "IMEXP": {
+      "name": "IMEXP",
+      "known": true,
+      "category": "Engineering",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "IMLN": {
+      "name": "IMLN",
+      "known": true,
+      "category": "Engineering",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "IMLOG10": {
+      "name": "IMLOG10",
+      "known": true,
+      "category": "Engineering",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "IMLOG2": {
+      "name": "IMLOG2",
+      "known": true,
+      "category": "Engineering",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "IMPOWER": {
+      "name": "IMPOWER",
+      "known": true,
+      "category": "Engineering",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "IMPRODUCT": {
+      "name": "IMPRODUCT",
+      "known": true,
+      "category": "Engineering",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "IMREAL": {
+      "name": "IMREAL",
+      "known": true,
+      "category": "Engineering",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "IMSEC": {
+      "name": "IMSEC",
+      "known": true,
+      "category": "Engineering",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "IMSECH": {
+      "name": "IMSECH",
+      "known": true,
+      "category": "Engineering",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "IMSIN": {
+      "name": "IMSIN",
+      "known": true,
+      "category": "Engineering",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "IMSINH": {
+      "name": "IMSINH",
+      "known": true,
+      "category": "Engineering",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "IMSQRT": {
+      "name": "IMSQRT",
+      "known": true,
+      "category": "Engineering",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "IMSUB": {
+      "name": "IMSUB",
+      "known": true,
+      "category": "Engineering",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "IMSUM": {
+      "name": "IMSUM",
+      "known": true,
+      "category": "Engineering",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "IMTAN": {
+      "name": "IMTAN",
+      "known": true,
+      "category": "Engineering",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "INDEX": {
+      "name": "INDEX",
+      "known": true,
+      "category": "Lookup and reference",
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
+    },
+    "INDIRECT": {
+      "name": "INDIRECT",
+      "known": true,
+      "category": "Lookup and reference",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "INFO": {
+      "name": "INFO",
+      "known": true,
+      "category": "Information",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "INT": {
+      "name": "INT",
+      "known": true,
+      "category": "Math and trigonometry",
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
+    },
+    "INTERCEPT": {
+      "name": "INTERCEPT",
+      "known": true,
+      "category": "Statistical",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "INTRATE": {
+      "name": "INTRATE",
+      "known": true,
+      "category": "Financial",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "IPMT": {
+      "name": "IPMT",
+      "known": true,
+      "category": "Financial",
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
+    },
+    "IRR": {
+      "name": "IRR",
+      "known": true,
+      "category": "Financial",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "ISBLANK": {
+      "name": "ISBLANK",
+      "known": true,
+      "category": "Information",
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
+    },
+    "ISERR": {
+      "name": "ISERR",
+      "known": true,
+      "category": "Information",
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
+    },
+    "ISERROR": {
+      "name": "ISERROR",
+      "known": true,
+      "category": "Information",
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
+    },
+    "ISEVEN": {
+      "name": "ISEVEN",
+      "known": true,
+      "category": "Information",
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
+    },
+    "ISFORMULA": {
+      "name": "ISFORMULA",
+      "known": true,
+      "category": "Information",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "ISLOGICAL": {
+      "name": "ISLOGICAL",
+      "known": true,
+      "category": "Information",
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
+    },
+    "ISNA": {
+      "name": "ISNA",
+      "known": true,
+      "category": "Information",
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
+    },
+    "ISNONTEXT": {
+      "name": "ISNONTEXT",
+      "known": true,
+      "category": "Information",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "ISNUMBER": {
+      "name": "ISNUMBER",
+      "known": true,
+      "category": "Information",
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
+    },
+    "ISO.CEILING": {
+      "name": "ISO.CEILING",
+      "known": true,
+      "category": "Math and trigonometry",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "ISODD": {
+      "name": "ISODD",
+      "known": true,
+      "category": "Information",
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
+    },
+    "ISOMITTED": {
+      "name": "ISOMITTED",
+      "known": true,
+      "category": "Information",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "ISOWEEKNUM": {
+      "name": "ISOWEEKNUM",
+      "known": true,
+      "category": "Date and time",
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
+    },
+    "ISPMT": {
+      "name": "ISPMT",
+      "known": true,
+      "category": "Financial",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "ISREF": {
+      "name": "ISREF",
+      "known": true,
+      "category": "Information",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "ISTEXT": {
+      "name": "ISTEXT",
+      "known": true,
+      "category": "Information",
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
+    },
+    "JIS": {
+      "name": "JIS",
+      "known": true,
+      "category": "Text",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "KURT": {
+      "name": "KURT",
+      "known": true,
+      "category": "Statistical",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "LAMBDA": {
+      "name": "LAMBDA",
+      "known": true,
+      "category": "Logical",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "LARGE": {
+      "name": "LARGE",
+      "known": true,
+      "category": "Statistical",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "LCM": {
+      "name": "LCM",
+      "known": true,
+      "category": "Math and trigonometry",
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
+    },
+    "LEFT": {
+      "name": "LEFT",
+      "known": true,
+      "category": "Text",
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
+    },
+    "LEFTB": {
+      "name": "LEFTB",
+      "known": true,
+      "category": "Text",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "LEN": {
+      "name": "LEN",
+      "known": true,
+      "category": "Text",
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
+    },
+    "LENB": {
+      "name": "LENB",
+      "known": true,
+      "category": "Text",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "LET": {
+      "name": "LET",
+      "known": true,
+      "category": "Logical",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "LINEST": {
+      "name": "LINEST",
+      "known": true,
+      "category": "Statistical",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "LN": {
+      "name": "LN",
+      "known": true,
+      "category": "Math and trigonometry",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "LOG": {
+      "name": "LOG",
+      "known": true,
+      "category": "Math and trigonometry",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "LOG10": {
+      "name": "LOG10",
+      "known": true,
+      "category": "Math and trigonometry",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "LOGEST": {
+      "name": "LOGEST",
+      "known": true,
+      "category": "Statistical",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "LOGINV": {
+      "name": "LOGINV",
+      "known": true,
+      "category": "Compatibility",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "LOGNORM.DIST": {
+      "name": "LOGNORM.DIST",
+      "known": true,
+      "category": "Statistical",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "LOGNORM.INV": {
+      "name": "LOGNORM.INV",
+      "known": true,
+      "category": "Statistical",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "LOGNORMDIST": {
+      "name": "LOGNORMDIST",
+      "known": true,
+      "category": "Compatibility",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "LOOKUP": {
+      "name": "LOOKUP",
+      "known": true,
+      "category": "Lookup and reference",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "LOWER": {
+      "name": "LOWER",
+      "known": true,
+      "category": "Text",
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
+    },
+    "MAKEARRAY": {
+      "name": "MAKEARRAY",
+      "known": true,
+      "category": "Logical",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "MAP": {
+      "name": "MAP",
+      "known": true,
+      "category": "Logical",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "MATCH": {
+      "name": "MATCH",
+      "known": true,
+      "category": "Lookup and reference",
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
+    },
+    "MAX": {
+      "name": "MAX",
+      "known": true,
+      "category": "Statistical",
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
+    },
+    "MAXA": {
+      "name": "MAXA",
+      "known": true,
+      "category": "Statistical",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "MAXIFS": {
+      "name": "MAXIFS",
+      "known": true,
+      "category": "Statistical",
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
+    },
+    "MDETERM": {
+      "name": "MDETERM",
+      "known": true,
+      "category": "Math and trigonometry",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "MDURATION": {
+      "name": "MDURATION",
+      "known": true,
+      "category": "Financial",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "MEDIAN": {
+      "name": "MEDIAN",
+      "known": true,
+      "category": "Statistical",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "MID": {
+      "name": "MID",
+      "known": true,
+      "category": "Text",
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
+    },
+    "MIDB": {
+      "name": "MIDB",
+      "known": true,
+      "category": "Text",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "MIN": {
+      "name": "MIN",
+      "known": true,
+      "category": "Statistical",
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
+    },
+    "MINA": {
+      "name": "MINA",
+      "known": true,
+      "category": "Statistical",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "MINIFS": {
+      "name": "MINIFS",
+      "known": true,
+      "category": "Statistical",
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
+    },
+    "MINUTE": {
+      "name": "MINUTE",
+      "known": true,
+      "category": "Date and time",
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
+    },
+    "MINVERSE": {
+      "name": "MINVERSE",
+      "known": true,
+      "category": "Math and trigonometry",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "MIRR": {
+      "name": "MIRR",
+      "known": true,
+      "category": "Financial",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "MMULT": {
+      "name": "MMULT",
+      "known": true,
+      "category": "Math and trigonometry",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "MOD": {
+      "name": "MOD",
+      "known": true,
+      "category": "Math and trigonometry",
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
+    },
+    "MODE": {
+      "name": "MODE",
+      "known": true,
+      "category": "Compatibility",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "MODE.MULT": {
+      "name": "MODE.MULT",
+      "known": true,
+      "category": "Statistical",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "MODE.SNGL": {
+      "name": "MODE.SNGL",
+      "known": true,
+      "category": "Statistical",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "MONTH": {
+      "name": "MONTH",
+      "known": true,
+      "category": "Date and time",
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
+    },
+    "MROUND": {
+      "name": "MROUND",
+      "known": true,
+      "category": "Math and trigonometry",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "MULTINOMIAL": {
+      "name": "MULTINOMIAL",
+      "known": true,
+      "category": "Math and trigonometry",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "MUNIT": {
+      "name": "MUNIT",
+      "known": true,
+      "category": "Math and trigonometry",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "N": {
+      "name": "N",
+      "known": true,
+      "category": "Information",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "NA": {
+      "name": "NA",
+      "known": true,
+      "category": "Information",
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
+    },
+    "NEGBINOM.DIST": {
+      "name": "NEGBINOM.DIST",
+      "known": true,
+      "category": "Statistical",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "NEGBINOMDIST": {
+      "name": "NEGBINOMDIST",
+      "known": true,
+      "category": "Compatibility",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "NETWORKDAYS": {
+      "name": "NETWORKDAYS",
+      "known": true,
+      "category": "Date and time",
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
+    },
+    "NETWORKDAYS.INTL": {
+      "name": "NETWORKDAYS.INTL",
+      "known": true,
+      "category": "Date and time",
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
+    },
+    "NOMINAL": {
+      "name": "NOMINAL",
+      "known": true,
+      "category": "Financial",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "NORM.DIST": {
+      "name": "NORM.DIST",
+      "known": true,
+      "category": "Statistical",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "NORM.INV": {
+      "name": "NORM.INV",
+      "known": true,
+      "category": "Compatibility",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "NORM.S.DIST": {
+      "name": "NORM.S.DIST",
+      "known": true,
+      "category": "Statistical",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "NORM.S.INV": {
+      "name": "NORM.S.INV",
+      "known": true,
+      "category": "Statistical",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "NORMDIST": {
+      "name": "NORMDIST",
+      "known": true,
+      "category": "Compatibility",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "NORMINV": {
+      "name": "NORMINV",
+      "known": true,
+      "category": "Statistical",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "NORMSDIST": {
+      "name": "NORMSDIST",
+      "known": true,
+      "category": "Compatibility",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "NORMSINV": {
+      "name": "NORMSINV",
+      "known": true,
+      "category": "Compatibility",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "NOT": {
+      "name": "NOT",
+      "known": true,
+      "category": "Logical",
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
+    },
+    "NOW": {
+      "name": "NOW",
+      "known": true,
+      "category": "Date and time",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "NPER": {
+      "name": "NPER",
+      "known": true,
+      "category": "Financial",
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
+    },
+    "NPV": {
+      "name": "NPV",
+      "known": true,
+      "category": "Financial",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "NUMBERVALUE": {
+      "name": "NUMBERVALUE",
+      "known": true,
+      "category": "Text",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "OCT2BIN": {
+      "name": "OCT2BIN",
+      "known": true,
+      "category": "Engineering",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "OCT2DEC": {
+      "name": "OCT2DEC",
+      "known": true,
+      "category": "Engineering",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "OCT2HEX": {
+      "name": "OCT2HEX",
+      "known": true,
+      "category": "Engineering",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "ODD": {
+      "name": "ODD",
+      "known": true,
+      "category": "Math and trigonometry",
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
+    },
+    "ODDFPRICE": {
+      "name": "ODDFPRICE",
+      "known": true,
+      "category": "Financial",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "ODDFYIELD": {
+      "name": "ODDFYIELD",
+      "known": true,
+      "category": "Financial",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "ODDLPRICE": {
+      "name": "ODDLPRICE",
+      "known": true,
+      "category": "Financial",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "ODDLYIELD": {
+      "name": "ODDLYIELD",
+      "known": true,
+      "category": "Financial",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "OFFSET": {
+      "name": "OFFSET",
+      "known": true,
+      "category": "Lookup and reference",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "OR": {
+      "name": "OR",
+      "known": true,
+      "category": "Logical",
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
+    },
+    "PDURATION": {
+      "name": "PDURATION",
+      "known": true,
+      "category": "Financial",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "PEARSON": {
+      "name": "PEARSON",
+      "known": true,
+      "category": "Statistical",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "PERCENTILE": {
+      "name": "PERCENTILE",
+      "known": true,
+      "category": "Compatibility",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "PERCENTILE.EXC": {
+      "name": "PERCENTILE.EXC",
+      "known": true,
+      "category": "Statistical",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "PERCENTILE.INC": {
+      "name": "PERCENTILE.INC",
+      "known": true,
+      "category": "Statistical",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "PERCENTOF": {
+      "name": "PERCENTOF",
+      "known": true,
+      "category": "Math and trigonometry",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "PERCENTRANK": {
+      "name": "PERCENTRANK",
+      "known": true,
+      "category": "Compatibility",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "PERCENTRANK.EXC": {
+      "name": "PERCENTRANK.EXC",
+      "known": true,
+      "category": "Statistical",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "PERCENTRANK.INC": {
+      "name": "PERCENTRANK.INC",
+      "known": true,
+      "category": "Statistical",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "PERMUT": {
+      "name": "PERMUT",
+      "known": true,
+      "category": "Statistical",
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
+    },
+    "PERMUTATIONA": {
+      "name": "PERMUTATIONA",
+      "known": true,
+      "category": "Statistical",
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
+    },
+    "PHI": {
+      "name": "PHI",
+      "known": true,
+      "category": "Statistical",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "PHONETIC": {
+      "name": "PHONETIC",
+      "known": true,
+      "category": "Text",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "PI": {
+      "name": "PI",
+      "known": true,
+      "category": "Math and trigonometry",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "PIVOTBY": {
+      "name": "PIVOTBY",
+      "known": true,
+      "category": "Lookup and reference",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "PMT": {
+      "name": "PMT",
+      "known": true,
+      "category": "Financial",
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
+    },
+    "POISSON": {
+      "name": "POISSON",
+      "known": true,
+      "category": "Compatibility",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "POISSON.DIST": {
+      "name": "POISSON.DIST",
+      "known": true,
+      "category": "Statistical",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "POWER": {
+      "name": "POWER",
+      "known": true,
+      "category": "Math and trigonometry",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "PPMT": {
+      "name": "PPMT",
+      "known": true,
+      "category": "Financial",
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
+    },
+    "PRICE": {
+      "name": "PRICE",
+      "known": true,
+      "category": "Financial",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "PRICEDISC": {
+      "name": "PRICEDISC",
+      "known": true,
+      "category": "Financial",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "PRICEMAT": {
+      "name": "PRICEMAT",
+      "known": true,
+      "category": "Financial",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "PROB": {
+      "name": "PROB",
+      "known": true,
+      "category": "Statistical",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "PRODUCT": {
+      "name": "PRODUCT",
+      "known": true,
+      "category": "Math and trigonometry",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "PROPER": {
+      "name": "PROPER",
+      "known": true,
+      "category": "Text",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "PV": {
+      "name": "PV",
+      "known": true,
+      "category": "Financial",
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
+    },
+    "QUARTILE": {
+      "name": "QUARTILE",
+      "known": true,
+      "category": "Compatibility",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "QUARTILE.EXC": {
+      "name": "QUARTILE.EXC",
+      "known": true,
+      "category": "Statistical",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "QUARTILE.INC": {
+      "name": "QUARTILE.INC",
+      "known": true,
+      "category": "Statistical",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "QUOTIENT": {
+      "name": "QUOTIENT",
+      "known": true,
+      "category": "Math and trigonometry",
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
+    },
+    "RADIANS": {
+      "name": "RADIANS",
+      "known": true,
+      "category": "Math and trigonometry",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "RAND": {
+      "name": "RAND",
+      "known": true,
+      "category": "Math and trigonometry",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "RANDARRAY": {
+      "name": "RANDARRAY",
+      "known": true,
+      "category": "Math and trigonometry",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "RANDBETWEEN": {
+      "name": "RANDBETWEEN",
+      "known": true,
+      "category": "Math and trigonometry",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "RANK": {
+      "name": "RANK",
+      "known": true,
+      "category": "Compatibility",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "RANK.AVG": {
+      "name": "RANK.AVG",
+      "known": true,
+      "category": "Statistical",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "RANK.EQ": {
+      "name": "RANK.EQ",
+      "known": true,
+      "category": "Statistical",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "RATE": {
+      "name": "RATE",
+      "known": true,
+      "category": "Financial",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "RECEIVED": {
+      "name": "RECEIVED",
+      "known": true,
+      "category": "Financial",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "REDUCE": {
+      "name": "REDUCE",
+      "known": true,
+      "category": "Logical",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "REGEXEXTRACT": {
+      "name": "REGEXEXTRACT",
+      "known": true,
+      "category": "Text",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "REGEXREPLACE": {
+      "name": "REGEXREPLACE",
+      "known": true,
+      "category": "Text",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "REGEXTEST": {
+      "name": "REGEXTEST",
+      "known": true,
+      "category": "Text",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "REGISTER.ID": {
+      "name": "REGISTER.ID",
+      "known": true,
+      "category": "Add-in and Automation",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "REPLACE": {
+      "name": "REPLACE",
+      "known": true,
+      "category": "Text",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "REPLACEB": {
+      "name": "REPLACEB",
+      "known": true,
+      "category": "Text",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "REPT": {
+      "name": "REPT",
+      "known": true,
+      "category": "Text",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "RIGHT": {
+      "name": "RIGHT",
+      "known": true,
+      "category": "Text",
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
+    },
+    "RIGHTB": {
+      "name": "RIGHTB",
+      "known": true,
+      "category": "Text",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "ROMAN": {
+      "name": "ROMAN",
+      "known": true,
+      "category": "Math and trigonometry",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "ROUND": {
+      "name": "ROUND",
+      "known": true,
+      "category": "Math and trigonometry",
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
+    },
+    "ROUNDDOWN": {
+      "name": "ROUNDDOWN",
+      "known": true,
+      "category": "Math and trigonometry",
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
+    },
+    "ROUNDUP": {
+      "name": "ROUNDUP",
+      "known": true,
+      "category": "Math and trigonometry",
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
+    },
+    "ROW": {
+      "name": "ROW",
+      "known": true,
+      "category": "Lookup and reference",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "ROWS": {
+      "name": "ROWS",
+      "known": true,
+      "category": "Lookup and reference",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "RRI": {
+      "name": "RRI",
+      "known": true,
+      "category": "Financial",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "RSQ": {
+      "name": "RSQ",
+      "known": true,
+      "category": "Statistical",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "RTD": {
+      "name": "RTD",
+      "known": true,
+      "category": "Lookup and reference",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "SCAN": {
+      "name": "SCAN",
+      "known": true,
+      "category": "Logical",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "SEARCH": {
+      "name": "SEARCH",
+      "known": true,
+      "category": "Text",
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
+    },
+    "SEARCHB": {
+      "name": "SEARCHB",
+      "known": true,
+      "category": "Text",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "SEC": {
+      "name": "SEC",
+      "known": true,
+      "category": "Math and trigonometry",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "SECH": {
+      "name": "SECH",
+      "known": true,
+      "category": "Math and trigonometry",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "SECOND": {
+      "name": "SECOND",
+      "known": true,
+      "category": "Date and time",
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
+    },
+    "SEQUENCE": {
+      "name": "SEQUENCE",
+      "known": true,
+      "category": "Math and trigonometry",
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
+    },
+    "SERIESSUM": {
+      "name": "SERIESSUM",
+      "known": true,
+      "category": "Math and trigonometry",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "SHEET": {
+      "name": "SHEET",
+      "known": true,
+      "category": "Information",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "SHEETS": {
+      "name": "SHEETS",
+      "known": true,
+      "category": "Information",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "SIGN": {
+      "name": "SIGN",
+      "known": true,
+      "category": "Math and trigonometry",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "SIN": {
+      "name": "SIN",
+      "known": true,
+      "category": "Math and trigonometry",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "SINH": {
+      "name": "SINH",
+      "known": true,
+      "category": "Math and trigonometry",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "SKEW": {
+      "name": "SKEW",
+      "known": true,
+      "category": "Statistical",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "SKEW.P": {
+      "name": "SKEW.P",
+      "known": true,
+      "category": "Statistical",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "SLN": {
+      "name": "SLN",
+      "known": true,
+      "category": "Financial",
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
+    },
+    "SLOPE": {
+      "name": "SLOPE",
+      "known": true,
+      "category": "Statistical",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "SMALL": {
+      "name": "SMALL",
+      "known": true,
+      "category": "Statistical",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "SORT": {
+      "name": "SORT",
+      "known": true,
+      "category": "Lookup and reference",
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
+    },
+    "SORTBY": {
+      "name": "SORTBY",
+      "known": true,
+      "category": "Lookup and reference",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "SQRT": {
+      "name": "SQRT",
+      "known": true,
+      "category": "Math and trigonometry",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "SQRTPI": {
+      "name": "SQRTPI",
+      "known": true,
+      "category": "Math and trigonometry",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "STANDARDIZE": {
+      "name": "STANDARDIZE",
+      "known": true,
+      "category": "Statistical",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "STDEV": {
+      "name": "STDEV",
+      "known": true,
+      "category": "Compatibility",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "STDEV.P": {
+      "name": "STDEV.P",
+      "known": true,
+      "category": "Statistical",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "STDEV.S": {
+      "name": "STDEV.S",
+      "known": true,
+      "category": "Statistical",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "STDEVA": {
+      "name": "STDEVA",
+      "known": true,
+      "category": "Statistical",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "STDEVP": {
+      "name": "STDEVP",
+      "known": true,
+      "category": "Compatibility",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "STDEVPA": {
+      "name": "STDEVPA",
+      "known": true,
+      "category": "Statistical",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "STEYX": {
+      "name": "STEYX",
+      "known": true,
+      "category": "Statistical",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "STOCKHISTORY": {
+      "name": "STOCKHISTORY",
+      "known": true,
+      "category": "Information",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "SUBSTITUTE": {
+      "name": "SUBSTITUTE",
+      "known": true,
+      "category": "Text",
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
+    },
+    "SUBTOTAL": {
+      "name": "SUBTOTAL",
+      "known": true,
+      "category": "Math and trigonometry",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "SUM": {
+      "name": "SUM",
+      "known": true,
+      "category": "Math and trigonometry",
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
+    },
+    "SUMIF": {
+      "name": "SUMIF",
+      "known": true,
+      "category": "Math and trigonometry",
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
+    },
+    "SUMIFS": {
+      "name": "SUMIFS",
+      "known": true,
+      "category": "Math and trigonometry",
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
+    },
+    "SUMPRODUCT": {
+      "name": "SUMPRODUCT",
+      "known": true,
+      "category": "Math and trigonometry",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "SUMSQ": {
+      "name": "SUMSQ",
+      "known": true,
+      "category": "Math and trigonometry",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "SUMX2MY2": {
+      "name": "SUMX2MY2",
+      "known": true,
+      "category": "Math and trigonometry",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "SUMX2PY2": {
+      "name": "SUMX2PY2",
+      "known": true,
+      "category": "Math and trigonometry",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "SUMXMY2": {
+      "name": "SUMXMY2",
+      "known": true,
+      "category": "Math and trigonometry",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "SWITCH": {
+      "name": "SWITCH",
+      "known": true,
+      "category": "Logical",
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
+    },
+    "SYD": {
+      "name": "SYD",
+      "known": true,
+      "category": "Financial",
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
+    },
+    "T": {
+      "name": "T",
+      "known": true,
+      "category": "Text",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "T.DIST": {
+      "name": "T.DIST",
+      "known": true,
+      "category": "Statistical",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "T.DIST.2T": {
+      "name": "T.DIST.2T",
+      "known": true,
+      "category": "Statistical",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "T.DIST.RT": {
+      "name": "T.DIST.RT",
+      "known": true,
+      "category": "Statistical",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "T.INV": {
+      "name": "T.INV",
+      "known": true,
+      "category": "Statistical",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "T.INV.2T": {
+      "name": "T.INV.2T",
+      "known": true,
+      "category": "Statistical",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "T.TEST": {
+      "name": "T.TEST",
+      "known": true,
+      "category": "Statistical",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "TAKE": {
+      "name": "TAKE",
+      "known": true,
+      "category": "Lookup and reference",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "TAN": {
+      "name": "TAN",
+      "known": true,
+      "category": "Math and trigonometry",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "TANH": {
+      "name": "TANH",
+      "known": true,
+      "category": "Math and trigonometry",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "TBILLEQ": {
+      "name": "TBILLEQ",
+      "known": true,
+      "category": "Financial",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "TBILLPRICE": {
+      "name": "TBILLPRICE",
+      "known": true,
+      "category": "Financial",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "TBILLYIELD": {
+      "name": "TBILLYIELD",
+      "known": true,
+      "category": "Financial",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "TDIST": {
+      "name": "TDIST",
+      "known": true,
+      "category": "Compatibility",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "TEXT": {
+      "name": "TEXT",
+      "known": true,
+      "category": "Text",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "TEXTAFTER": {
+      "name": "TEXTAFTER",
+      "known": true,
+      "category": "Text",
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
+    },
+    "TEXTBEFORE": {
+      "name": "TEXTBEFORE",
+      "known": true,
+      "category": "Text",
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
+    },
+    "TEXTJOIN": {
+      "name": "TEXTJOIN",
+      "known": true,
+      "category": "Text",
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
+    },
+    "TEXTSPLIT": {
+      "name": "TEXTSPLIT",
+      "known": true,
+      "category": "Text",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "TIME": {
+      "name": "TIME",
+      "known": true,
+      "category": "Date and time",
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
+    },
+    "TIMEVALUE": {
+      "name": "TIMEVALUE",
+      "known": true,
+      "category": "Date and time",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "TINV": {
+      "name": "TINV",
+      "known": true,
+      "category": "Compatibility",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "TOCOL": {
+      "name": "TOCOL",
+      "known": true,
+      "category": "Lookup and reference",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "TODAY": {
+      "name": "TODAY",
+      "known": true,
+      "category": "Date and time",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "TOROW": {
+      "name": "TOROW",
+      "known": true,
+      "category": "Lookup and reference",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "TRANSLATE": {
+      "name": "TRANSLATE",
+      "known": true,
+      "category": "Text",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "TRANSPOSE": {
+      "name": "TRANSPOSE",
+      "known": true,
+      "category": "Lookup and reference",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "TREND": {
+      "name": "TREND",
+      "known": true,
+      "category": "Statistical",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "TRIM": {
+      "name": "TRIM",
+      "known": true,
+      "category": "Text",
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
+    },
+    "TRIMMEAN": {
+      "name": "TRIMMEAN",
+      "known": true,
+      "category": "Statistical",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "TRIMRANGE": {
+      "name": "TRIMRANGE",
+      "known": true,
+      "category": "Lookup and reference",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "TRUE": {
+      "name": "TRUE",
+      "known": true,
+      "category": "Logical",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "TRUNC": {
+      "name": "TRUNC",
+      "known": true,
+      "category": "Math and trigonometry",
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
+    },
+    "TTEST": {
+      "name": "TTEST",
+      "known": true,
+      "category": "Compatibility",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "TYPE": {
+      "name": "TYPE",
+      "known": true,
+      "category": "Information",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "UNICHAR": {
+      "name": "UNICHAR",
+      "known": true,
+      "category": "Text",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "UNICODE": {
+      "name": "UNICODE",
+      "known": true,
+      "category": "Text",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "UNIQUE": {
+      "name": "UNIQUE",
+      "known": true,
+      "category": "Lookup and reference",
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
+    },
+    "UPPER": {
+      "name": "UPPER",
+      "known": true,
+      "category": "Text",
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
+    },
+    "VALUE": {
+      "name": "VALUE",
+      "known": true,
+      "category": "Text",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "VALUETOTEXT": {
+      "name": "VALUETOTEXT",
+      "known": true,
+      "category": "Text",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "VAR": {
+      "name": "VAR",
+      "known": true,
+      "category": "Compatibility",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "VAR.P": {
+      "name": "VAR.P",
+      "known": true,
+      "category": "Statistical",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "VAR.S": {
+      "name": "VAR.S",
+      "known": true,
+      "category": "Statistical",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "VARA": {
+      "name": "VARA",
+      "known": true,
+      "category": "Statistical",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "VARP": {
+      "name": "VARP",
+      "known": true,
+      "category": "Compatibility",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "VARPA": {
+      "name": "VARPA",
+      "known": true,
+      "category": "Statistical",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "VDB": {
+      "name": "VDB",
+      "known": true,
+      "category": "Financial",
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
+    },
+    "VLOOKUP": {
+      "name": "VLOOKUP",
+      "known": true,
+      "category": "Lookup and reference",
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
+    },
+    "VSTACK": {
+      "name": "VSTACK",
+      "known": true,
+      "category": "Look and reference",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "WEBSERVICE": {
+      "name": "WEBSERVICE",
+      "known": true,
+      "category": "Web",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "WEEKDAY": {
+      "name": "WEEKDAY",
+      "known": true,
+      "category": "Date and time",
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
+    },
+    "WEEKNUM": {
+      "name": "WEEKNUM",
+      "known": true,
+      "category": "Date and time",
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
+    },
+    "WEIBULL": {
+      "name": "WEIBULL",
+      "known": true,
+      "category": "Compatibility",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "WEIBULL.DIST": {
+      "name": "WEIBULL.DIST",
+      "known": true,
+      "category": "Statistical",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "WORKDAY": {
+      "name": "WORKDAY",
+      "known": true,
+      "category": "Date and time",
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
+    },
+    "WORKDAY.INTL": {
+      "name": "WORKDAY.INTL",
+      "known": true,
+      "category": "Date and time",
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
+    },
+    "WRAPCOLS": {
+      "name": "WRAPCOLS",
+      "known": true,
+      "category": "Look and reference",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "WRAPROWS": {
+      "name": "WRAPROWS",
+      "known": true,
+      "category": "Look and reference",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "XIRR": {
+      "name": "XIRR",
+      "known": true,
+      "category": "Financial",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "XLOOKUP": {
+      "name": "XLOOKUP",
+      "known": true,
+      "category": "Lookup and reference",
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
+    },
+    "XMATCH": {
+      "name": "XMATCH",
+      "known": true,
+      "category": "Lookup and reference",
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
+    },
+    "XNPV": {
+      "name": "XNPV",
+      "known": true,
+      "category": "Financial",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "XOR": {
+      "name": "XOR",
+      "known": true,
+      "category": "Logical",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "YEAR": {
+      "name": "YEAR",
+      "known": true,
+      "category": "Date and time",
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
+    },
+    "YEARFRAC": {
+      "name": "YEARFRAC",
+      "known": true,
+      "category": "Date and time",
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
+    },
+    "YIELD": {
+      "name": "YIELD",
+      "known": true,
+      "category": "Financial",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "YIELDDISC": {
+      "name": "YIELDDISC",
+      "known": true,
+      "category": "Financial",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "YIELDMAT": {
+      "name": "YIELDMAT",
+      "known": true,
+      "category": "Financial",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "Z.TEST": {
+      "name": "Z.TEST",
+      "known": true,
+      "category": "Statistical",
+      "python": "catalogued",
+      "rust": "catalogued"
+    },
+    "ZTEST": {
+      "name": "ZTEST",
+      "known": true,
+      "category": "Compatibility",
+      "python": "catalogued",
+      "rust": "catalogued"
+    }
+  }
+}

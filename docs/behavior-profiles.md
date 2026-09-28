@@ -1,10 +1,39 @@
+---
+author: unknown
+created: null
+agent: codex/Codex
+date: 2026-09-28
+type: behavior-reference
+status: active
+summary: Current evaluator and workbook boundaries, distinguishing shared fixtures from independent Excel evidence.
+provenance_note: Original creator and creation time were not recorded; these notes were consolidated on 2026-09-25.
+---
 # Workbook Forge behavior profiles
 
-This page collects the detailed behavior notes that used to live in `README.md` and `CONTEXT.md`. They were moved on 2026-09-25 without rewording, grouped by function family. `catalog/formulas.json` (`semantic_specs`) remains the authoritative per-function record. Here, a *profile* is a Workbook Forge choice that has not been checked against Excel.
+This page explains the supported evaluator behavior and workbook boundaries.
+The [formula catalog](../catalog/formulas.json) (`semantic_specs`) is the maintained
+per-function record. A *profile* declares Workbook Forge's rules; it does not by
+itself establish Excel compatibility. The [native primitive guide](primitives.md)
+describes the smaller direct-call and named-input interface over these evaluators.
 
 ## General
 
-Unsupported syntax returns typed errors instead of approximations. The shared fixtures verify Python/Rust agreement, but the engines have not yet been spot-checked against Microsoft Excel and are not full Excel calculation engines.
+Unsupported syntax returns typed errors instead of approximations. Shared fixtures
+verify Python/Rust agreement and their stated expected results. Three targeted
+formula observations have succeeded in Excel; broader function-family checks and
+the complete workbook roundtrip remain outstanding. See [Excel observations](excel-observations.md)
+for the exact evidence. The engines are not full Excel calculation engines.
+
+Both evaluators cap formula length at 8,192 UTF-16 code units and function nesting
+at 64 levels. Parenthesis nesting is limited to 96 levels, and wildcard matching
+to 5,000,000 matching-state steps per evaluation. The latter two limits are
+Workbook Forge safety profiles. Resource limits also apply at the workbook,
+agent transport and native composition boundaries; one interface's larger input
+budget does not raise the evaluator limit.
+
+Known OOXML compatibility prefixes are normalized for function dispatch and
+support lookup while imported formula text remains intact. A catalog entry or
+recognized prefix does not imply that an unsupported function can calculate.
 
 ## Text limits and number-to-text conversion
 
@@ -62,7 +91,75 @@ FV, PV, and PMT use per-period rates and payment counts, documented cash-flow si
 
 ## Workbook adapter
 
-It supports conservative reading and patching of macro-free transitional `.xlsx` packages. It validates package relationships and content types, preserves untouched package-part payloads and root namespace bindings, and writes to a new output path. The package reader caps compressed input at 130 MiB, expanded contents at 128 MiB, XML parts and the central directory at 32 MiB, and package entries at 10,000. It scans directory records before constructing ZIP entry objects and reads members in requests no larger than 64 KiB. ZIP64 footer parsing uses a guarded CPython `zipfile` helper; runtimes without that helper fail closed. `calculate_cells_to` evaluates explicitly requested scalar formula cells and their transitive formula dependencies, ignores stored formula caches as inputs, and writes typed scalar caches. It accepts only Python functions marked `conformance-tested`; it refuses unsupported syntax or functions, static dependency cycles, grouped formula ranges, table calculated or totals formula ranges, array results, 1904-date workbooks, and oversized reference closures before creating output. Each formula is limited to 100,000 characters; each range to 100,000 cells; total range-expansion work to 250,000 cells, counting repeated and overlapping references; formula-to-cell dependency edges to 100,000; and grouped/table range checks to 250,000. Dependency discovery is conservative and includes references in lazy branches. A scalar formula result that refers to a blank cell is cached as numeric zero; an explicit empty string remains a string cache, matching [Microsoft's documented reference behavior](https://support.microsoft.com/en-us/excel/clear-cells-of-contents-or-formats). Formula calculation remains a bounded Workbook Forge profile, not a full Excel compatibility claim. Edits and calculations invalidate stale calculation-chain metadata and request Excel recalculation on next open. The adapter does not execute macros or external data; Excel may update external links when a user opens the output, depending on settings. Macro-enabled `.xlsm`, legacy `.xls`, chart sheets, worksheet spill projection, structured table references, 1904-date formula calculation, and strict OOXML are outside the current adapter profile. Check `Workbook` docstrings and `python/workbook_forge/workbook.py` for package and XML limits.
+Two public workbook surfaces serve different needs:
 
-- Python `Workbook` reads and patches macro-free transitional `.xlsx` packages using the standard library, validates package relationships and content types, preserves untouched package payloads and markup-compatibility namespace bindings, invalidates stale calculation chains, and writes to a new file. The Run 21 implementation adds `calculate_cells_to`, which evaluates requested scalar formula cells and their static dependency closure, ignores existing formula caches, and stages typed cache writes before package mutation. It accepts only Python functions marked `conformance-tested`; calculation bounds include 100,000 formula characters, 100,000 cells per reference, 250,000 total range-expansion cells including repeated ranges, 100,000 formula-to-cell dependency edges, and 250,000 grouped/table range checks. Blank scalar formula results are cached as numeric zero; explicit empty-string results remain strings. Python and Rust cap formula-produced text at 32,767 UTF-16 code units, with checks before concatenation, `CONCAT`, `TEXTJOIN`, and all-match `SUBSTITUTE` allocation. It refuses grouped formulas, table calculated/totals formula cells, cycles, unsupported syntax/functions, array results, and 1904-date workbooks. Worksheet spill projection and incremental dependency invalidation remain unsupported. Numeric-to-text conversion is shared across Python and Rust: shortest round-tripping decimal text, integer values without `.0`, negative zero as `0`, and lowercase scientific notation with at least two exponent digits; finite integer literals outside binary64 range return `#NUM!`; this exact formatting is a local profile that has not been checked in Excel.
-- The adapter runs supported formulas through the local evaluator; it does not execute macros or external data. Excel may recalculate formulas and update workbook-defined external links when a user opens the output, depending on Excel settings. `.xlsm`, `.xls`, chart sheets, dynamic arrays, structured references, and unsupported XML profiles remain outside its current scope.
+| Surface | Purpose and limits |
+| --- | --- |
+| Python `WorkbookModel` and `workbook_forge.xlsx`; Rust `toolkit` and `xlsx` | Independent workbook authoring, full/incremental calculation, revisioned sessions, import, generation and preservation-aware export |
+| Python `workbook_forge.workbook.Workbook` | Lower-level package inspection, supported cell patches, and targeted scalar calculation with `calculate_cells_to` |
+
+The [programmable workbook guide](../README.md#programmable-workbooks) shows the
+first surface. The lower-level Python `Workbook` is also the package foundation
+used by its toolkit adapter; it is not a second Python calculation engine.
+A toolkit session can invalidate affected dependencies and reuse unrelated results.
+The lower-level `calculate_cells_to` operation computes a requested closure for
+one output file and has no incremental session of its own.
+
+### Package handling and preservation
+
+Both languages support conservative reading and patching of macro-free transitional
+`.xlsx` packages. They validate relationships and content types, preserve untouched
+package-part payloads, and write to a new output path. This preserves the bytes of
+untouched uncompressed parts; it does not promise an identical ZIP archive.
+Imported models retain an immutable source baseline. Directly changing the original
+Python `Workbook` object does not update an already imported model; reimport after
+such changes to establish a new baseline.
+
+Package limits include 130 MiB compressed input, 128 MiB expanded contents,
+32 MiB XML parts and central directory, and 10,000 entries. XML parsing is bounded
+to 1,000,000 elements and depth 128 per part. The Python reader scans directory
+records before constructing ZIP entry objects and reads members in requests of
+at most 64 KiB. Its ZIP64 footer handling uses a guarded CPython `zipfile` helper;
+runtimes without that helper refuse the operation. Rust retains its own bounded
+ZIP/XML implementation and UTF-8 XML profile. These bounds do not constitute full
+OOXML schema validation; see the [extraction contract](extraction-patterns.md).
+
+### Calculation and edits
+
+Authored values, formulas, imported caches and calculated results remain distinct.
+Caches are not calculation inputs. Exported results must match the model revision
+and supported meaning; a stale or unsupported result refuses export. Supported
+edits invalidate stale calculation-chain metadata and request Excel recalculation
+on next open. A scalar formula reference to a blank cell is cached as numeric zero;
+an explicit empty string remains a string cache, matching
+[Microsoft's documented reference behavior](https://support.microsoft.com/en-us/excel/clear-cells-of-contents-or-formats).
+
+Python `calculate_cells_to` accepts only functions marked `conformance-tested`
+for Python and evaluates the requested scalar formula cells and their transitive
+formula dependencies. Its preparation limits include 100,000 formula characters,
+100,000 cells per reference, 250,000 total range-expansion cells counting repeated
+and overlapping ranges, 100,000 formula-to-cell dependency edges, and 250,000
+grouped/table range checks. The evaluator's stricter formula-length limit still
+applies. Dependency discovery includes references in lazy branches, so static
+cycles or unsupported content in the closure can prevent calculation even when
+a branch would not be selected at runtime.
+
+Both toolkit sessions cap populated workbook cells and dependency edges at
+100,000. Atomic engine edit batches contain at most 10,000 edits; the
+[agent contract](agent-protocol.md) imposes a smaller limit of 100. Imported agent
+edits and Rust preservation-aware edits require original existing cells. Supported
+fresh-generation styles do not imply unrestricted imported-style editing.
+
+Macros and external data are never executed or fetched by either SDK. Excel may
+recalculate formulas and update workbook-defined external links when a person opens
+the output, depending on Excel settings. Macro-enabled `.xlsm`, legacy `.xls`,
+chart sheets, strict OOXML, structured table references, grouped/table formula
+calculation, worksheet spill placement and 1904-date formula calculation remain
+outside the supported workbook profile. Unsupported formula text can be retained
+for inspection and preservation; calculation depending on it is refused.
+
+Array results such as FILTER, SORT and UNIQUE are supported by the shape-preserving
+formula API. That does not imply that the workbook adapters can place or edit
+worksheet spill cells. Input bindings remain explicit application metadata and
+must be supplied when importing XLSX; Excel defined names do not establish those
+bindings automatically.

@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "profile": "workbook-toolkit-v1",
+  "backends": {
+    "python-reference": "Independent legacy Python formula evaluator",
+    "python": "Independent Python formula, expression, workbook, calculation and agent-operation implementation; default Python API",
+    "rust": "Independent Rust formula, expression, workbook, calculation and agent-operation implementation",
+    "python-native": "Optional interoperability bridge selecting the Rust implementation explicitly",
+    "python-ooxml": "Independent standard-library package reader, generator and preservation-aware patch writer",
+    "rust-ooxml": "Independent package reader, generator and preservation-aware patch writer using low-level ZIP/XML libraries; imported edits require existing cells"
+  },
+  "evidence": {
+    "documented": "Linked Microsoft sources in formulas.json",
+    "observed": "Successful Excel observation receipts with application version and settings",
+    "profile": "Explicit Workbook Forge behavior; parity alone does not establish Excel compatibility"
+  },
+  "primitives": [
+    {"id":"scalar-cells","read":true,"construct":true,"calculate":true,"transform":true,"export":true,"boundary":"number, text, boolean, blank, error; date calculations retain the 1900-system evaluator profile"},
+    {"id":"formula-expressions","read":true,"construct":true,"calculate":true,"transform":true,"export":true,"boundary":"existing bounded function/operator profile; unsupported formulas preserved but never calculated from caches"},
+    {"id":"a1-references","read":true,"construct":true,"calculate":true,"transform":true,"export":true,"boundary":"cell/range, mixed copy anchors and sheet qualification; no general row/column insertion"},
+    {"id":"arrays","read":true,"construct":false,"calculate":true,"transform":false,"export":false,"boundary":"shaped formula results only; grouped worksheet formulas preserved, spill projection unsupported"},
+    {"id":"application-bindings","read":false,"construct":true,"calculate":true,"transform":false,"export":true,"boundary":"explicit input/output cell bindings; not Excel defined-name expression evaluation; bindings require explicit reattachment on XLSX import"},
+    {"id":"presentation","read":true,"construct":true,"calculate":false,"transform":true,"export":true,"boundary":"number format, basic font/fill/alignment and column widths; imported unsupported styles retained"},
+    {"id":"input-validation","read":true,"construct":true,"calculate":true,"transform":false,"export":true,"boundary":"scalar types, required values, numeric bounds and short choice lists; existing unsupported Excel validation is preserved only"},
+    {"id":"names-and-tables","read":true,"construct":false,"calculate":false,"transform":false,"export":true,"boundary":"inspect/preserve metadata; no defined-name expressions or structured table formula evaluation"},
+    {"id":"package-preservation","read":true,"construct":false,"calculate":false,"transform":false,"export":true,"boundary":"untouched part payloads remain unchanged; affected unsupported structures reject edits; Rust imported edits require existing cells"},
+    {"id":"xml-pattern-extraction","read":true,"construct":false,"calculate":false,"transform":false,"export":false,"boundary":"ten namespace/path patterns with bounded paged records, original formula text, typed references and catalog function mappings; shared formula reconstruction is inspection only"},
+    {"id":"agent-operations","read":true,"construct":false,"calculate":true,"transform":true,"export":true,"boundary":"nine schema-described operations over one host-selected model; paginated provenance views, detached previews and revision-checked mutations; imported agent edits require existing-cell content changes; JSON-lines transport, no MCP server"}
+  ],
+  "deferred": ["durable state store","distributed collaboration","offline merges","live external feeds","general structural editing","worksheet spill placement","charts and full grid UI","macros and external-link execution"]
+}

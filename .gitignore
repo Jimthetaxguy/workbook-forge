@@ -8,6 +8,9 @@ target/
 dist/
 build/
 *.egg-info/
+*.so
+*.dylib
+.verification/
 
 # Local archives and ad-hoc backups; history lives in git commits.
 _archive-*/

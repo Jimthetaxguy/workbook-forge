@@ -35,6 +35,11 @@ class CatalogError(ValueError):
     """The checked-in catalog is malformed or internally inconsistent."""
 
 
+def workbook_capabilities() -> dict[str, Any]:
+    """Return primitive support separately from formula-function coverage."""
+    return json.loads(_catalog_file("workbook-capabilities.json").read_text(encoding="utf-8"))
+
+
 @lru_cache(maxsize=1)
 def _load() -> tuple[dict[str, Any], dict[str, dict[str, Any]]]:
     inventory = json.loads(_catalog_file("function_inventory.json").read_text(encoding="utf-8"))

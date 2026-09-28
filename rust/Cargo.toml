@@ -1,15 +1,23 @@
 [package]
 name = "workbook_forge"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 rust-version = "1.88"
 license = "MIT"
-description = "Bounded Excel formula evaluator for Workbook Forge"
+description = "Independent Rust Excel SDK with bounded calculation and agent operations"
+repository = "https://github.com/Jimthetaxguy/workbook-forge"
+readme = "../README.md"
+license-file = "../LICENSE"
+include = ["/src/**", "/examples/**", "/Cargo.toml", "/Cargo.lock"]
 
 [lib]
 name = "workbook_forge"
 path = "src/lib.rs"
 
 [dependencies]
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = { version = "1.0.151", features = ["unbounded_depth"] }
+quick-xml = "0.42.0"
+zip = { version = "8.6.0", default-features = false, features = ["deflate-flate2-zlib-rs"] }
 
 [dev-dependencies]

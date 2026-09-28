@@ -35,9 +35,9 @@ PERMISSIVE_CLASSIFIERS = {
 COPYLEFT_TEXT = re.compile(r"GPL|General Public|Mozilla|\bMPL\b|\bEPL\b|Eclipse Public|EUPL|CDDL|SSPL|BUSL")
 PERMISSIVE_TEXT = re.compile(r"\b(MIT|BSD|Apache|ISC|PSF|Python Software Foundation|Unlicense|Zlib)\b")
 
-# Rust crates that have passed a license review. Add a crate only after checking
-# that its license, and its dependencies' licenses, satisfy the rule above.
-REVIEWED_RUST_CRATES: frozenset[str] = frozenset()
+# Registry packages are reviewed by exact version and content checksum, including
+# the Python bridge's transitive dependencies. Evidence lives with the catalog.
+RUST_LICENSE_REVIEW = ROOT / "catalog" / "dependency-licenses.json"
 
 
 @pytest.mark.parametrize(
@@ -114,8 +114,9 @@ def _license_verdict(distribution: metadata.Distribution) -> tuple[str, bool]:
 
 
 def test_python_dependencies_use_permissive_licenses():
-    project = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))["project"]
-    declared = [*project.get("dependencies", []), *project.get("optional-dependencies", {}).get("test", [])]
+    configuration = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    project = configuration["project"]
+    declared = [*project.get("dependencies", []), *project.get("optional-dependencies", {}).get("test", []), *configuration["build-system"]["requires"]]
     assert declared, "pyproject.toml should declare the test dependencies the suite needs"
     pending = [Requirement(requirement) for requirement in declared]
     checked: dict[str, str] = {}
@@ -143,10 +144,22 @@ def test_python_dependencies_use_permissive_licenses():
 
 
 def test_rust_crate_has_no_unreviewed_third_party_dependencies():
-    lock = (ROOT / "rust" / "Cargo.lock").read_text(encoding="utf-8")
-    crates = set(re.findall(r'^name = "([^"]+)"', lock, flags=re.MULTILINE))
-    unreviewed = sorted(crates - {"workbook_forge"} - REVIEWED_RUST_CRATES)
-    assert not unreviewed, (
-        f"Rust crates need a license review (permissive, no copyleft) before use: {unreviewed}. "
-        "After the review, add them to REVIEWED_RUST_CRATES."
-    )
+    evidence = json.loads(RUST_LICENSE_REVIEW.read_text())["packages"]
+    reviewed = {(entry["name"], entry["version"]): entry for entry in evidence}
+    assert len(reviewed) == len(evidence), "duplicate dependency review records"
+    problems = []
+    for manifest in ("rust", "native"):
+        lock = tomllib.loads((ROOT / manifest / "Cargo.lock").read_text())
+        for package in lock["package"]:
+            if "source" not in package:
+                assert package["name"] in {"workbook_forge", "workbook_forge_python"}
+                continue
+            record = reviewed.get((package["name"], package["version"]))
+            if record is None:
+                problems.append(f"unreviewed: {package['name']} {package['version']}")
+                continue
+            assert package["source"] == "registry+https://github.com/rust-lang/crates.io-index"
+            assert record["registry_checksum"] == package["checksum"]
+            assert _spdx_is_permissive(record["license"]), record
+            assert record["license_files"], record
+    assert not problems, "\n".join(problems)
