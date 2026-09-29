@@ -516,18 +516,20 @@ def _evaluate(
     results: dict[str, Any],
 ) -> Any:
     environment: dict[str, Any] = {}
+    # The loop needs its own name: `address` is the cell being evaluated and
+    # is used below to say where a diagnostic belongs.
     for sheet in workbook.sheets:
-        for address, cell in sheet.cells.items():
-            key = f"{sheet.name}!{address}"
+        for other, cell in sheet.cells.items():
+            key = f"{sheet.name}!{other}"
             if cell.formula is not None:
                 if key not in results:
                     continue
                 scalar = _engine_scalar(results[key])
             else:
                 scalar = _engine_scalar(cell.value)
-            environment[f"{sheet.name.casefold()}!{address}"] = scalar
+            environment[f"{sheet.name.casefold()}!{other}"] = scalar
             if sheet.name == sheet_name:
-                environment[address] = scalar
+                environment[other] = scalar
     outcome = evaluate_result(expression, environment, sheet_name)
     if isinstance(outcome, ArrayValue):
         return _cell_diagnostic(
