@@ -37,10 +37,13 @@ across the language boundary. Ad-hoc dicts and dual native types drift.
      invent another binding schema.
    - `Sheet`: `name`, `dimensions` (optional `[min_row, max_row, min_col, max_col]`),
      `cells` (map of A1 address → Cell).
-   - `Cell`: `address`, `value` (JSON null/number/string/bool or error object),
-     `data_type`, `number_format` (optional string), `formula` (optional Formula).
+   - `Cell`: `address`, authored `value` for literal/input cells (JSON
+     null/number/string/bool or error object), `data_type`, `number_format`
+     (optional string), and `formula` (optional Formula).
    - `Formula`: `expression`, `dependencies` (array of `Sheet!A1` strings),
-     `result` (same value union as Cell.value).
+     and an optional cached value read from OOXML. A formula cache is an
+     imported observation, distinct from an authored cell value and from a
+     result freshly calculated by Workbook Forge.
 4. **Versioning.** `schema_version` is an integer on every serialized document.
    Bump it when the schema changes. Each reader accepts every supported older
    version through an explicit compatibility path or rejects it with an
@@ -52,6 +55,12 @@ across the language boundary. Ad-hoc dicts and dual native types drift.
    workbook and golden result fixtures under `tests/fixtures/canonical/`.
    Python and Rust suites load the same files and bytes; neither suite keeps a
    language-local copy of the canonical workbook or expected result.
+7. **Cache is not a calculation.** Intake preserves an existing formula cache
+   separately from formula text and literal cell values. A calculation report
+   records fresh results with backend and model provenance; an imported cache
+   can never satisfy a calculation acceptance check. Export may write a
+   calculated result as an OOXML cache, but must retain the calculation receipt
+   that produced it.
 
 ### Done when
 - A checked-in schema file exists under `schemas/`; Python and Rust independently
