@@ -87,7 +87,12 @@ differently for volatiles, iteration, arrays, and version quirks.
 2. **Required coverage classes** (each needs at least one fixture):
    - Volatile functions (`NOW`, `RAND`, and peers the engines claim to support).
    - Iterative calculation settings (when the source workbook enables them).
-   - Array / dynamic-array formulas in the supported set.
+   - Array / dynamic-array formulas in the supported set, including at least
+     one non-scalar result whose intended destination range is checked after
+     Excel recalculates and the workbook is reimported. Reducing an array to a
+     scalar does not prove spill placement. If spill placement is unsupported,
+     test the explicit refusal and leave this coverage gate open; do not claim
+     array export parity from calculation alone.
    - Cross-version Excel quirks called out in `docs/excel-observations.md` that
      affect recalculation of exported files.
 3. **Harness.** A named test harness (script or pytest/cargo target) that:
