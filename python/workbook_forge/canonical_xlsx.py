@@ -11,6 +11,7 @@ passing spill test.
 from __future__ import annotations
 
 import os
+import re
 import tempfile
 import zipfile
 from pathlib import Path
@@ -165,6 +166,7 @@ def read_package(path: str | Path) -> dict[str, Any]:
         styles, _metadata = _styles(package)
         for sheet in package.sheet_names:
             for address, element in package._cells[sheet].items():
+                _refuse_a_cell_that_would_be_misread(element, sheet, address)
                 stored = package.get(sheet, address)
                 attrs = dict(stored.formula_attributes)
                 kind = stored.formula_kind
@@ -345,6 +347,27 @@ def _scalar_caches(workbook: Workbook) -> dict[tuple[str, str], Any]:
                 value, sheet.name, address
             )
     return caches
+
+
+_CELL_TYPES = frozenset({None, "n", "s", "str", "inlineStr", "b", "e"})
+# A number as OOXML writes one. Python's float() also reads 1_000, digits
+# from other scripts and padded text, none of which is a number in a workbook.
+_STORED_NUMBER = re.compile(r"[+-]?([0-9]+\.?[0-9]*|\.[0-9]+)([eE][+-]?[0-9]+)?")
+
+
+def _refuse_a_cell_that_would_be_misread(element: Any, sheet: str, address: str) -> None:
+    kind = element.attrib.get("t")
+    if kind not in _CELL_TYPES:
+        what = "a date written as text" if kind == "d" else f"type {kind!r}"
+        raise CanonicalPackageError(
+            "unsupported_cell", f"{sheet}!{address} holds {what}, which would be read as plain text"
+        )
+    stored = element.find(_q("v"))
+    if kind in (None, "n") and stored is not None and stored.text is not None:
+        if _STORED_NUMBER.fullmatch(stored.text) is None:
+            raise CanonicalPackageError(
+                "unsupported_cell", f"{sheet}!{address} holds a number that is not written as a number"
+            )
 
 
 def _spill_marker(kind: str | None, attributes: dict[str, str], cell_attributes: dict[str, str]) -> str | None:

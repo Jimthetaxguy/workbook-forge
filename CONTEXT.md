@@ -115,14 +115,15 @@ The Excel round-trip harness is `tools/excel_oracle.py`, with `tools/canonical_e
 - Codex's documents described a shape of the model that `main` did not adopt. They now describe version 1 as built, and `docs/specs/red-flags.md` has a table of which requirements the code meets.
 - Intake from `impl/v1-intake` is ported to the canonical model. It reuses the existing package reader and adds no address parser of its own.
 - Not carried over, because each needs a decision or a change in both engines: typed binding constraints, the calculation session with revisions, refusal of duplicate JSON keys.
-- Intake returns nothing the canonical reader would refuse, and lists what the workbook holds that version 1 does not carry in `metadata.intake.not_carried`. The table at the top of `docs/specs/red-flags.md` says which requirements are met.
+- Intake returns nothing the canonical reader would refuse, and lists by name everything in the file that version 1 does not carry in `metadata.intake.not_carried`. The table at the top of `docs/specs/red-flags.md` says which requirements are met.
 - The Jev critic reads its key from `TYPESAFE_API_KEY`, a `.env` file, or the command in `TYPESAFE_KEY_COMMAND`. It names no secret store and no directory. `tools/with-typesafe-key.sh` asks the critic for the key, so the two follow one rule.
 ### 2026-09-29 — claude-code — adversarial review, gate and first fixes
 - `main` failed its own checks: `cargo clippy -D warnings` rejected `rust/src/model.rs`. Fixed. Nothing had been running the checks.
 - Added the gate, the review protocol and its tools. Seven reviewers, each given one lens and no history, reported 56 findings. Eleven were planted defects. Of the other 45, independent refuters knocked down four and the rest were reproduced on unchanged code.
 - Twelve small deliberate faults in limit checks were applied one at a time. Nine left every test passing. Tests now catch eight; the ninth is a redundant check.
 - Fixed in the Python canonical model: a diagnostic filed against the wrong cell, and formula references past XFD1048576 treated as ordinary references.
-- `ROUND`, `ROUNDUP`, `ROUNDDOWN` and `TRUNC` round a number as its 15-significant-digit decimal form, so a two-decimal amount is no longer moved by a cent. The rule is in `docs/behavior-profiles.md` and has not been checked in Excel.
+- The rounding functions round the stored value exactly, except that a number within two binary64 values of a boundary is taken as lying on it. A two-decimal amount is no longer moved by a cent. The rule is in `docs/behavior-profiles.md` and has not been checked in Excel.
+- **Boundary allowance:** the two binary64 values either side of a rounding boundary within which a number is taken as lying on the boundary.
 - Known and not yet fixed, most serious first: counting functions return an error when any cell in the range holds one; the engines disagree on criteria over mixed cell types.
 ### 2026-09-28 — codex/Codex — canonical model and export evidence
 - Updated the v1 dependency order: the shared JSON model is on `impl/v1-intake`, direct Python/Rust calculation is in progress on `impl/v1-calc-binding`, and headless wiring follows the bound export proof.

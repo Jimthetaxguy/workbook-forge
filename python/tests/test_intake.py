@@ -43,14 +43,20 @@ def _write(
     in_workbook: str = "",
     states: dict[str, str] | None = None,
     styles: str | None = None,
+    before_cells: str = "",
+    parts: dict[str, tuple[str, str]] | None = None,
+    sheet_relationships: str = "",
+    date1904: bool = False,
 ) -> Path:
+    """Write a workbook. `parts` maps a part name to its content type and text."""
     names = list(sheets)
     states = states or {}
+    extra = parts or {}
     overrides = "".join(
         f'<Override PartName="/xl/worksheets/sheet{index}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>'
         for index in range(1, len(names) + 1)
     )
-    parts = {
+    written = {
         "[Content_Types].xml": (
             '<?xml version="1.0"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
             '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
@@ -61,6 +67,7 @@ def _write(
                 if styles is not None
                 else ""
             )
+            + "".join(f'<Override PartName="/{name}" ContentType="{kind}"/>' for name, (kind, _) in extra.items())
             + f"{overrides}</Types>"
         ),
         "_rels/.rels": (
@@ -68,7 +75,9 @@ def _write(
             f'<Relationship Id="rId1" Type="{RELATIONSHIPS}/officeDocument" Target="xl/workbook.xml"/></Relationships>'
         ),
         "xl/workbook.xml": (
-            f'<?xml version="1.0"?><workbook xmlns="{MAIN}" xmlns:r="{RELATIONSHIPS}"><sheets>'
+            f'<?xml version="1.0"?><workbook xmlns="{MAIN}" xmlns:r="{RELATIONSHIPS}">'
+            + ('<workbookPr date1904="1"/>' if date1904 else "")
+            + "<sheets>"
             + "".join(
                 f'<sheet name="{name}" sheetId="{index}"'
                 + (f' state="{states[name]}"' if name in states else "")
@@ -88,13 +97,20 @@ def _write(
         ),
     }
     if styles is not None:
-        parts["xl/styles.xml"] = styles
+        written["xl/styles.xml"] = styles
     for index, name in enumerate(names, start=1):
-        parts[f"xl/worksheets/sheet{index}.xml"] = (
-            f'<?xml version="1.0"?><worksheet xmlns="{MAIN}"><sheetData>{sheets[name]}</sheetData>{after_cells}</worksheet>'
+        written[f"xl/worksheets/sheet{index}.xml"] = (
+            f'<?xml version="1.0"?><worksheet xmlns="{MAIN}">{before_cells}<sheetData>{sheets[name]}</sheetData>{after_cells}</worksheet>'
         )
+        if sheet_relationships:
+            written[f"xl/worksheets/_rels/sheet{index}.xml.rels"] = (
+                '<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+                f"{sheet_relationships}</Relationships>"
+            )
+    for name, (_, text) in extra.items():
+        written[name] = text
     with zipfile.ZipFile(path, "w") as archive:
-        for name, text in parts.items():
+        for name, text in written.items():
             archive.writestr(name, text)
     return path
 
@@ -299,35 +315,173 @@ def test_number_formats_are_kept_and_one_that_cannot_be_named_is_listed(tmp_path
         "F1": None,
     }
     assert book.metadata["intake"]["not_carried"] == [
-        {"kind": "number_format", "sheet": "Data", "format_id": 7, "count": 2}
+        {"where": "package", "what": "cell styles other than number formats", "count": 1},
+        {"where": "sheet", "what": "number format 7", "count": 2, "sheet": "Data"},
     ]
+
+
+# ECMA-376 part 1, 18.8.30. Written out here from the standard, not read from the code.
+SAME_IN_EVERY_LANGUAGE = {
+    1: "0", 2: "0.00", 3: "#,##0", 4: "#,##0.00", 9: "0%", 10: "0.00%", 11: "0.00E+00", 12: "# ?/?",
+    13: "# ??/??", 14: "mm-dd-yy", 15: "d-mmm-yy", 16: "d-mmm", 17: "mmm-yy", 18: "h:mm AM/PM",
+    19: "h:mm:ss AM/PM", 20: "h:mm", 21: "h:mm:ss", 22: "m/d/yy h:mm", 37: "#,##0 ;(#,##0)",
+    38: "#,##0 ;[Red](#,##0)", 39: "#,##0.00;(#,##0.00)", 40: "#,##0.00;[Red](#,##0.00)", 45: "mm:ss",
+    46: "[h]:mm:ss", 47: "mmss.0", 48: "##0.0E+0", 49: "@",
+}
+
+
+@pytest.mark.parametrize("format_id", range(0, 60))
+def test_every_built_in_number_format(tmp_path, format_id):
+    styles = (
+        f'<?xml version="1.0"?><styleSheet xmlns="{MAIN}"><fonts count="1"><font/></fonts>'
+        '<fills count="1"><fill/></fills><borders count="1"><border/></borders>'
+        f'<cellXfs count="1"><xf numFmtId="{format_id}"/></cellXfs></styleSheet>'
+    )
+    book = intake_workbook_model(
+        _write(tmp_path / "one.xlsx", {"Data": '<row r="1"><c r="A1" s="0"><v>1</v></c></row>'}, styles=styles)
+    )
+    listed = [entry for entry in book.metadata["intake"]["not_carried"] if entry["where"] == "sheet"]
+    assert book.sheet("Data").cells["A1"].number_format == SAME_IN_EVERY_LANGUAGE.get(format_id)
+    if format_id == 0 or format_id in SAME_IN_EVERY_LANGUAGE:
+        assert listed == []
+    else:
+        assert listed == [{"where": "sheet", "what": f"number format {format_id}", "count": 1, "sheet": "Data"}]
 
 
 # What version 1 does not carry is listed
 
 
-def test_content_with_no_place_in_the_model_is_listed(tmp_path):
-    book = _write(
-        tmp_path / "rich.xlsx",
-        {"Shown": '<row r="1"><c r="A1"><v>1</v></c></row>', "Kept back": '<row r="1"><c r="A1"><v>2</v></c></row>'},
-        after_cells=(
-            '<mergeCells count="2"><mergeCell ref="C1:D1"/><mergeCell ref="C2:D2"/></mergeCells>'
-            '<dataValidations count="1"><dataValidation type="whole" sqref="A1"/></dataValidations>'
-        ),
-        in_workbook='<definedNames><definedName name="Rate">Shown!$A$1</definedName></definedNames>',
-        states={"Kept back": "hidden"},
-    )
-    listed = intake_workbook_model(book).metadata["intake"]["not_carried"]
-    assert listed == [
-        {"kind": "defined_names", "count": 1},
-        {"kind": "hidden_sheet", "sheet": "Kept back"},
-        {"kind": "merged_cells", "sheet": "Shown", "count": 2},
-        {"kind": "data_validations", "sheet": "Shown", "count": 1},
-        {"kind": "merged_cells", "sheet": "Kept back", "count": 2},
-        {"kind": "data_validations", "sheet": "Kept back", "count": 1},
+ONE_CELL = '<row r="1"><c r="A1"><v>1</v></c></row>'
+X14 = "http://schemas.microsoft.com/office/spreadsheetml/2009/9/main"
+MC = "http://schemas.openxmlformats.org/markup-compatibility/2006"
+OFFICE = "application/vnd.openxmlformats-officedocument"
+
+
+def _listed(tmp_path, cells=ONE_CELL, **written):
+    path = _write(tmp_path / "rich.xlsx", {"Shown": cells}, **written)
+    jsonschema.validate(json.loads(intake_workbook(path)), SCHEMA)
+    listed = intake_workbook_model(path).metadata["intake"]["not_carried"]
+    assert summarize(intake_workbook_model(path))["not_carried"] == listed
+    return [(entry["where"], entry.get("sheet"), entry["what"], entry["count"]) for entry in listed]
+
+
+def test_a_plain_workbook_has_nothing_to_list(tmp_path):
+    assert _listed(tmp_path) == []
+
+
+@pytest.mark.parametrize(
+    ("markup", "what", "count"),
+    [
+        ('<mergeCells count="2"><mergeCell ref="C1:D1"/><mergeCell ref="C2:D2"/></mergeCells>', "mergeCells", 2),
+        ('<dataValidations count="1"><dataValidation type="whole" sqref="A1"/></dataValidations>', "dataValidations", 1),
+        ('<conditionalFormatting sqref="A1"><cfRule type="cellIs" priority="1"/></conditionalFormatting>', "conditionalFormatting", 1),
+        ('<hyperlinks><hyperlink ref="A1" location="Shown!A1"/></hyperlinks>', "hyperlinks", 1),
+        ('<autoFilter ref="A1:A1"/>', "autoFilter", 1),
+        ('<sheetProtection sheet="1"/>', "sheetProtection", 1),
+        ('<protectedRanges><protectedRange sqref="A1" name="r"/></protectedRanges>', "protectedRanges", 1),
+        ('<scenarios><scenario name="s"/></scenarios>', "scenarios", 1),
+        ('<headerFooter><oddHeader>Draft</oddHeader></headerFooter>', "headerFooter", 1),
+        ('<pageSetup orientation="landscape"/>', "pageSetup", 1),
+        ('<oleObjects><oleObject progId="x" shapeId="1"/></oleObjects>', "oleObjects", 1),
+        ('<an_element_nobody_has_heard_of/>', "an_element_nobody_has_heard_of", 1),
+        # Excel 2010 and later keep newer forms of validation, formats and sparklines here.
+        (f'<extLst><ext uri="x"><x14:dataValidations xmlns:x14="{X14}" count="1"/></ext><ext uri="y"/></extLst>', "extLst", 2),
+        (f'<mc:AlternateContent xmlns:mc="{MC}"><mc:Choice Requires="x14"/></mc:AlternateContent>', "AlternateContent (extension)", 1),
+    ],
+)
+def test_whatever_follows_the_cells_of_a_sheet_is_listed(tmp_path, markup, what, count):
+    assert _listed(tmp_path, after_cells=markup) == [("sheet", "Shown", what, count)]
+
+
+@pytest.mark.parametrize(
+    ("markup", "what", "count"),
+    [
+        ('<sheetViews><sheetView workbookViewId="0"><pane ySplit="1" state="frozen"/></sheetView></sheetViews>', "sheetViews", 1),
+        ('<cols><col min="2" max="2" hidden="1"/><col min="4" max="4" width="30"/></cols>', "cols", 2),
+        ('<sheetPr><tabColor rgb="FFFF0000"/></sheetPr>', "sheetPr", 1),
+    ],
+)
+def test_whatever_comes_before_the_cells_of_a_sheet_is_listed(tmp_path, markup, what, count):
+    assert _listed(tmp_path, before_cells=markup) == [("sheet", "Shown", what, count)]
+
+
+@pytest.mark.parametrize(
+    ("cells", "what", "count"),
+    [
+        ('<row r="1" hidden="1"><c r="A1"><v>1</v></c></row><row r="2" hidden="1"><c r="A2"><v>1</v></c></row>', "row attribute hidden", 2),
+        ('<row r="1" ht="40" customHeight="1"><c r="A1"><v>1</v></c></row>', "row attribute ht", 1),
+        ('<row r="1"><c r="A1" vm="1"><v>1</v></c></row>', "cell attribute vm", 1),
+        ('<row r="1"><c r="A1" ph="1"><v>1</v></c></row>', "cell attribute ph", 1),
+        ('<row r="1"><c r="A1"><v>1</v><extLst><ext uri="x"/></extLst></c></row>', "cell element extLst", 1),
+        ('<row r="1"><c r="A1" t="inlineStr"><is><r><rPr><b/></rPr><t>bold</t></r><r><t> plain</t></r></is></c></row>', "text formatting within a cell", 1),
+        ('<row r="1"><c r="A1" t="inlineStr"><is><t>kanji</t><rPh sb="0" eb="1"><t>kana</t></rPh></is></c></row>', "phonetic text", 1),
+    ],
+)
+def test_what_a_row_or_a_cell_holds_beyond_its_value_is_listed(tmp_path, cells, what, count):
+    listed = _listed(tmp_path, cells=cells)
+    assert ("sheet", "Shown", what, count) in listed
+    assert all(entry[2].split()[0] in {"row", "cell", "text", "phonetic"} for entry in listed)
+
+
+@pytest.mark.parametrize(
+    ("markup", "what", "count"),
+    [
+        ('<definedNames><definedName name="Rate">Shown!$A$1</definedName><definedName name="_xlnm.Print_Area">Shown!$A$1</definedName></definedNames>', "definedNames", 2),
+        ('<calcPr calcMode="manual" iterate="1"/>', "calcPr", 1),
+        ('<workbookProtection lockStructure="1"/>', "workbookProtection", 1),
+        ('<externalReferences><externalReference xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" r:id="rId9"/></externalReferences>', "externalReferences", 1),
+        ('<pivotCaches><pivotCache cacheId="1" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" r:id="rId9"/></pivotCaches>', "pivotCaches", 1),
+        ('<bookViews><workbookView/></bookViews>', "bookViews", 1),
+    ],
+)
+def test_whatever_else_the_workbook_part_holds_is_listed(tmp_path, markup, what, count):
+    assert _listed(tmp_path, in_workbook=markup) == [("workbook", None, what, count)]
+
+
+@pytest.mark.parametrize("state", ["hidden", "veryHidden"])
+def test_a_sheet_that_is_not_shown_is_listed(tmp_path, state):
+    path = _write(tmp_path / "two.xlsx", {"Shown": ONE_CELL, "Kept back": ONE_CELL}, states={"Kept back": state})
+    assert intake_workbook_model(path).metadata["intake"]["not_carried"] == [
+        {"where": "workbook", "what": f"sheet state {state}", "count": 1, "sheet": "Kept back"}
     ]
-    assert summarize(intake_workbook_model(book))["not_carried"] == listed
-    jsonschema.validate(json.loads(intake_workbook(book)), SCHEMA)
+
+
+@pytest.mark.parametrize(
+    ("name", "kind"),
+    [
+        ("xl/comments1.xml", f"{OFFICE}.spreadsheetml.comments+xml"),
+        ("xl/drawings/drawing1.xml", f"{OFFICE}.drawing+xml"),
+        ("xl/charts/chart1.xml", f"{OFFICE}.drawingml.chart+xml"),
+        ("xl/externalLinks/externalLink1.xml", f"{OFFICE}.spreadsheetml.externalLink+xml"),
+        ("xl/connections.xml", f"{OFFICE}.spreadsheetml.connections+xml"),
+        ("xl/theme/theme1.xml", f"{OFFICE}.theme+xml"),
+        ("xl/something/new.xml", "application/x-not-yet-invented"),
+    ],
+)
+def test_a_part_with_no_place_in_the_model_is_listed(tmp_path, name, kind):
+    assert _listed(tmp_path, parts={name: (kind, "<x/>")}) == [("package", None, f"part of type {kind}", 1)]
+
+
+def test_a_part_joined_to_a_sheet_is_listed_by_how_it_is_joined(tmp_path):
+    joined = "".join(
+        f'<Relationship Id="rId{n}" Type="{RELATIONSHIPS}/{kind}" Target="{target}"{mode}/>'
+        for n, (kind, target, mode) in enumerate(
+            [("comments", "../comments1.xml", ""), ("hyperlink", "https://example.invalid/", ' TargetMode="External"')], start=1
+        )
+    )
+    listed = _listed(
+        tmp_path, sheet_relationships=joined, parts={"xl/comments1.xml": (f"{OFFICE}.spreadsheetml.comments+xml", "<x/>")}
+    )
+    assert listed == [
+        ("package", None, f"part of type {OFFICE}.spreadsheetml.comments+xml", 1),
+        ("package", None, "relationship comments", 1),
+        ("package", None, "relationship hyperlink", 1),
+    ]
+
+
+def test_the_list_holds_names_from_the_file_and_no_paths(tmp_path):
+    path = _write(tmp_path / "rich.xlsx", {"Shown": ONE_CELL}, after_cells='<autoFilter ref="A1:A1"/>')
+    assert str(tmp_path) not in json.dumps(intake_workbook_model(path).metadata)
 
 
 # Refusals
@@ -408,3 +562,73 @@ def test_whatever_intake_returns_the_reader_accepts(tmp_path):
         document = intake_workbook(_write(tmp_path / f"{name}.xlsx", {name: cells}))
         jsonschema.validate(json.loads(document), SCHEMA)
         assert hydrate(document).to_json().encode("utf-8") == document
+
+
+@pytest.mark.parametrize(
+    "formula",
+    [
+        '<f t="array" ref="A1">SUM(B1:B2*2)</f>',  # an array formula in one cell
+        '<f t="array" ref="A1:A3">SEQUENCE(3)</f>',
+        '<f t="shared" ref="A1:A3" si="0">ROW()</f>',
+    ],
+)
+def test_no_array_or_grouped_formula_gets_through(tmp_path, formula):
+    reason = _refused(tmp_path, f'<row r="1"><c r="A1">{formula}<v>1</v></c></row>')
+    assert reason.startswith(("array_spill_refused", "unsupported_formula_group"))
+
+
+def test_a_dynamic_array_marked_only_by_cell_metadata_is_refused(tmp_path):
+    reason = _refused(tmp_path, '<row r="1"><c r="A1" cm="1"><f>SEQUENCE(3)</f><v>1</v></c></row>')
+    assert reason.startswith("array_spill_refused")
+
+
+def test_a_grouped_formula_that_is_also_marked_as_dynamic_is_refused(tmp_path):
+    cells = '<row r="1"><c r="A1" cm="1"><f t="shared" ref="A1:A2" si="0">ROW()</f><v>1</v></c></row>'
+    assert _refused(tmp_path, cells).startswith(("array_spill_refused", "unsupported_formula_group"))
+
+
+def test_a_workbook_that_counts_dates_from_1904_is_refused(tmp_path):
+    finished = _cli(_write(tmp_path / "old.xlsx", {"Data": ONE_CELL}, date1904=True))
+    assert finished.returncode == 1 and finished.stdout == ""
+    assert "1904" in json.loads(finished.stderr)["error"]
+
+
+@pytest.mark.parametrize(
+    ("cell", "reason"),
+    [
+        ('<c r="A1" t="d"><v>2024-01-15T00:00:00</v></c>', "a date written as text"),
+        ('<c r="A1" t="zz"><v>12</v></c>', "type 'zz'"),
+        ('<c r="A1"><v>1_000</v></c>', "not written as a number"),
+        ('<c r="A1"><v> 12 </v></c>', "not written as a number"),
+        ('<c r="A1"><v>\uff11\uff12</v></c>', "not written as a number"),
+        ('<c r="A1" t="n"><v>0x10</v></c>', "not written as a number"),
+        ('<c r="A1"><v>Infinity</v></c>', "not written as a number"),
+    ],
+)
+def test_a_stored_value_that_would_be_misread_is_refused(tmp_path, cell, reason):
+    refusal = _refused(tmp_path, f'<row r="1">{cell}</row>')
+    assert refusal.startswith("unsupported_cell") and reason in refusal and "Data!A1" in refusal
+
+
+@pytest.mark.parametrize(
+    ("stored", "value"),
+    [("12", 12), ("-0.5", -0.5), ("1.5E+3", 1500), ("2.5e-3", 0.0025), (".5", 0.5), ("7.", 7), ("+3", 3)],
+)
+def test_a_number_as_a_workbook_writes_it_is_read(tmp_path, stored, value):
+    book = intake_workbook_model(_write(tmp_path / "n.xlsx", {"Data": f'<row r="1"><c r="A1"><v>{stored}</v></c></row>'}))
+    assert book.sheet("Data").cells["A1"].value == value
+
+
+def test_the_reader_every_command_shares_refuses_a_cell_with_no_address(tmp_path):
+    from workbook_forge.workbook import UnsupportedWorkbook, Workbook as Package
+
+    path = _write(tmp_path / "placed.xlsx", {"Data": '<row r="1"><c r="A1"><v>111</v></c><c><v>222</v></c></row>'})
+    with pytest.raises(UnsupportedWorkbook, match="no address"):
+        Package.open(path)
+
+
+def test_a_workbook_with_macros_is_refused(tmp_path):
+    path = _write(tmp_path / "macro.xlsx", {"Data": ONE_CELL}, parts={"xl/vbaProject.bin": ("application/vnd.ms-office.vbaProject", "x")})
+    finished = _cli(path)
+    assert finished.returncode == 1 and finished.stdout == ""
+    assert "macro" in json.loads(finished.stderr)["error"]

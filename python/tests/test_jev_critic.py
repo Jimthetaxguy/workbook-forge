@@ -23,6 +23,8 @@ _spec = importlib.util.spec_from_file_location("jev_critic", TOOL)
 critic = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(critic)
 
+# The class as it ships. Some tests put a stand-in under its name.
+CLIENT = critic.JevClient
 LABELS = ["excel_canonical_behavior", "artificial_local_profile", "syntax_or_spill_boundary"]
 SETTINGS = ("TYPESAFE_API_KEY", "TYPESAFE_ENV_FILE", "TYPESAFE_KEY_COMMAND")
 
@@ -62,8 +64,46 @@ def test_the_order_of_the_files_and_the_command(empty, monkeypatch, tmp_path):
     assert critic.resolve_api_key() == "dummy-root"
     (critic.ROOT / ".env").unlink()
     assert critic.resolve_api_key() == "dummy-named"
-    named.unlink()
+    named.write_text("OTHER=1\n")
     assert critic.resolve_api_key() == "dummy-command"
+
+
+def test_a_named_key_file_that_is_not_there_is_an_error(empty, monkeypatch, tmp_path):
+    monkeypatch.setenv("TYPESAFE_ENV_FILE", str(tmp_path / "absent.env"))
+    monkeypatch.setenv("TYPESAFE_KEY_COMMAND", "printf dummy-command")
+    with pytest.raises(critic.CriticError, match="TYPESAFE_ENV_FILE does not exist"):
+        critic.resolve_api_key()
+
+
+def test_the_last_definition_in_a_key_file_counts(empty):
+    (empty / ".env").write_text("TYPESAFE_API_KEY=dummy-old\nOTHER=1\nTYPESAFE_API_KEY=dummy-new\n")
+    assert critic.resolve_api_key() == "dummy-new"
+
+
+def test_a_key_file_saved_with_a_byte_order_mark_is_read(empty):
+    (empty / ".env").write_bytes(b"\xef\xbb\xbfTYPESAFE_API_KEY=dummy-123\n")
+    assert critic.resolve_api_key() == "dummy-123"
+
+
+@pytest.mark.parametrize(
+    ("line", "reason"),
+    [
+        ('TYPESAFE_API_KEY="dummy-123', "quote is not closed"),
+        ("TYPESAFE_API_KEY='dummy-123", "quote is not closed"),
+        ('TYPESAFE_API_KEY="dummy-123"456', "after the closing quote"),
+        ('TYPESAFE_API_KEY="dummy-\\"123"', "after the closing quote"),
+        ("TYPESAFE_API_KEY=${OTHER_KEY}", "needs a shell"),
+        ("TYPESAFE_API_KEY=$(cat key)", "needs a shell"),
+        ('TYPESAFE_API_KEY="dummy-$TAIL"', "needs a shell"),
+        ("TYPESAFE_API_KEY=dummy\\-123", "needs a shell"),
+        ("TYPESAFE_API_KEY=dummy 123", "one line of plain characters"),
+    ],
+)
+def test_a_line_that_cannot_be_read_for_certain_is_refused(empty, line, reason):
+    (empty / ".env").write_text(line + "\n")
+    with pytest.raises(critic.CriticError, match=reason) as refused:
+        critic.resolve_api_key()
+    assert "dummy" not in str(refused.value) and "line 1" in str(refused.value)
 
 
 def test_a_file_with_no_key_is_passed_over(empty, monkeypatch, tmp_path):
@@ -146,7 +186,7 @@ def test_the_wrapper_passes_the_key_and_keeps_the_directory(tmp_path):
 
 def test_the_wrapper_refuses_what_the_tool_refuses(tmp_path):
     done = _wrapped(tmp_path, {"TYPESAFE_KEY_COMMAND": "printf 'locked: dummy-123'; exit 3"}, *SHOW)
-    assert done.returncode == 2
+    assert done.returncode == 125
     assert done.stdout == ""
     assert "TYPESAFE_KEY_COMMAND failed" in done.stderr and "dummy" not in done.stderr
 
@@ -158,7 +198,27 @@ def test_the_wrapper_returns_the_code_of_its_command(tmp_path):
 
 def test_the_wrapper_with_no_command_explains_itself(tmp_path):
     done = _wrapped(tmp_path, {"TYPESAFE_API_KEY": "dummy-123"})
-    assert done.returncode == 2 and "usage" in done.stderr
+    assert done.returncode == 125 and "usage" in done.stderr
+
+
+def test_the_wrapper_tells_its_own_failure_from_its_command(tmp_path):
+    key = {"TYPESAFE_API_KEY": "dummy-123"}
+    assert _wrapped(tmp_path, key, sys.executable, "-c", "raise SystemExit(2)").returncode == 2
+    assert _wrapped(tmp_path, key, "no-such-command-anywhere").returncode == 127
+    assert _wrapped(tmp_path, key, "").returncode == 125
+    (tmp_path / "folder").mkdir()
+    assert _wrapped(tmp_path, key, str(tmp_path / "folder")).returncode == 126
+    assert _wrapped(tmp_path, {}, *SHOW).returncode == 125
+    for done in (_wrapped(tmp_path, key, ""), _wrapped(tmp_path, key, str(tmp_path / "folder"))):
+        assert "Traceback" not in done.stderr and len(done.stderr.strip().splitlines()) == 1
+
+
+def test_the_key_is_in_the_environment_of_the_command_and_not_in_its_arguments(tmp_path):
+    show = "import os, sys; print(os.environ['TYPESAFE_API_KEY'] in ' '.join(sys.argv), sys.argv[1:])"
+    done = _wrapped(tmp_path, {"TYPESAFE_API_KEY": "dummy-123"}, sys.executable, "-c", show, "--flag", "--", "-x")
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.strip() == "False ['--flag', '--', '-x']"
+    assert "dummy-123" not in done.stderr
 
 
 # Requests
@@ -194,7 +254,7 @@ class Service:
         return Answer(step)
 
     def client(self):
-        return critic.JevClient(api_key="dummy-123", opener=self, sleep=self.sleeps.append)
+        return CLIENT(api_key="dummy-123", opener=self, sleep=self.sleeps.append)
 
 
 def _status(code):
@@ -230,8 +290,19 @@ def test_giving_up_does_not_wait_after_the_last_attempt():
     assert len(service.requests) == 4 and service.sleeps == [1.5, 3.0, 4.5]
 
 
-def test_a_request_that_timed_out_is_not_sent_again():
-    for error in (TimeoutError("timed out"), urllib.error.URLError(TimeoutError("timed out"))):
+def test_a_request_that_may_have_been_received_is_not_sent_again():
+    import ssl
+
+    for error in (
+        TimeoutError("timed out"),
+        urllib.error.URLError(TimeoutError("timed out")),
+        urllib.error.URLError(ConnectionResetError("reset while sending")),
+        urllib.error.URLError(BrokenPipeError("broken pipe")),
+        urllib.error.URLError(ssl.SSLCertVerificationError("untrusted")),
+        urllib.error.URLError(OSError("name does not resolve")),
+        urllib.error.URLError("a reason given as text"),
+        ConnectionResetError("reset while reading"),
+    ):
         service = Service(error, {"answers": {}})
         with pytest.raises(critic.CriticError):
             service.client().ask({}, {})
@@ -251,16 +322,120 @@ def test_an_answer_that_is_not_a_json_object_is_refused_once(body):
     assert len(service.requests) == 1
 
 
-def test_a_failure_that_names_the_key_does_not_show_it():
-    service = Service(urllib.error.URLError("proxy refused Bearer dummy-123"), *[_status(503)] * 3)
-    with pytest.raises(critic.CriticError) as failed:
-        service.client().ask({}, {}, retries=1)
-    assert "dummy-123" not in str(failed.value)
+def test_nothing_the_service_or_a_proxy_says_is_repeated(capsys):
+    said = "bad token dummy-123 ZHVtbXktMTIz dummy%2D123 dum\nmy-123"
+    failures = [
+        urllib.error.HTTPError("https://service.invalid", 401, said, {}, io.BytesIO(said.encode())),
+        urllib.error.HTTPError("https://service.invalid", 503, said, {}, io.BytesIO(said.encode())),
+        urllib.error.URLError(said),
+        urllib.error.URLError(ConnectionRefusedError(said)),
+        OSError(said),
+    ]
+    for failure in failures:
+        service = Service(failure)
+        with pytest.raises(critic.CriticError) as failed:
+            service.client().ask({}, {}, retries=1)
+        message = str(failed.value)
+        assert len(message.splitlines()) == 1
+        for part in ("dummy", "ZHVt", "token"):
+            assert part not in message, message
 
 
-def test_a_redirect_is_refused_and_not_followed():
-    request = critic.urllib.request.Request("https://service.invalid", data=b"{}", method="POST")
-    assert critic._NoRedirect().redirect_request(request, None, 302, "Found", {}, "http://elsewhere.invalid") is None
+def test_the_service_may_say_how_long_to_wait_up_to_a_limit():
+    def busy(wait):
+        return urllib.error.HTTPError("https://service.invalid", 429, "busy", {"Retry-After": wait}, io.BytesIO(b""))
+
+    service = Service(busy("7"), busy("9999"), busy("soon"), {"answers": {}})
+    assert service.client().ask({}, {}) == {"answers": {}}
+    assert service.sleeps == [7.0, 30.0, 4.5]
+
+
+@pytest.mark.parametrize("retries", [0, -1])
+def test_asking_for_no_attempts_is_an_error(retries):
+    service = Service({"answers": {}})
+    with pytest.raises(critic.CriticError, match="at least one attempt"):
+        service.client().ask({}, {}, retries=retries)
+    assert service.requests == []
+
+
+def test_the_key_travels_in_one_header_and_nowhere_else():
+    service = Service({"answers": {}})
+    service.client().ask({"formula": "LEN"}, {"q": {}})
+    (request,) = service.requests
+    assert request.get_method() == "POST"
+    assert request.full_url == critic.DEFAULT_URL and "dummy" not in request.full_url
+    assert request.get_header("Authorization") == "Bearer dummy-123"
+    assert b"dummy" not in request.data
+    others = {name: value for name, value in request.header_items() if name != "Authorization"}
+    assert "dummy-123" not in json.dumps(others)
+    assert json.loads(request.data) == {"model": critic.DEFAULT_MODEL, "state": {"formula": "LEN"}, "questions": {"q": {}}}
+
+
+class _Recorder:
+    """Two servers on this machine: one answers with a redirect to the other."""
+
+    def __init__(self, status):
+        import http.server
+        import threading
+
+        recorder = self
+        self.seen = []
+
+        class Elsewhere(http.server.BaseHTTPRequestHandler):
+            def _answer(self):
+                recorder.seen.append((self.command, self.headers.get("Authorization")))
+                self.send_response(200)
+                self.send_header("Content-Length", "15")
+                self.end_headers()
+                self.wfile.write(b'{"answers": {}}')
+
+            do_GET = do_POST = _answer
+
+            def log_message(self, *_):
+                pass
+
+        class Redirecting(http.server.BaseHTTPRequestHandler):
+            def do_POST(self):
+                self.rfile.read(int(self.headers.get("Content-Length", "0")))
+                self.send_response(status)
+                self.send_header("Location", f"http://127.0.0.1:{recorder.elsewhere.server_port}/collect")
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+
+            def log_message(self, *_):
+                pass
+
+        self.elsewhere = http.server.HTTPServer(("127.0.0.1", 0), Elsewhere)
+        self.redirecting = http.server.HTTPServer(("127.0.0.1", 0), Redirecting)
+        self.threads = [threading.Thread(target=server.serve_forever, daemon=True) for server in (self.elsewhere, self.redirecting)]
+        for thread in self.threads:
+            thread.start()
+
+    def close(self):
+        for server in (self.elsewhere, self.redirecting):
+            server.shutdown()
+            server.server_close()
+
+
+@pytest.mark.parametrize("status", [301, 302, 303, 307, 308])
+def test_the_client_as_it_ships_does_not_follow_a_redirect(status):
+    servers = _Recorder(status)
+    try:
+        client = critic.JevClient(
+            api_key="dummy-123", base_url=f"http://127.0.0.1:{servers.redirecting.server_port}/", sleep=lambda _: None
+        )
+        with pytest.raises(critic.CriticError, match=str(status)):
+            client.ask({}, {}, timeout=10)
+    finally:
+        servers.close()
+    assert servers.seen == []
+
+
+def _run_tool(directory, *arguments):
+    clean = {name: value for name, value in os.environ.items() if name not in SETTINGS}
+    return subprocess.run(
+        [sys.executable, str(TOOL), *arguments], cwd=directory, env=clean, capture_output=True, text=True, timeout=60
+    )
 
 
 # Scores
@@ -337,6 +512,79 @@ def test_a_control_answered_wrongly_fails_the_gate_whatever_the_score(tmp_path):
     assert report["mean_brier_score"] <= 2.0 and report["gate_passed"] is False
 
 
+def test_one_control_in_twenty_answered_wrongly_fails_the_gate(tmp_path):
+    cases = [_case("real", LABELS[0], False)] + [_case(f"control-{n}", LABELS[1], True) for n in range(20)]
+    sure = _answer(LABELS[1], {LABELS[1]: 1.0})
+    fooled = _answer(LABELS[0], {LABELS[0]: 1.0})
+    report = critic.run_benchmark_eval(Service(RIGHT[0], *[sure] * 19, fooled).client(), _benchmark(tmp_path, cases), 2.0)
+    assert report["false_control_rejection_rate"] == pytest.approx(0.95) and report["gate_passed"] is False
+    passing = critic.run_benchmark_eval(Service(RIGHT[0], *[sure] * 20).client(), _benchmark(tmp_path, cases), 2.0)
+    assert passing["gate_passed"] is True
+
+
+def test_a_choice_that_is_not_the_most_probable_label_cannot_be_scored(tmp_path):
+    torn = _answer(LABELS[0], {LABELS[0]: 0.2, LABELS[1]: 0.8})
+    report = critic.run_benchmark_eval(Service(torn, RIGHT[1]).client(), _benchmark(tmp_path, PAIR))
+    assert report["details"][0]["malformed"] == "the choice is not the most probable label"
+    assert report["details"][0]["correct"] is False and report["gate_passed"] is False
+
+
+def _command(monkeypatch, capsys, service, *arguments):
+    """Run the tool's command line in this process, with a stand-in service."""
+    ready = service.client()
+    monkeypatch.setattr(critic, "JevClient", lambda: ready)
+    try:
+        code = critic._main(list(arguments))
+    except critic.CriticError as error:
+        code = error.code
+    printed = capsys.readouterr()
+    return code, printed.out, printed.err
+
+
+def test_the_command_exits_0_when_the_gate_passes_and_1_when_it_fails(tmp_path, monkeypatch, capsys):
+    benchmark = str(_benchmark(tmp_path, PAIR))
+    code, out, _ = _command(monkeypatch, capsys, Service(*RIGHT), "eval-benchmark", "--benchmark-file", benchmark)
+    assert code == 0 and json.loads(out)["gate_passed"] is True
+    wrong = _answer(LABELS[2], {LABELS[2]: 1.0})
+    code, out, _ = _command(monkeypatch, capsys, Service(wrong, RIGHT[1]), "eval-benchmark", "--benchmark-file", benchmark)
+    assert code == 1 and json.loads(out)["gate_passed"] is False
+
+
+ECHO = {"request": {"headers": {"Authorization": "Bearer dummy-123"}}}
+
+
+@pytest.mark.parametrize(
+    ("arguments", "question"),
+    [
+        (("audit-profile", "--formula", "LEN", "--fixture", '{"formula": "=LEN(1)"}'), "behavior_provenance"),
+        (("classify-layout", "--window-json", "[[1]]"), "region_role"),
+    ],
+)
+def test_an_answer_is_printed_without_the_key_and_no_answer_is_an_error(monkeypatch, capsys, arguments, question):
+    answer = {"answers": {question: {"choice": "x"}}, **ECHO}
+    code, out, _ = _command(monkeypatch, capsys, Service(answer), *arguments)
+    assert code == 0 and "dummy-123" not in out
+    assert json.loads(out)["answers"] == answer["answers"]
+    for empty in ({"answers": {}, **ECHO}, {"error": {"type": "overloaded"}}, {"answers": {question: None}}):
+        code, out, _ = _command(monkeypatch, capsys, Service(empty), *arguments)
+        assert code == 2 and out == ""
+
+
+def test_a_benchmark_report_is_printed_without_the_key(tmp_path, monkeypatch, capsys):
+    told = _answer("Bearer dummy-123", {LABELS[0]: 1.0})
+    benchmark = str(_benchmark(tmp_path, PAIR))
+    code, out, _ = _command(monkeypatch, capsys, Service(told, RIGHT[1]), "eval-benchmark", "--benchmark-file", benchmark)
+    assert code == 1 and "dummy-123" not in out and json.loads(out)["details"][0]["predicted"] == "Bearer [key]"
+
+
+def test_a_file_nested_too_deep_to_read_is_an_error_in_one_line(tmp_path):
+    deep = tmp_path / "deep.json"
+    deep.write_text("[" * 200_000 + "]" * 200_000)
+    done = _run_tool(tmp_path, "eval-benchmark", "--benchmark-file", str(deep))
+    assert done.returncode == 2 and "Traceback" not in done.stderr
+    assert len(done.stderr.strip().splitlines()) == 1
+
+
 @pytest.mark.parametrize(
     ("cases", "reason"),
     [([], "holds no cases"), ({"id": "not a list"}, "holds no cases"), ([PAIR[0]], "holds no control cases")],
@@ -361,13 +609,6 @@ def test_a_threshold_outside_the_scale_is_refused(threshold, capsys):
         critic._main(["eval-benchmark", "--gate-threshold", threshold])
     assert stopped.value.code == 2
     assert "gate-threshold" in capsys.readouterr().err
-
-
-def _run_tool(directory, *arguments):
-    clean = {name: value for name, value in os.environ.items() if name not in SETTINGS}
-    return subprocess.run(
-        [sys.executable, str(TOOL), *arguments], cwd=directory, env=clean, capture_output=True, text=True, timeout=60
-    )
 
 
 def test_a_failure_is_one_line_and_code_two(tmp_path):

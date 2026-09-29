@@ -7,13 +7,14 @@
 # repository root; the file named by TYPESAFE_ENV_FILE; the one line printed
 # by the shell command in TYPESAFE_KEY_COMMAND.
 #
-# Exit code 2 means the key was not found or the command could not be run.
-# Any other code is the command's own.
+# The exit code is the command's own. When the command cannot be run it is
+# 125 (no key, or no command given), 126 (the command cannot be run) or
+# 127 (no such command).
 set -euo pipefail
 
 if [[ $# -eq 0 ]]; then
   echo "usage: $0 <command...>  e.g. $0 python3 tools/jev_critic.py --help" >&2
-  exit 2
+  exit 125
 fi
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

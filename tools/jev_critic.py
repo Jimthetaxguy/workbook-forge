@@ -14,7 +14,8 @@ Usage:
   python3 tools/jev_critic.py run -- <command...>
 
 Exit codes: 0 done or gate passed, 1 gate failed, 2 the tool could not do its work.
-`run` exits with the code of the command it ran.
+`run` exits with the code of the command it ran. When it cannot run the command it
+exits with 125 (no key), 126 (the command cannot be run) or 127 (no such command).
 """
 from __future__ import annotations
 
@@ -38,12 +39,18 @@ KEY_NAME = "TYPESAFE_API_KEY"
 KEY_COMMAND_SECONDS = 5
 # Answers that may come right on a second try. Anything else is final.
 RETRYABLE_STATUS = frozenset({429, 500, 502, 503, 504})
+# The longest wait the service may ask for with Retry-After, in seconds.
+LONGEST_WAIT = 30.0
 # The largest multi-class Brier score: all weight on one wrong label.
 WORST_BRIER = 2.0
 
 
 class CriticError(RuntimeError):
     """A failure that is reported in one line, never with the key in it."""
+
+    def __init__(self, message: str, code: int = 2):
+        super().__init__(message)
+        self.code = code
 
 
 def _checked_key(value: str, source: str) -> str:
@@ -56,28 +63,40 @@ def _checked_key(value: str, source: str) -> str:
 
 
 def _key_from_env_file(path: Path) -> str:
-    """Read KEY=value from a .env file: quotes, `export` and comments allowed."""
+    """Read KEY=value from a .env file. The last definition in the file counts.
+
+    A value may be bare, or in single or double quotes, and may be followed
+    by a comment. `export` may come first. Nothing is expanded, so a value
+    that refers to another variable is refused, not used as it stands.
+    """
     try:
-        lines = path.read_text(encoding="utf-8").splitlines()
+        lines = path.read_text(encoding="utf-8-sig").splitlines()
     except (OSError, UnicodeDecodeError) as error:
         raise CriticError(f"{path} could not be read: {type(error).__name__}") from None
-    for line in lines:
+    found = ""
+    for number, line in enumerate(lines, start=1):
         line = line.strip()
         if line.startswith("export "):
             line = line[len("export "):].lstrip()
         name, separator, value = line.partition("=")
         if not separator or name.strip() != KEY_NAME:
             continue
+        where = f"{path} line {number}"
         value = value.strip()
         if value[:1] in ("'", '"'):
             closing = value.find(value[0], 1)
-            value = value[1:closing] if closing > 0 else value[1:]
+            if closing < 0:
+                raise CriticError(f"{where}: the quote is not closed")
+            rest = value[closing + 1:].strip()
+            if rest and not rest.startswith("#"):
+                raise CriticError(f"{where}: there is text after the closing quote")
+            value = value[1:closing]
         else:
             value = value.split(" #", 1)[0].split("\t#", 1)[0]
-        key = _checked_key(value, str(path))
-        if key:
-            return key
-    return ""
+        if "$" in value or "\\" in value or "`" in value:
+            raise CriticError(f"{where}: the value needs a shell to read it, and none is used")
+        found = _checked_key(value, where)
+    return found
 
 
 def _key_from_command(command: str) -> str:
@@ -108,7 +127,10 @@ def resolve_api_key() -> str:
 
     candidates = [Path.cwd() / ".env", ROOT / ".env"]
     if os.environ.get("TYPESAFE_ENV_FILE"):
-        candidates.append(Path(os.environ["TYPESAFE_ENV_FILE"]))
+        named = Path(os.environ["TYPESAFE_ENV_FILE"])
+        if not named.is_file():
+            raise CriticError("the file named by TYPESAFE_ENV_FILE does not exist")
+        candidates.append(named)
     for candidate in candidates:
         if candidate.is_file():
             key = _key_from_env_file(candidate)
@@ -163,40 +185,53 @@ class JevClient:
             "User-Agent": "WorkbookForge-JevCritic/1.0",
         }
         req = urllib.request.Request(self.base_url, data=payload, headers=headers, method="POST")
+        if retries < 1:
+            raise CriticError("at least one attempt is needed")
         failure = "no attempt was made"
 
+        # Nothing the service or a proxy says is repeated in a message: it
+        # may hold the key in a form that cannot be recognised and removed.
         for attempt in range(1, retries + 1):
+            wait = 1.5 * attempt
             try:
                 with self._open(req, timeout=timeout) as resp:
                     body = resp.read()
             except urllib.error.HTTPError as error:
                 if error.code == 402:
                     raise CriticError("TypeSafe API: Payment Required (402)") from None
-                failure = self._without_key(f"the service answered HTTP {error.code} {error.reason}")
+                failure = f"the service answered HTTP {int(error.code)}"
                 if error.code not in RETRYABLE_STATUS:
                     raise CriticError(failure) from None
+                asked = str(error.headers.get("Retry-After", "")) if error.headers else ""
+                if asked.isdigit():
+                    wait = min(float(asked), LONGEST_WAIT)
             except urllib.error.URLError as error:
-                failure = self._without_key(f"the service could not be reached: {error.reason}")
-                if isinstance(error.reason, TimeoutError):
-                    # The request may have been received and charged for.
+                failure = f"the service could not be reached: {type(error.reason).__name__}"
+                if not isinstance(error.reason, ConnectionRefusedError):
+                    # Anything else may have happened after the request was
+                    # received, so the request is not sent again.
                     raise CriticError(failure) from None
-            except TimeoutError:
-                raise CriticError("the service did not answer in time") from None
             except (OSError, http.client.HTTPException) as error:
-                # The request was sent, so it is not sent again.
                 raise CriticError(f"the answer could not be read: {type(error).__name__}") from None
             else:
                 try:
                     answer = json.loads(body.decode("utf-8"))
-                except (UnicodeDecodeError, ValueError):
+                except (UnicodeDecodeError, ValueError, RecursionError):
                     raise CriticError("the service answered with something other than JSON") from None
                 if not isinstance(answer, dict):
                     raise CriticError("the service answered with JSON that is not an object")
                 return answer
             if attempt < retries:
-                self._sleep(1.5 * attempt)
+                self._sleep(wait)
 
         raise CriticError(f"{failure} (after {retries} attempts)")
+
+    def answer_to_show(self, response: Dict[str, Any], question: str) -> str:
+        """The service's answer as text to print, or an error when it holds none."""
+        answers = response.get("answers")
+        if not isinstance(answers, dict) or not isinstance(answers.get(question), dict):
+            raise CriticError("the service gave no answer to the question")
+        return self._without_key(json.dumps(response, indent=2))
 
 
 def audit_formula_profile(client: JevClient, formula_name: str, proposed_fixture: Dict[str, Any]) -> Dict[str, Any]:
@@ -286,6 +321,8 @@ def _read_answer(response: Dict[str, Any], question: str, labels: List[str]) -> 
         probabilities[label] = float(value)
     if abs(sum(probabilities.values()) - 1.0) > 0.01:
         return choice, {}, "the probabilities do not add up to 1"
+    if probabilities[choice] < max(probabilities.values()):
+        return choice, {}, "the choice is not the most probable label"
     return choice, probabilities, ""
 
 
@@ -302,7 +339,7 @@ def _gate_threshold(text: str) -> float:
 def run_benchmark_eval(client: JevClient, benchmark_path: Path, gate_threshold: float = 0.15) -> Dict[str, Any]:
     try:
         cases = json.loads(benchmark_path.read_text(encoding="utf-8"))
-    except (OSError, ValueError) as error:
+    except (OSError, ValueError, RecursionError) as error:
         raise CriticError(f"{benchmark_path} could not be read as JSON: {type(error).__name__}") from None
     if not isinstance(cases, list) or not cases:
         raise CriticError(f"{benchmark_path} holds no cases")
@@ -347,7 +384,8 @@ def run_benchmark_eval(client: JevClient, benchmark_path: Path, gate_threshold: 
     accuracy = sum(1 for r in results if r["correct"]) / n
     controls = [r for r in results if r["is_false_control"]]
     control_acc = sum(1 for r in controls if r["correct"]) / len(controls)
-    passed = (mean_brier <= gate_threshold) and (control_acc >= 0.95)
+    # One control taken for real behaviour is the failure the gate exists to catch.
+    passed = (mean_brier <= gate_threshold) and all(r["correct"] for r in controls)
 
     return {
         "total_cases": n,
@@ -365,22 +403,31 @@ def run_benchmark_eval(client: JevClient, benchmark_path: Path, gate_threshold: 
 def _json_argument(text: str, what: str) -> Any:
     try:
         return json.loads(text if text.lstrip()[:1] in ("{", "[") else Path(text).read_text(encoding="utf-8"))
-    except (OSError, ValueError) as error:
+    except (OSError, ValueError, RecursionError) as error:
         raise CriticError(f"{what} is neither JSON nor a file of JSON: {type(error).__name__}") from None
 
 
 def run_command(command: List[str]) -> None:
-    """Replace this process with `command`, with the key in its environment."""
+    """Replace this process with `command`, with the key in its environment.
+
+    The key goes into the environment and nowhere else: not into the
+    command's arguments, where other users of the machine could read it.
+    """
     if command[:1] == ["--"]:
         command = command[1:]
-    if not command:
-        raise CriticError("run needs a command, for example: run -- python3 tools/jev_critic.py --help")
+    if not command or not command[0]:
+        raise CriticError("run needs a command, for example: run -- python3 tools/jev_critic.py --help", 125)
     environment = dict(os.environ)
-    environment[KEY_NAME] = resolve_api_key()
+    try:
+        environment[KEY_NAME] = resolve_api_key()
+    except CriticError as error:
+        raise CriticError(str(error), 125) from None
     try:
         os.execvpe(command[0], command, environment)
-    except OSError as error:
-        raise CriticError(f"{command[0]} could not be run: {error.strerror}") from None
+    except FileNotFoundError:
+        raise CriticError(f"{command[0]}: no such command", 127) from None
+    except (OSError, ValueError) as error:
+        raise CriticError(f"{command[0]} cannot be run: {type(error).__name__}", 126) from None
 
 
 def _main(arguments: Optional[List[str]] = None) -> int:
@@ -408,14 +455,17 @@ def _main(arguments: Optional[List[str]] = None) -> int:
         return 0
     if args.cmd == "audit-profile":
         fixture_data = _json_argument(args.fixture, "--fixture")
-        print(json.dumps(audit_formula_profile(JevClient(), args.formula, fixture_data), indent=2))
+        client = JevClient()
+        print(client.answer_to_show(audit_formula_profile(client, args.formula, fixture_data), "behavior_provenance"))
         return 0
     if args.cmd == "classify-layout":
         window = _json_argument(args.window_json, "--window-json")
-        print(json.dumps(classify_table_layout(JevClient(), window), indent=2))
+        client = JevClient()
+        print(client.answer_to_show(classify_table_layout(client, window), "region_role"))
         return 0
-    res = run_benchmark_eval(JevClient(), Path(args.benchmark_file), args.gate_threshold)
-    print(json.dumps(res, indent=2))
+    client = JevClient()
+    res = run_benchmark_eval(client, Path(args.benchmark_file), args.gate_threshold)
+    print(client._without_key(json.dumps(res, indent=2)))
     return 0 if res["gate_passed"] else 1
 
 
@@ -424,7 +474,7 @@ def main() -> None:
         sys.exit(_main())
     except CriticError as error:
         print(f"error: {error}", file=sys.stderr)
-        sys.exit(2)
+        sys.exit(error.code)
 
 
 if __name__ == "__main__":

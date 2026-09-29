@@ -145,8 +145,7 @@ Call red flags are locked as build contracts in [docs/specs/red-flags.md](specs/
 3. **Workbook intake onto the canonical model. Built.** `workbook_forge.intake`
    reads an `.xlsx` file into the canonical model and `workbook-forge intake`
    prints it. It refuses array spill and grouped formulas with a reason, and
-   lists what the workbook holds that version 1 does not carry: defined names,
-   hidden sheets, merged cells, validations and the like. Use
+   lists by name everything in the file that version 1 does not carry. Use
    the gaps and mismatches the round trip exposes to decide which cells,
    relationships and unsupported features the cell map must capture next.
 4. **Headless path (`impl/v1-agent-headless`).** Put the proven intake →
