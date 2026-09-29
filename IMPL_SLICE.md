@@ -35,6 +35,11 @@ This slice follows canonical schema/versioning work on `impl/v1-intake`:
 - The fixture carries the explicit input/output cell bindings in the canonical
   model, using the schema owner's field contract. Do not create another
   binding manifest schema or guess field names in this slice.
+- Literal `Cell.value` data and an imported formula cache are distinct. A
+  formula's optional cached value is a source observation, never evidence that
+  this session calculated the cell. Fresh calculations live in a result report
+  tied to the backend and model version; sessions calculate from formula text
+  and bound inputs.
 
 ## First calculation: operating scenario
 
