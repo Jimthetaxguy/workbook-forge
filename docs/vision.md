@@ -16,13 +16,15 @@ one useful install-and-run path for agents and developers.
 
 ## Three directions
 
-1. **Excel → model.** Read a workbook into a typed structured model: cells,
-   formulas, cached values, layout, cross-sheet links, and metadata worth
-   keeping. A readable Markdown overview helps humans scan; the cell map is the
-   source of record. The two views cross-check with evidence. Markdown is never
-   the SoR.
-2. **Model → code.** Bind the same model into Python, Rust, agent tools, and
-   apps so formulas and structure become composable software.
+1. **Excel → model.** Read a real workbook into one canonical, typed structure:
+   cell identities, formulas, imported cached values, layout, cross-sheet
+   links, and source evidence. A readable Markdown overview helps humans scan;
+   the coordinate-preserving cell map is the source of record. The two views
+   cross-check with evidence. Markdown is never the SoR, and unsupported bits
+   are surfaced rather than guessed away.
+2. **Model → software.** Bind that same model into Python, Rust, agent tools,
+   and applications so formulas and structure become reusable building blocks
+   instead of logic trapped in sheets.
 3. **Model → Excel.** Emit an editable workbook again, with round-trip evidence
    that what left the model still opens and calculates in Excel.
 
@@ -86,6 +88,13 @@ in diagnostics; they do not erase the model.
 - **cell-store** — sealed cell event log and sync. Join later at a defined edge.
 - No fourth tree for the same job.
 
+The shared model contract lives in Workbook Forge. Python and Rust implement it
+independently and share meaning and fixtures; neither backend calls through the
+other. The model represents workbook meaning for calculation and translation.
+The sealed cell event log records immutable cell events over time. They are
+separate responsibilities; a later `FORGE_EDGE` may connect them without
+creating another model store or repository.
+
 ## How this shapes our work
 
 Each vision point is a build rule. If a change fights a rule, stop and rename
@@ -106,11 +115,25 @@ the goal.
 | Resilience / plugin detectors | Detectors live behind a plugin interface; failure is local; diagnostics collect; core model remains valid. |
 | Shelf split | Forge owns compute + OOXML; cell-store owns the sealed log. Do not grow a third product tree for the same responsibilities. |
 
+
+## Red-flag specs
+
+Call red flags are locked as build contracts in [docs/specs/red-flags.md](specs/red-flags.md): canonical intermediate form, behavioral parity for export, intake detector isolation, and model versioning from day one.
+
 ## Near-term order
 
-1. Intake SoT types and CLI (`impl/v1-intake`).
-2. One calc bound through both backends (`impl/v1-calc-binding`).
-3. Excel round-trip evidence (`impl/v1-export`).
-4. Headless agent surface (`impl/v1-agent-headless`).
+1. Bind one existing calculation to explicit worksheet cells and run that same
+   definition through both backends (`impl/v1-calc-binding`).
+2. Complete the Excel open, edit, recalculate, save and reimport proof for that
+   bound calculation (`impl/v1-export`). Package generation and SDK-only
+   reimport are useful checks, but do not satisfy this proof.
+3. Expand workbook intake using gaps and useful evidence exposed by the bound
+   roundtrip (`impl/v1-intake`). The existing reader and cell map are the
+   starting foundation; broader intake is the next product expansion.
+4. Put the proven path behind the pre-wired headless agent surface
+   (`impl/v1-agent-headless`), with CLI/SDK use and no GUI requirement.
 
-Expand observers, diffusion, and candidate recovery after that spine is green.
+Research and fixture design for intake can proceed alongside the first two
+steps. Implementation priority stays: one calculation through both backends,
+Excel round-trip evidence, then broader intake. Expand observers, diffusion,
+and candidate recovery after that spine is green.
