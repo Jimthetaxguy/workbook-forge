@@ -2,15 +2,16 @@
 author: Codex
 created: 2026-09-24
 agent: codex/Codex
-date: '2026-09-28T16:11:18-04:00'
+date: '2026-09-28T20:39:14-04:00'
 type: project-context
 task: Build an SDK for Excel in agent-ready formats using independent Python and Rust implementations
 status: active
-summary: Independent Python and Rust SDKs expose verified workbook workflows and native spreadsheet compositions; full Excel Desktop acceptance remains outstanding.
+summary: Workbook Forge is an agent-ready Excel compiler; the v1 spine is a versioned canonical model, one shared Python/Rust calculation, Excel recalc roundtrip evidence, and a headless path before broader intake.
 next_steps:
-  - Complete the separate live Excel acceptance gate before integration; native primitives, review fixes and verification are tracked in docs/toolkit-delivery.md.
-  - Define explicit bindings and independent transformations from native compositions to workbook expressions; see the proposed milestone in docs/toolkit-delivery.md.
-  - Expand the verified agent operation contract against concrete workbook tasks; keep framework/MCP adapters thin and retain source/revision-aware results.
+  - Finish the canonical JSON schema and model_version contract with Python/Rust hydration roundtrips; the typed Python intake model and CLI already exist on impl/v1-intake.
+  - Bind one trusted calculation to explicit cells and run the same definition through both backends; see docs/vision.md and docs/toolkit-delivery.md.
+  - Prove export by opening the bound workbook in Excel or the documented oracle, editing, fully recalculating, saving, reimporting and diffing formulas and behavior.
+  - Put the proven flow behind the headless CLI/SDK and print model_version; only then expand workbook intake from roundtrip gaps.
   - Use tools/excel_oracle.py to observe the generated scenario after an input edit and save; diagnose the current Excel automation failures.
   - Use observed Excel results to validate Workbook Forge profiles and update shared fixtures before expanding formula-family coverage.
   - After oracle coverage is reliable, prioritize the next formula slice by documented usage and dependency value.
@@ -36,6 +37,10 @@ Build an **SDK for Excel in agent-ready formats**: expose supported workbook dat
 - **Input preview:** a detached calculation of proposed inputs, with before/after outputs and cell changes; it never changes the owned session or writes files.
 - **Calculation provenance:** source formulas, references, explicit bindings and model revision attached to a result; imported caches are never evidence that Forge calculated a value.
 - **Workbook model:** sparse sheets, authored content, formulas, styles, and explicit input/output bindings, implemented independently in each language and separate from XML.
+- **Canonical workbook schema:** versioned serialized contract for `Cell`, `Formula`, `Sheet` and `Workbook`; Python and Rust hydrate native typed structures from the same bytes.
+- **`model_version`:** version of the serialized workbook artifact, distinct from schema-version evolution and visible in headless intake summaries.
+- **Markdown scan:** readable, potentially lossy view derived from the coordinate-preserving cell map; never the workbook source of record.
+- **Cell-store boundary:** cell-store owns the sealed cell event log. Workbook Forge owns compute and conservative OOXML; a later `FORGE_EDGE` may connect them. No fourth tree or duplicate model store.
 - **Application binding:** a named input or output attached to an explicit cell; not an Excel defined-name expression.
 - **Calculation snapshot:** an immutable model revision used by full or incremental calculation; stale work cannot replace current published results.
 - **Preservation baseline:** immutable imported package content used to patch supported changes without rereading or rewriting the original file.
