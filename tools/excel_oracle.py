@@ -31,6 +31,11 @@ REL = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
 PACKAGE_REL = "http://schemas.openxmlformats.org/package/2006/relationships"
 CONTENT = "http://schemas.openxmlformats.org/package/2006/content-types"
 ADDRESS = re.compile(r"[A-Z]{1,3}[1-9][0-9]{0,6}\Z")
+# Sign, parentheses, and exponent spelling do not turn a number into a formula.
+_NUMERIC_CONSTANT_FORMULA = re.compile(
+    r"^=\s*[+-]?\s*(?:\(\s*[+-]?\s*)*"
+    r"(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?\s*(?:\)\s*)*$"
+)
 EXPECTED_KINDS = {"independently_derived", "documented", "forge_profile"}
 SAFE_FUNCTIONS = {"SUM", "IF", "ISBLANK"}
 ROUNDTRIP_CLASSES = {"scenario", "volatile", "iteration", "array", "array_spill", "excel_quirk"}
@@ -792,6 +797,22 @@ def _formula_allowlist(contract: dict[str, Any], check_id: str) -> list[str]:
     return accepted
 
 
+def _numeric_constant_formula(formula: str | None) -> bool:
+    """True when the spelling is only a number, not a cell formula."""
+    return isinstance(formula, str) and _NUMERIC_CONSTANT_FORMULA.fullmatch(formula) is not None
+
+
+def _formula_is_accepted(actual: str | None, expected: str, allowlist: list[str]) -> bool:
+    if actual is None:
+        return False
+    if actual == expected:
+        return True
+    return any(
+        actual == candidate and not _numeric_constant_formula(candidate)
+        for candidate in allowlist
+    )
+
+
 def roundtrip_result_matches(actual: dict[str, Any], expected: dict[str, Any]) -> bool:
     if actual.get("type") != expected["type"]:
         return False
@@ -944,9 +965,9 @@ def _run_preflight(contract: dict[str, Any], cells: dict[str, dict[str, Any]], c
     for key, check in checks.items():
         cell = cells.get(key)
         expected = check["expected_formula"]
-        accepted = [expected, *_formula_allowlist(contract, check["id"])]
         actual = None if cell is None else cell["formula"]
-        if actual not in accepted:
+        allowlist = _formula_allowlist(contract, check["id"])
+        if not _formula_is_accepted(actual, expected, allowlist):
             failures.append(f"{key}: exported formula does not match contract {check['id']}")
     for edit in contract.get("edits", []):
         key = f"{edit['sheet']}!{edit['address']}"
@@ -1018,8 +1039,11 @@ def _compare_roundtrip(
         if prior == current:
             continue
         check = checks_by_key.get(key)
-        accepted = [] if check is None else [check["expected_formula"], *_formula_allowlist(contract, check["id"])]
-        allowed = current in accepted
+        allowed = False
+        if check is not None:
+            allowed = _formula_is_accepted(
+                current, check["expected_formula"], _formula_allowlist(contract, check["id"]),
+            )
         formula_diffs.append({"cell": key, "before": prior, "after": current, "allowlisted": allowed})
 
     outcomes = []
@@ -1029,14 +1053,32 @@ def _compare_roundtrip(
         old = before.get(key)
         new = after.get(key)
         expected_formula = check["expected_formula"]
-        accepted_formulas = [expected_formula, *_formula_allowlist(contract, check["id"])]
+        allowlisted_formulas = _formula_allowlist(contract, check["id"])
+        accepted_formulas = [expected_formula, *allowlisted_formulas]
         before_formula = None if old is None else old["formula"]
         after_formula = None if new is None else new["formula"]
-        before_matches = before_formula in accepted_formulas
-        formula_matches = after_formula in accepted_formulas
+        before_matches = _formula_is_accepted(
+            before_formula, expected_formula, allowlisted_formulas,
+        )
+        formula_matches = _formula_is_accepted(
+            after_formula, expected_formula, allowlisted_formulas,
+        )
         observed = {"type": "blank"} if new is None else new["result"]
+        before_observed = {"type": "blank"} if old is None else old["result"]
         expected_result = check["expected_result"]
-        result_matches = roundtrip_result_matches(observed, expected_result)
+        value_matches = roundtrip_result_matches(observed, expected_result)
+        # A cache that newly equals the expected number, under an unchanged formula,
+        # was not shown to be recalculated. A value already stored before Excel
+        # remains a value match; an unchanged file hash still cannot be observed.
+        planted_expected_cache = (
+            before_formula == after_formula
+            and value_matches
+            and expected_result.get("type") == "number"
+            and "predicate" not in expected_result
+            and "value" in expected_result
+            and not roundtrip_result_matches(before_observed, expected_result)
+        )
+        result_matches = value_matches and not planted_expected_cache
         settings_match = True
         if check["class"] == "iteration":
             required = contract["calculation_settings"]
@@ -1050,7 +1092,7 @@ def _compare_roundtrip(
             local_mismatches.append("exported formula differs from contract")
         if not formula_matches:
             local_mismatches.append("reimported formula differs from contract")
-        if not result_matches:
+        if not value_matches:
             local_mismatches.append("reimported result differs from expected behavior")
         if not settings_match:
             local_mismatches.append("Excel iterative calculation settings differ from contract")
@@ -1062,7 +1104,8 @@ def _compare_roundtrip(
             "expected_formula": expected_formula, "accepted_formula_values": accepted_formulas,
             "expected_result": expected_result, "formula_matches": formula_matches,
             "result_matches": result_matches, "calculation_settings_match": settings_match,
-            "allowlist_applied": allowlist, "matches": not local_mismatches,
+            "allowlist_applied": allowlist,
+            "matches": not local_mismatches and not planted_expected_cache,
             "mismatches": local_mismatches,
         }
         outcomes.append(outcome)
@@ -1192,7 +1235,21 @@ def run_roundtrip(
                 outcome_by_id = {outcome["id"]: outcome for outcome in outcomes}
                 for item in receipt["fixture_coverage"]:
                     item["status"] = "observed" if all(outcome_by_id[check_id]["matches"] for check_id in item["check_ids"]) else "mismatch"
-                receipt.update(status="mismatch" if mismatches else "observed", stage="reimport", mismatches=mismatches)
+                workbook_unchanged = (
+                    receipt["saved_workbook_sha256"] == receipt["working_copy_sha256_before_excel"]
+                )
+                if workbook_unchanged:
+                    for item in receipt["fixture_coverage"]:
+                        if item["status"] == "observed":
+                            item["status"] = "not_observed"
+                    receipt["reason"] = "An unchanged workbook hash is not an Excel observation"
+                    receipt.update(
+                        status="mismatch" if mismatches else "failed",
+                        stage="reimport",
+                        mismatches=mismatches,
+                    )
+                else:
+                    receipt.update(status="mismatch" if mismatches else "observed", stage="reimport", mismatches=mismatches)
         receipt["source_unchanged"] = source.exists() and _hash(source) == receipt.get("source_workbook_sha256")
     except subprocess.TimeoutExpired:
         receipt.update(status="blocked", stage="automation", reason="Excel automation timed out; the owned scratch workbook may remain open", owned_workbook_may_remain_open=True)
