@@ -20,3 +20,6 @@ Pick the scenario cells, write a binding manifest (inputs/outputs), run both eng
 
 ## Vision
 Follow [docs/vision.md](docs/vision.md). Shared types and build rules there bind this slice to the others.
+
+## Red-flag specs
+Build contracts: [docs/specs/red-flags.md](docs/specs/red-flags.md).
