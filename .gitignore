@@ -12,6 +12,10 @@ build/
 *.dylib
 .verification/
 
+# Local keys. The Jev critic reads .env; it must never be committed.
+.env
+.env.*
+
 # Local archives and ad-hoc backups; history lives in git commits.
 _archive-*/
 *.bak-*

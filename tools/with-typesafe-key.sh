@@ -6,8 +6,8 @@
 #   1. TYPESAFE_API_KEY, if already set
 #   2. a .env file in the current directory, then the file named by
 #      TYPESAFE_ENV_FILE
-#   3. Infisical, when TYPESAFE_INFISICAL_SECRET names the secret.
-#      TYPESAFE_INFISICAL_DIR is the directory holding .infisical.json.
+#   3. the output of TYPESAFE_KEY_COMMAND, a shell command that prints the
+#      key, for whatever secret store holds it
 set -euo pipefail
 
 CALLING_DIR="$PWD"
@@ -27,18 +27,13 @@ if [[ -z "${TYPESAFE_API_KEY:-}" ]]; then
   done
 fi
 
-if [[ -z "${TYPESAFE_API_KEY:-}" && -n "${TYPESAFE_INFISICAL_SECRET:-}" ]]; then
-  infisical_dir="${TYPESAFE_INFISICAL_DIR:-$CALLING_DIR}"
-  if command -v infisical >/dev/null 2>&1 && [[ -d "$infisical_dir" ]]; then
-    TYPESAFE_API_KEY="$(
-      cd "$infisical_dir" && infisical secrets get "$TYPESAFE_INFISICAL_SECRET" --env=dev --plain --silent 2>/dev/null | tr -d '\r\n'
-    )"
-    export TYPESAFE_API_KEY
-  fi
+if [[ -z "${TYPESAFE_API_KEY:-}" && -n "${TYPESAFE_KEY_COMMAND:-}" ]]; then
+  TYPESAFE_API_KEY="$(bash -c "$TYPESAFE_KEY_COMMAND" 2>/dev/null | tr -d '\r\n')" || true
+  export TYPESAFE_API_KEY
 fi
 
 if [[ -z "${TYPESAFE_API_KEY:-}" ]]; then
-  echo "error: TYPESAFE_API_KEY unavailable from the environment, a .env file, or Infisical" >&2
+  echo "error: TYPESAFE_API_KEY unavailable from the environment, a .env file, or TYPESAFE_KEY_COMMAND" >&2
   exit 1
 fi
 

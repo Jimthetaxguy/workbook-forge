@@ -114,7 +114,7 @@ The Excel round-trip harness is `tools/excel_oracle.py`, with `tools/canonical_e
 - Codex's documents described a shape of the model that `main` did not adopt. They now describe version 1 as built, and `docs/specs/red-flags.md` has a table of which requirements the code meets.
 - Intake from `impl/v1-intake` is ported to the canonical model. It reuses the existing package reader and adds no address parser of its own.
 - Not carried over, because each needs a decision or a change in both engines: typed binding constraints, the calculation session with revisions, refusal of duplicate JSON keys.
-- The Jev critic named a secret and a directory from one machine. Those now come from environment variables.
+- The Jev critic reads its key from `TYPESAFE_API_KEY`, a `.env` file, or the command in `TYPESAFE_KEY_COMMAND`. It names no secret store and no directory.
 ### 2026-09-29 — claude-code — adversarial review, gate and first fixes
 - `main` failed its own checks: `cargo clippy -D warnings` rejected `rust/src/model.rs`. Fixed. Nothing had been running the checks.
 - Added the gate, the review protocol and its tools. Seven reviewers, each given one lens and no history, reported 56 findings. Eleven were planted defects. Of the other 45, independent refuters knocked down four and the rest were reproduced on unchanged code.

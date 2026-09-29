@@ -32,11 +32,11 @@ DEFAULT_URL = "https://api.typesafe.ai/v1/systemone"
 
 
 def resolve_api_key() -> str:
-    """Resolve TYPESAFE_API_KEY from the environment, a .env file, or Infisical.
+    """Resolve TYPESAFE_API_KEY from the environment, a .env file, or a command.
 
-    Nothing about one machine is written here. A second .env file, the name
-    of the secret and the directory Infisical runs in come from
-    TYPESAFE_ENV_FILE, TYPESAFE_INFISICAL_SECRET and TYPESAFE_INFISICAL_DIR.
+    Nothing about one machine is written here. TYPESAFE_ENV_FILE names a
+    second .env file. TYPESAFE_KEY_COMMAND is a shell command that prints
+    the key, for whatever secret store holds it.
     """
     key = os.environ.get("TYPESAFE_API_KEY")
     if key and key.strip():
@@ -54,17 +54,16 @@ def resolve_api_key() -> str:
                         if k:
                             return k
 
-    secret = os.environ.get("TYPESAFE_INFISICAL_SECRET")
-    code_root = Path(os.environ.get("TYPESAFE_INFISICAL_DIR", ROOT.parent))
-    if secret and (code_root / ".infisical.json").is_file():
+    command = os.environ.get("TYPESAFE_KEY_COMMAND")
+    if command:
         try:
-            cmd = ["infisical", "secrets", "get", secret, "--env=dev", "--plain", "--silent"]
-            out = subprocess.check_output(cmd, cwd=code_root, stderr=subprocess.DEVNULL, timeout=5)
-            k = out.decode("utf-8").strip()
-            if k:
-                return k
-        except Exception:
-            pass
+            out = subprocess.check_output(command, shell=True, stderr=subprocess.DEVNULL, timeout=5)
+        except (subprocess.SubprocessError, OSError) as error:
+            # The command and its output may hold the key, so neither is shown.
+            raise RuntimeError(f"TYPESAFE_KEY_COMMAND failed: {type(error).__name__}") from None
+        k = out.decode("utf-8").strip()
+        if k:
+            return k
 
     raise RuntimeError(
         "TYPESAFE_API_KEY not found. Set TYPESAFE_API_KEY or run via tools/with-typesafe-key.sh"
