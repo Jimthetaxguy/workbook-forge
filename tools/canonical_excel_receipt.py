@@ -54,9 +54,10 @@ def main(argv: list[str] | None = None) -> int:
     )
     print(args.output_dir / "receipt.json")
     engines = receipt["engines"]
-    if not engines["before_input_change"]["python_rust_match"]:
+    # With --no-rust the match is null: not compared, and recorded as such.
+    if engines["before_input_change"]["python_rust_match"] is False:
         return 1
-    if not engines["after_input_change_preview"]["python_rust_match"]:
+    if engines["after_input_change_preview"]["python_rust_match"] is False:
         return 1
     if not receipt["structural_reimport"]["match"]:
         return 1

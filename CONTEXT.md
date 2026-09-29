@@ -20,7 +20,8 @@ remaining:
   - Worksheet spill projection, volatile/iteration/quirk round-trip classes, cross-backend bound export, and broad Excel 365 coverage are not complete.
   - From impl/v1-intake and impl/v1-calc-binding, intake is ported. Typed binding constraints, the calculation session with revisions, and refusal of duplicate JSON keys are not. Agent-headless has not started its implementation.
   - No pull request so far has had checks run on it or a review; mergeability alone is not acceptance evidence. tools/gate.sh is the check to run.
-  - 33 confirmed review findings are open; the most serious are the counting functions, which return an error when any cell in the range holds one.
+  - 33 confirmed findings from the first review are open; the most serious are the counting functions, which return an error when any cell in the range holds one.
+  - Six more are open from the review of the unified branch: the toolkit workbook form takes a missing version as 1; versions are not checked on write; a formula that refers to a blank cell has a null result; no calculation report or origin `calculated`; a formula that uses a defined name is reported as a parse error; `_xHHHH_` escapes in text are not decoded.
   - "GitHub reports Jimthetaxguy/workbook-forge as public, verified 2026-09-28; historical private-release preparation notes in docs/run-history.md describe their original checkpoints."
 open_questions: []
 ---
@@ -114,6 +115,7 @@ The Excel round-trip harness is `tools/excel_oracle.py`, with `tools/canonical_e
 - Codex's documents described a shape of the model that `main` did not adopt. They now describe version 1 as built, and `docs/specs/red-flags.md` has a table of which requirements the code meets.
 - Intake from `impl/v1-intake` is ported to the canonical model. It reuses the existing package reader and adds no address parser of its own.
 - Not carried over, because each needs a decision or a change in both engines: typed binding constraints, the calculation session with revisions, refusal of duplicate JSON keys.
+- Intake returns nothing the canonical reader would refuse, and lists what the workbook holds that version 1 does not carry in `metadata.intake.not_carried`. The table at the top of `docs/specs/red-flags.md` says which requirements are met.
 - The Jev critic reads its key from `TYPESAFE_API_KEY`, a `.env` file, or the command in `TYPESAFE_KEY_COMMAND`. It names no secret store and no directory. `tools/with-typesafe-key.sh` asks the critic for the key, so the two follow one rule.
 ### 2026-09-29 — claude-code — adversarial review, gate and first fixes
 - `main` failed its own checks: `cargo clippy -D warnings` rejected `rust/src/model.rs`. Fixed. Nothing had been running the checks.

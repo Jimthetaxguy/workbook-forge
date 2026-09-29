@@ -68,3 +68,6 @@ array-of-bindings + constraints DTO, `canonical_calc` session/revision API,
 intake bleed-in (`intake.py`, `test_intake.py`), and `tools/verify_canonical_calc.py`
 tied to that alternate binding shape. Constraints/session can land later on this
 schema if needed; they must not fork the serialized model.
+
+Since then, intake has been rebuilt on this schema: `python/workbook_forge/intake.py`
+and `python/tests/test_intake.py` are present.

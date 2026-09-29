@@ -129,7 +129,7 @@ def build_canonical_receipt(
                 "outputs": _bound_outputs(python_before),
             },
             "after_input_change_preview": {
-                "source": "python_and_rust_not_excel",
+                "source": "python_and_rust_not_excel" if rust else "python_only_not_excel",
                 "python_rust_match": engines["after_input_change_preview"]["match"],
                 "outputs": _bound_outputs(python_after),
                 "note": "Model calculation after unit_price=25. Not an Excel recalc.",
@@ -169,9 +169,14 @@ def _oracle():
     return module
 
 
+def _match_text(match: bool | None) -> str:
+    return "not compared" if match is None else str(match).lower()
+
+
 def _engine_pair(python_workbook, raw: bytes, rust: bool) -> dict[str, Any]:
     if not rust:
-        return {"match": True}
+        # Not compared is not the same as agreed.
+        return {"match": None}
     rust_workbook = _rust_calculate(raw)
     return {"match": _canonical(python_workbook.to_dict()) == _canonical(rust_workbook)}
 
@@ -283,7 +288,7 @@ def _markdown(receipt: dict[str, Any]) -> str:
     if scenario.get("reason"):
         lines.extend(["", scenario["reason"]])
     lines.extend(["", "## Engine values", ""])
-    lines.append(f"Before the input change, Python/Rust match: `{str(before['python_rust_match']).lower()}`.")
+    lines.append(f"Before the input change, Python/Rust match: `{_match_text(before['python_rust_match'])}`.")
     lines.append("")
     lines.append("| Output | Result |")
     lines.append("| --- | --- |")
@@ -291,7 +296,7 @@ def _markdown(receipt: dict[str, Any]) -> str:
         lines.append(f"| {name} | `{json.dumps(item['result'])}` |")
     lines.extend([
         "",
-        f"After unit_price=25, engine preview only. Python/Rust match: `{str(preview['python_rust_match']).lower()}`. {preview['note']}",
+        f"After unit_price=25, engine preview only. Python/Rust match: `{_match_text(preview['python_rust_match'])}`. {preview['note']}",
         "",
         "| Output | Result |",
         "| --- | --- |",

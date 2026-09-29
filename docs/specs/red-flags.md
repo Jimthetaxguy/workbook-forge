@@ -15,16 +15,24 @@ These specs state requirements. This table states which of them the code on
 | --- | --- |
 | Schema, and Python and Rust hydration of the same bytes (Spec 1) | Built |
 | One bound calculation in both engines (Spec 1) | Built |
-| `schema_version` and `model_version` enforced on read (Spec 4) | Built |
+| `schema_version` and `model_version` enforced on read (Spec 4) | Built, for the canonical model |
+| Versions enforced on write (Spec 4) | Not built. `Workbook.to_json` writes whatever version it holds. Intake checks its own output by reading it back |
+| A missing version refused everywhere (Spec 4) | Canonical reader only. The toolkit workbook form, read by `run`, `inspect` and `agent`, takes a missing `schema_version` as 1 in both engines |
+| One serialized form for every tool (Spec 1) | Not built. Two forms exist. Intake, canonical export and the canonical receipt use the canonical model. The agent tools, the general export and `run`, `inspect`, `scenario` and `agent` use the older toolkit workbook form |
 | Model changelog (Spec 4) | Built: `model-changelog.md` |
-| Typed bindings with value type, required status and constraints | Not built. Version 1 bindings are name-to-cell maps |
+| Typed bindings with value type, required status and constraints | Not in the canonical model: version 1 bindings are name-to-cell maps. The toolkit workbook form has typed input bindings |
+| A calculation report with backend and model provenance, and origin `calculated` (Spec 1, item 7) | Not built. `calculate` returns a workbook, provenance is copied unchanged, and export keeps no receipt |
+| A result that tells "not calculated" from "calculated, and blank" (Spec 1) | Not built. A formula that refers to a blank cell has a null result after calculation |
+| Shared fixtures only, with no language-local expected values (Spec 1, item 6) | Partly. Both suites read `fixtures/`. Both also assert literal expected values, and Rust reads `operating-scenario-cases.json` only when the Python test runs it |
 | Migrator from an older version (Spec 1) | Not built. Only version 1 exists |
 | Excel round-trip harness (Spec 2) | Built: `tools/excel_oracle.py` |
 | An observed Excel round trip of the canonical fixture (Spec 2) | Not recorded. The committed receipts are preflight only |
 | Array spill, volatile, iteration and quirk classes observed (Spec 2) | Not observed. Spill placement is unsupported on export |
 | `oracle_optional` and `oracle_required` test runs (Spec 2) | Not built |
 | Detectors behind an off-switch (Spec 3) | Not built |
-| `intake_workbook` emitting the canonical model (Spec 4) | Built: `python/workbook_forge/intake.py`, and the `workbook-forge intake` command |
+| `intake_workbook` emitting the canonical model (Spec 4) | Built, Python only: `python/workbook_forge/intake.py`, and the `workbook-forge intake` command. It returns nothing the canonical reader would refuse, and lists what version 1 does not carry in `metadata.intake.not_carried` |
+| Intake of array, shared and data-table formulas (Spec 4) | Refused with a reason. Every workbook with a filled-down formula is refused |
+| Intake decoding `_xHHHH_` escapes in text | Not built, in either reader |
 | A job that runs both suites on every change | Not built. `tools/gate.sh` runs them locally |
 
 ---
@@ -64,7 +72,8 @@ across the language boundary. Ad-hoc dicts and dual native types drift.
      (optional string), and `formula` (optional Formula).
    - `Formula`: `expression`, `dependencies` (array of `Sheet!A1` strings),
      and `result`, the value Workbook Forge calculated, which is null until
-     it has calculated one. A value read from OOXML is kept in `Cell.value`
+     it has calculated one. Today it is also null after calculating a
+     formula that refers to a blank cell. A value read from OOXML is kept in `Cell.value`
      with provenance `imported`. A formula cache is an imported observation,
      distinct from an authored cell value and from a result freshly calculated
      by Workbook Forge.
@@ -189,7 +198,8 @@ schema moves. The extracted model is already a product artifact.
    `model_version` (semver string or integer sequence — pick one in the schema
    and stick to it; recommend integer `model_version` paired with
    `schema_version`). `schema_version` tracks the byte contract; `model_version`
-   identifies the workbook model artifact. Both are validated on read/write.
+   identifies the workbook model artifact. Both must be validated on read
+   and on write. Today they are validated on read.
 2. **Changelog.** `docs/specs/model-changelog.md` (create with the first bump)
    records each model_version: date, summary, breaking or not, migration notes.
 3. **Migration path.** When v2 ships, a reader for v1 remains available. Prefer
@@ -197,7 +207,8 @@ schema moves. The extracted model is already a product artifact.
 4. **No later.** Intake and export land with `model_version` set on day one of
    the typed model (v1). A blank or missing version is a validation error, on
    read as well as on write. There is no compatibility window that treats a
-   missing version as version 1.
+   missing version as version 1. The canonical reader meets this. The toolkit
+   workbook form does not yet: see the table at the top.
 5. **Agents and CLI** print `model_version` in intake summaries so humans can
    see which artifact generation they hold. Python's `intake_workbook` emits
    serialized canonical JSON as well as its native model result; it is not
@@ -257,7 +268,8 @@ schema moves. The extracted model is already a product artifact.
 1. Check in the schema, then prove Python hydration/serialization and Rust
    Serde round-trip against the same fixture bytes. Done.
 2. Run one explicitly bound calculation from the same canonical JSON document
-   through the Python and Rust engines and compare outputs. Done.
+   through the Python and Rust engines and compare outputs. Done. A receipt
+   made with `--no-rust` records the match as not compared.
 3. Export from either backend and run the full-recalculation Excel harness.
 4. Port intake so that it emits the canonical model. Done.
 5. Wrap the proven path in the Python headless CLI first. Expose Rust to agents

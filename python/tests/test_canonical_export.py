@@ -225,3 +225,15 @@ def test_receipt_records_pending_excel_and_refused_spill(tmp_path):
     assert "unit_price" in text
     assert "Excel formula rewrites" in text
     assert "not_passed" in text
+
+
+def test_a_receipt_made_without_rust_does_not_say_the_engines_agree(tmp_path):
+    receipt = build_canonical_receipt(FIXTURE, tmp_path / "receipt", rust=False)
+    before = receipt["engines"]["before_input_change"]
+    preview = receipt["engines"]["after_input_change_preview"]
+    assert before["python_rust_match"] is None
+    assert preview["python_rust_match"] is None
+    assert preview["source"] == "python_only_not_excel"
+    written = (tmp_path / "receipt" / "receipt.md").read_text(encoding="utf-8")
+    assert written.count("Python/Rust match: `not compared`") == 2
+    assert "match: `true`" not in written.split("## Engine values")[1]

@@ -114,6 +114,13 @@ def import_canonical(path: str | Path) -> Workbook:
             "unsupported_formula_group",
             f"v1 canonical import refuses grouped formulas at {listed}",
         )
+    untexted = [item for item in stored["cells"] if item["formula_without_text"]]
+    if untexted:
+        listed = "; ".join(f"{item['sheet']}!{item['address']}" for item in untexted)
+        raise CanonicalPackageError(
+            "unsupported_formula",
+            f"formula cells with no formula text at {listed}; their stored values are not read as literals",
+        )
     if stored["date_system"] != "1900":
         raise CanonicalPackageError(
             "unsupported_package",
@@ -185,6 +192,7 @@ def read_package(path: str | Path) -> dict[str, Any]:
                         "number_format": number_format,
                         "spill": spill,
                         "group": group,
+                        "formula_without_text": stored.formula is None and element.find(_q("f")) is not None,
                     }
                 )
         sheet_names = list(package.sheet_names)
@@ -342,6 +350,9 @@ def _scalar_caches(workbook: Workbook) -> dict[tuple[str, str], Any]:
 def _spill_marker(kind: str | None, attributes: dict[str, str], cell_attributes: dict[str, str]) -> str | None:
     folded = (kind or attributes.get("t") or "").casefold()
     ref = attributes.get("ref")
+    if folded in {"shared", "datatable"}:
+        # Their ref is the filled range. `_group_marker` reports them.
+        return None
     if folded == "array":
         return f't="array"{f" ref={ref!r}" if ref else ""}'
     if ref and _multi_cell_ref(ref):

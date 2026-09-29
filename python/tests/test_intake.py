@@ -35,8 +35,17 @@ TOTALS = (
 )
 
 
-def _write(path: Path, sheets: dict[str, str]) -> Path:
+def _write(
+    path: Path,
+    sheets: dict[str, str],
+    *,
+    after_cells: str = "",
+    in_workbook: str = "",
+    states: dict[str, str] | None = None,
+    styles: str | None = None,
+) -> Path:
     names = list(sheets)
+    states = states or {}
     overrides = "".join(
         f'<Override PartName="/xl/worksheets/sheet{index}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>'
         for index in range(1, len(names) + 1)
@@ -47,7 +56,12 @@ def _write(path: Path, sheets: dict[str, str]) -> Path:
             '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
             '<Default Extension="xml" ContentType="application/xml"/>'
             '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>'
-            f"{overrides}</Types>"
+            + (
+                '<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>'
+                if styles is not None
+                else ""
+            )
+            + f"{overrides}</Types>"
         ),
         "_rels/.rels": (
             '<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
@@ -56,10 +70,12 @@ def _write(path: Path, sheets: dict[str, str]) -> Path:
         "xl/workbook.xml": (
             f'<?xml version="1.0"?><workbook xmlns="{MAIN}" xmlns:r="{RELATIONSHIPS}"><sheets>'
             + "".join(
-                f'<sheet name="{name}" sheetId="{index}" r:id="rId{index}"/>'
+                f'<sheet name="{name}" sheetId="{index}"'
+                + (f' state="{states[name]}"' if name in states else "")
+                + f' r:id="rId{index}"/>'
                 for index, name in enumerate(names, start=1)
             )
-            + "</sheets></workbook>"
+            + f"</sheets>{in_workbook}</workbook>"
         ),
         "xl/_rels/workbook.xml.rels": (
             '<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
@@ -67,12 +83,15 @@ def _write(path: Path, sheets: dict[str, str]) -> Path:
                 f'<Relationship Id="rId{index}" Type="{RELATIONSHIPS}/worksheet" Target="worksheets/sheet{index}.xml"/>'
                 for index in range(1, len(names) + 1)
             )
+            + (f'<Relationship Id="rIdStyles" Type="{RELATIONSHIPS}/styles" Target="styles.xml"/>' if styles is not None else "")
             + "</Relationships>"
         ),
     }
+    if styles is not None:
+        parts["xl/styles.xml"] = styles
     for index, name in enumerate(names, start=1):
         parts[f"xl/worksheets/sheet{index}.xml"] = (
-            f'<?xml version="1.0"?><worksheet xmlns="{MAIN}"><sheetData>{sheets[name]}</sheetData></worksheet>'
+            f'<?xml version="1.0"?><worksheet xmlns="{MAIN}"><sheetData>{sheets[name]}</sheetData>{after_cells}</worksheet>'
         )
     with zipfile.ZipFile(path, "w") as archive:
         for name, text in parts.items():
@@ -159,10 +178,53 @@ def _cli(*arguments):
     )
 
 
+def _expected_document(source: str) -> dict:
+    """The document for `book`, written out from what `book` was given."""
+    origin = {"origin": "imported", "source": source}
+
+    def cell(address, data_type, value, expression=None):
+        written = {"address": address, "data_type": data_type, "provenance": origin, "value": value}
+        if expression is not None:
+            written["formula"] = {"dependencies": [], "expression": expression, "result": None}
+        return written
+
+    return {
+        "schema_version": 1,
+        "model_version": 1,
+        "source_path": source,
+        "provenance": origin,
+        "metadata": {"intake": {"not_carried": []}},
+        "sheets": [
+            {
+                "name": "Inputs",
+                "dimensions": [1, 2, 1, 2],
+                "cells": {
+                    "A1": cell("A1", "text", "Units"),
+                    "A2": cell("A2", "text", "Price"),
+                    "B1": cell("B1", "number", 40),
+                    "B2": cell("B2", "number", 2.5),
+                },
+            },
+            {
+                "name": "Totals",
+                "dimensions": [1, 1, 1, 2],
+                "cells": {
+                    "A1": cell("A1", "number", 999, "=Inputs!B1*Inputs!B2"),
+                    "B1": cell("B1", "blank", None, "=A1+1"),
+                },
+            },
+        ],
+    }
+
+
 def test_the_command_prints_the_model(book):
     finished = _cli(book)
     assert finished.returncode == 0, finished.stderr
-    assert finished.stdout.encode("utf-8") == intake_workbook(book) + b"\n"
+    assert json.loads(finished.stdout) == _expected_document(str(book.resolve()))
+
+
+def test_the_function_returns_the_same_document_as_the_command(book):
+    assert json.loads(intake_workbook(book)) == _expected_document(str(book.resolve()))
 
 
 def test_the_command_prints_the_model_version_in_its_summary(book):
@@ -177,3 +239,172 @@ def test_the_command_refuses_an_array_formula_with_a_reason(tmp_path):
     finished = _cli(_write(tmp_path / "spill.xlsx", {"Data": spill}))
     assert finished.returncode == 1 and finished.stdout == ""
     assert "array_spill_refused" in json.loads(finished.stderr)["error"]
+
+
+# Stored values of every kind
+
+
+KINDS = (
+    '<row r="1">'
+    '<c r="A1" t="str"><f>"a"&amp;"b"</f><v>stale text</v></c>'
+    '<c r="B1" t="b"><f>1=1</f><v>0</v></c>'
+    '<c r="C1" t="e"><f>1/0</f><v>#N/A</v></c>'
+    '<c r="D1" t="b"><v>1</v></c>'
+    '<c r="E1" t="e"><v>#DIV/0!</v></c>'
+    '<c r="F1" t="inlineStr"><is><t>007</t></is></c>'
+    "</row>"
+)
+
+
+def test_a_stored_value_of_any_kind_is_never_a_result(tmp_path):
+    cells = intake_workbook_model(_write(tmp_path / "kinds.xlsx", {"Data": KINDS})).sheet("Data").cells
+    stored = {address: (cell.data_type, cell.value) for address, cell in cells.items()}
+    assert stored["A1"] == ("text", "stale text")
+    assert stored["B1"] == ("boolean", False)
+    assert stored["D1"] == ("boolean", True)
+    assert stored["F1"] == ("text", "007")
+    assert (cells["C1"].data_type, cells["C1"].value["error"]) == ("error", "#N/A")
+    assert (cells["E1"].data_type, cells["E1"].value["error"]) == ("error", "#DIV/0!")
+    for address in ("A1", "B1", "C1"):
+        assert cells[address].formula.result is None, address
+        assert cells[address].formula.dependencies == (), address
+    for address in ("D1", "E1", "F1"):
+        assert cells[address].formula is None, address
+    assert {cell.provenance.origin for cell in cells.values()} == {"imported"}
+
+
+STYLES = (
+    f'<?xml version="1.0"?><styleSheet xmlns="{MAIN}">'
+    '<numFmts count="1"><numFmt numFmtId="164" formatCode="0.000&quot; kg&quot;"/></numFmts>'
+    '<fonts count="1"><font/></fonts><fills count="1"><fill/></fills><borders count="1"><border/></borders>'
+    '<cellStyleXfs count="1"><xf/></cellStyleXfs>'
+    '<cellXfs count="5"><xf numFmtId="0"/><xf numFmtId="22"/><xf numFmtId="4"/><xf numFmtId="164"/><xf numFmtId="7"/></cellXfs>'
+    "</styleSheet>"
+)
+STYLED = (
+    '<row r="1"><c r="A1" s="0"><v>1</v></c><c r="B1" s="1"><v>45306.5</v></c><c r="C1" s="2"><v>1234.5</v></c>'
+    '<c r="D1" s="3"><v>2</v></c><c r="E1" s="4"><v>3</v></c><c r="F1" s="4"><v>4</v></c></row>'
+)
+
+
+def test_number_formats_are_kept_and_one_that_cannot_be_named_is_listed(tmp_path):
+    book = intake_workbook_model(_write(tmp_path / "styled.xlsx", {"Data": STYLED}, styles=STYLES))
+    formats = {address: cell.number_format for address, cell in book.sheet("Data").cells.items()}
+    assert formats == {
+        "A1": None,  # General
+        "B1": "m/d/yy h:mm",  # built-in 22
+        "C1": "#,##0.00",  # built-in 4
+        "D1": '0.000" kg"',  # the workbook's own format 164
+        "E1": None,  # built-in 7 depends on the locale
+        "F1": None,
+    }
+    assert book.metadata["intake"]["not_carried"] == [
+        {"kind": "number_format", "sheet": "Data", "format_id": 7, "count": 2}
+    ]
+
+
+# What version 1 does not carry is listed
+
+
+def test_content_with_no_place_in_the_model_is_listed(tmp_path):
+    book = _write(
+        tmp_path / "rich.xlsx",
+        {"Shown": '<row r="1"><c r="A1"><v>1</v></c></row>', "Kept back": '<row r="1"><c r="A1"><v>2</v></c></row>'},
+        after_cells=(
+            '<mergeCells count="2"><mergeCell ref="C1:D1"/><mergeCell ref="C2:D2"/></mergeCells>'
+            '<dataValidations count="1"><dataValidation type="whole" sqref="A1"/></dataValidations>'
+        ),
+        in_workbook='<definedNames><definedName name="Rate">Shown!$A$1</definedName></definedNames>',
+        states={"Kept back": "hidden"},
+    )
+    listed = intake_workbook_model(book).metadata["intake"]["not_carried"]
+    assert listed == [
+        {"kind": "defined_names", "count": 1},
+        {"kind": "hidden_sheet", "sheet": "Kept back"},
+        {"kind": "merged_cells", "sheet": "Shown", "count": 2},
+        {"kind": "data_validations", "sheet": "Shown", "count": 1},
+        {"kind": "merged_cells", "sheet": "Kept back", "count": 2},
+        {"kind": "data_validations", "sheet": "Kept back", "count": 1},
+    ]
+    assert summarize(intake_workbook_model(book))["not_carried"] == listed
+    jsonschema.validate(json.loads(intake_workbook(book)), SCHEMA)
+
+
+# Refusals
+
+
+def _refused(tmp_path, cells, name="Data"):
+    finished = _cli(_write(tmp_path / "refused.xlsx", {name: cells}))
+    assert finished.returncode == 1 and finished.stdout == "", finished.stdout
+    assert "Traceback" not in finished.stderr
+    return json.loads(finished.stderr)["error"]
+
+
+def test_a_filled_down_formula_is_refused_as_a_group_and_not_as_a_spill(tmp_path):
+    shared = (
+        '<row r="1"><c r="A1"><v>1</v></c><c r="B1"><f t="shared" ref="B1:B2" si="0">A1*2</f><v>2</v></c></row>'
+        '<row r="2"><c r="A2"><v>2</v></c><c r="B2"><f t="shared" si="0"/><v>4</v></c></row>'
+    )
+    reason = _refused(tmp_path, shared)
+    assert reason.startswith("unsupported_formula_group") and "spill" not in reason
+
+
+def test_a_data_table_is_refused_as_a_group_and_not_as_a_spill(tmp_path):
+    table = '<row r="1"><c r="A1"><f t="dataTable" ref="A1:B2" r1="D1">0</f><v>1</v></c></row>'
+    reason = _refused(tmp_path, table)
+    assert reason.startswith("unsupported_formula_group") and "spill" not in reason
+
+
+def test_a_formula_cell_with_no_text_is_not_read_as_a_literal(tmp_path):
+    reason = _refused(tmp_path, '<row r="1"><c r="A1"><f/><v>5</v></c><c r="B1"><f>A1*2</f></c></row>')
+    assert reason.startswith("unsupported_formula") and "Data!A1" in reason
+
+
+def test_a_cell_with_no_address_is_refused_and_not_dropped(tmp_path):
+    reason = _refused(tmp_path, '<row r="1"><c r="A1"><v>111</v></c><c><v>222</v></c></row>')
+    assert "no address" in reason
+
+
+@pytest.mark.parametrize("stored", ["1e999", "-1e999", "NaN"])
+def test_a_number_that_is_not_finite_is_refused_by_name_of_cell(tmp_path, stored):
+    cells = f'<row r="7"><c r="C7"><v>{stored}</v></c></row>'
+    assert "Data!C7" in _refused(tmp_path, cells)
+    summary = _cli(_write(tmp_path / "again.xlsx", {"Data": cells}), "--summary")
+    assert summary.returncode == 1 and summary.stdout == ""
+
+
+def test_an_error_excel_does_not_have_is_refused(tmp_path):
+    reason = _refused(tmp_path, '<row r="1"><c r="A1" t="e"><v>#N/A!</v></c></row>')
+    assert "Traceback" not in reason
+
+
+def test_a_sheet_name_the_model_cannot_hold_is_refused_with_the_reason(tmp_path):
+    reason = _refused(tmp_path, '<row r="1"><c r="A1"><v>1</v></c></row>', name="Q1!")
+    assert "model version 1" in reason and "'!'" in reason
+
+
+def test_a_damaged_package_is_refused_in_one_line(tmp_path):
+    good = _write(tmp_path / "good.xlsx", {"Data": '<row r="1"><c r="A1"><v>' + "7" * 4000 + "</v></c></row>"})
+    damaged = tmp_path / "damaged.xlsx"
+    with zipfile.ZipFile(good) as source, zipfile.ZipFile(damaged, "w", zipfile.ZIP_DEFLATED) as target:
+        for item in source.infolist():
+            target.writestr(item.filename, source.read(item.filename))
+    raw = bytearray(damaged.read_bytes())
+    with zipfile.ZipFile(damaged) as archive:
+        sheet = archive.getinfo("xl/worksheets/sheet1.xml")
+    start = sheet.header_offset + 30 + len(sheet.filename)
+    for offset in range(start + 4, start + 12):
+        raw[offset] ^= 0xFF
+    damaged.write_bytes(bytes(raw))
+    finished = _cli(damaged)
+    assert finished.returncode == 1 and finished.stdout == ""
+    assert "Traceback" not in finished.stderr
+    assert len(finished.stderr.strip().splitlines()) == 1
+    assert "error" in json.loads(finished.stderr)
+
+
+def test_whatever_intake_returns_the_reader_accepts(tmp_path):
+    for name, cells in {"Data": KINDS, "Sums": TOTALS.replace("Inputs!", "")}.items():
+        document = intake_workbook(_write(tmp_path / f"{name}.xlsx", {name: cells}))
+        jsonschema.validate(json.loads(document), SCHEMA)
+        assert hydrate(document).to_json().encode("utf-8") == document

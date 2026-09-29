@@ -32,7 +32,10 @@ one useful install-and-run path for agents and developers.
 
 The canonical model contract is the single source of truth. Each language
 implements it with native typed structures. Intake, calc-binding, export and
-agent tools use that contract directly. Thin transport or process adapters may
+agent tools are to use that contract directly. Today intake, the canonical
+export and the canonical receipt do. The agent tools, the general export and
+the `run`, `inspect`, `scenario` and `agent` commands still use the older
+toolkit workbook form. Thin transport or process adapters may
 connect package and tool boundaries, but must not invent competing workbook
 meaning or a parallel model that drifts from the contract.
 
@@ -129,7 +132,8 @@ Call red flags are locked as build contracts in [docs/specs/red-flags.md](specs/
    `fixtures/operating-scenario-cases.json`. Python and Rust hydrate the same
    bytes into their own types and calculate directly against them. There is no
    adapter DTO and no separately authored calculation. `schema_version` and
-   `model_version` are required, and unknown versions are refused.
+   `model_version` are required by the canonical reader, and unknown versions
+   are refused. Both test suites also assert some expected values as literals.
 2. **Export behavioral parity (Spec 2). Harness present, proof outstanding.**
    Write the bound model to `.xlsx`, open it in Excel Desktop, edit an input,
    force full recalculation, save and reimport. Diff formulas and behavior as
@@ -140,7 +144,9 @@ Call red flags are locked as build contracts in [docs/specs/red-flags.md](specs/
    Matching cached XML values or SDK-only reimport is not a pass for this gate.
 3. **Workbook intake onto the canonical model. Built.** `workbook_forge.intake`
    reads an `.xlsx` file into the canonical model and `workbook-forge intake`
-   prints it. It refuses array spill and grouped formulas with a reason. Use
+   prints it. It refuses array spill and grouped formulas with a reason, and
+   lists what the workbook holds that version 1 does not carry: defined names,
+   hidden sheets, merged cells, validations and the like. Use
    the gaps and mismatches the round trip exposes to decide which cells,
    relationships and unsupported features the cell map must capture next.
 4. **Headless path (`impl/v1-agent-headless`).** Put the proven intake →
