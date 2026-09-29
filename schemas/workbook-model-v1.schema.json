@@ -1,0 +1,190 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Workbook Forge Workbook Model v1",
+  "description": "Canonical language-neutral serialized workbook model. Python hydrates workbook_forge.model.Workbook and Rust hydrates workbook_forge::model::Workbook directly from these bytes. Calc-binding code consumes these native model types directly; it must not introduce a competing workbook DTO. Formula caches are imported observations, never fresh calculation results; calculation results and provenance belong in separate reports.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "model_version",
+    "metadata",
+    "bindings",
+    "sheets"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "const": 1,
+      "description": "Version of this JSON document shape. Unsupported values must be rejected explicitly."
+    },
+    "model_version": {
+      "type": "integer",
+      "const": 1,
+      "description": "Version of the workbook meaning contract carried by this artifact."
+    },
+    "source_path": {
+      "type": "string",
+      "description": "Optional origin supplied by the caller; it is not a portable workbook identity."
+    },
+    "metadata": {
+      "type": "object",
+      "description": "Source and intake metadata. Cell and formula meaning belongs in the typed fields below."
+    },
+    "bindings": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/binding" },
+      "description": "Named input and output values attached to explicit cells; bindings are part of the canonical model, not a side manifest."
+    },
+    "sheets": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/sheet"
+      }
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "address": {
+      "type": "string",
+      "pattern": "^[A-Z]{1,3}[1-9][0-9]*$",
+      "description": "A canonical, unqualified A1 cell address."
+    },
+    "value": {
+      "description": "A JSON cell value, including a structured spreadsheet error.",
+      "oneOf": [
+        { "type": "null" },
+        { "type": "number" },
+        { "type": "string" },
+        { "type": "boolean" },
+        { "$ref": "#/$defs/errorValue" }
+      ]
+    },
+    "errorValue": {
+      "type": "object",
+      "required": ["error"],
+      "properties": {
+        "error": { "type": "string", "minLength": 1 },
+        "message": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "formula": {
+      "type": "object",
+      "required": ["expression", "dependencies"],
+      "properties": {
+        "expression": {
+          "type": "string",
+          "pattern": "^=",
+          "description": "Original formula text, retaining the leading equals sign."
+        },
+        "dependencies": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[^!]+![A-Z]{1,3}[1-9][0-9]*$"
+          },
+          "uniqueItems": true
+        },
+        "cached_value": {
+          "$ref": "#/$defs/cachedValue",
+          "description": "Optional value stored with the formula in the source workbook. It is not evidence that Workbook Forge calculated this value."
+        }
+      },
+      "additionalProperties": false
+    },
+    "cachedValue": {
+      "description": "A non-blank scalar value observed in the source workbook's formula cache.",
+      "oneOf": [
+        { "type": "number" },
+        { "type": "string" },
+        { "type": "boolean" },
+        { "$ref": "#/$defs/errorValue" }
+      ]
+    },
+    "bindingConstraints": {
+      "type": "object",
+      "properties": {
+        "min": { "type": "number" },
+        "max": { "type": "number" },
+        "choices": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/value" }
+        }
+      },
+      "additionalProperties": false
+    },
+    "binding": {
+      "type": "object",
+      "required": [
+        "direction",
+        "name",
+        "sheet",
+        "address",
+        "value_type",
+        "required",
+        "constraints"
+      ],
+      "properties": {
+        "direction": { "enum": ["input", "output"] },
+        "name": { "type": "string", "minLength": 1 },
+        "sheet": { "type": "string", "minLength": 1 },
+        "address": { "$ref": "#/$defs/address" },
+        "value_type": {
+          "enum": ["blank", "number", "boolean", "text", "error", "unknown"]
+        },
+        "required": { "type": "boolean" },
+        "constraints": { "$ref": "#/$defs/bindingConstraints" }
+      },
+      "additionalProperties": false
+    },
+    "cell": {
+      "type": "object",
+      "required": ["address", "value", "data_type"],
+      "properties": {
+        "address": { "$ref": "#/$defs/address" },
+        "value": {
+          "$ref": "#/$defs/value",
+          "description": "Authored literal value. A formula cell stores null here; its imported cached value, if present, belongs on Formula.cached_value."
+        },
+        "data_type": {
+          "enum": ["blank", "number", "boolean", "text", "error", "unknown"]
+        },
+        "number_format": { "type": "string" },
+        "formula": { "$ref": "#/$defs/formula" }
+      },
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": { "required": ["formula"] },
+          "then": { "properties": { "value": { "type": "null" } } }
+        }
+      ]
+    },
+    "dimensions": {
+      "type": "array",
+      "prefixItems": [
+        { "type": "integer", "minimum": 1, "maximum": 1048576 },
+        { "type": "integer", "minimum": 1, "maximum": 1048576 },
+        { "type": "integer", "minimum": 1, "maximum": 16384 },
+        { "type": "integer", "minimum": 1, "maximum": 16384 }
+      ],
+      "items": false,
+      "minItems": 4,
+      "maxItems": 4,
+      "description": "[min_row, max_row, min_column, max_column], using one-based Excel coordinates."
+    },
+    "sheet": {
+      "type": "object",
+      "required": ["name", "cells"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "dimensions": { "$ref": "#/$defs/dimensions" },
+        "cells": {
+          "type": "object",
+          "propertyNames": { "$ref": "#/$defs/address" },
+          "additionalProperties": { "$ref": "#/$defs/cell" }
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

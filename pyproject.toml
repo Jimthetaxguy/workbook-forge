@@ -37,6 +37,9 @@ package-dir = {"" = "python"}
   "catalog/primitive-catalog.json",
   "catalog/primitive-expression.schema.json",
 ]
+"share/workbook_forge/schemas" = [
+  "schemas/workbook-model-v1.schema.json",
+]
 
 [tool.setuptools.packages.find]
 where = ["python"]

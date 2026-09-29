@@ -1,0 +1,89 @@
+{
+  "schema_version": 1,
+  "model_version": 1,
+  "metadata": {
+    "fixture": "named bindings with imported and missing formula-cache cases"
+  },
+  "bindings": [
+    {
+      "direction": "input",
+      "name": "amount",
+      "sheet": "Inputs",
+      "address": "A1",
+      "value_type": "number",
+      "required": true,
+      "constraints": { "min": 0.0, "max": 1000.0 }
+    },
+    {
+      "direction": "output",
+      "name": "doubled",
+      "sheet": "Results",
+      "address": "A1",
+      "value_type": "number",
+      "required": true,
+      "constraints": {}
+    }
+  ],
+  "sheets": [
+    {
+      "name": "Inputs",
+      "dimensions": [1, 3, 1, 3],
+      "cells": {
+        "A1": {
+          "address": "A1",
+          "value": 10.0,
+          "data_type": "number",
+          "number_format": "0.00"
+        },
+        "A2": {
+          "address": "A2",
+          "value": null,
+          "data_type": "blank"
+        },
+        "A3": {
+          "address": "A3",
+          "value": true,
+          "data_type": "boolean"
+        },
+        "B1": {
+          "address": "B1",
+          "value": "assumption note",
+          "data_type": "text"
+        },
+        "C1": {
+          "address": "C1",
+          "value": {
+            "error": "#N/A",
+            "message": "source cell contained an error"
+          },
+          "data_type": "error"
+        }
+      }
+    },
+    {
+      "name": "Results",
+      "dimensions": [1, 1, 1, 2],
+      "cells": {
+        "A1": {
+          "address": "A1",
+          "value": null,
+          "data_type": "number",
+          "formula": {
+            "expression": "=Inputs!A1*2",
+            "dependencies": ["Inputs!A1"],
+            "cached_value": 20.0
+          }
+        },
+        "B1": {
+          "address": "B1",
+          "value": null,
+          "data_type": "number",
+          "formula": {
+            "expression": "=Inputs!A1+1",
+            "dependencies": ["Inputs!A1"]
+          }
+        }
+      }
+    }
+  ]
+}
