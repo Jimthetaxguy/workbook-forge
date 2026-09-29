@@ -1,7 +1,5 @@
 """Behavior, byte-budget and preservation tests for the Python agent adapter."""
-from copy import deepcopy
 import json
-from pathlib import Path
 from threading import Thread
 from xml.etree import ElementTree as ET
 import zipfile

@@ -1,7 +1,6 @@
 """Exercise public Python toolkit and command-line entry points."""
 
 import json
-from pathlib import Path
 import subprocess
 import sys
 

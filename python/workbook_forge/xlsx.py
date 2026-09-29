@@ -20,7 +20,7 @@ from xml.etree import ElementTree as ET
 from . import ErrorValue
 from .toolkit import WorkbookModel, _digest
 from .workbook import (
-    CONTENT_TYPES, EXCEL_ERROR_CODES, MAIN, NS, PKG_REL, REL_DOC,
+    CONTENT_TYPES, EXCEL_ERROR_CODES, NS, PKG_REL, REL_DOC,
     TABLE_CONTENT_TYPE, WORKBOOK_CONTENT_TYPE, WORKSHEET_CONTENT_TYPE,
     MAX_CALCULATION_REFERENCE_CELLS, MAX_PACKAGE_BYTES, MAX_PACKAGE_ENTRIES,
     MAX_XML_PART_BYTES, RANGE_RE, UnsupportedWorkbook, Workbook, WorkbookError,

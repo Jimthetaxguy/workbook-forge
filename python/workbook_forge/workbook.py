@@ -2,8 +2,8 @@
 
 Only edited worksheet and workbook metadata parts are regenerated. All other
 package members are copied through byte-for-byte at the uncompressed-part
-level. It can calculate explicitly targeted formulas with the bounded Formula
-Atlas evaluator. It never executes macros or external data sources.
+level. It can calculate explicitly targeted formulas with the bounded Workbook
+Forge evaluator. It never executes macros or external data sources.
 """
 
 from __future__ import annotations
