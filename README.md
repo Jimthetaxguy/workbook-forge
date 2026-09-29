@@ -2,6 +2,8 @@
 
 **North Star:** [docs/vision.md](docs/vision.md). Red-flag specs: [docs/specs/red-flags.md](docs/specs/red-flags.md).
 
+Near-term order: Step 0 on `impl/v1-calc-binding` is the versioned workbook model ([Spec 1](docs/specs/red-flags.md#spec-1--canonical-intermediate-form), [Spec 4](docs/specs/red-flags.md#spec-4--model-versioning-from-day-one)), then calculation binding on that same branch, then export, intake, and agent-headless. Downstream branches rebase after this merges. Version rules: [model versioning](docs/specs/model-versioning.md).
+
 **Workbook Forge is an SDK for Excel in formats agents can use.** Its goal is to
 make supported workbook data, formulas, dependencies, presentation, and business
 inputs available as structured objects that agents can inspect, calculate,

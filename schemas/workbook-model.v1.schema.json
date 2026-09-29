@@ -1,0 +1,164 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://workbook-forge.dev/schemas/workbook-model.v1.schema.json",
+  "title": "Workbook Forge canonical workbook model v1",
+  "description": "Serialized source of truth for the workbook model (Spec 1). schema_version is the wire shape; model_version is the semantic interpretation. See docs/specs/model-versioning.md and docs/specs/model-changelog.md.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "model_version", "metadata", "sheets"],
+  "properties": {
+    "schema_version": {"type": "integer", "const": 1},
+    "model_version": {"type": "integer", "const": 1},
+    "source_path": {"type": ["string", "null"]},
+    "metadata": {"type": "object"},
+    "provenance": {"$ref": "#/$defs/provenance"},
+    "bindings": {"$ref": "#/$defs/bindings"},
+    "diagnostics": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/diagnostic"}
+    },
+    "sheets": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/sheet"}
+    }
+  },
+  "$defs": {
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["origin"],
+      "properties": {
+        "origin": {"enum": ["authored", "imported", "calculated"]},
+        "source": {"type": ["string", "null"]}
+      }
+    },
+    "bindings": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["inputs", "outputs"],
+      "properties": {
+        "inputs": {
+          "type": "object",
+          "additionalProperties": {"$ref": "#/$defs/cellId"}
+        },
+        "outputs": {
+          "type": "object",
+          "additionalProperties": {"$ref": "#/$defs/cellId"}
+        }
+      }
+    },
+    "cellId": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sheet", "address"],
+      "properties": {
+        "sheet": {"type": "string", "minLength": 1},
+        "address": {"type": "string", "pattern": "^[A-Z]{1,3}[1-9][0-9]{0,6}$"}
+      }
+    },
+    "diagnostic": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "classification", "message"],
+      "properties": {
+        "code": {
+          "enum": [
+            "unsupported_formula",
+            "parse_error",
+            "cycle",
+            "resource_limit",
+            "invalid_reference",
+            "blocked_dependency"
+          ]
+        },
+        "classification": {
+          "enum": ["unsupported", "parse_error", "cycle", "resource_limit", "invalid_reference"]
+        },
+        "message": {"type": "string"},
+        "sheet": {"type": "string"},
+        "address": {"type": "string", "pattern": "^[A-Z]{1,3}[1-9][0-9]{0,6}$"},
+        "function": {"type": "string"}
+      }
+    },
+    "sheet": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "cells"],
+      "properties": {
+        "name": {"type": "string", "minLength": 1},
+        "dimensions": {
+          "type": "array",
+          "prefixItems": [
+            {"type": "integer", "minimum": 1},
+            {"type": "integer", "minimum": 1},
+            {"type": "integer", "minimum": 1},
+            {"type": "integer", "minimum": 1}
+          ],
+          "minItems": 4,
+          "maxItems": 4,
+          "items": false
+        },
+        "cells": {
+          "type": "object",
+          "additionalProperties": {"$ref": "#/$defs/cell"}
+        }
+      }
+    },
+    "cell": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["address", "value", "data_type"],
+      "properties": {
+        "address": {"type": "string", "pattern": "^[A-Z]{1,3}[1-9][0-9]{0,6}$"},
+        "value": {"$ref": "#/$defs/value"},
+        "data_type": {"enum": ["blank", "number", "text", "boolean", "error"]},
+        "number_format": {"type": ["string", "null"]},
+        "formula": {"$ref": "#/$defs/formula"},
+        "provenance": {"$ref": "#/$defs/provenance"}
+      }
+    },
+    "formula": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["expression", "dependencies", "result"],
+      "properties": {
+        "expression": {"type": "string", "minLength": 1},
+        "dependencies": {
+          "type": "array",
+          "items": {"type": "string", "pattern": "^[^!]+![A-Z]{1,3}[1-9][0-9]{0,6}$"}
+        },
+        "result": {"$ref": "#/$defs/value"}
+      }
+    },
+    "value": {
+      "oneOf": [
+        {"type": "null"},
+        {"type": "number"},
+        {"type": "string"},
+        {"type": "boolean"},
+        {"$ref": "#/$defs/error"}
+      ]
+    },
+    "error": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["error", "message"],
+      "properties": {
+        "error": {
+          "enum": [
+            "#NULL!",
+            "#DIV/0!",
+            "#VALUE!",
+            "#REF!",
+            "#NAME?",
+            "#NUM!",
+            "#N/A",
+            "#SPILL!",
+            "#CALC!"
+          ]
+        },
+        "message": {"type": ["string", "null"]}
+      }
+    }
+  }
+}
