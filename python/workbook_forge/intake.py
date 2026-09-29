@@ -91,31 +91,36 @@ def intake_workbook(path: str | Path) -> Workbook:
             if not isinstance(payload, dict):
                 continue
             formula_text = payload.get("formula")
-            value = payload.get("value")
-            if value is None and "cached_value" in payload:
-                value = payload.get("cached_value")
+            has_formula = isinstance(formula_text, str) and bool(formula_text)
+            cached_value = payload.get("cached_value") if has_formula else None
+            value = None if has_formula else payload.get("value")
+            observed_value = cached_value if has_formula else value
             style = payload.get("style") if isinstance(payload.get("style"), dict) else {}
             number_format = style.get("number_format") if style else None
             formula_obj = None
-            if isinstance(formula_text, str) and formula_text:
+            if has_formula:
                 expression = formula_text if formula_text.startswith("=") else f"={formula_text}"
                 formula_obj = Formula(
                     expression=expression,
                     dependencies=extract_dependencies(expression, name),
-                    result=value,
+                    cached_value=cached_value,
                 )
             cells[address] = Cell(
                 address=address,
                 value=value,
                 formula=formula_obj,
-                data_type=_classify_value(value),  # type: ignore[arg-type]
+                data_type=(
+                    "unknown"
+                    if has_formula and cached_value is None
+                    else _classify_value(observed_value)
+                ),  # type: ignore[arg-type]
                 number_format=number_format,
             )
         sheets.append(Sheet(name=name, cells=cells, dimensions=_dimensions(cells)))
 
     inspect_report = imported.inspect()
     metadata = {
-        "schema_version": snapshot.get("schema_version"),
+        "source_schema_version": snapshot.get("schema_version"),
         "backend": imported.backend,
         "package": inspect_report.get("xlsx") or {},
     }

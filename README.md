@@ -33,6 +33,7 @@ agreement and established expected values; it does not replace either implementa
 | --- | --- |
 | Read the North Star (Excel compiler, three directions, build rules) | [Vision](docs/vision.md) |
 | Red-flag build contracts (schema, export parity, detectors, model versioning) | [Red-flag specs](docs/specs/red-flags.md) |
+| Exchange the canonical, versioned workbook model | [Model v1 JSON Schema](schemas/workbook-model-v1.schema.json) and [Python types](python/workbook_forge/model.py) |
 | Run a formula against supplied cell values | [Python evaluator](#python-quick-start) |
 | Compose calculations with named inputs and no workbook | [Native primitives](docs/primitives.md) |
 | Author or modify a workbook and calculate its outputs | [Programmable workbooks](#programmable-workbooks) |

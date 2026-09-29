@@ -22,15 +22,28 @@ across the language boundary. Ad-hoc dicts and dual native types drift.
 2. **Hydration only.** Python and Rust each deserialize the canonical bytes into
    their native types. No shared heap, no FFI object graph passed as SoT, no
    “Python model is truth / Rust mirrors it” shortcut.
+   The direct model surfaces are `workbook_forge.model.Workbook` and
+   `workbook_forge::model::Workbook`. Calc-binding must calculate against those
+   native types directly. The existing toolkit session shape must be retargeted
+   or refactored; a second serialized workbook DTO is not an acceptable bridge.
 3. **Field set (v1 minimum).**
    - `Workbook`: `schema_version`, `model_version`, `source_path` (optional),
-     `metadata` (object), `sheets` (array of Sheet).
+     `metadata` (object), `bindings` (array of named cell bindings), and
+     `sheets` (array of Sheet).
    - `Sheet`: `name`, `dimensions` (optional `[min_row, max_row, min_col, max_col]`),
      `cells` (map of A1 address → Cell).
-   - `Cell`: `address`, `value` (JSON null/number/string/bool or error object),
-     `data_type`, `number_format` (optional string), `formula` (optional Formula).
+   - `Cell`: `address`, `value` (an authored literal: JSON null/number/string/
+     bool or error object), `data_type`, `number_format` (optional string), and
+     `formula` (optional Formula). A formula cell has `value: null`.
    - `Formula`: `expression`, `dependencies` (array of `Sheet!A1` strings),
-     `result` (same value union as Cell.value).
+     and optional `cached_value`. That field is only an imported value stored
+     beside the formula in the source file; it is never a fresh engine result.
+     Calculation outputs and backend/model provenance belong in a separate
+     calculation report.
+   - `Binding`: `direction` (`input` or `output`), `name`, explicit `sheet` and
+     `address`, `value_type`, `required`, and typed `constraints` (`min`, `max`,
+     and/or `choices`). Bindings live on Workbook so calc-binding consumes the
+     same canonical native type rather than a side manifest.
 4. **Versioning.** `schema_version` is an integer on every serialized document.
    Any breaking or additive schema change that readers must understand requires
    a **version bump**. Ship a backward-compatible reader that accepts all
@@ -138,8 +151,7 @@ schema moves. The extracted model is already a product artifact.
 
 ### Done when
 - Schema + Python/Rust hydrate enforce `model_version`.
-- Changelog file exists once the first bump is planned; v1 row is present when
-  intake SoT ships.
+- [Model changelog](model-changelog.md) records v1 and its initial reader policy.
 
 ---
 

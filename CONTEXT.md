@@ -36,6 +36,7 @@ Build an **SDK for Excel in agent-ready formats**: expose supported workbook dat
 - **Input preview:** a detached calculation of proposed inputs, with before/after outputs and cell changes; it never changes the owned session or writes files.
 - **Calculation provenance:** source formulas, references, explicit bindings and model revision attached to a result; imported caches are never evidence that Forge calculated a value.
 - **Workbook model:** sparse sheets, authored content, formulas, styles, and explicit input/output bindings, implemented independently in each language and separate from XML.
+- **Canonical Workbook Model:** the versioned serialized contract in `schemas/workbook-model-v1.schema.json`, hydrated into `workbook_forge.model.Workbook` in Python and `workbook_forge::model::Workbook` in Rust. Those native types are the direct calc-binding input; do not introduce a competing workbook DTO. The existing toolkit session `WorkbookModel` remains a legacy engine shape until calc-binding retargets or refactors it.
 - **Application binding:** a named input or output attached to an explicit cell; not an Excel defined-name expression.
 - **Calculation snapshot:** an immutable model revision used by full or incremental calculation; stale work cannot replace current published results.
 - **Preservation baseline:** immutable imported package content used to patch supported changes without rereading or rewriting the original file.
@@ -62,7 +63,7 @@ Build an **SDK for Excel in agent-ready formats**: expose supported workbook dat
 - Jev is a development-time reviewer only. It is not linked into runtime, and its results are advisory.
 - Macros and external data are never executed or fetched.
 ## Current State
-The [current-state findings](docs/toolkit-delivery.md#current-state-findings) separate delivered capabilities from evidence limits. Native named-input compositions and cell-based workbook expressions remain separate authoring interfaces; an explicit binding and transformation contract is the proposed next integration milestone, not an implemented export API.
+The [current-state findings](docs/toolkit-delivery.md#current-state-findings) separate delivered capabilities from evidence limits. The `impl/v1-intake` branch carries the first versioned canonical Workbook Model; its schema and shared fixture are under `schemas/` and `tests/fixtures/canonical/`. Native named-input compositions and cell-based workbook expressions remain separate authoring interfaces. Calc-binding must refactor or retarget session APIs to calculate against the canonical model directly, not translate it through another workbook DTO.
 The native primitive interface adds nine functions and ten binary operators, typed native values, named-input composition and inspectable operation identities without requiring a workbook. Both packages provide the canonical catalog and expression schema. All three PR boundary findings are fixed; final independent review also closed a direct-call size-limit mismatch. Contributor evidence and the outstanding Excel acceptance gate are recorded in `docs/toolkit-delivery.md`.
 Runs 1–24 are accepted. Coverage stands at 115 implemented functions, 85 detailed semantic specs, 110 source records, and 1,371 shared fixtures. Run 24 bounds formula size, nesting, and wildcard work. The toolkit adds independently implemented typed authoring, calculation sessions and Excel adapters in Python and Rust, installed examples, and reviewed parallel calculation. Both SDKs now expose nine schema-described agent operations and JSON-lines runners, verified through installed packages and a live agent task. Formula-aware XML extraction adds ten structural patterns, typed references and catalog mappings; the complete suite now passes 923 Python and 88 Rust tests. Three direct formula checks succeeded in Excel 16.113.2; the generated-file roundtrip and full scenario remain unverified because automation failed. The 521-entry source inventory remains broader than implementation coverage; 406 functions remain catalog-only. FILTER, SORT, and UNIQUE return bounded, shape-preserving arrays; worksheet spill projection remains unsupported. SORT/UNIQUE comparison, equality, coercion, and output precision include explicit Workbook Forge profiles. Do not describe the package as Excel-complete.
 - The source-linked function inventory contains 521 records; it is a versioned discovery catalog, not an evaluator coverage claim.
@@ -77,6 +78,7 @@ Runs 1–24 are accepted. Coverage stands at 115 implemented functions, 85 detai
 - `docs/excel-observations.md`: observation meanings, harness usage and actual Excel evidence.
 - `docs/run-history.md`: dated project activity, superseded checkpoint decisions, Runs 1–24 and the pre-loop baseline. Historical counts and repository visibility describe their original checkpoints.
 - `docs/behavior-profiles.md`: current behavior and profile notes by function family, plus workbook adapter details.
+- `schemas/workbook-model-v1.schema.json` and `docs/specs/model-changelog.md`: canonical model bytes, field schema, and model-version history.
 - `.autoresearch/state.json`: the authoritative accepted-run ledger. `.autoresearch/config.json` holds the loop criteria and `eval_command`.
 - `_working-files/`: dated checkpoint and review notes.
 - `_archive-2026-09-25-L1/`: a git-ignored archive of the pre-git backup copies (`*.bak-*`, `.autoresearch/_archive-*`, `.autoresearch/backups/`), with `MANIFEST.tsv` and `ROLLBACK.sh`.
@@ -87,6 +89,10 @@ Runs 1–24 are accepted. Coverage stands at 115 implemented functions, 85 detai
 - Append each run's summary to `docs/run-history.md`. Keep `README.md` and this file limited to the current state.
 - Run the Rust gates with `CARGO_TARGET_DIR` inside the checkout, as `eval_command` does. A shared target directory can mix build artifacts between copies of the crate.
 ## Latest maintenance
+### 2026-09-28 — codex/Codex — canonical workbook model v1
+- Added the versioned Python/Rust model hydration contract and one shared serialization fixture on `impl/v1-intake`.
+- Calc-binding still needs to retarget/refactor the existing session API to calculate from canonical model types directly; that integration is specified but not implemented in this slice.
+
 ### 2026-09-28 — codex/Codex — public documentation review
 - Reviewed all project guides and historical notes, verified portable examples, and removed unnecessary personal context and machine locations.
 - Recorded the contributor checks and separate published-history decision in [toolkit delivery](docs/toolkit-delivery.md#activity).

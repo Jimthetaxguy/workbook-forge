@@ -141,10 +141,12 @@ def import_xlsx(path: str | Path, *, inputs=None, outputs=None, backend: str = "
             for address, element in workbook._cells[sheet].items():
                 source = workbook.get(sheet, address)
                 node = element.find(_q("f"))
+                value_node = element.find(_q("v"))
                 cell: dict[str, Any] = {"value": None if node is not None else _scalar(source.value)}
                 if node is not None:
                     cell["formula"] = node.text or ""
-                    cell["cached_value"] = _scalar(source.value)
+                    if value_node is not None:
+                        cell["cached_value"] = _scalar(source.value)
                     if not node.text or source.formula_kind not in {None, "normal"}:
                         cell["blocked_reason"] = f"unsupported formula kind {source.formula_kind!r}"
                     if workbook._uses_1904_date_system:
