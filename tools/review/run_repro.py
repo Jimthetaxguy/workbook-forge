@@ -30,12 +30,28 @@ OUTPUT_LIMIT = 8000
 # osascript, so both are refused: reviews never start a desktop application.
 FORBIDDEN_WORDS = ("rm", "git", "curl", "wget", "osascript", "sudo", "ssh")
 # `open -a` starts a desktop application on macOS.
-FORBIDDEN_FRAGMENTS = ("--excel", "Microsoft Excel", "open -a", "| sh", "| bash", "~/")
+FORBIDDEN_FRAGMENTS = ("open -a", "| sh", "| bash")
+# The shell expands these into text this check never sees.
+FORBIDDEN_CHARACTERS = {
+    "$": "a shell variable or substitution",
+    "`": "a shell substitution",
+    "~": "the home directory",
+}
 _WORD = re.compile(r"[A-Za-z0-9_./~-]+")
 
 
 def refusal(command: str, root: Path) -> str | None:
-    """Return why the command is refused, or None when it may run."""
+    """Return why the command is refused, or None when it may run.
+
+    This reads the command text. It cannot see what a script named in the
+    command does, so it is a check on honest mistakes, not a sandbox.
+    """
+    if "excel" in command.lower():
+        # Every flag and tool that starts Excel has the word in its name.
+        return "mentions Excel; reviews never start it"
+    for character, meaning in FORBIDDEN_CHARACTERS.items():
+        if character in command:
+            return f"contains {character!r}, {meaning}"
     for fragment in FORBIDDEN_FRAGMENTS:
         if fragment in command:
             return f"contains {fragment!r}"
@@ -43,10 +59,17 @@ def refusal(command: str, root: Path) -> str | None:
         name = word.rsplit("/", 1)[-1]
         if name in FORBIDDEN_WORDS:
             return f"uses {name!r}"
-        if ".." in Path(word).parts:
-            return f"path {word!r} climbs out of the working directory"
-        if word.startswith("/") and not _inside(Path(word), root) and not _is_program(word):
-            return f"path {word!r} is outside the working directory"
+    try:
+        arguments = shlex.split(command)
+    except ValueError as error:
+        return f"cannot be read as a shell command: {error}"
+    for argument in arguments:
+        if any(character.isspace() for character in argument):
+            continue  # quoted text, such as a search pattern, is not a path
+        if ".." in Path(argument).parts:
+            return f"path {argument!r} climbs out of the working directory"
+        if argument.startswith("/") and not _inside(Path(argument), root) and not _is_program(argument):
+            return f"path {argument!r} is outside the working directory"
     return None
 
 

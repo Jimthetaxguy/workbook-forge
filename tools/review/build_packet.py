@@ -7,10 +7,13 @@ the code and its contract and nothing else.
 
     build_packet.py build  --source CHECKOUT --lens NAME --stage 1|2 --out DIR
     build_packet.py verify --lens NAME --stage 1|2 DIR
+    build_packet.py seal   DIR
     build_packet.py check  DIR
 
 `build` also writes DIR.map.json beside the packet. That file links each
-packet file back to its source and is for the coordinator only.
+packet file back to its source, records what the packet held when it was
+sealed, and is for the coordinator only. Run `seal` again after adding a file
+to a packet.
 """
 from __future__ import annotations
 
@@ -26,6 +29,8 @@ LENSES = Path(__file__).with_name("lenses.json")
 MANIFEST = "manifest.json"
 # Files the coordinator adds to a packet. They are not copied from the source.
 COORDINATOR_FILES = frozenset({MANIFEST, "BRIEF.md", "expectations.md", "claims.jsonl"})
+# A reviewer's own scripts, and what Python leaves behind when it runs.
+REVIEWER_DIRECTORIES = frozenset({"_scratch", "__pycache__"})
 _FRONT_MATTER = "---\n"
 
 
@@ -120,12 +125,47 @@ def build(source: Path, lens_name: str, stage: int, out: Path) -> dict:
         ["git", "-C", str(source), "rev-parse", "HEAD"],
         check=True, capture_output=True, text=True,
     ).stdout.strip()
-    sidecar = out.with_name(out.name + ".map.json")
-    sidecar.write_text(
+    _sidecar(out).write_text(
         json.dumps({"tip": tip, "lens": lens_name, "stage": stage, "files": origin}, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
     )
+    seal(out)
     return manifest
+
+
+def _sidecar(packet: Path) -> Path:
+    return packet.with_name(packet.name + ".map.json")
+
+
+def _unlisted(packet: Path, manifest: dict) -> list[str]:
+    """Files in the packet that the manifest does not list."""
+    found = []
+    for path in packet_files(packet):
+        relative = path.relative_to(packet).as_posix()
+        if relative == MANIFEST or relative in manifest["files"]:
+            continue
+        if REVIEWER_DIRECTORIES & set(PurePosixPath(relative).parts):
+            continue
+        found.append(relative)
+    return found
+
+
+def seal(packet: Path) -> None:
+    """Record, outside the packet, what the packet holds now.
+
+    The manifest sits inside the packet, where a reviewer can rewrite it. The
+    record beside the packet is what `check` trusts. Seal again after adding
+    a file to the packet or planting a defect in it.
+    """
+    sidecar = _sidecar(packet)
+    record = json.loads(sidecar.read_text(encoding="utf-8")) if sidecar.is_file() else {}
+    manifest_bytes = (packet / MANIFEST).read_bytes()
+    record["manifest_sha256"] = digest(manifest_bytes)
+    record["coordinator_files"] = {
+        name: digest((packet / name).read_bytes())
+        for name in _unlisted(packet, json.loads(manifest_bytes))
+    }
+    sidecar.write_text(json.dumps(record, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
 def packet_files(packet: Path) -> list[Path]:
@@ -160,16 +200,29 @@ def verify(packet: Path, lens_name: str, stage: int) -> list[str]:
 
 
 def check(packet: Path) -> list[str]:
-    """Compare the packet to its manifest, to show a reviewer changed nothing."""
-    manifest = json.loads((packet / MANIFEST).read_text(encoding="utf-8"))
+    """Show whether a reviewer changed, added or removed anything.
+
+    Files under `_scratch/` are the reviewer's own and are not reported.
+    """
+    manifest_bytes = (packet / MANIFEST).read_bytes()
+    manifest = json.loads(manifest_bytes)
+    sidecar = _sidecar(packet)
+    record = json.loads(sidecar.read_text(encoding="utf-8")) if sidecar.is_file() else {}
+    if record.get("manifest_sha256") not in (None, digest(manifest_bytes)):
+        return [f"{MANIFEST}: changed since the packet was built"]
+    expected = dict(manifest["files"])
+    expected.update(record.get("coordinator_files", {}))
     problems: list[str] = []
-    for name, expected in sorted(manifest["files"].items()):
+    for name, wanted in expected.items():
         path = packet / name
         if not path.is_file():
             problems.append(f"{name}: removed")
-        elif digest(path.read_bytes()) != expected:
+        elif digest(path.read_bytes()) != wanted:
             problems.append(f"{name}: changed")
-    return problems
+    for name in _unlisted(packet, manifest):
+        if name not in expected and not ("coordinator_files" not in record and name in COORDINATOR_FILES):
+            problems.append(f"{name}: added")
+    return sorted(problems)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -186,11 +239,16 @@ def main(argv: list[str] | None = None) -> int:
     verify_parser.add_argument("packet", type=Path)
     check_parser = commands.add_parser("check")
     check_parser.add_argument("packet", type=Path)
+    seal_parser = commands.add_parser("seal")
+    seal_parser.add_argument("packet", type=Path)
     arguments = parser.parse_args(argv)
     try:
         if arguments.command == "build":
             manifest = build(arguments.source, arguments.lens, arguments.stage, arguments.out)
             print(f"built {len(manifest['files'])} files for lens {arguments.lens} stage {arguments.stage}")
+            return 0
+        if arguments.command == "seal":
+            seal(arguments.packet)
             return 0
         if arguments.command == "verify":
             problems = verify(arguments.packet, arguments.lens, arguments.stage)

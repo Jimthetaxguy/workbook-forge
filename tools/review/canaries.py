@@ -30,9 +30,12 @@ from pathlib import Path
 import subprocess
 import sys
 
+import build_packet
+
 MAX_DEFECTS = 12
 TEST_TIMEOUT = 900
 NEARBY_LINES = 5
+MAX_FINDING_LINES = 40
 
 
 class DefectError(Exception):
@@ -127,13 +130,22 @@ def plant(packet: Path, results: list[dict], limit: int) -> list[dict]:
     manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     sidecar = packet.with_name(packet.name + ".planted.json")
     sidecar.write_text(json.dumps(planted, indent=2) + "\n", encoding="utf-8")
+    build_packet.seal(packet)
     return planted
 
 
 def matches(finding: dict, defect: dict) -> bool:
+    """Whether a finding points at a planted defect.
+
+    A finding that cites a whole file points at nothing, and a refuted
+    finding found nothing, so neither counts.
+    """
     location = finding["location"]
+    span = location["line_end"] - location["line_start"] + 1
     return (
-        finding["lens"] == defect["lens"]
+        finding.get("status") != "REFUTED"
+        and span <= MAX_FINDING_LINES
+        and finding["lens"] == defect["lens"]
         and location["file"] == defect["file"]
         and location["line_start"] - NEARBY_LINES <= defect["line"] <= location["line_end"] + NEARBY_LINES
     )

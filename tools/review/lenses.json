@@ -6,6 +6,8 @@
       "stage1": ["docs/specs/*.md", "schemas/*.json"],
       "stage2": [
         "python/workbook_forge/model.py",
+        "python/workbook_forge/catalog.py",
+        "catalog/*.json",
         "rust/src/model.rs",
         "rust/examples/canonical_calc.rs",
         "fixtures/operating-scenario*.json",

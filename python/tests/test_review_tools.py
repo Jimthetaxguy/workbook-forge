@@ -199,7 +199,7 @@ def test_a_complete_finding_is_accepted(tmp_path):
         ({"attacks_attempted": []}, "should be non-empty"),
         ({"evidence": {"command": "python -c 1", "output": ""}}, "should be non-empty"),
         ({"evidence": {"command": "git log", "output": "x"}}, "uses 'git'"),
-        ({"evidence": {"command": "python t.py --excel", "output": "x"}}, "--excel"),
+        ({"evidence": {"command": "python t.py --excel", "output": "x"}}, "mentions Excel"),
         ({"location": {"file": "/etc/passwd", "line_start": 1, "line_end": 1}}, "inside the packet"),
         ({"location": {"file": "../x.py", "line_start": 1, "line_end": 1}}, "inside the packet"),
         ({"location": {"file": "a.py", "line_start": 9, "line_end": 2}}, "ends before it starts"),
@@ -291,3 +291,82 @@ def test_running_defects_leaves_the_checkout_as_it_was(checkout):
     results = canaries.run(checkout, [DEFECT], Path(sys.executable))
     assert results[0]["survived"] and results[0]["caught_by"] == []
     assert (checkout / DEFECT["file"]).read_text() == before
+
+
+# Weaknesses found when these tools were themselves reviewed
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "python3 tools/excel_oracle.py --run-excel",
+        "python3 tools/excel_oracle.py --run-excel --live-scenario",
+        "python3 tools/canonical_excel_receipt.py --fixture f.json",
+        'cat "$HOME/code/repo/CONTEXT.md"',
+        "cd ~ && cat code/repo/CONTEXT.md",
+        "cat `echo /etc/passwd`",
+        "cat $(echo /etc/passwd)",
+        "cat ..",
+        "python3.13 -c 'unterminated",
+    ],
+)
+def test_more_commands_that_reach_outside_are_refused(tmp_path, command):
+    assert repro.refusal(command, tmp_path) is not None
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        'grep -n -A9 "Scalar::Error { code, .. } => Value::Error" rust/src/model.rs',
+        "PYTHONPATH=python python3.13 -B _scratch/check.py",
+        "PYTHONPATH=python python3.13 -m pytest -q -o pythonpath=_scratch/variant_01 python/tests/test_x.py",
+        "python3.13 -c \"print('a..b')\"",
+    ],
+)
+def test_ordinary_review_commands_are_allowed(tmp_path, command):
+    assert repro.refusal(command, tmp_path) is None
+
+
+def test_a_finding_that_cites_a_whole_file_earns_no_planted_defect():
+    planted = [{"id": "limit-off-by-one", "file": DEFECT["file"], "line": 5, "lens": "contract"}]
+    whole_file = _finding(location={"file": DEFECT["file"], "line_start": 1, "line_end": 99999})
+    report = canaries.score([whole_file], planted)
+    assert report["contract"]["found"] == 0
+    assert not report["contract"]["clean_verdicts_trusted"]
+
+
+def test_a_refuted_finding_earns_no_planted_defect():
+    planted = [{"id": "limit-off-by-one", "file": DEFECT["file"], "line": 5, "lens": "contract"}]
+    refuted = _finding(status="REFUTED", refutation="does not reproduce")
+    assert canaries.score([refuted], planted)["contract"]["found"] == 0
+
+
+def test_check_notices_a_rewritten_manifest(checkout, tmp_path):
+    packet = tmp_path / "packet"
+    packets.build(checkout, "contract", 2, packet)
+    target = packet / "python/workbook_forge/model.py"
+    target.write_text("LIMIT = 11\n")
+    manifest = json.loads((packet / "manifest.json").read_text())
+    manifest["files"]["python/workbook_forge/model.py"] = packets.digest(target.read_bytes())
+    (packet / "manifest.json").write_text(json.dumps(manifest))
+    assert packets.check(packet) == ["manifest.json: changed since the packet was built"]
+
+
+def test_check_notices_added_and_removed_files(checkout, tmp_path):
+    packet = tmp_path / "packet"
+    packets.build(checkout, "contract", 2, packet)
+    (packet / "notes.md").write_text("extra\n")
+    (packet / "_scratch").mkdir()
+    (packet / "_scratch/experiment.py").write_text("print(1)\n")
+    (packet / "schemas/workbook-model.v1.schema.json").unlink()
+    assert packets.check(packet) == [
+        "notes.md: added",
+        "schemas/workbook-model.v1.schema.json: removed",
+    ]
+
+
+def test_planting_keeps_the_manifest_record_current(checkout, tmp_path):
+    packet = tmp_path / "packet"
+    packets.build(checkout, "contract", 2, packet)
+    canaries.plant(packet, [{**DEFECT, "survived": True}], limit=3)
+    assert packets.check(packet) == []

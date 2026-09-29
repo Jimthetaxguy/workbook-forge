@@ -69,9 +69,10 @@ One JSON object per line, matching `review/findings.schema.json`.
   be empty. "Found nothing" without a list of what was tried is not accepted.
 - **There is no field for strengths.** The schema refuses unknown fields.
 - **No patches.** A finding that contains a diff is rejected.
-- **Commands stay inside the packet.** A command that uses `git`, `rm`,
-  `curl`, `osascript` or `--excel`, or names a path outside the packet, is
-  rejected. Reviews never start Excel or any other desktop application.
+- **Commands stay inside the packet.** A command is rejected when it uses
+  `git`, `rm`, `curl` or `osascript`, mentions Excel, contains `$`, a backtick
+  or `~`, or names a path outside the packet. Reviews never start Excel or
+  any other desktop application.
 
 Check a file of findings with:
 
@@ -132,6 +133,24 @@ found by running the tests, which measures the tests and not the reviewer.
   reason.** It shows the copies match, not that the content is correct.
 
 ## Limits of this protocol
+
+- The command check reads the text of a command. It cannot see what a script
+  named in the command does. It catches honest mistakes. It does not contain
+  a reviewer who sets out to get around it.
+- `run_repro.py` stops the command and its ordinary child processes. A
+  process that starts its own session is outside the limit. `tools/gate.sh`
+  does this, so a reproduction must not call it.
+- After `canaries.py run`, the compiled Rust programs on disk were built from
+  the last planted defect. Build them again before using them.
+- pytest reads `pythonpath` from `pyproject.toml` and puts it ahead of
+  `PYTHONPATH`. To test a changed copy of the package, pass
+  `-o pythonpath=DIRECTORY`. Without it the original is imported and every
+  change appears to go unnoticed.
+- A lens must include every module that its files import. A packet whose
+  code cannot be imported forces the reviewer to write a stand-in.
+- A planted defect counts as found when a finding of no more than 40 lines,
+  not refuted, covers its line. This shows the reviewer looked there. It does
+  not show the reviewer understood the defect, so read the finding.
 
 - The packet keeps a reviewer away from the builder's material by
   arrangement, not by force. A reviewer running on the same machine can read
