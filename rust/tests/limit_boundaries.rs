@@ -75,7 +75,10 @@ fn request_of(length: usize) -> Value {
 fn error_of(response: &Value) -> (String, String) {
     (
         response["error"]["code"].as_str().unwrap_or("").to_owned(),
-        response["error"]["message"].as_str().unwrap_or("").to_owned(),
+        response["error"]["message"]
+            .as_str()
+            .unwrap_or("")
+            .to_owned(),
     )
 }
 
@@ -95,7 +98,10 @@ fn a_request_one_byte_over_the_limit_is_refused() {
     assert_eq!(response["ok"], json!(false));
     assert_eq!(
         error_of(&response),
-        ("resource_limit".to_owned(), "request exceeds 1 MiB".to_owned())
+        (
+            "resource_limit".to_owned(),
+            "request exceeds 1 MiB".to_owned()
+        )
     );
 }
 
@@ -106,8 +112,8 @@ fn workbook_with_column_range(scratch: &Scratch, last_column: u32) -> PathBuf {
     let mut archive = zip::ZipArchive::new(fs::File::open(&exported).unwrap()).unwrap();
     let rewritten = scratch.path(&format!("columns-{last_column}.xlsx"));
     let mut writer = zip::ZipWriter::new(fs::File::create(&rewritten).unwrap());
-    let options = zip::write::SimpleFileOptions::default()
-        .compression_method(zip::CompressionMethod::Stored);
+    let options =
+        zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
     let mut changed = 0;
     for index in 0..archive.len() {
         let mut entry = archive.by_index(index).unwrap();
@@ -121,7 +127,11 @@ fn workbook_with_column_range(scratch: &Scratch, last_column: u32) -> PathBuf {
             );
             let text = match (text.find("<cols>"), text.find("</cols>")) {
                 (Some(start), Some(end)) => {
-                    format!("{}{columns}{}", &text[..start], &text[end + "</cols>".len()..])
+                    format!(
+                        "{}{columns}{}",
+                        &text[..start],
+                        &text[end + "</cols>".len()..]
+                    )
                 }
                 _ => text.replacen("<sheetData>", &format!("{columns}<sheetData>"), 1),
             };
@@ -133,7 +143,10 @@ fn workbook_with_column_range(scratch: &Scratch, last_column: u32) -> PathBuf {
         writer.write_all(&bytes).unwrap();
     }
     writer.finish().unwrap();
-    assert_eq!(changed, 1, "the export should hold xl/worksheets/sheet1.xml");
+    assert_eq!(
+        changed, 1,
+        "the export should hold xl/worksheets/sheet1.xml"
+    );
     rewritten
 }
 
@@ -153,5 +166,8 @@ fn a_column_range_ending_past_the_last_column_is_refused() {
     let error = import(&workbook_with_column_range(&scratch, 16_385))
         .err()
         .expect("column 16385 is outside the sheet");
-    assert!(error.to_string().contains("invalid column range"), "{error}");
+    assert!(
+        error.to_string().contains("invalid column range"),
+        "{error}"
+    );
 }
