@@ -1,6 +1,6 @@
 """What the separate copies of two small routines do today.
 
-Cell addresses are parsed in five places and spreadsheet error codes are
+Cell addresses are parsed in six places and spreadsheet error codes are
 listed in five. The copies do not agree. These tests record each copy's
 present behaviour, disagreements included, so that replacing them with one
 routine is a visible decision about which behaviour wins and not a silent
@@ -30,7 +30,8 @@ def _workbook_position(address: str) -> tuple[int, int]:
     return row, column
 
 
-def _model_address(address: str) -> tuple[int, int]:
+def _model_canonical(address: str) -> tuple[int, int]:
+    """The check the canonical model applies to cell keys and bindings."""
     if model._canonical_address(address) is None:
         raise ValueError(address)
     return model._parts(address)
@@ -42,7 +43,9 @@ PARSERS = {
     "workbook": _workbook_position,
     "engine": python_engine._coordinates,
     "expressions": _expression_reference,
-    "model": _model_address,
+    "model-canonical": _model_canonical,
+    # The canonical model reads formula references with this one.
+    "model-parts": model._parts,
 }
 
 # Every copy agrees on these.
@@ -54,14 +57,15 @@ REFUSED_BY_ALL = ["A0", "A01", "AAAA1", "1A", "A", "", "Sheet1!A1"]
 
 # The copies disagree on these. True means the copy accepts the address.
 DISAGREEMENTS = {
-    # Past the last column or row. Only the formula evaluator accepts them.
-    "XFE1": {"evaluator": True, "workbook": False, "engine": False, "expressions": False, "model": False},
-    "A1048577": {"evaluator": True, "workbook": False, "engine": False, "expressions": False, "model": False},
-    "ZZZ1": {"evaluator": True, "workbook": False, "engine": False, "expressions": False, "model": False},
-    "A10000000": {"evaluator": True, "workbook": False, "engine": False, "expressions": False, "model": False},
-    # Lower case and absolute markers. Only the canonical model refuses them.
-    "a1": {"evaluator": True, "workbook": True, "engine": True, "expressions": True, "model": False},
-    "$A$1": {"evaluator": True, "workbook": True, "engine": True, "expressions": True, "model": False},
+    # Past the last column or row. The formula evaluator and the model's
+    # reference reader accept them.
+    "XFE1": {"evaluator": True, "workbook": False, "engine": False, "expressions": False, "model-canonical": False, "model-parts": True},
+    "A1048577": {"evaluator": True, "workbook": False, "engine": False, "expressions": False, "model-canonical": False, "model-parts": True},
+    "ZZZ1": {"evaluator": True, "workbook": False, "engine": False, "expressions": False, "model-canonical": False, "model-parts": True},
+    "A10000000": {"evaluator": True, "workbook": False, "engine": False, "expressions": False, "model-canonical": False, "model-parts": True},
+    # Lower case and absolute markers. Only the canonical check refuses them.
+    "a1": {"evaluator": True, "workbook": True, "engine": True, "expressions": True, "model-canonical": False, "model-parts": True},
+    "$A$1": {"evaluator": True, "workbook": True, "engine": True, "expressions": True, "model-canonical": False, "model-parts": True},
 }
 
 

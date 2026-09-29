@@ -15,7 +15,8 @@ import zipfile
 import pytest
 
 from workbook_forge import python_engine, workbook
-from workbook_forge.model import MAX_RANGE_CELLS, ModelError, calculate, hydrate
+from workbook_forge import model
+from workbook_forge.model import ModelError, calculate, hydrate
 from workbook_forge.workbook import UnsupportedWorkbook, Workbook
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -23,6 +24,10 @@ FIXTURE = json.loads((ROOT / "fixtures" / "operating-scenario.workbook.json").re
 LAST_ROW = 1_048_576
 LAST_COLUMN = 16_384
 UINT64_MAX = (1 << 64) - 1
+# Stated in docs/behavior-profiles.md and CONTEXT.md. Written out here, not
+# imported, so that changing the number in the code fails a test.
+RANGE_CELL_LIMIT = 100_000
+PACKAGE_BYTE_LIMIT = 128 * 1024 * 1024
 
 INSIDE = ["A1", "XFD1", "A1048576", "XFD1048576"]
 OUTSIDE = ["XFE1", "A1048577", "XFE1048577"]
@@ -91,11 +96,17 @@ def _range_diagnostics(cell_count: int) -> list[tuple[str, str]]:
 
 
 def test_model_calculates_a_range_of_exactly_the_limit():
-    assert _range_diagnostics(MAX_RANGE_CELLS) == []
+    assert _range_diagnostics(RANGE_CELL_LIMIT) == []
 
 
 def test_model_refuses_a_range_one_cell_over_the_limit():
-    assert _range_diagnostics(MAX_RANGE_CELLS + 1) == [("resource_limit", "F2")]
+    assert _range_diagnostics(RANGE_CELL_LIMIT + 1) == [("resource_limit", "F2")]
+
+
+def test_limits_have_their_documented_values():
+    assert (model.MAX_ROW, model.MAX_COLUMN) == (LAST_ROW, LAST_COLUMN)
+    assert model.MAX_RANGE_CELLS == RANGE_CELL_LIMIT
+    assert workbook.MAX_PACKAGE_BYTES == PACKAGE_BYTE_LIMIT
 
 
 # Workbook package reader

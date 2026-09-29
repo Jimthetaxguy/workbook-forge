@@ -446,8 +446,9 @@ def _analyze(
         try:
             start_row, start_col = _parts(reference.start)
             end_row, end_col = _parts(reference.end or reference.start)
-            # The formula parser accepts any column letters and row digits.
-            # A cell past XFD1048576 does not exist.
+            # The formula parser accepts up to three column letters and any
+            # row digits, so it lets through cells past XFD1048576, which
+            # do not exist.
             if max(start_row, end_row) > MAX_ROW or max(start_col, end_col) > MAX_COLUMN:
                 raise ValueError(reference.start)
         except ValueError:
