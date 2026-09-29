@@ -1,0 +1,164 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://workbook-forge.dev/schemas/excel-roundtrip-contract-v1.json",
+  "title": "Workbook Forge Excel round-trip contract",
+  "description": "A versioned, cell-scoped contract for full Excel recalculation and SDK reimport.",
+  "type": "object",
+  "required": ["schema_version", "id", "checks"],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "id": { "type": "string", "minLength": 1 },
+    "model_version": { "type": "integer", "minimum": 1 },
+    "required_fixture_classes": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "enum": ["scenario", "volatile", "iteration", "array", "array_spill", "excel_quirk"] }
+    },
+    "calculation_settings": {
+      "type": "object",
+      "properties": {
+        "iteration": { "type": "boolean" },
+        "max_iterations": { "type": "integer", "minimum": 1 },
+        "max_change": { "type": "number", "exclusiveMinimum": 0 }
+      },
+      "additionalProperties": false
+    },
+    "edits": {
+      "type": "array",
+      "maxItems": 100,
+      "items": {
+        "type": "object",
+        "required": ["sheet", "address", "value"],
+        "properties": {
+          "sheet": { "type": "string", "minLength": 1, "maxLength": 31 },
+          "address": { "$ref": "#/$defs/address" },
+          "value": { "type": ["null", "number", "string", "boolean"] }
+        },
+        "additionalProperties": false
+      }
+    },
+    "checks": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 1000,
+      "items": {
+        "type": "object",
+        "required": ["id", "class", "sheet", "address", "expected_formula", "expected_result"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$" },
+          "class": { "enum": ["scenario", "volatile", "iteration", "array", "array_spill", "excel_quirk"] },
+          "sheet": { "type": "string", "minLength": 1, "maxLength": 31 },
+          "address": { "$ref": "#/$defs/address" },
+          "expected_formula": { "type": "string", "pattern": "^=", "maxLength": 8192 },
+          "expected_result": { "$ref": "#/$defs/expectedResult" },
+          "spill_cells": {
+            "type": "array", "minItems": 1, "maxItems": 10000, "uniqueItems": true,
+            "items": { "$ref": "#/$defs/address" }
+          }
+        },
+        "allOf": [
+          {
+            "if": { "properties": { "class": { "const": "array_spill" } }, "required": ["class"] },
+            "then": { "required": ["spill_cells"], "properties": { "expected_result": { "$ref": "#/$defs/arrayResult" } } }
+          },
+          {
+            "if": { "properties": { "expected_result": { "properties": { "type": { "const": "array" } }, "required": ["type"] } }, "required": ["expected_result"] },
+            "then": { "properties": { "class": { "const": "array_spill" } } }
+          }
+        ],
+        "additionalProperties": false
+      }
+    },
+    "allowlist": {
+      "type": "array",
+      "items": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": ["check_id", "field", "policy", "reason"],
+            "properties": {
+              "check_id": { "type": "string" },
+              "field": { "const": "result" },
+              "policy": { "const": "volatile_predicate" },
+              "reason": { "type": "string", "minLength": 1 }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": ["check_id", "field", "accepted_values", "reason"],
+            "properties": {
+              "check_id": { "type": "string" },
+              "field": { "const": "formula" },
+              "accepted_values": { "type": "array", "minItems": 1, "items": { "type": "string", "pattern": "^=" } },
+              "reason": { "type": "string", "minLength": 1 }
+            },
+            "additionalProperties": false
+          }
+        ]
+      }
+    }
+  },
+  "$defs": {
+    "address": {
+      "type": "string",
+      "pattern": "^[A-Z]{1,3}[1-9][0-9]{0,6}$"
+    },
+    "expectedResult": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["type", "value", "tolerance"],
+          "properties": {
+            "type": { "const": "number" },
+            "value": { "type": "number" },
+            "tolerance": {
+              "type": "object",
+              "required": ["absolute", "relative"],
+              "properties": {
+                "absolute": { "type": "number", "minimum": 0 },
+                "relative": { "type": "number", "minimum": 0 }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": ["type", "predicate"],
+          "properties": {
+            "type": { "const": "number" },
+            "predicate": {
+              "type": "object",
+              "minProperties": 1,
+              "properties": {
+                "minimum": { "type": "number" },
+                "maximum": { "type": "number" },
+                "minimum_inclusive": { "type": "boolean" },
+                "maximum_inclusive": { "type": "boolean" }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        },
+        { "type": "object", "required": ["type"], "properties": { "type": { "const": "blank" } }, "additionalProperties": false },
+        { "type": "object", "required": ["type", "value"], "properties": { "type": { "const": "text" }, "value": { "type": "string" } }, "additionalProperties": false },
+        { "type": "object", "required": ["type", "value"], "properties": { "type": { "const": "boolean" }, "value": { "type": "boolean" } }, "additionalProperties": false },
+        { "type": "object", "required": ["type", "value"], "properties": { "type": { "const": "error" }, "value": { "type": "string" } }, "additionalProperties": false },
+        { "$ref": "#/$defs/arrayResult" }
+      ]
+    },
+    "arrayResult": {
+      "type": "object",
+      "required": ["type", "shape"],
+      "properties": {
+        "type": { "const": "array" },
+        "shape": { "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "integer", "minimum": 1 } }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": true
+}

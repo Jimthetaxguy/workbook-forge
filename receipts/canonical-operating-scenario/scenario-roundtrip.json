@@ -1,0 +1,52 @@
+{
+  "schema_version": 1,
+  "harness": "excel_export_roundtrip_v1",
+  "recorded_at_utc": "2026-09-29T04:09:24.284352+00:00",
+  "status": "prepared",
+  "contract_id": "operating-scenario-canonical-v1",
+  "contract_sha256": "20e048e6e35069728704de29e6517e766d7179a49591934c0c362f1568eaa5b0",
+  "model_version": 1,
+  "engine_requested": "Microsoft Excel Desktop",
+  "source_workbook": "operating-scenario.exported.xlsx",
+  "observations": [],
+  "formula_diffs": [],
+  "fixture_coverage": [
+    {
+      "class": "scenario",
+      "check_ids": [
+        "total-revenue-after-price-edit",
+        "total-profit-after-price-edit",
+        "break-even-after-price-edit",
+        "period-1-revenue",
+        "period-2-revenue",
+        "period-3-revenue",
+        "period-1-variable-cost",
+        "period-2-variable-cost",
+        "period-3-variable-cost",
+        "period-1-profit",
+        "period-2-profit",
+        "period-3-profit"
+      ],
+      "status": "not_observed"
+    }
+  ],
+  "safety": {
+    "source_overwritten": false,
+    "global_settings_written": false,
+    "external_sources_allowed": false
+  },
+  "source_workbook_sha256": "39bcc361e09d3d00015d4c9623ff9193eae4bbb63b2b507893642c9bdf56ab28",
+  "exported_model_sha256": "e652ba23cb35cb85c2bd7f46adaa235777b764acbf172d48eb64ec387d0c4683",
+  "date_system": "1900",
+  "exported_calc_properties": {
+    "fullCalcOnLoad": "1",
+    "forceFullCalc": "1",
+    "calcMode": "auto",
+    "fullPrecision": "1"
+  },
+  "formula_count_before": 15,
+  "stage": "preflight",
+  "reason": "Excel was not invoked; no recalculation or compatibility claim is made",
+  "source_unchanged": true,
+  "receipt": "receipt.json"
+}

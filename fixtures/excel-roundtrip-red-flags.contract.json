@@ -1,0 +1,235 @@
+{
+  "schema_version": 1,
+  "id": "operating-scenario-v1-red-flags",
+  "model_version": 1,
+  "required_fixture_classes": ["scenario", "volatile", "iteration", "array", "array_spill", "excel_quirk"],
+  "calculation_settings": {
+    "iteration": true,
+    "max_iterations": 100,
+    "max_change": 0.001
+  },
+  "edits": [
+    { "sheet": "Assumptions", "address": "B1", "value": 25 }
+  ],
+  "checks": [
+    {
+      "id": "total-revenue-after-price-edit",
+      "class": "scenario",
+      "sheet": "Forecast",
+      "address": "F2",
+      "expected_formula": "=SUM(C2:C4)",
+      "expected_result": { "type": "number", "value": 9250, "tolerance": { "absolute": 0, "relative": 0 } }
+    },
+    {
+      "id": "total-profit-after-price-edit",
+      "class": "scenario",
+      "sheet": "Forecast",
+      "address": "F3",
+      "expected_formula": "=SUM(E2:E4)",
+      "expected_result": { "type": "number", "value": 3290, "tolerance": { "absolute": 0, "relative": 0 } }
+    },
+    {
+      "id": "break-even-after-price-edit",
+      "class": "scenario",
+      "sheet": "Forecast",
+      "address": "F4",
+      "expected_formula": "=IF(Assumptions!B1>Assumptions!B2,Assumptions!B3/(Assumptions!B1-Assumptions!B2),NA())",
+      "expected_result": { "type": "number", "value": 58.8235294117647, "tolerance": { "absolute": 1e-10, "relative": 1e-12 } }
+    },
+    {
+      "id": "period-1-revenue",
+      "class": "scenario",
+      "sheet": "Forecast",
+      "address": "C2",
+      "expected_formula": "=(B2*'Assumptions'!$B$1)",
+      "expected_result": { "type": "number", "value": 2500, "tolerance": { "absolute": 0, "relative": 0 } }
+    },
+    {
+      "id": "period-2-revenue",
+      "class": "scenario",
+      "sheet": "Forecast",
+      "address": "C3",
+      "expected_formula": "=(B3*'Assumptions'!$B$1)",
+      "expected_result": { "type": "number", "value": 3000, "tolerance": { "absolute": 0, "relative": 0 } }
+    },
+    {
+      "id": "period-3-revenue",
+      "class": "scenario",
+      "sheet": "Forecast",
+      "address": "C4",
+      "expected_formula": "=(B4*'Assumptions'!$B$1)",
+      "expected_result": { "type": "number", "value": 3750, "tolerance": { "absolute": 0, "relative": 0 } }
+    },
+    {
+      "id": "period-1-variable-cost",
+      "class": "scenario",
+      "sheet": "Forecast",
+      "address": "D2",
+      "expected_formula": "=(B2*'Assumptions'!$B$2)",
+      "expected_result": { "type": "number", "value": 800, "tolerance": { "absolute": 0, "relative": 0 } }
+    },
+    {
+      "id": "period-2-variable-cost",
+      "class": "scenario",
+      "sheet": "Forecast",
+      "address": "D3",
+      "expected_formula": "=(B3*'Assumptions'!$B$2)",
+      "expected_result": { "type": "number", "value": 960, "tolerance": { "absolute": 0, "relative": 0 } }
+    },
+    {
+      "id": "period-3-variable-cost",
+      "class": "scenario",
+      "sheet": "Forecast",
+      "address": "D4",
+      "expected_formula": "=(B4*'Assumptions'!$B$2)",
+      "expected_result": { "type": "number", "value": 1200, "tolerance": { "absolute": 0, "relative": 0 } }
+    },
+    {
+      "id": "period-1-profit",
+      "class": "scenario",
+      "sheet": "Forecast",
+      "address": "E2",
+      "expected_formula": "=((C2-D2)-'Assumptions'!$B$3)",
+      "expected_result": { "type": "number", "value": 700, "tolerance": { "absolute": 0, "relative": 0 } }
+    },
+    {
+      "id": "period-2-profit",
+      "class": "scenario",
+      "sheet": "Forecast",
+      "address": "E3",
+      "expected_formula": "=((C3-D3)-'Assumptions'!$B$3)",
+      "expected_result": { "type": "number", "value": 1040, "tolerance": { "absolute": 0, "relative": 0 } }
+    },
+    {
+      "id": "period-3-profit",
+      "class": "scenario",
+      "sheet": "Forecast",
+      "address": "E4",
+      "expected_formula": "=((C4-D4)-'Assumptions'!$B$3)",
+      "expected_result": { "type": "number", "value": 1550, "tolerance": { "absolute": 0, "relative": 0 } }
+    },
+    {
+      "id": "volatile-rand",
+      "class": "volatile",
+      "sheet": "Red Flags",
+      "address": "B2",
+      "expected_formula": "=RAND()",
+      "expected_result": { "type": "number", "predicate": { "minimum": 0, "maximum": 1, "minimum_inclusive": true, "maximum_inclusive": false } }
+    },
+    {
+      "id": "volatile-now",
+      "class": "volatile",
+      "sheet": "Red Flags",
+      "address": "B3",
+      "expected_formula": "=NOW()",
+      "expected_result": { "type": "number", "predicate": { "minimum": 40000, "maximum": 100000, "minimum_inclusive": true, "maximum_inclusive": true } }
+    },
+    {
+      "id": "iterative-convergence",
+      "class": "iteration",
+      "sheet": "Red Flags",
+      "address": "B4",
+      "expected_formula": "=B4/2+1",
+      "expected_result": { "type": "number", "value": 2, "tolerance": { "absolute": 0.0011, "relative": 0 } }
+    },
+    {
+      "id": "array-scalar-reduction",
+      "class": "array",
+      "sheet": "Red Flags",
+      "address": "B5",
+      "expected_formula": "=SUM(SEQUENCE(3))",
+      "expected_result": { "type": "number", "value": 6, "tolerance": { "absolute": 0, "relative": 0 } }
+    },
+    {
+      "id": "array-spill-placement",
+      "class": "array_spill",
+      "sheet": "Red Flags",
+      "address": "B7",
+      "expected_formula": "=SEQUENCE(3)",
+      "expected_result": { "type": "array", "shape": [3, 1] },
+      "spill_cells": ["B7", "B8", "B9"]
+    },
+    {
+      "id": "binary-decimal-precision",
+      "class": "excel_quirk",
+      "sheet": "Red Flags",
+      "address": "B6",
+      "expected_formula": "=0.1+0.2",
+      "expected_result": { "type": "number", "value": 0.3, "tolerance": { "absolute": 1e-12, "relative": 0 } }
+    }
+  ],
+  "allowlist": [
+    {
+      "check_id": "volatile-rand",
+      "field": "result",
+      "policy": "volatile_predicate",
+      "reason": "RAND changes on each full recalculation; require a finite result in the Excel [0,1) interval instead of identical values."
+    },
+    {
+      "check_id": "volatile-now",
+      "field": "result",
+      "policy": "volatile_predicate",
+      "reason": "NOW changes with recalculation time; check that the result is a plausible Excel date serial, not bitwise equality."
+    },
+    {
+      "check_id": "array-scalar-reduction",
+      "field": "formula",
+      "accepted_values": ["=SUM(_xlfn.SEQUENCE(3))"],
+      "reason": "An Excel build may write the exact future-function prefix for SEQUENCE; no other formula rewrite is accepted."
+    },
+    {
+      "check_id": "period-1-revenue",
+      "field": "formula",
+      "accepted_values": ["=(B2*Assumptions!$B$1)"],
+      "reason": "Excel 16.113.2 removed optional quotes around the simple sheet name Assumptions in this formula; both exact forms are retained."
+    },
+    {
+      "check_id": "period-2-revenue",
+      "field": "formula",
+      "accepted_values": ["=(B3*Assumptions!$B$1)"],
+      "reason": "Excel 16.113.2 removed optional quotes around the simple sheet name Assumptions in this formula; both exact forms are retained."
+    },
+    {
+      "check_id": "period-3-revenue",
+      "field": "formula",
+      "accepted_values": ["=(B4*Assumptions!$B$1)"],
+      "reason": "Excel 16.113.2 removed optional quotes around the simple sheet name Assumptions in this formula; both exact forms are retained."
+    },
+    {
+      "check_id": "period-1-variable-cost",
+      "field": "formula",
+      "accepted_values": ["=(B2*Assumptions!$B$2)"],
+      "reason": "Excel 16.113.2 removed optional quotes around the simple sheet name Assumptions in this formula; both exact forms are retained."
+    },
+    {
+      "check_id": "period-2-variable-cost",
+      "field": "formula",
+      "accepted_values": ["=(B3*Assumptions!$B$2)"],
+      "reason": "Excel 16.113.2 removed optional quotes around the simple sheet name Assumptions in this formula; both exact forms are retained."
+    },
+    {
+      "check_id": "period-3-variable-cost",
+      "field": "formula",
+      "accepted_values": ["=(B4*Assumptions!$B$2)"],
+      "reason": "Excel 16.113.2 removed optional quotes around the simple sheet name Assumptions in this formula; both exact forms are retained."
+    },
+    {
+      "check_id": "period-1-profit",
+      "field": "formula",
+      "accepted_values": ["=((C2-D2)-Assumptions!$B$3)"],
+      "reason": "Excel 16.113.2 removed optional quotes around the simple sheet name Assumptions in this formula; both exact forms are retained."
+    },
+    {
+      "check_id": "period-2-profit",
+      "field": "formula",
+      "accepted_values": ["=((C3-D3)-Assumptions!$B$3)"],
+      "reason": "Excel 16.113.2 removed optional quotes around the simple sheet name Assumptions in this formula on the repeated live run; both exact forms are retained."
+    },
+    {
+      "check_id": "period-3-profit",
+      "field": "formula",
+      "accepted_values": ["=((C4-D4)-Assumptions!$B$3)"],
+      "reason": "Excel 16.113.2 removed optional quotes around the simple sheet name Assumptions in this formula; both exact forms are retained."
+    }
+  ]
+}
