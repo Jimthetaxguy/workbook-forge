@@ -28,12 +28,13 @@ one useful install-and-run path for agents and developers.
 3. **Model → Excel.** Emit an editable workbook again, with round-trip evidence
    that what left the model still opens and calculates in Excel.
 
-## Typed composable pieces, no adapters
+## Typed composable pieces, one model contract
 
-Core types (`Cell`, `Formula`, `Sheet`, `Workbook`, and the calc/export surfaces
-that grow from them) are the single source of truth. Every stage — intake,
-calc-binding, export, agent-headless — imports those types directly. No
-translation layers between stages. No parallel “DTO” that drifts from the model.
+The canonical model contract is the single source of truth. Each language
+implements it with native typed structures. Intake, calc-binding, export and
+agent tools use that contract directly. Thin transport or process adapters may
+connect package and tool boundaries, but must not invent competing workbook
+meaning or a parallel model that drifts from the contract.
 
 ## Headless agent path
 
@@ -102,50 +103,73 @@ the goal.
 
 | Vision point | Build rule |
 | --- | --- |
-| Typed composable pieces, no adapters | Calc-binding, export, and agent-headless import `workbook_forge.model` (and later shared calc types) directly. Do not invent parallel DTOs or adapter modules between slices. |
+| One typed model contract | Canonical JSON bytes are the source of truth. Python and Rust hydrate the same versioned workbook meaning independently and calculate against those native model types directly. Thin transport adapters may connect calls; no slice invents a competing workbook model or translation-only DTO. |
 | Excel → model is SoR | Intake writes the typed `Workbook`. Markdown overview is a derived scan layer with evidence links into the cell map. |
 | Model → code | Calc-binding binds one supported formula path through Python and Rust against the same model types, with shared fixtures. |
 | Model → Excel | Export round-trips the model to `.xlsx` and proves open + calculate with evidence; no “export-only” schema. |
-| Headless agent path | Agent-headless exposes CLI/SDK ops over intake → model → calc → export; no GUI requirement in the happy path. |
+| Headless agent path | The Python CLI exposes the proven intake → model → calc → export path first, with no GUI requirement. Expose Rust to agents when the native Rust API offers the same operations. |
 | Candidate formula recovery | Hard-coded recovery writes candidates into a separate workbook or layer, tagged uncertain; never overwrite source formulas or claim recovery of originals. |
 | Intake: one pass, many observers | Core intake returns the model even if every observer is off. Observers register as plugins; results attach as optional annotations. |
 | Intake never blocks on metadata | Each probe has a timeout and a fallback (skip + diagnostic). A hung probe cannot stall `intake_workbook`. |
 | Diffusion over linear streaming | Partition independent regions; run parallel workers; merge. Do not require full-sheet serial walks when the graph allows splits. |
 | Repeated-formula collapse | Graph builders detect template + range runs **before** materializing per-cell nodes. |
 | Resilience / plugin detectors | Detectors live behind a plugin interface; failure is local; diagnostics collect; core model remains valid. |
-| Shelf split | Forge owns compute + OOXML; cell-store owns the sealed log. Do not grow a third product tree for the same responsibilities. |
+| Shelf split | Forge owns compute + OOXML; cell-store owns the sealed log. Do not grow a fourth tree for the same responsibilities. |
 
 
 ## Red-flag specs
 
 Call red flags are locked as build contracts in [docs/specs/red-flags.md](specs/red-flags.md): canonical intermediate form, behavioral parity for export, intake detector isolation, and model versioning from day one.
 
-## Near-term order
+## Near-term order: reduce risk in the compiler spine
 
-Step 0 of calc-binding is the versioned workbook model ([Spec 1](specs/red-flags.md#spec-1--canonical-intermediate-form)
-and [Spec 4](specs/red-flags.md#spec-4--model-versioning-from-day-one)). The calc
-candidate is `agent/combine-calc-best-20260928` (draft PR #3): Grok schema
-`schemas/workbook-model.v1.schema.json`, fixture
-`fixtures/operating-scenario.workbook.json`, plus the Mac multi-case goldens.
-PR #2 stays open. Export, intake, and agent-headless follow that tip.
+1. **Canonical model and one bound calculation (Specs 1 and 4). Done, on `main`.**
+   The schema is `schemas/workbook-model.v1.schema.json` and the fixture is
+   `fixtures/operating-scenario.workbook.json`, with the multi-case goldens in
+   `fixtures/operating-scenario-cases.json`. Python and Rust hydrate the same
+   bytes into their own types and calculate directly against them. There is no
+   adapter DTO and no separately authored calculation. `schema_version` and
+   `model_version` are required, and unknown versions are refused.
+2. **Export behavioral parity (Spec 2). Harness present, proof outstanding.**
+   Write the bound model to `.xlsx`, open it in Excel Desktop, edit an input,
+   force full recalculation, save and reimport. Diff formulas and behavior as
+   well as values. Include the required volatile, iterative, supported-array
+   and known-quirk cases. `tools/excel_oracle.py` is the round-trip harness and
+   `tools/canonical_excel_receipt.py --excel` runs it on the canonical fixture.
+   Package generation and reimport without Excel Desktop are useful checks.
+   Matching cached XML values or SDK-only reimport is not a pass for this gate.
+3. **Workbook intake onto the canonical model.** `impl/v1-intake` has a typed
+   intake reader and CLI that emit canonical JSON in an earlier shape of the
+   model. Port it to the schema on `main`. Then use the gaps and mismatches the
+   round trip exposes to decide which cells, relationships and unsupported
+   features the cell map must capture next.
+4. **Headless path (`impl/v1-agent-headless`).** Put the proven intake →
+   versioned model → calculation → export path behind the Python CLI/SDK first,
+   without requiring a GUI. Include `model_version` in summaries. Expose Rust
+   to agents once its native API supports the same operations. Keep this
+   surface thin until steps 1 to 3 work.
+5. **Broader intake.** Only after the spine is green, expand observers,
+   diffusion, repeated-formula collapse and candidate formula recovery.
 
-1. On the combine tip: hydrate one canonical, versioned workbook in Python
-   and Rust, then bind one existing calculation to those cell identities and run
-   it through both engines.
-2. Complete the Excel open, edit, recalculate, save and reimport proof for that
-   bound calculation. The fixture is `fixtures/operating-scenario.workbook.json`,
-   not the older SDK `operating_scenario()` demo. Package generation and
-   reimport without Excel Desktop are useful checks, but do not satisfy this
-   proof. `tools/excel_oracle.py` is the round-trip harness.
-   `tools/canonical_excel_receipt.py --excel` exports the canonical fixture and
-   runs that harness in Excel Desktop.
-3. Expand workbook intake using gaps and useful evidence exposed by the bound
-   roundtrip (`impl/v1-intake`). The existing reader and cell map are the
-   starting foundation; broader intake is the next product expansion.
-4. Put the proven path behind the pre-wired headless agent surface
-   (`impl/v1-agent-headless`), with CLI/SDK use and no GUI requirement.
+## v1 spine done
 
-Research and fixture design for intake can proceed alongside the first two
-steps. Implementation priority stays: one calculation through both backends,
-Excel round-trip evidence, then broader intake. Expand observers, diffusion,
-and candidate recovery after that spine is green.
+Call the v1 product spine complete only when all of these are evidenced:
+
+- A serialized workbook model carries `schema_version` and `model_version`, and
+  both language implementations hydrate it into their native typed structures.
+- One explicitly bound calculation produces the same expected results in
+  Python and Rust using shared fixtures.
+- Its exported workbook survives open, edit, full recalculation, save and
+  reimport, with a structured behavior/formula/value diff and recorded Excel or
+  oracle version and settings.
+- The Python headless CLI can run that path and prints the model version; Rust
+  agent operations are exposed when the same native operations exist there.
+- No red-flag spec has an open waiver.
+
+Step 1 is on `main`. Until the remaining gates are met, land each further slice
+only with its evidence. Do not spend the critical path on a fourth tree, duplicate model store, adapter DTOs,
+broad formula-family expansion, or detector tuning against a single golden
+workbook. Detectors remain optional plugins with an off-switch and diverse
+fixtures (Spec 3). The standing shelf boundary remains: Forge owns compute and
+conservative OOXML; cell-store owns the sealed event log; connect them later
+through `FORGE_EDGE` when that edge is real.

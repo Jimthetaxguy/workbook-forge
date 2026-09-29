@@ -2,21 +2,25 @@
 author: Codex
 created: 2026-09-24
 agent: codex/Codex
-date: '2026-09-28T20:03:14-04:00'
+date: '2026-09-29T06:30:00-04:00'
 type: project-context
 task: Build an SDK for Excel in agent-ready formats using independent Python and Rust implementations
 status: active
-summary: Independent Python and Rust SDKs expose verified workbook workflows and native spreadsheet compositions; full Excel Desktop acceptance remains outstanding.
+summary: Workbook Forge is an agent-ready Excel compiler; the v1 spine is a versioned canonical model, one shared Python/Rust calculation, Excel recalc roundtrip evidence, and a headless path before broader intake. The model and one bound calculation are on main; the Excel proof, intake onto that model and the headless path are outstanding.
 next_steps:
-  - Complete the separate live Excel acceptance gate before integration; native primitives, review fixes and verification are tracked in docs/toolkit-delivery.md.
-  - Define explicit bindings and independent transformations from native compositions to workbook expressions; see the proposed milestone in docs/toolkit-delivery.md.
+  - "On a Mac with Excel, run `python3 tools/canonical_excel_receipt.py --fixture fixtures/operating-scenario.workbook.json --output-dir receipts/canonical-operating-scenario-excel --excel` and commit the receipt. Spill placement stays blocked until export can write those cells."
+  - Fix the confirmed defects in order of severity, starting with rounding of two-decimal amounts. Take expected values from Microsoft's examples or decimal arithmetic, never from either engine.
+  - Port workbook intake from impl/v1-intake so that it emits the canonical model in the schema on main, and print model_version in the CLI summary.
+  - Put the proven intake → model → calculation → export path behind the Python headless CLI, then expose Rust operations with matching behavior.
   - Use docs/product-specifications.md as the durable product and acceptance contract for intake, compilation, headless use, formula hypotheses and evidence-led coverage.
   - Expand the verified agent operation contract against concrete workbook tasks; keep framework/MCP adapters thin and retain source/revision-aware results.
-  - On a Mac with Excel, run `python3 tools/canonical_excel_receipt.py --fixture fixtures/operating-scenario.workbook.json --output-dir receipts/canonical-operating-scenario-excel --excel`. Spill placement stays blocked until export can write those cells.
-  - Use observed Excel results to validate Workbook Forge profiles and update shared fixtures before expanding formula-family coverage.
-  - After oracle coverage is reliable, prioritize the next formula slice by documented usage and dependency value.
+  - Use observed Excel results to validate Workbook Forge profiles and update shared fixtures before expanding formula-family coverage; keep observers optional and formula-recovery candidates separate and uncertain.
+  - After the core loop is evidenced, prioritize additional formula families by documented workbook use and dependency value.
 remaining:
-  - Workbook spill projection, general worksheet formula semantics beyond targeted scalar dependency closures, and broad Excel 365 coverage are staged, not complete.
+  - Worksheet spill projection, volatile/iteration/quirk round-trip classes, cross-backend bound export, and broad Excel 365 coverage are not complete.
+  - Intake and the calculation session on impl/v1-intake and impl/v1-calc-binding use an earlier shape of the model and are not ported; agent-headless has not started its implementation.
+  - No pull request so far has had checks run on it or a review; mergeability alone is not acceptance evidence. tools/gate.sh is the check to run.
+  - 34 confirmed review findings are open; the most serious is rounding of two-decimal amounts in both engines.
   - "GitHub reports Jimthetaxguy/workbook-forge as public, verified 2026-09-28; historical private-release preparation notes in docs/run-history.md describe their original checkpoints."
 open_questions: []
 ---
@@ -24,7 +28,7 @@ open_questions: []
 ## Purpose
 Build an **SDK for Excel in agent-ready formats**: expose supported workbook data, formulas, dependencies, presentation and explicit business bindings as structured objects that agents can inspect, calculate, compose and deliver back as editable Excel workbooks. Independent Python and Rust implementations own these operations. The formula glossary aims to enumerate Excel 365 syntax and functions; evaluator and workbook capabilities make narrower, explicit claims.
 
-**Workbook Forge** is the product name selected for public release on 2026-09-26. The Python distribution, import package, and Rust core crate are named `workbook_forge`. The canonical checkout tracks GitHub `main`; GitHub visibility is public as of the live 2026-09-28 check. The toolkit implementation is isolated on `agent/codex-workbook-toolkit` until integration.
+**Workbook Forge** is the product name selected for public release on 2026-09-26. The Python distribution, import package, and Rust core crate are named `workbook_forge`. The canonical checkout tracks GitHub `main`; GitHub visibility is public as of the live 2026-09-28 check. The toolkit implementation was merged to `main` on 2026-09-28.
 ## Terms
 - **Spreadsheet primitive:** an identifiable operation with typed arguments, native implementations, explicit behavior limits and compatibility evidence. It can be used without a workbook.
 - **Composition:** a structured calculation combining primitive calls, named inputs and operators while retaining operation identities for inspection. It can power scripts, agents or a later application interface.
@@ -37,6 +41,10 @@ Build an **SDK for Excel in agent-ready formats**: expose supported workbook dat
 - **Input preview:** a detached calculation of proposed inputs, with before/after outputs and cell changes; it never changes the owned session or writes files.
 - **Calculation provenance:** source formulas, references, explicit bindings and model revision attached to a result; imported caches are never evidence that Forge calculated a value.
 - **Workbook model:** sparse sheets, authored content, formulas, styles, and explicit input/output bindings, implemented independently in each language and separate from XML.
+- **Canonical workbook schema:** versioned serialized contract for `Cell`, `Formula`, `Sheet` and `Workbook`; Python and Rust hydrate native typed structures from the same bytes.
+- **`model_version`:** version of the serialized workbook artifact, distinct from schema-version evolution and visible in headless intake summaries.
+- **Markdown scan:** readable, potentially lossy view derived from the coordinate-preserving cell map; never the workbook source of record.
+- **Cell-store boundary:** cell-store owns the sealed cell event log. Workbook Forge owns compute and conservative OOXML; a later `FORGE_EDGE` may connect them. No fourth tree or duplicate model store.
 - **Application binding:** a named input or output attached to an explicit cell; not an Excel defined-name expression.
 - **Calculation snapshot:** an immutable model revision used by full or incremental calculation; stale work cannot replace current published results.
 - **Preservation baseline:** immutable imported package content used to patch supported changes without rereading or rewriting the original file.
@@ -68,9 +76,13 @@ Build an **SDK for Excel in agent-ready formats**: expose supported workbook dat
 - Jev is a development-time reviewer only. It is not linked into runtime, and its results are advisory.
 - Macros and external data are never executed or fetched.
 ## Current State
-The [current-state findings](docs/toolkit-delivery.md#current-state-findings) separate delivered capabilities from evidence limits. Native named-input compositions and cell-based workbook expressions remain separate authoring interfaces; an explicit binding and transformation contract is the proposed next integration milestone, not an implemented export API.
+The [current-state findings](docs/toolkit-delivery.md#current-state-findings) separate delivered capabilities from evidence limits. Native named-input compositions and cell-based workbook expressions remain separate authoring interfaces; the canonical binding path is on `main` and is not yet the general export API.
 The native primitive interface adds nine functions and ten binary operators, typed native values, named-input composition and inspectable operation identities without requiring a workbook. Both packages provide the canonical catalog and expression schema. All three PR boundary findings are fixed; final independent review also closed a direct-call size-limit mismatch. Contributor evidence and the outstanding Excel acceptance gate are recorded in `docs/toolkit-delivery.md`.
-Runs 1–24 are accepted. Coverage stands at 115 implemented functions, 85 detailed semantic specs, 110 source records, and 1,371 shared fixtures. Run 24 bounds formula size, nesting, and wildcard work. The toolkit adds independently implemented typed authoring, calculation sessions and Excel adapters in Python and Rust, installed examples, and reviewed parallel calculation. Both SDKs now expose nine schema-described agent operations and JSON-lines runners, verified through installed packages and a live agent task. Formula-aware XML extraction adds ten structural patterns, typed references and catalog mappings; the complete suite now passes 923 Python and 88 Rust tests. A Python SDK export of `operating_scenario()` completed a 12-cell edit, full-recalc, save and reimport check in Excel 16.113.2. Nine formula quote normalizations were explicitly allowlisted; all declared values matched and the source package remained unchanged. This proves the scenario slice of that SDK package: global Excel calculation/iteration settings were not observable through AppleScript, and the full red-flag contract is blocked because export refuses worksheet spill caches. The same harness now also exports `fixtures/operating-scenario.workbook.json`; Excel Desktop for that canonical package is still pending. The 521-entry source inventory remains broader than implementation coverage; 406 functions remain catalog-only. FILTER, SORT, and UNIQUE return bounded, shape-preserving arrays; worksheet spill projection remains unsupported. SORT/UNIQUE comparison, equality, coercion, and output precision include explicit Workbook Forge profiles. Do not describe the package as Excel-complete.
+At the accepted toolkit checkpoint, coverage was 115 implemented functions, 85 detailed semantic specs, 110 source records, and 1,371 shared fixtures; its complete suite recorded 923 Python and 88 Rust tests. The 521-entry source inventory is broader than implemented coverage, with 406 catalog-only functions. These checkpoint counts describe the toolkit baseline, not Excel-wide compatibility. FILTER, SORT, and UNIQUE return bounded, shape-preserving arrays; worksheet spill projection remains unsupported.
+
+The versioned canonical workbook schema, Python and Rust hydration, the bound operating-scenario calculation and its shared fixtures are on `main`: `schemas/workbook-model.v1.schema.json`, `python/workbook_forge/model.py`, `rust/src/model.rs` and `fixtures/operating-scenario.workbook.json`. Both engines read the same bytes and calculate with their own evaluators. `impl/v1-intake` and `impl/v1-calc-binding` hold an earlier shape of the model, with typed binding constraints, a calculation session and an intake reader that emits canonical JSON. That work is not on `main` and has to be ported to the schema above.
+
+The Excel round-trip harness is `tools/excel_oracle.py`, with `tools/canonical_excel_receipt.py` for the canonical fixture. The committed receipts under `receipts/canonical-operating-scenario/` are preflight only: they record that Excel was not invoked and that Spec 2 is not passed. `docs/excel-observations.md` describes one run of Microsoft Excel 16.113.2 on the older SDK scenario in which all 12 declared checks matched; no receipt for that run is committed. The full red-flag contract is blocked before Excel opens because export cannot place dynamic-array spill cells, and the volatile, iteration, scalar-array and Excel-quirk classes are unobserved.
 - The source-linked function inventory contains 521 records; it is a versioned discovery catalog, not an evaluator coverage claim.
 - The Python and Rust evaluators implement the same bounded scalar, reference, operator, common-function, conditional-aggregation, and rectangular formula-result slice. Both load `fixtures/formula-cases.jsonl`. The toolkit adds reviewed Serde dependencies and a separate PyO3 bridge; exact license receipts cover both lockfiles.
 - `catalog/formulas.json` records per-language status; a function is `conformance-tested` only when shared fixture coverage passes in both engines.
@@ -102,6 +114,10 @@ Runs 1–24 are accepted. Coverage stands at 115 implemented functions, 85 detai
 - Twelve small deliberate faults in limit checks were applied one at a time. Nine left every test passing. Tests now catch eight; the ninth is a redundant check.
 - Fixed in the Python canonical model: a diagnostic filed against the wrong cell, and formula references past XFD1048576 treated as ordinary references.
 - Known and not yet fixed, most serious first: both engines move two-decimal amounts by a cent in `TRUNC`, `ROUNDDOWN`, `ROUNDUP` and `ROUND`; counting functions return an error when any cell in the range holds one; the engines disagree on criteria over mixed cell types.
+### 2026-09-28 — codex/Codex — canonical model and export evidence
+- Updated the v1 dependency order: the shared JSON model is on `impl/v1-intake`, direct Python/Rust calculation is in progress on `impl/v1-calc-binding`, and headless wiring follows the bound export proof.
+- Recorded the existing Python SDK Excel round trip (12/12 checks) separately from the still-blocked full export gate (dynamic spill placement unsupported; global Excel settings unverified).
+- Rechecked PR #2: its remote head advanced and is now mergeable, but remains draft with no CI checks; no merge or conflict-fix push was made from this checkout.
 ### 2026-09-28 — codex/Codex — public documentation review
 - Reviewed all project guides and historical notes, verified portable examples, and removed unnecessary personal context and machine locations.
 - Recorded the contributor checks and separate published-history decision in [toolkit delivery](docs/toolkit-delivery.md#activity).
