@@ -2,21 +2,21 @@
 author: Codex
 created: 2026-09-24
 agent: codex/Codex
-date: '2026-09-28T20:39:14-04:00'
+date: '2026-09-28T21:53:05-04:00'
 type: project-context
 task: Build an SDK for Excel in agent-ready formats using independent Python and Rust implementations
 status: active
-summary: Workbook Forge is an agent-ready Excel compiler; the v1 spine is a versioned canonical model, one shared Python/Rust calculation, Excel recalc roundtrip evidence, and a headless path before broader intake.
+summary: Workbook Forge is an agent-ready Excel compiler; the v1 spine is a versioned canonical model, one shared Python/Rust calculation, Excel recalc roundtrip evidence, and a headless path before broader intake. Current implementation slices remain branch-only.
 next_steps:
-  - Finish the canonical JSON schema and model_version contract with Python/Rust hydration roundtrips; the typed Python intake model and CLI already exist on impl/v1-intake.
-  - Bind one trusted calculation to explicit cells and run the same definition through both backends; see docs/vision.md and docs/toolkit-delivery.md.
-  - Prove export by opening the bound workbook in Excel or the documented oracle, editing, fully recalculating, saving, reimporting and diffing formulas and behavior.
-  - Put the proven flow behind the headless CLI/SDK and print model_version; only then expand workbook intake from roundtrip gaps.
-  - Use tools/excel_oracle.py to observe the generated scenario after an input edit and save; diagnose the current Excel automation failures.
-  - Use observed Excel results to validate Workbook Forge profiles and update shared fixtures before expanding formula-family coverage.
-  - After oracle coverage is reliable, prioritize the next formula slice by documented usage and dependency value.
+  - Complete the direct native-model calculation session in impl/v1-calc-binding and prove identical results from the same canonical JSON fixture in Python and Rust.
+  - Run the Excel export harness against that bound canonical calculation; the existing Python SDK scenario has an observed 12-cell round trip, while the full red-flag gate is still blocked on spill placement.
+  - Put the proven intake → model → calculation → export path behind the Python headless CLI, print model_version, then expose Rust operations with matching behavior.
+  - Expand intake and formula coverage from gaps found by those round trips; keep observers optional and formula-recovery candidates separate and uncertain.
+  - After the core loop is evidenced, prioritize additional formula families by documented workbook use and dependency value.
 remaining:
-  - Workbook spill projection, general worksheet formula semantics beyond targeted scalar dependency closures, and broad Excel 365 coverage are staged, not complete.
+  - Worksheet spill projection, volatile/iteration/quirk round-trip classes, cross-backend bound export, and broad Excel 365 coverage are not complete.
+  - The intake and export implementation slices are on feature branches; calc-binding is still in progress and agent-headless has not started its implementation.
+  - PR #2 is a draft and currently has no CI checks on its head; mergeability alone is not acceptance evidence.
   - "GitHub reports Jimthetaxguy/workbook-forge as public, verified 2026-09-28; historical private-release preparation notes in docs/run-history.md describe their original checkpoints."
 open_questions: []
 ---
@@ -67,9 +67,13 @@ Build an **SDK for Excel in agent-ready formats**: expose supported workbook dat
 - Jev is a development-time reviewer only. It is not linked into runtime, and its results are advisory.
 - Macros and external data are never executed or fetched.
 ## Current State
-The [current-state findings](docs/toolkit-delivery.md#current-state-findings) separate delivered capabilities from evidence limits. Native named-input compositions and cell-based workbook expressions remain separate authoring interfaces; an explicit binding and transformation contract is the proposed next integration milestone, not an implemented export API.
+The [current-state findings](docs/toolkit-delivery.md#current-state-findings) separate delivered capabilities from evidence limits. Native named-input compositions and cell-based workbook expressions remain separate authoring interfaces; the new canonical binding path is being implemented on `impl/v1-calc-binding` and is not yet the general export API.
 The native primitive interface adds nine functions and ten binary operators, typed native values, named-input composition and inspectable operation identities without requiring a workbook. Both packages provide the canonical catalog and expression schema. All three PR boundary findings are fixed; final independent review also closed a direct-call size-limit mismatch. Contributor evidence and the outstanding Excel acceptance gate are recorded in `docs/toolkit-delivery.md`.
-Runs 1–24 are accepted. Coverage stands at 115 implemented functions, 85 detailed semantic specs, 110 source records, and 1,371 shared fixtures. Run 24 bounds formula size, nesting, and wildcard work. The toolkit adds independently implemented typed authoring, calculation sessions and Excel adapters in Python and Rust, installed examples, and reviewed parallel calculation. Both SDKs now expose nine schema-described agent operations and JSON-lines runners, verified through installed packages and a live agent task. Formula-aware XML extraction adds ten structural patterns, typed references and catalog mappings; the complete suite now passes 923 Python and 88 Rust tests. Three direct formula checks succeeded in Excel 16.113.2; the generated-file roundtrip and full scenario remain unverified because automation failed. The 521-entry source inventory remains broader than implementation coverage; 406 functions remain catalog-only. FILTER, SORT, and UNIQUE return bounded, shape-preserving arrays; worksheet spill projection remains unsupported. SORT/UNIQUE comparison, equality, coercion, and output precision include explicit Workbook Forge profiles. Do not describe the package as Excel-complete.
+At the accepted toolkit checkpoint, coverage was 115 implemented functions, 85 detailed semantic specs, 110 source records, and 1,371 shared fixtures; its complete suite recorded 923 Python and 88 Rust tests. The 521-entry source inventory is broader than implemented coverage, with 406 catalog-only functions. These checkpoint counts describe the toolkit baseline, not Excel-wide compatibility. FILTER, SORT, and UNIQUE return bounded, shape-preserving arrays; worksheet spill projection remains unsupported.
+
+The versioned canonical workbook schema, Python/Rust hydration, and shared fixtures are on `impl/v1-intake` (latest commit `0cbee61`). `intake_workbook(path)` now emits canonical JSON bytes, and the CLI emits that document by default with `--summary` for a human overview. The direct bound calculation session is being implemented on `impl/v1-calc-binding`.
+
+On `impl/v1-export`, Microsoft Excel 16.113.2 opened an SDK-generated operating scenario, applied an input edit, fully rebuilt, saved and closed it; SDK reimport matched all 12 declared checks. Nine formula rewrites only removed optional quotes around the simple sheet name `Assumptions` and are explicitly allowlisted. The source stayed unchanged. AppleScript could not read Excel's global calculation and iteration settings, so those remain unverified. The full red-flag contract is still blocked before Excel opens because the export path cannot place dynamic-array spill cells; volatile, iteration, scalar-array, and Excel-quirk classes remain unobserved. This evidence covers the existing Python SDK scenario, not yet the shared Python/Rust bound calculation.
 - The source-linked function inventory contains 521 records; it is a versioned discovery catalog, not an evaluator coverage claim.
 - The Python and Rust evaluators implement the same bounded scalar, reference, operator, common-function, conditional-aggregation, and rectangular formula-result slice. Both load `fixtures/formula-cases.jsonl`. The toolkit adds reviewed Serde dependencies and a separate PyO3 bridge; exact license receipts cover both lockfiles.
 - `catalog/formulas.json` records per-language status; a function is `conformance-tested` only when shared fixture coverage passes in both engines.
@@ -92,6 +96,11 @@ Runs 1–24 are accepted. Coverage stands at 115 implemented functions, 85 detai
 - Append each run's summary to `docs/run-history.md`. Keep `README.md` and this file limited to the current state.
 - Run the Rust gates with `CARGO_TARGET_DIR` inside the checkout, as `eval_command` does. A shared target directory can mix build artifacts between copies of the crate.
 ## Latest maintenance
+### 2026-09-28 — codex/Codex — canonical model and export evidence
+- Updated the v1 dependency order: the shared JSON model is on `impl/v1-intake`, direct Python/Rust calculation is in progress on `impl/v1-calc-binding`, and headless wiring follows the bound export proof.
+- Recorded the existing Python SDK Excel round trip (12/12 checks) separately from the still-blocked full export gate (dynamic spill placement unsupported; global Excel settings unverified).
+- Rechecked PR #2: its remote head advanced and is now mergeable, but remains draft with no CI checks; no merge or conflict-fix push was made from this checkout.
+
 ### 2026-09-28 — codex/Codex — public documentation review
 - Reviewed all project guides and historical notes, verified portable examples, and removed unnecessary personal context and machine locations.
 - Recorded the contributor checks and separate published-history decision in [toolkit delivery](docs/toolkit-delivery.md#activity).
