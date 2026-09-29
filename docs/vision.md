@@ -122,8 +122,15 @@ Call red flags are locked as build contracts in [docs/specs/red-flags.md](specs/
 
 ## Near-term order
 
-1. Bind one existing calculation to explicit worksheet cells and run that same
-   definition through both backends (`impl/v1-calc-binding`).
+Step 0 of calc-binding is the versioned workbook model ([Spec 1](specs/red-flags.md#spec-1--canonical-intermediate-form)
+and [Spec 4](specs/red-flags.md#spec-4--model-versioning-from-day-one)). It lands
+on `impl/v1-calc-binding` before the calculation binding. Downstream branches
+rebase onto that result after it merges: `impl/v1-export`, then `impl/v1-intake`,
+then `impl/v1-agent-headless`.
+
+1. On `impl/v1-calc-binding`: hydrate one canonical, versioned workbook in Python
+   and Rust, then bind one existing calculation to those cell identities and run
+   it through both engines.
 2. Complete the Excel open, edit, recalculate, save and reimport proof for that
    bound calculation (`impl/v1-export`). Package generation and SDK-only
    reimport are useful checks, but do not satisfy this proof.

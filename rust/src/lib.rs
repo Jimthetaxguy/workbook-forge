@@ -6,6 +6,7 @@
 
 pub mod agent;
 pub mod extraction;
+pub mod model;
 pub mod primitives;
 pub mod toolkit;
 pub mod xlsx;
