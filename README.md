@@ -2,7 +2,7 @@
 
 **North Star:** [docs/vision.md](docs/vision.md). Red-flag specs: [docs/specs/red-flags.md](docs/specs/red-flags.md).
 
-Near-term order: Step 0 on `impl/v1-calc-binding` is the versioned workbook model ([Spec 1](docs/specs/red-flags.md#spec-1--canonical-intermediate-form), [Spec 4](docs/specs/red-flags.md#spec-4--model-versioning-from-day-one)), then calculation binding on that same branch, then export, intake, and agent-headless. Downstream branches rebase after this merges. Version rules: [model versioning](docs/specs/model-versioning.md).
+Near-term order: the versioned workbook model and the operating-scenario calc binding land first ([Spec 1](docs/specs/red-flags.md#spec-1--canonical-intermediate-form), [Spec 4](docs/specs/red-flags.md#spec-4--model-versioning-from-day-one)). Export then sends `fixtures/operating-scenario.workbook.json` through OOXML. Excel Desktop full recalc is still the Spec 2 oracle. The harness is `tools/excel_oracle.py`; `tools/canonical_excel_receipt.py` exports the canonical fixture and calls it. Intake onto the canonical model is built, in Python. Agent-headless comes after an Excel receipt. Version rules: [model versioning](docs/specs/model-versioning.md).
 
 **Workbook Forge is an SDK for Excel in formats agents can use.** Its goal is to
 make supported workbook data, formulas, dependencies, presentation, and business
@@ -40,6 +40,7 @@ agreement and established expected values; it does not replace either implementa
 | Author or modify a workbook and calculate its outputs | [Programmable workbooks](#programmable-workbooks) |
 | Inspect XML records, formulas and source locations | [Extraction guide](docs/extraction-patterns.md) |
 | Give an agent bounded workbook operations | [Agent quick start](#agent-sdk-quick-start) and [operation contract](docs/agent-protocol.md) |
+| Understand product goals and planned behavior | [Product specifications](docs/product-specifications.md) |
 | Assess behavior and verification limits | [Behavior profiles](docs/behavior-profiles.md) and [delivery evidence](docs/toolkit-delivery.md#current-state-findings) |
 
 Use Python 3.12 or later for the Python package. From a source checkout:

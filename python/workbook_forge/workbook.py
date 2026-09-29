@@ -2,8 +2,8 @@
 
 Only edited worksheet and workbook metadata parts are regenerated. All other
 package members are copied through byte-for-byte at the uncompressed-part
-level. It can calculate explicitly targeted formulas with the bounded Formula
-Atlas evaluator. It never executes macros or external data sources.
+level. It can calculate explicitly targeted formulas with the bounded Workbook
+Forge evaluator. It never executes macros or external data sources.
 """
 
 from __future__ import annotations
@@ -1310,11 +1310,13 @@ class Workbook:
             ):
                 raise UnsupportedWorkbook("inline-string payload cannot coexist with a value or formula")
             address = cell.attrib.get("r")
-            if address:
-                normalized = _normal_address(address)
-                if normalized in result:
-                    raise UnsupportedWorkbook(f"duplicate cell address: {normalized}")
-                result[normalized] = cell
+            if not address:
+                # Dropping the cell would lose data without a word.
+                raise UnsupportedWorkbook("a cell has no address; cells placed by position are not read")
+            normalized = _normal_address(address)
+            if normalized in result:
+                raise UnsupportedWorkbook(f"duplicate cell address: {normalized}")
+            result[normalized] = cell
         return result
 
     def get(self, sheet: str, address: str) -> Cell:

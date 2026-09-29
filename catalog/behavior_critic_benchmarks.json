@@ -1,0 +1,184 @@
+[
+  {
+    "id": "case-blank-arithmetic-pos",
+    "is_false_control": false,
+    "ground_truth": "excel_canonical_behavior",
+    "state": {
+      "formula": "ADDITION",
+      "fixture": {
+        "formula": "=A1+10",
+        "cell_context": {"A1": null},
+        "result": 10.0
+      },
+      "target": "Microsoft Excel 365 Desktop calculation engine"
+    },
+    "questions": {
+      "behavior_provenance": {
+        "type": "choice",
+        "instructions": "Does this proposed behavior for adding to a blank cell match authentic Excel 365 Desktop behavior or an artificial engine profile?",
+        "criteria": {
+          "excel_canonical_behavior": {
+            "what": "Exact match with documented Microsoft Excel 365 calculation results or verified Excel behavior."
+          },
+          "artificial_local_profile": {
+            "what": "A behavioral choice introduced by local engine design that conflicts with Excel Desktop."
+          },
+          "syntax_or_spill_boundary": {
+            "what": "An unsupported boundary error returned because dynamic array spill placement or formula-cell context is unmodeled."
+          }
+        }
+      }
+    }
+  },
+  {
+    "id": "case-blank-arithmetic-neg",
+    "is_false_control": true,
+    "ground_truth": "artificial_local_profile",
+    "state": {
+      "formula": "ADDITION",
+      "fixture": {
+        "formula": "=A1+10",
+        "cell_context": {"A1": null},
+        "result": {"error": "#VALUE!"}
+      },
+      "target": "Microsoft Excel 365 Desktop calculation engine"
+    },
+    "questions": {
+      "behavior_provenance": {
+        "type": "choice",
+        "instructions": "Does this proposed behavior for adding to a blank cell match authentic Excel 365 Desktop behavior or an artificial engine profile?",
+        "criteria": {
+          "excel_canonical_behavior": {
+            "what": "Exact match with documented Microsoft Excel 365 calculation results or verified Excel behavior."
+          },
+          "artificial_local_profile": {
+            "what": "A behavioral choice introduced by local engine design that conflicts with Excel Desktop."
+          },
+          "syntax_or_spill_boundary": {
+            "what": "An unsupported boundary error returned because dynamic array spill placement or formula-cell context is unmodeled."
+          }
+        }
+      }
+    }
+  },
+  {
+    "id": "case-collation-text-number-pos",
+    "is_false_control": false,
+    "ground_truth": "excel_canonical_behavior",
+    "state": {
+      "formula": "COMPARE",
+      "fixture": {
+        "formula": "=\"a\">1",
+        "result": true
+      },
+      "target": "Microsoft Excel 365 Desktop calculation engine"
+    },
+    "questions": {
+      "behavior_provenance": {
+        "type": "choice",
+        "instructions": "Does this proposed behavior for Relational Comparison match authentic Excel 365 Desktop behavior or an artificial engine profile?",
+        "criteria": {
+          "excel_canonical_behavior": {
+            "what": "Exact match with documented Microsoft Excel 365 calculation results or verified Excel behavior."
+          },
+          "artificial_local_profile": {
+            "what": "A behavioral choice introduced by local engine design that conflicts with Excel Desktop."
+          },
+          "syntax_or_spill_boundary": {
+            "what": "An unsupported boundary error returned because dynamic array spill placement or formula-cell context is unmodeled."
+          }
+        }
+      }
+    }
+  },
+  {
+    "id": "case-collation-text-number-neg",
+    "is_false_control": true,
+    "ground_truth": "artificial_local_profile",
+    "state": {
+      "formula": "COMPARE",
+      "fixture": {
+        "formula": "=\"a\">1",
+        "result": {"error": "#VALUE!"}
+      },
+      "target": "Microsoft Excel 365 Desktop calculation engine"
+    },
+    "questions": {
+      "behavior_provenance": {
+        "type": "choice",
+        "instructions": "Does this proposed behavior for Relational Comparison match authentic Excel 365 Desktop behavior or an artificial engine profile?",
+        "criteria": {
+          "excel_canonical_behavior": {
+            "what": "Exact match with documented Microsoft Excel 365 calculation results or verified Excel behavior."
+          },
+          "artificial_local_profile": {
+            "what": "A behavioral choice introduced by local engine design that conflicts with Excel Desktop."
+          },
+          "syntax_or_spill_boundary": {
+            "what": "An unsupported boundary error returned because dynamic array spill placement or formula-cell context is unmodeled."
+          }
+        }
+      }
+    }
+  },
+  {
+    "id": "case-utf16-surrogate-pos",
+    "is_false_control": false,
+    "ground_truth": "excel_canonical_behavior",
+    "state": {
+      "formula": "LEN",
+      "fixture": {
+        "formula": "=LEN(\"😀\")",
+        "result": 2
+      },
+      "target": "Microsoft Excel 365 Desktop calculation engine"
+    },
+    "questions": {
+      "behavior_provenance": {
+        "type": "choice",
+        "instructions": "Does this proposed behavior for LEN match authentic Excel 365 Desktop behavior or an artificial engine profile?",
+        "criteria": {
+          "excel_canonical_behavior": {
+            "what": "Exact match with documented Microsoft Excel 365 calculation results or verified Excel behavior."
+          },
+          "artificial_local_profile": {
+            "what": "A behavioral choice introduced by local engine design that conflicts with Excel Desktop."
+          },
+          "syntax_or_spill_boundary": {
+            "what": "An unsupported boundary error returned because dynamic array spill placement or formula-cell context is unmodeled."
+          }
+        }
+      }
+    }
+  },
+  {
+    "id": "case-utf16-surrogate-neg",
+    "is_false_control": true,
+    "ground_truth": "artificial_local_profile",
+    "state": {
+      "formula": "LEN",
+      "fixture": {
+        "formula": "=LEN(\"😀\")",
+        "result": 1
+      },
+      "target": "Microsoft Excel 365 Desktop calculation engine"
+    },
+    "questions": {
+      "behavior_provenance": {
+        "type": "choice",
+        "instructions": "Does this proposed behavior for LEN match authentic Excel 365 Desktop behavior or an artificial engine profile?",
+        "criteria": {
+          "excel_canonical_behavior": {
+            "what": "Exact match with documented Microsoft Excel 365 calculation results or verified Excel behavior."
+          },
+          "artificial_local_profile": {
+            "what": "A behavioral choice introduced by local engine design that conflicts with Excel Desktop."
+          },
+          "syntax_or_spill_boundary": {
+            "what": "An unsupported boundary error returned because dynamic array spill placement or formula-cell context is unmodeled."
+          }
+        }
+      }
+    }
+  }
+]

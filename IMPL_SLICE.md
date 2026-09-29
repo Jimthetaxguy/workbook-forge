@@ -1,47 +1,53 @@
-# v1 calc-binding — canonical model, then calculation
+# v1 export — canonical calculation through Excel
 
-**Branch:** `impl/v1-calc-binding`  
-**Base:** `main`
+**Branch:** `cursor/v1-export-canonical-receipt-bb6f`  
+**Base:** `agent/combine-calc-best-20260928` @ `4d56af6`
 
-## Order
+This branch starts at the combined calc tip, not at bare `3cc1efd`. That tip keeps the Grok source of truth: `schemas/workbook-model.v1.schema.json` and `fixtures/operating-scenario.workbook.json`. It also keeps the Mac multi-case goldens in `fixtures/operating-scenario-cases.json`. Draft PR #3 is the calc candidate. PR #2 stays open.
 
-Downstream branches rebase after this slice merges. Do not invent a separate product tree for the model.
+The Excel harness is the Mac export slice `origin/impl/v1-export` at `bea3ee1` (`tools/excel_oracle.py` and the round-trip contract). `tools/canonical_excel_receipt.py` only exports the canonical fixture and calls that harness.
 
-1. **Step 0, on this branch.** Versioned workbook model. Serialized schema is the source of truth ([Spec 1](docs/specs/red-flags.md#spec-1--canonical-intermediate-form), [Spec 4](docs/specs/red-flags.md#spec-4--model-versioning-from-day-one)). See [model versioning](docs/specs/model-versioning.md).
-2. **This branch, after Step 0.** Bind the operating scenario (named assumptions → revenue, profit, break-even) to canonical cell identities and calculate it in Python and Rust.
-3. **Next:** Excel open / edit / recalc / save / reimport (`impl/v1-export`).
-4. **Then:** intake expansion (`impl/v1-intake`).
-5. **Then:** agent-headless composition (`impl/v1-agent-headless`).
+## What this slice proves
 
-`impl/v1-export`, `impl/v1-intake`, and `impl/v1-agent-headless` should rebase onto this branch after it merges.
+`fixtures/operating-scenario.workbook.json` is the canonical model. Python and Rust calculate those bytes. The Python OOXML writer exports that workbook, and import reads the package back into the same model types.
 
-## Step 0
+Excel Desktop is the recalc oracle (Spec 2). Export bytes, reimport, formula text, and engine parity do not pass Spec 2.
 
-- Schema: `schemas/workbook-model.v1.schema.json`
-- Python hydration: `workbook_forge.model` (import the module directly)
-- Rust hydration: `workbook_forge::model` from the same JSON bytes. No Python call and no FFI object graph.
-- Shared fixture: `fixtures/operating-scenario.workbook.json`
+## Command
 
-`schema_version` is the wire shape. `model_version` is the semantic interpretation. Missing or unsupported versions are errors.
+Pending receipt from a host without Excel Desktop:
 
-## Calc-binding
+```bash
+python3 tools/canonical_excel_receipt.py \
+  --fixture fixtures/operating-scenario.workbook.json \
+  --output-dir receipts/canonical-operating-scenario
+```
 
-The fixture's `bindings` name canonical cells (`Assumptions!B1`, `Forecast!F2`, and the rest). Both engines hydrate that document, calculate with their own formula evaluators, and keep `schema_version` and `model_version` on the serialized result. There is no adapter DTO and no parallel calculation document. Numeric equality is not enough: dependencies, Excel errors, and unsupported classifications have to match.
+Desktop oracle, on a Mac with Excel, in a clean directory:
 
-## Out of scope here
+```bash
+python3 tools/canonical_excel_receipt.py \
+  --fixture fixtures/operating-scenario.workbook.json \
+  --output-dir receipts/canonical-operating-scenario-excel \
+  --excel
+```
 
-Excel Desktop export oracle (Spec 2), intake detectors (Spec 3), and agent-headless composition.
+The no-Excel run marks the scenario contract `prepared` and Excel `pending`. It does not pass Spec 2.
+
+## Array spill
+
+v1 does not place spill cells. Canonical export and import fail closed with `array_spill_refused` and write no spill cells. The red-flag contract (`fixtures/excel-roundtrip-red-flags.contract.json`) names `Red Flags!B7` `=SEQUENCE(3)` and spill cells `B7:B9`. `run_roundtrip` blocks that class before Excel with `blocker_kind=unsupported_capability` and coverage `blocked`. The receipt gate is `not_passed`. `SUM(SEQUENCE(...))` does not count as spill placement.
+
+## Out of scope
+
+Agent-headless waits until the scenario round-trip status is `observed` and `spec2_passed` is true. Intake and broader formula coverage wait on gaps from real workbooks.
 
 ## Do not
 
 - Do not rewrite history on `main` or force-push.
 - Do not modify Codex session files under `~/.codex`.
-- Keep shelf split: Forge owns compute + OOXML; cell-store owns the sealed event log (join later via FORGE_EDGE).
-
-## Vision
-
-Follow [docs/vision.md](docs/vision.md). Shared types and build rules there bind this slice to the others.
-
+- Do not merge this branch, PR #2, or PR #3 from here.
+- Keep shelf split: Forge owns compute + OOXML; cell-store owns the sealed event log.
 
 ## Combined calc tip — 2026-09-28
 
@@ -62,3 +68,6 @@ array-of-bindings + constraints DTO, `canonical_calc` session/revision API,
 intake bleed-in (`intake.py`, `test_intake.py`), and `tools/verify_canonical_calc.py`
 tied to that alternate binding shape. Constraints/session can land later on this
 schema if needed; they must not fork the serialized model.
+
+Since then, intake has been rebuilt on this schema: `python/workbook_forge/intake.py`
+and `python/tests/test_intake.py` are present.

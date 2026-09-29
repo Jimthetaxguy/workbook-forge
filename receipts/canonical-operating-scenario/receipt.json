@@ -1,0 +1,190 @@
+{
+  "schema_version": 1,
+  "kind": "canonical-excel-receipt",
+  "harness": "excel_export_roundtrip_v1",
+  "recorded_at_utc": "2026-09-29T04:09:24.304975+00:00",
+  "spec2_passed": false,
+  "spec2_note": "Spec 2 needs Excel Desktop full rebuild plus every required red-flag class. A prepared package check is not that. array_spill stays blocked until spill placement exists, so this receipt does not pass Spec 2.",
+  "fixture": "fixtures/operating-scenario.workbook.json",
+  "exported_xlsx": "receipts/canonical-operating-scenario/operating-scenario.exported.xlsx",
+  "input_change": {
+    "name": "unit_price",
+    "sheet": "Assumptions",
+    "address": "B1",
+    "before": 20,
+    "after": 25
+  },
+  "scenario_contract": "fixtures/operating-scenario.excel-roundtrip.contract.json",
+  "scenario_roundtrip": {
+    "status": "prepared",
+    "stage": "preflight",
+    "reason": "Excel was not invoked; no recalculation or compatibility claim is made",
+    "receipt": "receipts/canonical-operating-scenario/scenario-roundtrip.json",
+    "formula_diffs": [],
+    "mismatches": [],
+    "excel_desktop": "pending"
+  },
+  "array_spill": {
+    "status": "blocked",
+    "gate": "not_passed",
+    "blocker_kind": "unsupported_capability",
+    "capability": "worksheet_dynamic_array_spill_placement",
+    "coverage": "blocked",
+    "receipt": "receipts/canonical-operating-scenario/red-flag-roundtrip.json",
+    "reason": "The red-flag contract names Red Flags!B7 =SEQUENCE(3) and spill cells B7:B9. The round-trip harness blocks that class before Excel opens because export refuses worksheet array spill caches. Scalar SUM(SEQUENCE(...)) does not count as spill placement."
+  },
+  "red_flag_roundtrip": {
+    "status": "blocked",
+    "blocker_kind": "unsupported_capability",
+    "preflight_skipped": true,
+    "fixture_coverage": [
+      {
+        "class": "scenario",
+        "check_ids": [
+          "total-revenue-after-price-edit",
+          "total-profit-after-price-edit",
+          "break-even-after-price-edit",
+          "period-1-revenue",
+          "period-2-revenue",
+          "period-3-revenue",
+          "period-1-variable-cost",
+          "period-2-variable-cost",
+          "period-3-variable-cost",
+          "period-1-profit",
+          "period-2-profit",
+          "period-3-profit"
+        ],
+        "status": "not_observed"
+      },
+      {
+        "class": "volatile",
+        "check_ids": [
+          "volatile-rand",
+          "volatile-now"
+        ],
+        "status": "not_observed"
+      },
+      {
+        "class": "iteration",
+        "check_ids": [
+          "iterative-convergence"
+        ],
+        "status": "not_observed"
+      },
+      {
+        "class": "array",
+        "check_ids": [
+          "array-scalar-reduction"
+        ],
+        "status": "not_observed"
+      },
+      {
+        "class": "array_spill",
+        "check_ids": [
+          "array-spill-placement"
+        ],
+        "status": "blocked"
+      },
+      {
+        "class": "excel_quirk",
+        "check_ids": [
+          "binary-decimal-precision"
+        ],
+        "status": "not_observed"
+      }
+    ],
+    "receipt": "receipts/canonical-operating-scenario/red-flag-roundtrip.json"
+  },
+  "engines": {
+    "before_input_change": {
+      "python_rust_match": true,
+      "outputs": {
+        "break_even_units": {
+          "sheet": "Forecast",
+          "address": "F4",
+          "result": 83.33333333333333
+        },
+        "division_error": {
+          "sheet": "Forecast",
+          "address": "F5",
+          "result": {
+            "error": "#DIV/0!",
+            "message": null
+          }
+        },
+        "parse_probe": {
+          "sheet": "Forecast",
+          "address": "J2",
+          "result": null
+        },
+        "profit": {
+          "sheet": "Forecast",
+          "address": "F3",
+          "result": 1440
+        },
+        "revenue": {
+          "sheet": "Forecast",
+          "address": "F2",
+          "result": 7400
+        },
+        "unsupported_probe": {
+          "sheet": "Forecast",
+          "address": "J1",
+          "result": null
+        }
+      }
+    },
+    "after_input_change_preview": {
+      "source": "python_and_rust_not_excel",
+      "python_rust_match": true,
+      "outputs": {
+        "break_even_units": {
+          "sheet": "Forecast",
+          "address": "F4",
+          "result": 58.8235294117647
+        },
+        "division_error": {
+          "sheet": "Forecast",
+          "address": "F5",
+          "result": {
+            "error": "#DIV/0!",
+            "message": null
+          }
+        },
+        "parse_probe": {
+          "sheet": "Forecast",
+          "address": "J2",
+          "result": null
+        },
+        "profit": {
+          "sheet": "Forecast",
+          "address": "F3",
+          "result": 3290
+        },
+        "revenue": {
+          "sheet": "Forecast",
+          "address": "F2",
+          "result": 9250
+        },
+        "unsupported_probe": {
+          "sheet": "Forecast",
+          "address": "J1",
+          "result": null
+        }
+      },
+      "note": "Model calculation after unit_price=25. Not an Excel recalc."
+    }
+  },
+  "structural_reimport": {
+    "match": true,
+    "mismatches": [],
+    "formula_rewrites": [],
+    "note": "Canonical reimport of the exported package before Excel opens it. Excel formula rewrites, when Desktop runs, are scenario_roundtrip.formula_diffs."
+  },
+  "excel_desktop_pending": true,
+  "desktop_command": "python3 tools/canonical_excel_receipt.py --fixture fixtures/operating-scenario.workbook.json --output-dir receipts/canonical-operating-scenario-excel --excel",
+  "agent_headless": {
+    "status": "not_started",
+    "reason": "Headless agent composition waits until an Excel Desktop receipt exists."
+  }
+}
