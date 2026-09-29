@@ -4,7 +4,7 @@
 | --- | --- |
 | Base | `origin/main` (synced locally at `5698f5b`) |
 | Checkout | `/Users/jamespustorino/code/_worktrees/workbook-forge-v1-calc-binding` |
-| Status | Scenario and acceptance contract specified; implementation waits on the canonical schema and native hydration slice. |
+| Status | Canonical schema prerequisite merged into this branch; direct Python/Rust sessions and shared operating-scenario cases are implemented and locally verified. The Excel Desktop round-trip remains a separate export gate. |
 
 ## Job
 
@@ -22,7 +22,8 @@ no intermediate workbook DTO is introduced.
 
 ## Prerequisites
 
-This slice follows canonical schema/versioning work on `impl/v1-intake`:
+This slice includes the canonical schema/versioning work first authored on
+`impl/v1-intake`:
 
 - `schemas/` contains the JSON Schema for `Workbook`, `Sheet`, `Cell`, and
   `Formula`, including `schema_version` and `model_version`.
@@ -124,8 +125,21 @@ stringifying them into a successful number or rejecting the input.
 
 ## Current source entry points
 
-- Python scenario and workbook session: `python/workbook_forge/toolkit.py`
-- Rust scenario and workbook session: `rust/src/toolkit.rs`
-- Shared workbook-model intake target: `python/workbook_forge/model.py`
+- Python direct canonical session: `python/workbook_forge/canonical_calc.py`
+- Rust direct canonical session: `rust/src/canonical_calc.rs`
+- Shared bound workbook and golden cases: `tests/fixtures/canonical/operating-scenario-v1.json` and `tests/fixtures/canonical/operating-scenario-cases.json`
+- Cross-backend deterministic receipt: `tools/verify_canonical_calc.py`
+- Canonical native model types: `python/workbook_forge/model.py` and `rust/src/model.rs`
+- Legacy operating scenario constructors retained for comparison: `python/workbook_forge/toolkit.py` and `rust/src/toolkit.rs`
 - Export oracle and round-trip work: `tools/excel_oracle.py` and
   `impl/v1-export`
+
+## Local acceptance evidence — 2026-09-28
+
+- `PYTHONPATH=python uv run --extra test python -m pytest -q --tb=short` — 885 passed, 56 skipped.
+- `CARGO_TARGET_DIR="$PWD/rust/target" cargo check --manifest-path rust/Cargo.toml` — passed.
+- `CARGO_TARGET_DIR="$PWD/rust/target" cargo test --manifest-path rust/Cargo.toml` — 99 passed.
+- `cargo fmt --manifest-path rust/Cargo.toml --check`, Python compilation, and `git diff --check` — passed.
+- `python tools/verify_canonical_calc.py` — pass, no differences. Fixture SHA-256: `a6ff2b1cc79f11a69e94d1ffabc1dd3ecb1980bb2dcff1d0fae2522f310bab66`; schema/model versions: `1`/`1`; tolerance: `1e-12`.
+- The receipt compares canonical workbook meaning, bindings, named outputs, every calculated cell, diagnostics, and the `#N/A` result across both engines.
+- This is a native-engine parity check. It does not satisfy Excel Desktop open/edit/recalculate/save/reimport acceptance; that remains in `impl/v1-export`.

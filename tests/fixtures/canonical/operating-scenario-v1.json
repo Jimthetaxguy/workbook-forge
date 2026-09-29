@@ -1,0 +1,111 @@
+{
+  "schema_version": 1,
+  "model_version": 1,
+  "metadata": {
+    "fixture": "operating scenario with explicit input/output bindings",
+    "cache_basis": "unit_price=20, unit_cost=8, fixed_cost=1000"
+  },
+  "bindings": [
+    {
+      "direction": "input",
+      "name": "unit_price",
+      "sheet": "Assumptions",
+      "address": "B1",
+      "value_type": "number",
+      "required": true,
+      "constraints": {"min": 0}
+    },
+    {
+      "direction": "input",
+      "name": "unit_cost",
+      "sheet": "Assumptions",
+      "address": "B2",
+      "value_type": "number",
+      "required": true,
+      "constraints": {"min": 0}
+    },
+    {
+      "direction": "input",
+      "name": "fixed_cost",
+      "sheet": "Assumptions",
+      "address": "B3",
+      "value_type": "number",
+      "required": true,
+      "constraints": {"min": 0}
+    },
+    {
+      "direction": "output",
+      "name": "revenue",
+      "sheet": "Forecast",
+      "address": "F2",
+      "value_type": "number",
+      "required": true,
+      "constraints": {}
+    },
+    {
+      "direction": "output",
+      "name": "profit",
+      "sheet": "Forecast",
+      "address": "F3",
+      "value_type": "number",
+      "required": true,
+      "constraints": {}
+    },
+    {
+      "direction": "output",
+      "name": "break_even_units",
+      "sheet": "Forecast",
+      "address": "F4",
+      "value_type": "number",
+      "required": true,
+      "constraints": {}
+    }
+  ],
+  "sheets": [
+    {
+      "name": "Assumptions",
+      "dimensions": [1, 3, 1, 2],
+      "cells": {
+        "A1": {"address": "A1", "value": "Unit price", "data_type": "text"},
+        "B1": {"address": "B1", "value": 20, "data_type": "number", "number_format": "$#,##0.00;[Red]($#,##0.00)"},
+        "A2": {"address": "A2", "value": "Unit variable cost", "data_type": "text"},
+        "B2": {"address": "B2", "value": 8, "data_type": "number", "number_format": "$#,##0.00;[Red]($#,##0.00)"},
+        "A3": {"address": "A3", "value": "Fixed cost per period", "data_type": "text"},
+        "B3": {"address": "B3", "value": 1000, "data_type": "number", "number_format": "$#,##0.00;[Red]($#,##0.00)"}
+      }
+    },
+    {
+      "name": "Forecast",
+      "dimensions": [1, 4, 1, 7],
+      "cells": {
+        "A1": {"address": "A1", "value": "Period", "data_type": "text"},
+        "B1": {"address": "B1", "value": "Quantity", "data_type": "text"},
+        "C1": {"address": "C1", "value": "Revenue", "data_type": "text"},
+        "D1": {"address": "D1", "value": "Variable costs", "data_type": "text"},
+        "E1": {"address": "E1", "value": "Profit", "data_type": "text"},
+        "F1": {"address": "F1", "value": "Summary outputs", "data_type": "text"},
+        "A2": {"address": "A2", "value": "Period 1", "data_type": "text"},
+        "B2": {"address": "B2", "value": 100, "data_type": "number"},
+        "C2": {"address": "C2", "value": null, "data_type": "number", "number_format": "$#,##0.00;[Red]($#,##0.00)", "formula": {"expression": "=B2*Assumptions!$B$1", "dependencies": ["Assumptions!B1", "Forecast!B2"], "cached_value": 2000}},
+        "D2": {"address": "D2", "value": null, "data_type": "number", "number_format": "$#,##0.00;[Red]($#,##0.00)", "formula": {"expression": "=B2*Assumptions!$B$2", "dependencies": ["Assumptions!B2", "Forecast!B2"], "cached_value": 800}},
+        "E2": {"address": "E2", "value": null, "data_type": "number", "number_format": "$#,##0.00;[Red]($#,##0.00)", "formula": {"expression": "=C2-D2-Assumptions!$B$3", "dependencies": ["Assumptions!B3", "Forecast!C2", "Forecast!D2"], "cached_value": 200}},
+        "A3": {"address": "A3", "value": "Period 2", "data_type": "text"},
+        "B3": {"address": "B3", "value": 120, "data_type": "number"},
+        "C3": {"address": "C3", "value": null, "data_type": "number", "number_format": "$#,##0.00;[Red]($#,##0.00)", "formula": {"expression": "=B3*Assumptions!$B$1", "dependencies": ["Assumptions!B1", "Forecast!B3"], "cached_value": 2400}},
+        "D3": {"address": "D3", "value": null, "data_type": "number", "number_format": "$#,##0.00;[Red]($#,##0.00)", "formula": {"expression": "=B3*Assumptions!$B$2", "dependencies": ["Assumptions!B2", "Forecast!B3"], "cached_value": 960}},
+        "E3": {"address": "E3", "value": null, "data_type": "number", "number_format": "$#,##0.00;[Red]($#,##0.00)", "formula": {"expression": "=C3-D3-Assumptions!$B$3", "dependencies": ["Assumptions!B3", "Forecast!C3", "Forecast!D3"], "cached_value": 440}},
+        "A4": {"address": "A4", "value": "Period 3", "data_type": "text"},
+        "B4": {"address": "B4", "value": 150, "data_type": "number"},
+        "C4": {"address": "C4", "value": null, "data_type": "number", "number_format": "$#,##0.00;[Red]($#,##0.00)", "formula": {"expression": "=B4*Assumptions!$B$1", "dependencies": ["Assumptions!B1", "Forecast!B4"], "cached_value": 3000}},
+        "D4": {"address": "D4", "value": null, "data_type": "number", "number_format": "$#,##0.00;[Red]($#,##0.00)", "formula": {"expression": "=B4*Assumptions!$B$2", "dependencies": ["Assumptions!B2", "Forecast!B4"], "cached_value": 1200}},
+        "E4": {"address": "E4", "value": null, "data_type": "number", "number_format": "$#,##0.00;[Red]($#,##0.00)", "formula": {"expression": "=C4-D4-Assumptions!$B$3", "dependencies": ["Assumptions!B3", "Forecast!C4", "Forecast!D4"], "cached_value": 800}},
+        "F2": {"address": "F2", "value": null, "data_type": "number", "number_format": "$#,##0.00;[Red]($#,##0.00)", "formula": {"expression": "=SUM(C2:C4)", "dependencies": ["Forecast!C2", "Forecast!C3", "Forecast!C4"], "cached_value": 7400}},
+        "F3": {"address": "F3", "value": null, "data_type": "number", "number_format": "$#,##0.00;[Red]($#,##0.00)", "formula": {"expression": "=SUM(E2:E4)", "dependencies": ["Forecast!E2", "Forecast!E3", "Forecast!E4"], "cached_value": 1440}},
+        "F4": {"address": "F4", "value": null, "data_type": "number", "number_format": "0.00", "formula": {"expression": "=IF(Assumptions!B1>Assumptions!B2,Assumptions!B3/(Assumptions!B1-Assumptions!B2),NA())", "dependencies": ["Assumptions!B1", "Assumptions!B2", "Assumptions!B3"], "cached_value": 83.33333333333333}},
+        "G2": {"address": "G2", "value": "Total revenue", "data_type": "text"},
+        "G3": {"address": "G3", "value": "Total profit", "data_type": "text"},
+        "G4": {"address": "G4", "value": "Break-even units per period", "data_type": "text"}
+      }
+    }
+  ]
+}
