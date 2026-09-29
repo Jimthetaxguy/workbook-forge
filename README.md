@@ -29,6 +29,7 @@ agreement and established expected values; it does not replace either implementa
 
 | Task | Start here |
 | --- | --- |
+| Read the North Star (Excel compiler, three directions, build rules) | [Vision](docs/vision.md) |
 | Run a formula against supplied cell values | [Python evaluator](#python-quick-start) |
 | Compose calculations with named inputs and no workbook | [Native primitives](docs/primitives.md) |
 | Author or modify a workbook and calculate its outputs | [Programmable workbooks](#programmable-workbooks) |
