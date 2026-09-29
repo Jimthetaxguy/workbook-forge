@@ -22,6 +22,21 @@ Earlier notes counted "evaluator slices". Slices 2–10 predate the autoresearch
 
 ## Project activity
 
+### 2026-09-29 — cursor agent — export harness restarted on the combine tip
+- Changed: the export branch now starts at `agent/combine-calc-best-20260928` @ `4d56af6` (draft PR #3). Schema path stays `schemas/workbook-model.v1.schema.json`. Fixture path stays `fixtures/operating-scenario.workbook.json`. Mac multi-case goldens stay. The Excel harness is still `origin/impl/v1-export` @ `bea3ee1`. PR #2 stays open.
+- Evidence: focused tests on this host. Excel Desktop did not run. Spec 2 is not passed. Array spill stays blocked.
+- Next/remaining: on a Mac with Excel, run `python3 tools/canonical_excel_receipt.py --fixture fixtures/operating-scenario.workbook.json --output-dir receipts/canonical-operating-scenario-excel --excel`.
+
+### 2026-09-29 — cursor agent — canonical fixture through the export harness
+- Changed: replayed `tools/excel_oracle.py`, the round-trip contract schema, and the red-flag contract from `origin/impl/v1-export` at `bea3ee1` onto the Grok calc-binding tip `3cc1efd`. `tools/canonical_excel_receipt.py` exports `fixtures/operating-scenario.workbook.json` and calls that harness. A lineage receipt records how Mac `origin/impl/v1-calc-binding` at `c69300e` differs; that model stays on its own branch.
+- Evidence: on this host the scenario contract reaches `prepared` and the red-flag contract stays `blocked` on `worksheet_dynamic_array_spill_placement`. Python and Rust still match the fixture before the input change and in the unit_price=25 engine preview. Excel Desktop did not run. Spec 2 is not passed. Focused tests cover the harness and the canonical export.
+- Next/remaining: on a Mac with Excel, run `python3 tools/canonical_excel_receipt.py --fixture fixtures/operating-scenario.workbook.json --output-dir receipts/canonical-operating-scenario-excel --excel`. Spill placement and the other red-flag classes remain outstanding. Agent-headless stays unstarted.
+
+### 2026-09-28 — codex/Codex — SDK export round-trip trust harness
+- Changed: added a versioned cell contract and reusable `--roundtrip` CLI path. It copies an SDK-generated workbook, applies declared edits, invokes Excel full rebuild, saves and closes the scratch copy, reimports it, and reports exact formula and typed-result differences in a JSON receipt. Volatile predicates, iteration settings, exact formula allowlists and dynamic-array spill cells are explicit.
+- Evidence: Excel 16.113.2 completed the `operating_scenario()` export cycle after changing `Assumptions!B1` from 20 to 25. Twelve values matched; nine exact, per-cell quote-normalization formula changes were allowlisted; the source stayed unchanged. The full red-flag receipt remains blocked because SDK export refuses worksheet spill caches. AppleScript did not expose this Excel build's global calculation/iteration settings; the receipt marks them unavailable and unverified. Focused tests: 34 passed; full Python suite in an isolated environment with declared test dependencies: 883 passed, 56 skipped; AppleScript compile, schema validation and Python compilation pass.
+- Next/remaining: the canonical fixture is now the export input on the Grok calc-binding tip. Spill placement and observed iteration/volatile/quirk classes remain required before the full export gate is complete.
+
 ### 2026-09-28 — codex/Codex — formula-aware XML extraction
 - Changed: independent Python/Rust namespace/path primitives now drive XLSX extraction and existing readers; ten patterns attach original XML provenance, typed formula references and catalog support mappings. Shared formulas can be reconstructed for inspection only.
 - Evidence: 640 Python and 78 Rust tests, including 82 cross-language extraction checks; Rust 1.88, strict lint/compile gates, fresh pure/native wheels and external Rust consumer verification. Scenario extraction agrees on 12 formulas and 3 validations. No dependencies were added. A fresh official-registry audit confirmed all 15 Python locks and all direct Rust dependencies are latest stable; the upstream-required Syn 2 branch uses its latest compatible release.

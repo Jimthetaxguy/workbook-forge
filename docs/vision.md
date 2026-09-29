@@ -123,17 +123,22 @@ Call red flags are locked as build contracts in [docs/specs/red-flags.md](specs/
 ## Near-term order
 
 Step 0 of calc-binding is the versioned workbook model ([Spec 1](specs/red-flags.md#spec-1--canonical-intermediate-form)
-and [Spec 4](specs/red-flags.md#spec-4--model-versioning-from-day-one)). It lands
-on `impl/v1-calc-binding` before the calculation binding. Downstream branches
-rebase onto that result after it merges: `impl/v1-export`, then `impl/v1-intake`,
-then `impl/v1-agent-headless`.
+and [Spec 4](specs/red-flags.md#spec-4--model-versioning-from-day-one)). The calc
+candidate is `agent/combine-calc-best-20260928` (draft PR #3): Grok schema
+`schemas/workbook-model.v1.schema.json`, fixture
+`fixtures/operating-scenario.workbook.json`, plus the Mac multi-case goldens.
+PR #2 stays open. Export, intake, and agent-headless follow that tip.
 
-1. On `impl/v1-calc-binding`: hydrate one canonical, versioned workbook in Python
+1. On the combine tip: hydrate one canonical, versioned workbook in Python
    and Rust, then bind one existing calculation to those cell identities and run
    it through both engines.
 2. Complete the Excel open, edit, recalculate, save and reimport proof for that
-   bound calculation (`impl/v1-export`). Package generation and SDK-only
-   reimport are useful checks, but do not satisfy this proof.
+   bound calculation. The fixture is `fixtures/operating-scenario.workbook.json`,
+   not the older SDK `operating_scenario()` demo. Package generation and
+   reimport without Excel Desktop are useful checks, but do not satisfy this
+   proof. `tools/excel_oracle.py` is the round-trip harness.
+   `tools/canonical_excel_receipt.py --excel` exports the canonical fixture and
+   runs that harness in Excel Desktop.
 3. Expand workbook intake using gaps and useful evidence exposed by the bound
    roundtrip (`impl/v1-intake`). The existing reader and cell map are the
    starting foundation; broader intake is the next product expansion.
