@@ -2290,28 +2290,103 @@ fn decimal_digits(value: &Value) -> Result<i32, FormulaError> {
     }
     Ok(number.trunc() as i32)
 }
+/// The decimal digits of a positive number, most significant first, and the
+/// power of ten of the last digit.
+struct DecimalDigits {
+    digits: Vec<u8>,
+    last_place: i32,
+}
+
+/// Write `magnitude` with `fraction_digits` digits after the first one.
+fn decimal_digits_of(magnitude: f64, fraction_digits: usize) -> Option<DecimalDigits> {
+    let text = format!("{magnitude:.fraction_digits$e}");
+    let (mantissa, exponent) = text.split_once('e')?;
+    let exponent: i32 = exponent.parse().ok()?;
+    let digits = mantissa
+        .bytes()
+        .filter(u8::is_ascii_digit)
+        .map(|byte| byte - b'0')
+        .collect();
+    Some(DecimalDigits {
+        digits,
+        last_place: exponent - i32::try_from(fraction_digits).ok()?,
+    })
+}
+
+/// A binary64 value written exactly in decimal has at most 767 digits.
+const EXACT_FRACTION_DIGITS: usize = 800;
+
+/// Round at a power-of-ten place using Excel's directed modes.
+///
+/// The number is rounded as its 15-significant-digit decimal form, not as
+/// the binary value that stores it. 19.99 is stored as
+/// 19.989999999999998..., and rounding that value exactly would make
+/// TRUNC(19.99,2) return 19.98.
+///
+/// The 15-digit form is used only when it has a digit below the requested
+/// place. Otherwise it cannot say what lies below that place, and the
+/// stored value is rounded exactly.
 fn round_to_precision(number: f64, digits: i32, mode: &str) -> Result<f64, FormulaError> {
     if !number.is_finite() {
         return Err(FormulaError::Num);
     }
-    let scale = 10f64.powi(digits);
-    if !scale.is_finite() || scale == 0.0 {
-        return Err(FormulaError::Num);
-    }
-    let scaled = number * scale;
-    // At large magnitudes, positive decimal precision cannot change a binary float.
-    if scaled.is_infinite() && digits > 0 {
+    if number == 0.0 {
         return Ok(number);
     }
-    if !scaled.is_finite() {
-        return Err(FormulaError::Num);
+    let place = -digits;
+    let magnitude = number.abs();
+    let mut written = decimal_digits_of(magnitude, 14).ok_or(FormulaError::Num)?;
+    if written.last_place >= place {
+        written = decimal_digits_of(magnitude, EXACT_FRACTION_DIGITS).ok_or(FormulaError::Num)?;
+        while written.digits.len() > 1 && written.digits.last() == Some(&0) {
+            written.digits.pop();
+            written.last_place += 1;
+        }
+        if written.last_place >= place {
+            // Nothing is stored below the requested place.
+            return Ok(number);
+        }
     }
-    let rounded = match mode {
-        "nearest" => (scaled.abs() + 0.5).floor().copysign(scaled),
-        "away-from-zero" => scaled.abs().ceil().copysign(scaled),
-        _ => scaled.trunc(),
+
+    let length = i32::try_from(written.digits.len()).map_err(|_| FormulaError::Num)?;
+    let first_place = written.last_place + length - 1;
+    let kept_length = usize::try_from(first_place - place + 1).unwrap_or(0);
+    let (kept, dropped) = written.digits.split_at(kept_length);
+    let round_up = match mode {
+        "nearest" => {
+            // The digit just below the place. It is zero when the number
+            // starts further down than that.
+            first_place >= place - 1 && dropped.first().is_some_and(|digit| *digit >= 5)
+        }
+        "away-from-zero" => dropped.iter().any(|digit| *digit != 0),
+        _ => false,
     };
-    let result = rounded / scale;
+    let mut kept = kept.to_vec();
+    if round_up {
+        let mut carried = true;
+        for digit in kept.iter_mut().rev() {
+            if *digit == 9 {
+                *digit = 0;
+            } else {
+                *digit += 1;
+                carried = false;
+                break;
+            }
+        }
+        if carried {
+            kept.insert(0, 1);
+        }
+    }
+    let mut text = String::with_capacity(kept.len() + 8);
+    if number.is_sign_negative() {
+        text.push('-');
+    }
+    if kept.is_empty() {
+        text.push('0');
+    }
+    text.extend(kept.iter().map(|digit| char::from(b'0' + digit)));
+    text.push_str(&format!("e{place}"));
+    let result: f64 = text.parse().map_err(|_| FormulaError::Num)?;
     if result.is_finite() {
         Ok(result)
     } else {

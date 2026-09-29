@@ -10,6 +10,7 @@ import calendar
 from bisect import bisect_left, bisect_right
 from dataclasses import dataclass
 from datetime import date, timedelta
+import decimal
 import math
 import re
 from collections.abc import Iterable, Mapping
@@ -1045,33 +1046,45 @@ def _decimal_digits(value: object) -> int | ErrorValue:
     return digits
 
 
+# Its own context, so a caller's decimal settings cannot change a result.
+# The exact decimal form of a binary64 value has at most 767 digits.
+_DECIMAL_CONTEXT = decimal.Context(prec=1200)
+_DECIMAL_ROUNDING = {
+    "nearest": decimal.ROUND_HALF_UP,
+    "away-from-zero": decimal.ROUND_UP,
+    "toward-zero": decimal.ROUND_DOWN,
+}
+
+
 def _round_to_precision(number: object, digits: int, mode: str) -> float | ErrorValue:
-    """Round a numeric value at a power-of-ten precision using Excel's directed modes."""
+    """Round a number at a power-of-ten precision using Excel's directed modes.
+
+    The number is rounded as its 15-significant-digit decimal form, not as
+    the binary value that stores it. 19.99 is stored as
+    19.989999999999998..., and rounding that value exactly would make
+    TRUNC(19.99,2) return 19.98.
+
+    The 15-digit form is used only when it has a digit below the requested
+    place. Otherwise it cannot say what lies below that place, and the
+    stored value is rounded exactly.
+    """
     try:
         numeric = float(number)
     except (OverflowError, TypeError, ValueError):
         return ErrorValue("#NUM!", "number is outside the supported numeric range")
     if not math.isfinite(numeric):
         return ErrorValue("#NUM!", "number must be finite")
-    try:
-        scale = 10.0**digits
-    except OverflowError:
-        return ErrorValue("#NUM!", "num_digits is outside the supported numeric range")
-    if not math.isfinite(scale) or scale == 0:
-        return ErrorValue("#NUM!", "num_digits is outside the supported numeric range")
-    scaled = numeric * scale
-    # At large magnitudes, positive decimal precision cannot change a binary float.
-    if math.isinf(scaled) and digits > 0:
+    if numeric == 0:
         return numeric
-    if not math.isfinite(scaled):
-        return ErrorValue("#NUM!", "rounded number is outside the supported numeric range")
-    if mode == "nearest":
-        rounded = math.copysign(math.floor(abs(scaled) + 0.5), scaled)
-    elif mode == "away-from-zero":
-        rounded = math.copysign(math.ceil(abs(scaled)), scaled)
-    else:
-        rounded = math.trunc(scaled)
-    result = rounded / scale
+    written = decimal.Decimal(f"{numeric:.14e}")
+    if written.as_tuple().exponent >= -digits:
+        written = decimal.Decimal(numeric)
+        if written.normalize(_DECIMAL_CONTEXT).as_tuple().exponent >= -digits:
+            # Nothing is stored below the requested place.
+            return numeric
+    place = decimal.Decimal((0, (1,), -digits))
+    rounded = written.quantize(place, rounding=_DECIMAL_ROUNDING[mode], context=_DECIMAL_CONTEXT)
+    result = float(rounded)
     if not math.isfinite(result):
         return ErrorValue("#NUM!", "rounded number is outside the supported numeric range")
     return result
