@@ -40,6 +40,7 @@ agreement and established expected values; it does not replace either implementa
 | Author or modify a workbook and calculate its outputs | [Programmable workbooks](#programmable-workbooks) |
 | Inspect XML records, formulas and source locations | [Extraction guide](docs/extraction-patterns.md) |
 | Give an agent bounded workbook operations | [Agent quick start](#agent-sdk-quick-start) and [operation contract](docs/agent-protocol.md) |
+| Understand product goals and planned behavior | [Product specifications](docs/product-specifications.md) |
 | Assess behavior and verification limits | [Behavior profiles](docs/behavior-profiles.md) and [delivery evidence](docs/toolkit-delivery.md#current-state-findings) |
 
 Use Python 3.12 or later for the Python package. From a source checkout:

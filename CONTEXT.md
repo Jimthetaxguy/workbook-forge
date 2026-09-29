@@ -2,7 +2,7 @@
 author: Codex
 created: 2026-09-24
 agent: codex/Codex
-date: '2026-09-28T16:11:18-04:00'
+date: '2026-09-28T20:03:14-04:00'
 type: project-context
 task: Build an SDK for Excel in agent-ready formats using independent Python and Rust implementations
 status: active
@@ -10,6 +10,7 @@ summary: Independent Python and Rust SDKs expose verified workbook workflows and
 next_steps:
   - Complete the separate live Excel acceptance gate before integration; native primitives, review fixes and verification are tracked in docs/toolkit-delivery.md.
   - Define explicit bindings and independent transformations from native compositions to workbook expressions; see the proposed milestone in docs/toolkit-delivery.md.
+  - Use docs/product-specifications.md as the durable product and acceptance contract for intake, compilation, headless use, formula hypotheses and evidence-led coverage.
   - Expand the verified agent operation contract against concrete workbook tasks; keep framework/MCP adapters thin and retain source/revision-aware results.
   - On a Mac with Excel, run `python3 tools/canonical_excel_receipt.py --fixture fixtures/operating-scenario.workbook.json --output-dir receipts/canonical-operating-scenario-excel --excel`. Spill placement stays blocked until export can write those cells.
   - Use observed Excel results to validate Workbook Forge profiles and update shared fixtures before expanding formula-family coverage.
@@ -77,6 +78,7 @@ Runs 1–24 are accepted. Coverage stands at 115 implemented functions, 85 detai
 ## Where things are
 - `docs/primitives.md`: native function calls, inspectable compositions, package discovery and explicit behavior limits.
 - `docs/toolkit-delivery.md`: architecture, ownership, milestone checklist, acceptance model and implementation evidence.
+- `docs/product-specifications.md`: product outcomes, intake/compiler/agent/formula-hypothesis specifications, research questions and executable dependency order.
 - `docs/extraction-patterns.md`: independent XML parsing/extraction contract, limits, formula mappings and source provenance.
 - `docs/agent-protocol.md`: the versioned operation, pagination, error, provenance and JSON-lines transport contract; catalog/agent-operations.json owns its discoverable schemas.
 - `docs/excel-observations.md`: observation meanings, harness usage and actual Excel evidence.
