@@ -4,10 +4,10 @@
     "is_false_control": false,
     "ground_truth": "excel_canonical_behavior",
     "state": {
-      "formula": "SUM",
+      "formula": "ADDITION",
       "fixture": {
         "formula": "=A1+10",
-        "cell_context": {"A1": ""},
+        "cell_context": {"A1": null},
         "result": 10.0
       },
       "target": "Microsoft Excel 365 Desktop calculation engine"
@@ -15,7 +15,7 @@
     "questions": {
       "behavior_provenance": {
         "type": "choice",
-        "instructions": "Does this proposed behavior for SUM/Arithmetic match authentic Excel 365 Desktop behavior or an artificial engine profile?",
+        "instructions": "Does this proposed behavior for adding to a blank cell match authentic Excel 365 Desktop behavior or an artificial engine profile?",
         "criteria": {
           "excel_canonical_behavior": {
             "what": "Exact match with documented Microsoft Excel 365 calculation results or verified Excel behavior."
@@ -35,10 +35,10 @@
     "is_false_control": true,
     "ground_truth": "artificial_local_profile",
     "state": {
-      "formula": "SUM",
+      "formula": "ADDITION",
       "fixture": {
         "formula": "=A1+10",
-        "cell_context": {"A1": ""},
+        "cell_context": {"A1": null},
         "result": {"error": "#VALUE!"}
       },
       "target": "Microsoft Excel 365 Desktop calculation engine"
@@ -46,7 +46,7 @@
     "questions": {
       "behavior_provenance": {
         "type": "choice",
-        "instructions": "Does this proposed behavior for SUM/Arithmetic match authentic Excel 365 Desktop behavior or an artificial engine profile?",
+        "instructions": "Does this proposed behavior for adding to a blank cell match authentic Excel 365 Desktop behavior or an artificial engine profile?",
         "criteria": {
           "excel_canonical_behavior": {
             "what": "Exact match with documented Microsoft Excel 365 calculation results or verified Excel behavior."
