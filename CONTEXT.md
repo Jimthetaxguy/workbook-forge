@@ -54,6 +54,11 @@ Build an **SDK for Excel in agent-ready formats**: expose supported workbook dat
 - **FILTER mask:** a one-dimensional row or column include vector whose length must match the selected source axis; two-dimensional masks are rejected by the current evaluator profile.
 - **Binary comparison profile:** Binary operator errors propagate left to right, including non-finite numeric literal errors. ASCII text compares without case; if either text value contains non-ASCII characters, comparison is exact. Blank, Boolean, and numeric values compare after finite binary64 coercion; nonfinite values return `#NUM!`; mixed text/numeric equality is false, inequality is true, and relational comparison returns `#VALUE!`. These are Workbook Forge rules, not verified Excel collation or coercion behavior. Adjacent 16-digit literals are parity probes beyond Microsoft’s documented precision, not Excel result oracles.
 - **FormulaResult / evaluate_result:** the shape-preserving result contract shared by Python and Rust; the scalar `evaluate` APIs keep a local `#VALUE!` boundary for top-level arrays and ranges.
+- **Gate:** `tools/gate.sh`, the one command that decides whether a commit is acceptable. It rebuilds the native bridge, runs both test suites and the linters, fails on a skipped test, and stores its log under the commit it tested.
+- **Review packet:** a plain copy of the files one reviewer may see, with no version history and no status claims. It is built by `tools/review/build_packet.py`.
+- **Lens:** the single question a reviewer is asked, and the list of files that question needs. Listed in `tools/review/lenses.json`.
+- **Planted defect:** a small deliberate fault used to find out whether the tests, or a reviewer, would notice a real one. A planted defect that the tests miss is a gap in the tests.
+- **Finding:** one defect claim with a location, a command that shows it, and the command's output. It is confirmed only when an independent refuter fails to knock it down and the coordinator reproduces it on unchanged code.
 ## Boundaries
 - Target: Excel for Microsoft 365 desktop, with availability/version metadata retained.
 - Languages: independent hand-written Python and Rust implementations of formula primitives, workbook models, validation, dependency calculation, editing sessions and OOXML adapters. Shared fixtures compare behavior; neither engine calls the other. The optional native bridge is explicit interoperability.
@@ -77,6 +82,8 @@ Runs 1–24 are accepted. Coverage stands at 115 implemented functions, 85 detai
 - `docs/excel-observations.md`: observation meanings, harness usage and actual Excel evidence.
 - `docs/run-history.md`: dated project activity, superseded checkpoint decisions, Runs 1–24 and the pre-loop baseline. Historical counts and repository visibility describe their original checkpoints.
 - `docs/behavior-profiles.md`: current behavior and profile notes by function family, plus workbook adapter details.
+- `docs/review-protocol.md`: how to review this project so that the reviewer does not inherit the builder's view; `tools/review/` enforces it.
+- `tools/gate.sh`: the gate.
 - `.autoresearch/state.json`: the authoritative accepted-run ledger. `.autoresearch/config.json` holds the loop criteria and `eval_command`.
 - `_working-files/`: dated checkpoint and review notes.
 - `_archive-2026-09-25-L1/`: a git-ignored archive of the pre-git backup copies (`*.bak-*`, `.autoresearch/_archive-*`, `.autoresearch/backups/`), with `MANIFEST.tsv` and `ROLLBACK.sh`.
@@ -87,6 +94,12 @@ Runs 1–24 are accepted. Coverage stands at 115 implemented functions, 85 detai
 - Append each run's summary to `docs/run-history.md`. Keep `README.md` and this file limited to the current state.
 - Run the Rust gates with `CARGO_TARGET_DIR` inside the checkout, as `eval_command` does. A shared target directory can mix build artifacts between copies of the crate.
 ## Latest maintenance
+### 2026-09-29 — claude-code — adversarial review, gate and first fixes
+- `main` failed its own checks: `cargo clippy -D warnings` rejected `rust/src/model.rs`. Fixed. Nothing had been running the checks.
+- Added the gate, the review protocol and its tools. Seven reviewers, each given one lens and no history, reported 56 findings. Eleven were planted defects. Of the other 45, independent refuters knocked down four and the rest were reproduced on unchanged code.
+- Twelve small deliberate faults in limit checks were applied one at a time. Nine left every test passing. Tests now catch eight; the ninth is a redundant check.
+- Fixed in the Python canonical model: a diagnostic filed against the wrong cell, and formula references past XFD1048576 treated as ordinary references.
+- Known and not yet fixed, most serious first: both engines move two-decimal amounts by a cent in `TRUNC`, `ROUNDDOWN`, `ROUNDUP` and `ROUND`; counting functions return an error when any cell in the range holds one; the engines disagree on criteria over mixed cell types.
 ### 2026-09-28 — codex/Codex — public documentation review
 - Reviewed all project guides and historical notes, verified portable examples, and removed unnecessary personal context and machine locations.
 - Recorded the contributor checks and separate published-history decision in [toolkit delivery](docs/toolkit-delivery.md#activity).
