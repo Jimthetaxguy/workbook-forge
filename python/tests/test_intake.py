@@ -8,7 +8,12 @@ import sys
 import zipfile
 from pathlib import Path
 
-from workbook_forge.intake import extract_dependencies, intake_workbook, main
+from workbook_forge.intake import (
+    extract_dependencies,
+    intake_workbook,
+    intake_workbook_model,
+    main,
+)
 from workbook_forge.model import (
     Binding,
     BindingConstraints,
@@ -52,7 +57,7 @@ def test_core_types_are_importable_source_of_truth():
 
 def test_intake_formula_cross_sheet_format_and_empty(tmp_path):
     path = write_intake_fixture(tmp_path / "intake.xlsx")
-    wb = intake_workbook(path)
+    wb = intake_workbook_model(path)
     assert isinstance(wb, Workbook)
     assert wb.schema_version == 1
     assert wb.model_version == 1
@@ -109,11 +114,41 @@ def test_extract_dependencies_handles_sheet_bang():
     assert deps == ("Sheet2!A1", "Sheet1!B2")
 
 
-def test_cli_prints_json_summary(tmp_path):
+def test_intake_workbook_emits_canonical_json_bytes(tmp_path):
+    path = write_intake_fixture(tmp_path / "canonical.xlsx")
+    encoded = intake_workbook(path)
+    assert isinstance(encoded, bytes)
+    payload = json.loads(encoded)
+    assert payload["schema_version"] == 1
+    assert payload["model_version"] == 1
+    assert payload["sheets"][0]["cells"]["B1"]["formula"]["cached_value"] == 20.0
+    hydrated = Workbook.from_bytes(encoded)
+    assert hydrated.to_bytes() == encoded
+
+
+def test_cli_prints_canonical_json_by_default(tmp_path):
     path = write_intake_fixture(tmp_path / "cli.xlsx")
     # module entry point
     proc = subprocess.run(
         [sys.executable, "-m", "workbook_forge.intake", str(path)],
+        cwd=Path(__file__).resolve().parents[1],
+        env={**dict(**__import__("os").environ), "PYTHONPATH": str(Path(__file__).resolve().parents[1])},
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert proc.returncode == 0, proc.stderr
+    payload = json.loads(proc.stdout)
+    assert payload["schema_version"] == 1
+    assert payload["model_version"] == 1
+    assert "sheets" in payload
+    assert payload["sheets"][0]["cells"]["B1"]["formula"]["cached_value"] == 20.0
+
+
+def test_cli_can_print_versioned_summary(tmp_path):
+    path = write_intake_fixture(tmp_path / "summary.xlsx")
+    proc = subprocess.run(
+        [sys.executable, "-m", "workbook_forge.intake", "--summary", str(path)],
         cwd=Path(__file__).resolve().parents[1],
         env={**dict(**__import__("os").environ), "PYTHONPATH": str(Path(__file__).resolve().parents[1])},
         capture_output=True,

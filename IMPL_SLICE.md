@@ -38,7 +38,7 @@ an overview-plus-cell-map path and does not mutate its source workbook.
 Landed the typed intake model and canonical schema/versioning contract:
 
 - `python/workbook_forge/model.py` — SoT types: `Cell`, `Formula`, `Sheet`, `Workbook`
-- `python/workbook_forge/intake.py` — `intake_workbook(path)` via bounded OOXML/`import_xlsx`; CLI `python -m workbook_forge.intake <file.xlsx>`
+- `python/workbook_forge/intake.py` — `intake_workbook(path)` emits canonical JSON bytes via bounded OOXML/`import_xlsx`; `intake_workbook_model(path)` returns the native Python model. The CLI emits canonical JSON by default; `--summary` prints the versioned overview.
 - `schemas/workbook-model-v1.schema.json` — required v1 interchange form
 - `rust/src/model.rs` — Rust types hydrate the same bytes without an FFI object graph
 - `tests/fixtures/canonical/workbook-v1.json` — shared Python/Rust round-trip fixture

@@ -2,7 +2,7 @@
 author: Codex
 created: 2026-09-24
 agent: codex/Codex
-date: '2026-09-28T16:11:18-04:00'
+date: '2026-09-28T21:38:51-04:00'
 type: project-context
 task: Build an SDK for Excel in agent-ready formats using independent Python and Rust implementations
 status: active
@@ -63,7 +63,7 @@ Build an **SDK for Excel in agent-ready formats**: expose supported workbook dat
 - Jev is a development-time reviewer only. It is not linked into runtime, and its results are advisory.
 - Macros and external data are never executed or fetched.
 ## Current State
-The [current-state findings](docs/toolkit-delivery.md#current-state-findings) separate delivered capabilities from evidence limits. The `impl/v1-intake` branch carries the first versioned canonical Workbook Model; its schema and shared fixture are under `schemas/` and `tests/fixtures/canonical/`. Native named-input compositions and cell-based workbook expressions remain separate authoring interfaces. Calc-binding must refactor or retarget session APIs to calculate against the canonical model directly, not translate it through another workbook DTO.
+The [current-state findings](docs/toolkit-delivery.md#current-state-findings) separate delivered capabilities from evidence limits. The `impl/v1-intake` branch carries the first versioned canonical Workbook Model; its schema and shared fixture are under `schemas/` and `tests/fixtures/canonical/`. `intake_workbook(path)` emits canonical JSON bytes; `intake_workbook_model(path)` is the native Python convenience, and the CLI emits canonical JSON by default with `--summary` for a versioned overview. Native named-input compositions and cell-based workbook expressions remain separate authoring interfaces. Calc-binding must refactor or retarget session APIs to calculate against the canonical model directly, not translate it through another workbook DTO.
 The native primitive interface adds nine functions and ten binary operators, typed native values, named-input composition and inspectable operation identities without requiring a workbook. Both packages provide the canonical catalog and expression schema. All three PR boundary findings are fixed; final independent review also closed a direct-call size-limit mismatch. Contributor evidence and the outstanding Excel acceptance gate are recorded in `docs/toolkit-delivery.md`.
 Runs 1–24 are accepted. Coverage stands at 115 implemented functions, 85 detailed semantic specs, 110 source records, and 1,371 shared fixtures. Run 24 bounds formula size, nesting, and wildcard work. The toolkit adds independently implemented typed authoring, calculation sessions and Excel adapters in Python and Rust, installed examples, and reviewed parallel calculation. Both SDKs now expose nine schema-described agent operations and JSON-lines runners, verified through installed packages and a live agent task. Formula-aware XML extraction adds ten structural patterns, typed references and catalog mappings; the complete suite now passes 923 Python and 88 Rust tests. Three direct formula checks succeeded in Excel 16.113.2; the generated-file roundtrip and full scenario remain unverified because automation failed. The 521-entry source inventory remains broader than implementation coverage; 406 functions remain catalog-only. FILTER, SORT, and UNIQUE return bounded, shape-preserving arrays; worksheet spill projection remains unsupported. SORT/UNIQUE comparison, equality, coercion, and output precision include explicit Workbook Forge profiles. Do not describe the package as Excel-complete.
 - The source-linked function inventory contains 521 records; it is a versioned discovery catalog, not an evaluator coverage claim.
@@ -89,6 +89,10 @@ Runs 1–24 are accepted. Coverage stands at 115 implemented functions, 85 detai
 - Append each run's summary to `docs/run-history.md`. Keep `README.md` and this file limited to the current state.
 - Run the Rust gates with `CARGO_TARGET_DIR` inside the checkout, as `eval_command` does. A shared target directory can mix build artifacts between copies of the crate.
 ## Latest maintenance
+### 2026-09-28 — codex/Codex — canonical JSON as intake output
+- Made serialized canonical model bytes the default Python intake result and CLI output; retained an explicit native-model helper and versioned summary mode.
+- Calc-binding and downstream callers should hydrate canonical bytes into their native model types before working with them.
+
 ### 2026-09-28 — codex/Codex — canonical workbook model v1
 - Added the versioned Python/Rust model hydration contract and one shared serialization fixture on `impl/v1-intake`.
 - Calc-binding still needs to retarget/refactor the existing session API to calculate from canonical model types directly; that integration is specified but not implemented in this slice.

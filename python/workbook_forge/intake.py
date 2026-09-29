@@ -1,11 +1,12 @@
-"""Excel → structured model intake.
+"""Excel → canonical JSON intake.
 
 Uses the project's bounded OOXML reader (stdlib zip/XML; openpyxl-equivalent
-for this SDK) so agents get a typed Workbook without a third-party Excel dep.
+for this SDK) to emit canonical model bytes without a third-party Excel dep.
 """
 
 from __future__ import annotations
 
+import argparse
 import json
 import re
 import sys
@@ -72,8 +73,8 @@ def _dimensions(cells: dict[str, Cell]) -> tuple[int, int, int, int] | None:
     return (min(rows), max(rows), min(cols), max(cols))
 
 
-def intake_workbook(path: str | Path) -> Workbook:
-    """Open an .xlsx and return the canonical structured Workbook model."""
+def intake_workbook_model(path: str | Path) -> Workbook:
+    """Open an .xlsx and return its native canonical Workbook model."""
     source = Path(path).expanduser().resolve()
     if not source.is_file():
         raise FileNotFoundError(f"workbook not found: {source}")
@@ -127,13 +128,30 @@ def intake_workbook(path: str | Path) -> Workbook:
     return Workbook(sheets=tuple(sheets), metadata=metadata, source_path=str(source))
 
 
+def intake_workbook(path: str | Path) -> bytes:
+    """Open an .xlsx and emit the canonical versioned JSON document bytes."""
+    return intake_workbook_model(path).to_bytes()
+
+
 def main(argv: list[str] | None = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
-    if not args or args[0] in {"-h", "--help"}:
-        print("usage: python -m workbook_forge.intake <file.xlsx>", file=sys.stderr)
-        return 2
-    workbook = intake_workbook(args[0])
-    print(json.dumps(workbook.to_summary_dict(), indent=2, default=str))
+    parser = argparse.ArgumentParser(
+        prog="python -m workbook_forge.intake",
+        description="Compile an .xlsx workbook to canonical JSON.",
+    )
+    parser.add_argument(
+        "--summary",
+        action="store_true",
+        help="print a compact human-readable summary instead of the canonical model",
+    )
+    parser.add_argument("workbook", help="path to the .xlsx workbook")
+    parsed = parser.parse_args(args)
+
+    workbook = intake_workbook_model(parsed.workbook)
+    if parsed.summary:
+        print(json.dumps(workbook.to_summary_dict(), indent=2, default=str))
+    else:
+        sys.stdout.buffer.write(workbook.to_bytes())
     return 0
 
 
