@@ -1,5 +1,7 @@
 # Workbook Forge
 
+**North Star:** [docs/vision.md](docs/vision.md) — Excel compiler; three directions; typed SoT; build rules for this slice.
+
 **Workbook Forge is an SDK for Excel in formats agents can use.** Its goal is to
 make supported workbook data, formulas, dependencies, presentation, and business
 inputs available as structured objects that agents can inspect, calculate,
