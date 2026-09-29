@@ -222,3 +222,86 @@ def test_python_and_rust_semantic_diff_is_empty():
         "sheet": "Forecast",
         "address": "F2",
     }
+
+
+CASES = ROOT / "fixtures" / "operating-scenario-cases.json"
+
+
+def _apply_inputs(document: dict, inputs: dict) -> bytes:
+    """Rewrite named binding input cells in the canonical JSON (no adapter DTO)."""
+    workbook = hydrate(json.dumps(document))
+    assert workbook.bindings is not None
+    sheets = {sheet["name"]: sheet for sheet in document["sheets"]}
+    for name, value in inputs.items():
+        target = workbook.bindings.inputs[name]
+        cell = sheets[target.sheet]["cells"][target.address]
+        assert cell.get("formula") is None, name
+        cell["value"] = value
+        cell["data_type"] = "number" if isinstance(value, (int, float)) and not isinstance(value, bool) else cell["data_type"]
+    return json.dumps(document).encode("utf-8")
+
+
+def _close(actual, expected, tolerance: float) -> bool:
+    if isinstance(expected, dict) and "error" in expected:
+        return actual == expected
+    if isinstance(actual, (int, float)) and isinstance(expected, (int, float)):
+        return abs(float(actual) - float(expected)) <= tolerance
+    return actual == expected
+
+
+def test_shared_golden_input_cases_match_python_and_rust():
+    """Mac-lineage multi-case coverage on the Grok schema/bindings path."""
+    cases = json.loads(CASES.read_text(encoding="utf-8"))
+    fixture = json.loads(FIXTURE.read_text(encoding="utf-8"))
+    tolerance = float(cases["numeric_tolerance"])
+    assert cases["model_fixture"] == FIXTURE.name
+
+    for case in cases["cases"]:
+        document = json.loads(json.dumps(fixture))
+        raw = _apply_inputs(document, case["inputs"])
+        calculated = calculate(hydrate(raw))
+        assert calculated.bindings is not None
+        for name, expected in case["expected"].items():
+            target = calculated.bindings.outputs[name]
+            cell = calculated.sheet(target.sheet).cells[target.address]
+            actual = cell.formula.result if cell.formula is not None else cell.value
+            assert _close(actual, expected, tolerance), (case["name"], name, actual, expected)
+
+        # Rust must agree on the same rewritten bytes (values, errors, deps).
+        # Write a temp sibling so the rust example can read a path.
+        temp = ROOT / "fixtures" / f".tmp-{case['name']}.workbook.json"
+        try:
+            temp.write_bytes(raw)
+            rust_calculated = _rust_path(temp, "calculate")["workbook"]
+            py_dict = calculated.to_dict()
+            assert _canonical(py_dict) == _canonical(rust_calculated), case["name"]
+        finally:
+            if temp.exists():
+                temp.unlink()
+
+
+def _rust_path(path: Path, mode: str) -> dict:
+    env = os.environ.copy()
+    env["CARGO_TARGET_DIR"] = str(ROOT / "rust" / "target")
+    completed = subprocess.run(
+        [
+            "cargo",
+            "run",
+            "--quiet",
+            "--manifest-path",
+            str(ROOT / "rust" / "Cargo.toml"),
+            "--locked",
+            "--example",
+            "canonical_calc",
+            "--",
+            str(path),
+            mode,
+        ],
+        cwd=ROOT,
+        check=False,
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+    assert completed.returncode == 0, completed.stderr
+    return json.loads(completed.stdout)
