@@ -69,10 +69,13 @@ One JSON object per line, matching `review/findings.schema.json`.
   be empty. "Found nothing" without a list of what was tried is not accepted.
 - **There is no field for strengths.** The schema refuses unknown fields.
 - **No patches.** A finding that contains a diff is rejected.
-- **Commands stay inside the packet.** A command is rejected when it uses
-  `git`, `rm`, `curl` or `osascript`, mentions Excel, contains `$`, a backtick
-  or `~`, or names a path outside the packet. Reviews never start Excel or
-  any other desktop application.
+- **Commands stay inside the packet.** A command may run only the programs
+  listed in `tools/review/run_repro.py`, or a program inside the packet. It
+  may join commands with `&&`, `||`, `;` and `|`. Outside quotes it may not
+  use any other shell syntax: no redirection, no `$`, no `~`, no patterns
+  that match file names. It may not name a path outside the packet, or the
+  two scripts that drive Excel. Reviews never start Excel or any other
+  desktop application.
 
 Check a file of findings with:
 
@@ -135,8 +138,11 @@ found by running the tests, which measures the tests and not the reviewer.
 ## Limits of this protocol
 
 - The command check reads the text of a command. It cannot see what a script
-  named in the command does. It catches honest mistakes. It does not contain
-  a reviewer who sets out to get around it.
+  named in the command does, and it cannot see inside code passed to
+  `python -c`. It catches honest mistakes. It does not contain a reviewer who
+  sets out to get around it. Only running reviews in a sandbox would.
+- The command check refuses a `sed` address written as `/text/`, because it
+  looks like a path. Use line numbers.
 - `run_repro.py` stops the command and its ordinary child processes. A
   process that starts its own session is outside the limit. `tools/gate.sh`
   does this, so a reproduction must not call it.

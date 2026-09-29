@@ -82,9 +82,16 @@ def _test(checkout: Path, defect: dict, python: Path) -> dict:
                 command, cwd=checkout, env=environment, capture_output=True,
                 text=True, timeout=TEST_TIMEOUT, check=False,
             )
-            outcome[name] = "failed" if finished.returncode else "passed"
         except subprocess.TimeoutExpired:
             outcome[name] = "timed out"
+            break
+        except OSError as error:
+            raise DefectError(f"{name} could not start: {error}") from error
+        # pytest exits 1 when a test fails. Any other non-zero code means the
+        # run itself broke, which says nothing about the defect.
+        if name == "pytest" and finished.returncode not in (0, 1):
+            raise DefectError(f"pytest did not run (exit {finished.returncode}): {finished.stdout[-300:]}")
+        outcome[name] = "failed" if finished.returncode else "passed"
         if outcome[name] != "passed":
             break
     return outcome
@@ -94,6 +101,10 @@ def run(checkout: Path, defects: list[dict], python: Path) -> list[dict]:
     if len(defects) > MAX_DEFECTS:
         raise DefectError(f"{len(defects)} defects given; the limit is {MAX_DEFECTS}")
     _require_clean(checkout)
+    for kind in sorted({defect["file"].rsplit(".", 1)[-1] for defect in defects}):
+        before = _test(checkout, {"file": f"unchanged.{kind}"}, python)
+        if any(result != "passed" for result in before.values()):
+            raise DefectError(f"the tests do not pass before any defect is applied: {before}")
     results = []
     for defect in defects:
         path = checkout / defect["file"]

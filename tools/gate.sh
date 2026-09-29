@@ -9,7 +9,8 @@
 #   - a skipped test fails the gate unless tools/gate-allowed-skips.txt names it
 #   - whitespace is checked against HEAD, which covers staged changes too
 #   - the whole run has a time limit
-#   - the log is stored under the commit it tested
+#   - the log is stored under the commit it tested, and under a different
+#     name when the tree had uncommitted changes
 #
 # Usage: bash tools/gate.sh
 # Environment:
@@ -29,7 +30,13 @@ fi
 if [ -z "${GATE_INNER:-}" ]; then
   commit="$(git rev-parse HEAD)"
   mkdir -p .verification/gates
-  log=".verification/gates/$commit.log"
+  if [ -n "$(git status --porcelain)" ]; then
+    # What was tested is not what the commit holds, so the log must not be
+    # filed as that commit's.
+    log=".verification/gates/$commit-with-uncommitted-changes.log"
+  else
+    log=".verification/gates/$commit.log"
+  fi
   # The limit is enforced from Python so the gate does not depend on a
   # `timeout` binary, which macOS does not ship.
   GATE_INNER=1 GATE_LOG="$log" "$PY" - "$LIMIT" "$0" <<'PYTHON'

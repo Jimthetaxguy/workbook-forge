@@ -135,12 +135,16 @@ def check_tests(baseline: Path, renames: Path | None) -> list[str]:
     ).stdout
     current = {line.strip() for line in collected.splitlines() if "::" in line}
     mapping: list[tuple[str, str]] = []
+    missing = []
     if renames is not None and renames.is_file():
         for line in renames.read_text(encoding="utf-8").splitlines():
             if line.strip() and not line.startswith("#"):
-                old, new = line.split("\t")
+                old, new, *rest = line.split("\t")
                 mapping.append((old, new))
-    missing = []
+                wanted = int(rest[0]) if rest else 1
+                have = sum(1 for name in current if name == new or name.startswith(new + "["))
+                if have < wanted:
+                    missing.append(f"{new}: {have} collected, at least {wanted} expected")
     for identity in baseline.read_text(encoding="utf-8").split("\n"):
         if not identity or identity in current:
             continue
@@ -159,8 +163,8 @@ def check_gates(fixes: Path) -> list[str]:
         log = ROOT / ".verification" / "gates" / f"{commit}.log"
         if not log.is_file():
             found.append(f"{commit[:7]}: no gate log")
-        elif not log.read_text(encoding="utf-8").rstrip().splitlines()[-1].startswith("GATE PASS"):
-            found.append(f"{commit[:7]}: gate did not pass")
+        elif log.read_text(encoding="utf-8").rstrip().splitlines()[-1] != f"GATE PASS: commit {commit} (clean)":
+            found.append(f"{commit[:7]}: the log does not record a pass for this commit with nothing uncommitted")
     return found
 
 

@@ -26,50 +26,127 @@ DEFAULT_TIMEOUT = 120
 DEFAULT_MEMORY_MB = 2048
 OUTPUT_LIMIT = 8000
 
-# Commands a reproduction has no reason to contain. Excel is driven through
-# osascript, so both are refused: reviews never start a desktop application.
-FORBIDDEN_WORDS = ("rm", "git", "curl", "wget", "osascript", "sudo", "ssh")
-# `open -a` starts a desktop application on macOS.
-FORBIDDEN_FRAGMENTS = ("open -a", "| sh", "| bash")
-# The shell expands these into text this check never sees.
-FORBIDDEN_CHARACTERS = {
-    "$": "a shell variable or substitution",
-    "`": "a shell substitution",
-    "~": "the home directory",
-}
-_WORD = re.compile(r"[A-Za-z0-9_./~-]+")
+# A reproduction may run these programs and nothing else. Anything that can
+# start a desktop application, reach the network, or change files outside
+# the packet is absent from the list, so it does not need to be named.
+ALLOWED_PROGRAMS = frozenset({
+    "python", "python3", "python3.13", "sh",
+    "grep", "sed", "head", "tail", "wc", "cat", "sort", "uniq", "cut", "ls", "diff", "true",
+})
+# Between commands. Each command on either side is checked on its own.
+SEPARATORS = ("&&", "||", ";", "|")
+# Outside quotes, the shell gives every other character a meaning: expansion,
+# redirection, a pattern that matches file names.
+PLAIN = frozenset("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-./=:,+@%")
+# These two scripts drive Microsoft Excel. Their tests do not.
+_STARTS_EXCEL = re.compile(r"(?<!test_)(excel_oracle|excel_receipt)")
+# A slash that begins a path: not inside a word, and followed by a letter.
+_ABSOLUTE = re.compile(r"(?<![\w.])/[A-Za-z]")
+
+
+class _Refused(Exception):
+    pass
+
+
+def _words(command: str) -> list[tuple[str, bool]]:
+    """Split a command into words. The flag says whether any part was quoted."""
+    words: list[tuple[str, bool]] = []
+    text, quoted, started, quote = "", False, False, ""
+    index = 0
+    while index < len(command):
+        character = command[index]
+        if quote:
+            if character == quote:
+                quote = ""
+            elif quote == '"' and character in "$`\\":
+                raise _Refused(f"contains {character!r} inside double quotes, which the shell expands")
+            else:
+                text += character
+        elif character in "'\"":
+            quote, quoted, started = character, True, True
+        elif character.isspace():
+            if started:
+                words.append((text, quoted))
+            text, quoted, started = "", False, False
+        elif command.startswith(("&&", "||"), index):
+            if started:
+                words.append((text, quoted))
+            words.append((command[index:index + 2], False))
+            text, quoted, started = "", False, False
+            index += 1
+        elif character in ";|":
+            if started:
+                words.append((text, quoted))
+            words.append((character, False))
+            text, quoted, started = "", False, False
+        elif character in PLAIN:
+            text += character
+            started = True
+        else:
+            raise _Refused(f"contains {character!r} outside quotes, which the shell gives a meaning")
+        index += 1
+    if quote:
+        raise _Refused("has a quotation mark that is never closed")
+    if started:
+        words.append((text, quoted))
+    return words
+
+
+def _check_word(word: str, root: Path) -> None:
+    if _STARTS_EXCEL.search(word):
+        raise _Refused(f"names {word!r}, which can start Excel")
+    if "../" in word or word == ".." or word.endswith("/.."):
+        raise _Refused(f"{word!r} climbs out of the working directory")
+    if _ABSOLUTE.search(word):
+        raise _Refused(f"{word!r} names a path from the top of the file system")
+    for piece in re.split(r"[=:,]", word):
+        if piece and "/" in piece and not any(c.isspace() for c in piece):
+            if (root / piece).is_symlink() or not _inside(root / piece, root):
+                raise _Refused(f"{piece!r} leads outside the working directory")
+
+
+def _check_program(word: str, root: Path) -> None:
+    if "/" in word:
+        if not (word.startswith("./") or word.startswith("_")) or not _inside(root / word, root):
+            raise _Refused(f"program {word!r} is not inside the working directory")
+        return
+    if word not in ALLOWED_PROGRAMS:
+        raise _Refused(f"runs {word!r}; allowed programs are {', '.join(sorted(ALLOWED_PROGRAMS))}")
 
 
 def refusal(command: str, root: Path) -> str | None:
     """Return why the command is refused, or None when it may run.
 
+    A command is one or more simple commands joined by `&&`, `||`, `;` or
+    `|`. Each may set variables, must run an allowed program or one inside
+    the working directory, and may name only paths inside that directory.
+
     This reads the command text. It cannot see what a script named in the
     command does, so it is a check on honest mistakes, not a sandbox.
     """
-    if "excel" in command.lower():
-        # Every flag and tool that starts Excel has the word in its name.
-        return "mentions Excel; reviews never start it"
-    for character, meaning in FORBIDDEN_CHARACTERS.items():
-        if character in command:
-            return f"contains {character!r}, {meaning}"
-    for fragment in FORBIDDEN_FRAGMENTS:
-        if fragment in command:
-            return f"contains {fragment!r}"
-    for word in _WORD.findall(command):
-        name = word.rsplit("/", 1)[-1]
-        if name in FORBIDDEN_WORDS:
-            return f"uses {name!r}"
     try:
-        arguments = shlex.split(command)
-    except ValueError as error:
-        return f"cannot be read as a shell command: {error}"
-    for argument in arguments:
-        if any(character.isspace() for character in argument):
-            continue  # quoted text, such as a search pattern, is not a path
-        if ".." in Path(argument).parts:
-            return f"path {argument!r} climbs out of the working directory"
-        if argument.startswith("/") and not _inside(Path(argument), root) and not _is_program(argument):
-            return f"path {argument!r} is outside the working directory"
+        expect_program = True
+        seen = False
+        for word, quoted in _words(command):
+            if not quoted and word in SEPARATORS:
+                if expect_program:
+                    raise _Refused(f"has nothing to run before {word!r}")
+                expect_program = True
+                continue
+            seen = True
+            if expect_program and not quoted and re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*=.*", word):
+                _check_word(word.split("=", 1)[1], root)
+                continue
+            if expect_program:
+                _check_program(word, root)
+                expect_program = False
+                if word == "sh":
+                    continue
+            _check_word(word, root)
+        if not seen or expect_program:
+            raise _Refused("has nothing to run")
+    except _Refused as reason:
+        return str(reason)
     return None
 
 
@@ -79,14 +156,6 @@ def _inside(path: Path, root: Path) -> bool:
     except ValueError:
         return False
     return True
-
-
-def _is_program(word: str) -> bool:
-    """An interpreter or tool may live anywhere. A data file may not."""
-    if word == "/dev/null":
-        return True
-    path = Path(word)
-    return path.is_file() and os.access(path, os.X_OK)
 
 
 def _group_memory_mb(group: int) -> float:

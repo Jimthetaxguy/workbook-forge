@@ -168,19 +168,19 @@ def test_commands_that_reach_outside_are_refused(tmp_path, command):
 
 
 def test_a_plain_command_runs_and_its_output_is_kept(tmp_path):
-    record = repro.run(f"{sys.executable} -c \"print(open.__name__)\"", tmp_path, timeout=20, memory_mb=512)
+    record = repro.run("python3 -c \"print(open.__name__)\"", tmp_path, timeout=20, memory_mb=512)
     assert record["refused"] is None
     assert record["exit_code"] == 0 and record["output"] == "open\n"
 
 
 def test_a_command_that_hangs_is_stopped(tmp_path):
-    record = repro.run(f"{sys.executable} -c \"import time; time.sleep(60)\"", tmp_path, timeout=1, memory_mb=512)
+    record = repro.run("python3 -c \"import time; time.sleep(60)\"", tmp_path, timeout=1, memory_mb=512)
     assert record["timed_out"] and record["exit_code"] != 0
     assert record["seconds"] < 10
 
 
 def test_a_command_that_takes_too_much_memory_is_stopped(tmp_path):
-    hungry = f"{sys.executable} -c \"import time; block = bytearray(400 * 1024 * 1024); time.sleep(30)\""
+    hungry = "python3 -c \"import time; block = bytearray(400 * 1024 * 1024); time.sleep(30)\""
     record = repro.run(hungry, tmp_path, timeout=20, memory_mb=100)
     assert record["memory_exceeded"] and not record["timed_out"]
 
@@ -198,8 +198,8 @@ def test_a_complete_finding_is_accepted(tmp_path):
         ({"strengths": "well structured"}, "Additional properties"),
         ({"attacks_attempted": []}, "should be non-empty"),
         ({"evidence": {"command": "python -c 1", "output": ""}}, "should be non-empty"),
-        ({"evidence": {"command": "git log", "output": "x"}}, "uses 'git'"),
-        ({"evidence": {"command": "python t.py --excel", "output": "x"}}, "mentions Excel"),
+        ({"evidence": {"command": "git log", "output": "x"}}, "runs 'git'"),
+        ({"evidence": {"command": "python tools/excel_oracle.py --excel", "output": "x"}}, "can start Excel"),
         ({"location": {"file": "/etc/passwd", "line_start": 1, "line_end": 1}}, "inside the packet"),
         ({"location": {"file": "../x.py", "line_start": 1, "line_end": 1}}, "inside the packet"),
         ({"location": {"file": "a.py", "line_start": 9, "line_end": 2}}, "ends before it starts"),
@@ -308,9 +308,25 @@ def test_running_defects_leaves_the_checkout_as_it_was(checkout):
         "cat $(echo /etc/passwd)",
         "cat ..",
         "python3.13 -c 'unterminated",
+        # Found when the first version of this check was itself reviewed.
+        "cat </etc/passwd",
+        "python3 tool.py --input=/etc/passwd",
+        "echo x >/var/outside.txt",
+        'cat "/Users/other/review notes/findings.jsonl"',
+        'cat "../other reviewer/findings.jsonl"',
+        "cat .?/outside.txt",
+        "python3 tools/ex*_oracle.py --run-e --live-s",
+        "python3 -m tools.excel_oracle",
+        "open -na Calculator",
+        "open  -a Calculator",
+        "open -b com.apple.calculator",
+        "cat linked/status.md",
+        "&& cat a.txt",
+        "",
     ],
 )
 def test_more_commands_that_reach_outside_are_refused(tmp_path, command):
+    (tmp_path / "linked").symlink_to(tmp_path.parent)
     assert repro.refusal(command, tmp_path) is not None
 
 
@@ -321,6 +337,12 @@ def test_more_commands_that_reach_outside_are_refused(tmp_path, command):
         "PYTHONPATH=python python3.13 -B _scratch/check.py",
         "PYTHONPATH=python python3.13 -m pytest -q -o pythonpath=_scratch/variant_01 python/tests/test_x.py",
         "python3.13 -c \"print('a..b')\"",
+        "grep -c observation fixtures/excel-observation-cases.json",
+        "wc -l docs/excel-observations.md",
+        "python3.13 -m pytest -q python/tests/test_excel_oracle.py",
+        "python3.13 -c 'print(\"=$A$1+1\")'",
+        "python3.13 _scratch/a.py | head -4; sed -n '10,12p' fixtures/cases.jsonl",
+        "sh _scratch/run.sh 02 && ./_bin/canonical_calc fixtures/a.json hydrate",
     ],
 )
 def test_ordinary_review_commands_are_allowed(tmp_path, command):
@@ -370,3 +392,70 @@ def test_planting_keeps_the_manifest_record_current(checkout, tmp_path):
     packets.build(checkout, "contract", 2, packet)
     canaries.plant(packet, [{**DEFECT, "survived": True}], limit=3)
     assert packets.check(packet) == []
+
+
+def test_check_reports_a_link_added_to_the_packet(checkout, tmp_path):
+    packet = tmp_path / "packet"
+    packets.build(checkout, "contract", 2, packet)
+    (packet / "history").symlink_to(checkout / "docs")
+    assert packets.check(packet) == ["history: added"]
+
+
+def test_check_needs_the_record_beside_the_packet(checkout, tmp_path):
+    packet = tmp_path / "packet"
+    packets.build(checkout, "contract", 2, packet)
+    copy = tmp_path / "copy"
+    packet.rename(copy)
+    (copy / "python/workbook_forge/model.py").write_text("LIMIT = 11\n")
+    assert packets.check(copy) == ["copy.map.json: the record beside the packet is missing"]
+
+
+def _checkout_with_a_test(checkout, body):
+    (checkout / "python/tests").mkdir()
+    (checkout / "python/tests/test_limit.py").write_text(
+        "import sys\nsys.path.insert(0, 'python/workbook_forge')\nimport model\n\n\n" + body
+    )
+    _git(checkout, "add", "python/tests/test_limit.py")
+    _git(checkout, "commit", "-q", "-m", "test")
+
+
+def test_a_defect_the_tests_notice_is_reported_as_caught(checkout):
+    _checkout_with_a_test(checkout, "def test_at_the_limit():\n    assert model.within(10)\n")
+    results = canaries.run(checkout, [DEFECT], Path(sys.executable))
+    assert not results[0]["survived"] and results[0]["caught_by"] == ["pytest"]
+
+
+def test_tests_that_cannot_run_prove_nothing(checkout):
+    _checkout_with_a_test(checkout, "def test_at_the_limit():\n    assert model.within(10)\n")
+    before = (checkout / DEFECT["file"]).read_text()
+    with pytest.raises(canaries.DefectError, match="before any defect is applied"):
+        canaries.run(checkout, [DEFECT], Path("/usr/bin/false"))
+    assert (checkout / DEFECT["file"]).read_text() == before
+
+
+def test_tests_that_already_fail_prove_nothing(checkout):
+    _checkout_with_a_test(checkout, "def test_wrong():\n    assert model.within(11)\n")
+    with pytest.raises(canaries.DefectError, match="before any defect is applied"):
+        canaries.run(checkout, [DEFECT], Path(sys.executable))
+
+
+def test_a_gate_log_counts_only_for_its_own_clean_commit(tmp_path, monkeypatch):
+    commit = "a" * 40
+    other = "b" * 40
+    gates = tmp_path / ".verification" / "gates"
+    gates.mkdir(parents=True)
+    fixes = tmp_path / "fixes.jsonl"
+    fixes.write_text(json.dumps({"commit": commit, "status": "applied"}) + "\n")
+    monkeypatch.setattr(ledger, "ROOT", tmp_path)
+    monkeypatch.setattr(ledger, "_git", lambda *arguments: commit + "\n")
+
+    (gates / f"{commit}.log").write_text(f"steps\nGATE PASS: commit {commit} (clean)\n")
+    assert ledger.check_gates(fixes) == []
+    for last_line in (
+        f"GATE PASS: commit {commit} (with uncommitted changes)",
+        f"GATE PASS: commit {other} (clean)",
+        "GATE PASS",
+        "GATE FAIL: pytest",
+    ):
+        (gates / f"{commit}.log").write_text(f"steps\n{last_line}\n")
+        assert len(ledger.check_gates(fixes)) == 1, last_line

@@ -169,7 +169,8 @@ def seal(packet: Path) -> None:
 
 
 def packet_files(packet: Path) -> list[Path]:
-    return sorted(path for path in packet.rglob("*") if not path.is_dir())
+    """Every file and every link. A link to a directory is reported, not followed."""
+    return sorted(path for path in packet.rglob("*") if path.is_symlink() or not path.is_dir())
 
 
 def verify(packet: Path, lens_name: str, stage: int) -> list[str]:
@@ -207,20 +208,23 @@ def check(packet: Path) -> list[str]:
     manifest_bytes = (packet / MANIFEST).read_bytes()
     manifest = json.loads(manifest_bytes)
     sidecar = _sidecar(packet)
-    record = json.loads(sidecar.read_text(encoding="utf-8")) if sidecar.is_file() else {}
-    if record.get("manifest_sha256") not in (None, digest(manifest_bytes)):
+    if not sidecar.is_file():
+        # Without the record, everything inside the packet could have been rewritten.
+        return [f"{sidecar.name}: the record beside the packet is missing"]
+    record = json.loads(sidecar.read_text(encoding="utf-8"))
+    if record.get("manifest_sha256") != digest(manifest_bytes):
         return [f"{MANIFEST}: changed since the packet was built"]
     expected = dict(manifest["files"])
     expected.update(record.get("coordinator_files", {}))
     problems: list[str] = []
     for name, wanted in expected.items():
         path = packet / name
-        if not path.is_file():
+        if path.is_symlink() or not path.is_file():
             problems.append(f"{name}: removed")
         elif digest(path.read_bytes()) != wanted:
             problems.append(f"{name}: changed")
     for name in _unlisted(packet, manifest):
-        if name not in expected and not ("coordinator_files" not in record and name in COORDINATOR_FILES):
+        if name not in expected:
             problems.append(f"{name}: added")
     return sorted(problems)
 
