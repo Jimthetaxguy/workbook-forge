@@ -1017,13 +1017,13 @@ fn parse_diagnostics(data: &JsonValue) -> Result<Vec<Diagnostic>, ModelError> {
         }
         let sheet = optional_present_string(object, "sheet", &path)?;
         let address = optional_present_string(object, "address", &path)?;
-        if let Some(address) = &address {
-            if !is_canonical_a1(address) {
-                return Err(ModelError::new(
-                    "invalid_model",
-                    format!("{path}.address is not a canonical A1 reference"),
-                ));
-            }
+        if let Some(address) = &address
+            && !is_canonical_a1(address)
+        {
+            return Err(ModelError::new(
+                "invalid_model",
+                format!("{path}.address is not a canonical A1 reference"),
+            ));
         }
         let function = optional_present_string(object, "function", &path)?;
         diagnostics.push(Diagnostic {
