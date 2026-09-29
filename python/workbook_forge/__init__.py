@@ -13,6 +13,7 @@ from datetime import date, timedelta
 import decimal
 import math
 import re
+import struct
 from collections.abc import Iterable, Mapping
 from typing import TypeAlias
 
@@ -1049,24 +1050,38 @@ def _decimal_digits(value: object) -> int | ErrorValue:
 # Its own context, so a caller's decimal settings cannot change a result.
 # The exact decimal form of a binary64 value has at most 767 digits.
 _DECIMAL_CONTEXT = decimal.Context(prec=1200)
-_DECIMAL_ROUNDING = {
-    "nearest": decimal.ROUND_HALF_UP,
-    "away-from-zero": decimal.ROUND_UP,
-    "toward-zero": decimal.ROUND_DOWN,
-}
+# How many binary64 values away from a rounding boundary a number may be and
+# still be taken as lying on it. Writing a decimal number costs up to half a
+# step and one operation on written numbers about one more.
+_BOUNDARY_STEPS = 2
+
+
+def _binary64_position(magnitude: float) -> int:
+    """Where a positive number stands among the binary64 values, in order."""
+    return struct.unpack("<q", struct.pack("<d", magnitude))[0]
+
+
+def _steps_to(magnitude: float, boundary: decimal.Decimal) -> int:
+    """How many binary64 values lie between a number and a boundary."""
+    nearest = float(boundary)
+    # Closeness is relative, so nothing but zero is close to zero.
+    if nearest == 0 or not math.isfinite(nearest):
+        return _BOUNDARY_STEPS + 1
+    return abs(_binary64_position(magnitude) - _binary64_position(nearest))
 
 
 def _round_to_precision(number: object, digits: int, mode: str) -> float | ErrorValue:
-    """Round a number at a power-of-ten precision using Excel's directed modes.
+    """Round a number at a power-of-ten place using Excel's directed modes.
 
-    The number is rounded as its 15-significant-digit decimal form, not as
-    the binary value that stores it. 19.99 is stored as
-    19.989999999999998..., and rounding that value exactly would make
-    TRUNC(19.99,2) return 19.98.
+    The stored binary value is rounded exactly, with one exception. A number
+    within `_BOUNDARY_STEPS` binary64 values of a boundary is taken as lying
+    on that boundary. The boundaries are the multiples of the place and, for
+    rounding to nearest, the halves between them. When more than one is that
+    close, the one fewest steps away is taken, and a multiple before a half.
+    A whole number below 2^53 is stored exactly and is always rounded exactly.
 
-    The 15-digit form is used only when it has a digit below the requested
-    place. Otherwise it cannot say what lies below that place, and the
-    stored value is rounded exactly.
+    19.99 is stored as 19.989999999999998..., which is the binary64 value
+    nearest to 19.99. Without the exception TRUNC(19.99,2) would be 19.98.
     """
     try:
         numeric = float(number)
@@ -1075,19 +1090,46 @@ def _round_to_precision(number: object, digits: int, mode: str) -> float | Error
     if not math.isfinite(numeric):
         return ErrorValue("#NUM!", "number must be finite")
     if numeric == 0:
-        return numeric
-    written = decimal.Decimal(f"{numeric:.14e}")
-    if written.as_tuple().exponent >= -digits:
-        written = decimal.Decimal(numeric)
-        if written.normalize(_DECIMAL_CONTEXT).as_tuple().exponent >= -digits:
-            # Nothing is stored below the requested place.
-            return numeric
+        return 0.0
+    magnitude = abs(numeric)
+    exact = decimal.Decimal.from_float(magnitude)
     place = decimal.Decimal((0, (1,), -digits))
-    rounded = written.quantize(place, rounding=_DECIMAL_ROUNDING[mode], context=_DECIMAL_CONTEXT)
-    result = float(rounded)
+    lower = exact.quantize(place, rounding=decimal.ROUND_DOWN, context=_DECIMAL_CONTEXT)
+    if lower == exact:
+        # Nothing is stored below the requested place.
+        return numeric
+    upper = _DECIMAL_CONTEXT.add(lower, place)
+    half = _DECIMAL_CONTEXT.add(lower, decimal.Decimal((0, (5,), -digits - 1)))
+
+    if magnitude < _MAX_EXACT_INTEGER and magnitude == math.floor(magnitude):
+        # A whole number below 2^53 is stored exactly, so it is rounded exactly.
+        to_lower = to_upper = to_half = _BOUNDARY_STEPS + 1
+    else:
+        to_lower, to_upper = _steps_to(magnitude, lower), _steps_to(magnitude, upper)
+        to_half = _steps_to(magnitude, half)
+    # On equal steps, the multiple nearer to the exact value.
+    upper_is_nearer = to_upper < to_lower or (to_upper == to_lower and exact > half)
+    to_multiple = to_upper if upper_is_nearer else to_lower
+    if mode == "nearest" and to_half < min(to_multiple, _BOUNDARY_STEPS + 1):
+        up = True
+    elif to_multiple <= _BOUNDARY_STEPS:
+        up = upper_is_nearer
+    elif mode == "nearest":
+        up = exact >= half
+    else:
+        up = mode == "away-from-zero"
+    result = float(upper if up else lower)
     if not math.isfinite(result):
         return ErrorValue("#NUM!", "rounded number is outside the supported numeric range")
-    return result
+    # A result of zero carries no sign.
+    return math.copysign(result, numeric) if result else 0.0
+
+
+def _round_to_whole(numeric: float, mode: str) -> float:
+    """Round a finite number to a whole number by the same rule."""
+    rounded = _round_to_precision(numeric, 0, mode)
+    assert isinstance(rounded, float)
+    return rounded
 
 
 def _round_to_parity(value: object, odd: bool) -> float | int | ErrorValue:
@@ -1109,7 +1151,7 @@ def _round_to_parity(value: object, odd: bool) -> float | int | ErrorValue:
         # Binary64 values at this magnitude are already even integers.
         return numeric
 
-    rounded = math.ceil(magnitude)
+    rounded = int(_round_to_whole(magnitude, "away-from-zero"))
     wanted_parity = 1 if odd else 0
     if rounded % 2 != wanted_parity:
         rounded += 1
@@ -2861,7 +2903,8 @@ def _function(
             return ErrorValue("#NUM!", "number is outside the supported numeric range")
         if not math.isfinite(numeric):
             return ErrorValue("#NUM!", "number must be finite")
-        return math.floor(numeric)
+        # Toward negative infinity.
+        return int(_round_to_whole(numeric, "toward-zero" if numeric >= 0 else "away-from-zero"))
     if name in {"HOUR", "MINUTE", "SECOND"}:
         serial = _number(args[0])
         if isinstance(serial, ErrorValue):
@@ -3071,7 +3114,7 @@ def _function(
         quotient = numerator / denominator
         if not math.isfinite(quotient):
             return ErrorValue("#NUM!", "QUOTIENT result is outside the supported numeric range")
-        return math.trunc(quotient)
+        return int(_round_to_whole(quotient, "toward-zero"))
     if name in {"LEFT", "RIGHT"}:
         text = _text(args[0])
         if isinstance(text, ErrorValue):
@@ -3389,7 +3432,8 @@ def _db_rate(cost: float, salvage: float, life: int) -> float:
         else math.log(salvage) - math.log(cost)
     )
     raw_rate = -math.expm1(log_ratio / life)
-    return math.floor(raw_rate * 1000.0 + 0.5) / 1000.0
+    rounded = _round_to_precision(raw_rate, 3, "nearest")
+    return rounded if isinstance(rounded, float) else raw_rate
 
 
 def _db_depreciation(cost: float, salvage: float, life: float, period: float, month: float) -> float | ErrorValue:

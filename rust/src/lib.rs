@@ -2290,108 +2290,150 @@ fn decimal_digits(value: &Value) -> Result<i32, FormulaError> {
     }
     Ok(number.trunc() as i32)
 }
-/// The decimal digits of a positive number, most significant first, and the
-/// power of ten of the last digit.
-struct DecimalDigits {
-    digits: Vec<u8>,
-    last_place: i32,
-}
-
-/// Write `magnitude` with `fraction_digits` digits after the first one.
-fn decimal_digits_of(magnitude: f64, fraction_digits: usize) -> Option<DecimalDigits> {
-    let text = format!("{magnitude:.fraction_digits$e}");
-    let (mantissa, exponent) = text.split_once('e')?;
-    let exponent: i32 = exponent.parse().ok()?;
-    let digits = mantissa
-        .bytes()
-        .filter(u8::is_ascii_digit)
-        .map(|byte| byte - b'0')
-        .collect();
-    Some(DecimalDigits {
-        digits,
-        last_place: exponent - i32::try_from(fraction_digits).ok()?,
-    })
-}
-
 /// A binary64 value written exactly in decimal has at most 767 digits.
 const EXACT_FRACTION_DIGITS: usize = 800;
 
+/// How many binary64 values away from a rounding boundary a number may be and
+/// still be taken as lying on it. Writing a decimal number costs up to half a
+/// step and one operation on written numbers about one more.
+const BOUNDARY_STEPS: u64 = 2;
+
+/// Decimal digits, most significant first, as text for the number parser.
+fn digits_text(digits: &[u8]) -> String {
+    if digits.is_empty() {
+        return "0".into();
+    }
+    digits
+        .iter()
+        .map(|digit| char::from(b'0' + digit))
+        .collect()
+}
+
+/// The digits of `digits` plus one, as a whole number.
+fn digits_plus_one(digits: &[u8]) -> Vec<u8> {
+    let mut raised = digits.to_vec();
+    for digit in raised.iter_mut().rev() {
+        if *digit == 9 {
+            *digit = 0;
+        } else {
+            *digit += 1;
+            return raised;
+        }
+    }
+    raised.insert(0, 1);
+    raised
+}
+
+/// How many binary64 values lie between a positive number and a boundary,
+/// given as decimal text.
+fn steps_to(magnitude: f64, boundary: &str) -> u64 {
+    match boundary.parse::<f64>() {
+        // Closeness is relative, so nothing but zero is close to zero.
+        Ok(nearest) if nearest != 0.0 && nearest.is_finite() => {
+            // Positive binary64 values stand in the order of their bits.
+            magnitude.to_bits().abs_diff(nearest.to_bits())
+        }
+        _ => BOUNDARY_STEPS + 1,
+    }
+}
+
 /// Round at a power-of-ten place using Excel's directed modes.
 ///
-/// The number is rounded as its 15-significant-digit decimal form, not as
-/// the binary value that stores it. 19.99 is stored as
-/// 19.989999999999998..., and rounding that value exactly would make
-/// TRUNC(19.99,2) return 19.98.
+/// The stored binary value is rounded exactly, with one exception. A number
+/// within `BOUNDARY_STEPS` binary64 values of a boundary is taken as lying on
+/// that boundary. The boundaries are the multiples of the place and, for
+/// rounding to nearest, the halves between them. When more than one is that
+/// close, the one fewest steps away is taken, and a multiple before a half.
+/// A whole number below 2^53 is stored exactly and is always rounded exactly.
 ///
-/// The 15-digit form is used only when it has a digit below the requested
-/// place. Otherwise it cannot say what lies below that place, and the
-/// stored value is rounded exactly.
+/// 19.99 is stored as 19.989999999999998..., which is the binary64 value
+/// nearest to 19.99. Without the exception TRUNC(19.99,2) would be 19.98.
 fn round_to_precision(number: f64, digits: i32, mode: &str) -> Result<f64, FormulaError> {
     if !number.is_finite() {
         return Err(FormulaError::Num);
     }
     if number == 0.0 {
-        return Ok(number);
+        return Ok(0.0);
     }
     let place = -digits;
     let magnitude = number.abs();
-    let mut written = decimal_digits_of(magnitude, 14).ok_or(FormulaError::Num)?;
-    if written.last_place >= place {
-        written = decimal_digits_of(magnitude, EXACT_FRACTION_DIGITS).ok_or(FormulaError::Num)?;
-        while written.digits.len() > 1 && written.digits.last() == Some(&0) {
-            written.digits.pop();
-            written.last_place += 1;
-        }
-        if written.last_place >= place {
-            // Nothing is stored below the requested place.
-            return Ok(number);
-        }
+
+    // The stored value, written out exactly.
+    let text = format!("{magnitude:.EXACT_FRACTION_DIGITS$e}");
+    let (mantissa, exponent) = text.split_once('e').ok_or(FormulaError::Num)?;
+    let first_place: i32 = exponent.parse().map_err(|_| FormulaError::Num)?;
+    let mut written: Vec<u8> = mantissa
+        .bytes()
+        .filter(u8::is_ascii_digit)
+        .map(|byte| byte - b'0')
+        .collect();
+    while written.len() > 1 && written.last() == Some(&0) {
+        written.pop();
+    }
+    let length = i32::try_from(written.len()).map_err(|_| FormulaError::Num)?;
+    if first_place - length + 1 >= place {
+        // Nothing is stored below the requested place.
+        return Ok(number);
     }
 
-    let length = i32::try_from(written.digits.len()).map_err(|_| FormulaError::Num)?;
-    let first_place = written.last_place + length - 1;
+    // `kept` counts whole units of the place. `below` is what lies under it,
+    // starting with the digit just below the place.
     let kept_length = usize::try_from(first_place - place + 1).unwrap_or(0);
-    let (kept, dropped) = written.digits.split_at(kept_length);
-    let round_up = match mode {
-        "nearest" => {
-            // The digit just below the place. It is zero when the number
-            // starts further down than that.
-            first_place >= place - 1 && dropped.first().is_some_and(|digit| *digit >= 5)
-        }
-        "away-from-zero" => dropped.iter().any(|digit| *digit != 0),
-        _ => false,
-    };
-    let mut kept = kept.to_vec();
-    if round_up {
-        let mut carried = true;
-        for digit in kept.iter_mut().rev() {
-            if *digit == 9 {
-                *digit = 0;
-            } else {
-                *digit += 1;
-                carried = false;
-                break;
-            }
-        }
-        if carried {
-            kept.insert(0, 1);
-        }
-    }
-    let mut text = String::with_capacity(kept.len() + 8);
-    if number.is_sign_negative() {
-        text.push('-');
-    }
-    if kept.is_empty() {
-        text.push('0');
-    }
-    text.extend(kept.iter().map(|digit| char::from(b'0' + digit)));
-    text.push_str(&format!("e{place}"));
-    let result: f64 = text.parse().map_err(|_| FormulaError::Num)?;
-    if result.is_finite() {
-        Ok(result)
+    let (kept, dropped) = written.split_at(kept_length);
+    let below: &[u8] = if first_place >= place - 1 {
+        dropped
     } else {
-        Err(FormulaError::Num)
+        // The number starts further down, so that digit is zero.
+        &[0]
+    };
+    let at_least_half = below[0] >= 5;
+    let more_than_half = at_least_half && (below[0] > 5 || below[1..].iter().any(|d| *d != 0));
+
+    let lower = format!("{}e{place}", digits_text(kept));
+    let upper = format!("{}e{place}", digits_text(&digits_plus_one(kept)));
+    let half = format!("{}5e{}", digits_text(kept), place - 1);
+
+    let (to_lower, to_upper, to_half) = if magnitude < MAX_EXACT_INTEGER && magnitude.fract() == 0.0
+    {
+        // A whole number below 2^53 is stored exactly, so it is rounded exactly.
+        (BOUNDARY_STEPS + 1, BOUNDARY_STEPS + 1, BOUNDARY_STEPS + 1)
+    } else {
+        (
+            steps_to(magnitude, &lower),
+            steps_to(magnitude, &upper),
+            steps_to(magnitude, &half),
+        )
+    };
+    // On equal steps, the multiple nearer to the exact value.
+    let upper_is_nearer = to_upper < to_lower || (to_upper == to_lower && more_than_half);
+    let to_multiple = if upper_is_nearer { to_upper } else { to_lower };
+    let up = if mode == "nearest" && to_half < to_multiple.min(BOUNDARY_STEPS + 1) {
+        true
+    } else if to_multiple <= BOUNDARY_STEPS {
+        upper_is_nearer
+    } else if mode == "nearest" {
+        at_least_half
+    } else {
+        mode == "away-from-zero"
+    };
+
+    let result: f64 = (if up { upper } else { lower })
+        .parse()
+        .map_err(|_| FormulaError::Num)?;
+    if !result.is_finite() {
+        return Err(FormulaError::Num);
     }
+    // A result of zero carries no sign.
+    Ok(if result == 0.0 {
+        0.0
+    } else {
+        result.copysign(number)
+    })
+}
+
+/// Round a finite number to a whole number by the same rule.
+fn round_to_whole(number: f64, mode: &str) -> f64 {
+    round_to_precision(number, 0, mode).unwrap_or(number)
 }
 fn round_to_parity(number: f64, odd: bool) -> Result<f64, FormulaError> {
     if !number.is_finite() {
@@ -2406,7 +2448,7 @@ fn round_to_parity(number: f64, odd: bool) -> Result<f64, FormulaError> {
             Ok(number)
         };
     }
-    let mut rounded = magnitude.ceil();
+    let mut rounded = round_to_whole(magnitude, "away-from-zero");
     let requested_parity = if odd { 1.0 } else { 0.0 };
     if rounded.rem_euclid(2.0) != requested_parity {
         rounded += 1.0;
@@ -2801,7 +2843,15 @@ fn eval_call(name: &str, args: &[Expr], env: &Environment<'_>) -> Result<Value, 
             arity(name, args, 1, 1)?;
             let number = to_number(&flat[0])?;
             return if number.is_finite() {
-                Ok(Value::Number(number.floor()))
+                // Toward negative infinity.
+                Ok(Value::Number(round_to_whole(
+                    number,
+                    if number >= 0.0 {
+                        "toward-zero"
+                    } else {
+                        "away-from-zero"
+                    },
+                )))
             } else {
                 Err(FormulaError::Num)
             };
@@ -2839,7 +2889,7 @@ fn eval_call(name: &str, args: &[Expr], env: &Environment<'_>) -> Result<Value, 
             }
             let quotient = number / divisor;
             if quotient.is_finite() {
-                return Ok(Value::Number(quotient.trunc()));
+                return Ok(Value::Number(round_to_whole(quotient, "toward-zero")));
             }
             return Err(FormulaError::Num);
         }
@@ -3747,7 +3797,7 @@ fn db_rate(cost: f64, salvage: f64, life: i64) -> f64 {
         salvage.ln() - cost.ln()
     };
     let raw_rate = -(log_ratio / life as f64).exp_m1();
-    (raw_rate * 1000.0 + 0.5).floor() / 1000.0
+    round_to_precision(raw_rate, 3, "nearest").unwrap_or(raw_rate)
 }
 
 fn db_depreciation(

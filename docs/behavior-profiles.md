@@ -61,11 +61,22 @@ Criteria support comparison operators, case-insensitive text, `*` and `?` wildca
 
 `INT` floors toward negative infinity; `TRUNC` and `ROUNDDOWN` move toward zero; `ROUNDUP` moves away from zero; `MOD` follows the divisor's sign; and `QUOTIENT` truncates its quotient toward zero. Decimal precision is bounded to -308 through 308, and fractional `num_digits` values are truncated toward zero by this implementation; Microsoft does not specify that fractional case, and it has not been checked in Excel.
 
-`ROUND`, `ROUNDUP`, `ROUNDDOWN` and `TRUNC` round a number as it is written, not as the binary value that stores it. A number is taken as its 15-significant-digit decimal form, which is the precision Microsoft states for Excel ([specifications and limits](https://support.microsoft.com/en-us/excel/excel-specifications-and-limits)). So `TRUNC(19.99,2)` is 19.99, `ROUNDUP(0.07,2)` is 0.07 and `ROUND(1.005,2)` is 1.01, although 19.99 is stored as 19.989999999999998 and 1.005 as 1.00499999999999989. The same rule removes binary noise from a calculated operand: `ROUNDUP(0.1+0.2,1)` is 0.3.
+`ROUND`, `ROUNDUP`, `ROUNDDOWN`, `TRUNC`, `INT`, `EVEN`, `ODD` and `QUOTIENT` share one rounding rule. The stored binary value is rounded exactly, with one exception: a number within two binary64 values of a boundary is taken as lying on that boundary. The boundaries are the multiples of the requested place and, for `ROUND`, the halves between them. When more than one boundary is that close, the one fewest values away is taken, and a multiple before a half. A whole number below 2^53 is stored exactly and is always rounded exactly. Nothing but zero is taken as zero, and a result of zero carries no sign.
 
-The 15-digit form is used only when it has at least one digit below the requested place. When it has none, it cannot say what lies below that place, and the stored value is rounded exactly. This keeps whole numbers past fifteen digits unchanged at zero decimals, and keeps `TRUNC` from raising the whole part of a number such as 123456789012345.75.
+The exception exists because a decimal number is rarely stored exactly. 19.99 is stored as 19.989999999999998, which is the binary64 value nearest to it, so `TRUNC(19.99,2)` is 19.99 and not 19.98. In the same way `ROUNDUP(0.07,2)` is 0.07 and `ROUND(1.005,2)` is 1.01. Two values of allowance also cover one operation on written numbers: `ROUNDUP(0.1+0.2,1)` is 0.3 and `INT(4.35*100)` is 435.
 
-Python and Rust implement the rule separately, Python with decimal arithmetic and Rust on decimal digits, and agree bit for bit. Expected values in the fixtures and tests come from Microsoft's published examples and from decimal arithmetic on the written number, never from either engine. The rule itself has not been checked in Excel. `INT`, `EVEN`, `ODD`, `MOD` and `QUOTIENT` still work on the stored value.
+What follows from the rule:
+
+- A number written with up to 15 significant digits is always rounded as decimal arithmetic on the written number would round it, at any magnitude and any number of places.
+- A number that differs from a boundary by more than two binary64 values is rounded exactly. `ROUND(123456789012.3449,2)` is 123456789012.34, and `ROUNDUP(1000000000000004,-2)` is 1000000000000100.
+- A number with 16 or 17 significant digits that sits within two values of a boundary is taken as lying on it. `TRUNC(0.9999999999999999)` and `INT(0.9999999999999999)` are 1.
+- Noise from a longer chain of operations can exceed two values. `ROUNDDOWN` of a long sum can then land a cent low. Use `ROUND` on the sum first.
+
+This is a Workbook Forge rule. Microsoft states that Excel keeps 15 significant digits ([specifications and limits](https://support.microsoft.com/en-us/excel/excel-specifications-and-limits)) and does not state how the rounding functions treat the digits past them, and the rule has not been checked in Excel. Observations that would settle it: `ROUNDUP(0.1+0.2,1)`, `TRUNC(4.35*100)`, `INT(4.35*100)`, `ROUND(123456789012+0.3449,2)`, `ROUNDUP(1E15+4,-2)` and `TRUNC(1-2^-53)`.
+
+Python and Rust implement the rule separately, Python with decimal arithmetic and Rust on decimal digits, and agree bit for bit. Expected values in the fixtures and tests come from Microsoft's published examples and from decimal or integer arithmetic on the written number, never from either engine.
+
+`MOD` still works on the stored value: `MOD(19.99*100,1)` is 0.9999999999997726 while `INT(19.99*100)` is 1999. `DB` rounds its rate to three places by the same rule, but it computes the rate with logarithms, and that noise can exceed two values when the rate falls on a half.
 
 ### Dates and times
 
