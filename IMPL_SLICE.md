@@ -20,3 +20,6 @@ Add one documented recipe: import fixture → intake report → run bound scenar
 
 ## Vision
 Follow [docs/vision.md](docs/vision.md). Shared types and build rules there bind this slice to the others.
+
+## Red-flag specs
+Build contracts: [docs/specs/red-flags.md](docs/specs/red-flags.md).
