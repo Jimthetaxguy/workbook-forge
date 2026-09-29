@@ -22,6 +22,11 @@ Earlier notes counted "evaluator slices". Slices 2–10 predate the autoresearch
 
 ## Project activity
 
+### 2026-09-28 — codex/Codex — SDK export round-trip trust harness
+- Changed: added a versioned cell contract and reusable `--roundtrip` CLI path. It copies an SDK-generated workbook, applies declared edits, invokes Excel full rebuild, saves and closes the scratch copy, reimports it, and reports exact formula and typed-result differences in a JSON receipt. Volatile predicates, iteration settings, exact formula allowlists and dynamic-array spill cells are explicit.
+- Evidence: Excel 16.113.2 completed the `operating_scenario()` export cycle after changing `Assumptions!B1` from 20 to 25. Twelve values matched; nine exact, per-cell quote-normalization formula changes were allowlisted; the source stayed unchanged. The full red-flag receipt remains blocked because SDK export refuses worksheet spill caches. AppleScript did not expose this Excel build's global calculation/iteration settings; the receipt marks them unavailable and unverified. Focused tests: 34 passed; full Python suite in an isolated environment with declared test dependencies: 883 passed, 56 skipped; AppleScript compile, schema validation and Python compilation pass.
+- Next/remaining: rerun the contract against the shared calc-binding model when that slice is available. Spill placement and observed iteration/volatile/quirk classes remain required before the full export gate is complete. Do not merge the implementation branch before those gates have evidence.
+
 ### 2026-09-28 — codex/Codex — formula-aware XML extraction
 - Changed: independent Python/Rust namespace/path primitives now drive XLSX extraction and existing readers; ten patterns attach original XML provenance, typed formula references and catalog support mappings. Shared formulas can be reconstructed for inspection only.
 - Evidence: 640 Python and 78 Rust tests, including 82 cross-language extraction checks; Rust 1.88, strict lint/compile gates, fresh pure/native wheels and external Rust consumer verification. Scenario extraction agrees on 12 formulas and 3 validations. No dependencies were added. A fresh official-registry audit confirmed all 15 Python locks and all direct Rust dependencies are latest stable; the upstream-required Syn 2 branch uses its latest compatible release.
