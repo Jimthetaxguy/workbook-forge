@@ -200,6 +200,7 @@ def test_a_complete_finding_is_accepted(tmp_path):
         ({"evidence": {"command": "python -c 1", "output": ""}}, "should be non-empty"),
         ({"evidence": {"command": "git log", "output": "x"}}, "runs 'git'"),
         ({"evidence": {"command": "python tools/excel_oracle.py --excel", "output": "x"}}, "can start Excel"),
+        ({"evidence": {"command": "sh tools/excel_oracle.py", "output": "x"}}, "can start Excel"),
         ({"location": {"file": "/etc/passwd", "line_start": 1, "line_end": 1}}, "inside the packet"),
         ({"location": {"file": "../x.py", "line_start": 1, "line_end": 1}}, "inside the packet"),
         ({"location": {"file": "a.py", "line_start": 9, "line_end": 2}}, "ends before it starts"),
@@ -321,6 +322,8 @@ def test_running_defects_leaves_the_checkout_as_it_was(checkout):
         "open  -a Calculator",
         "open -b com.apple.calculator",
         "cat linked/status.md",
+        'cat "\\$HOME/notes" "$HOME/notes"',
+        "grep -n x tools/excel_oracle.py && python3 tools/excel_oracle.py",
         "&& cat a.txt",
         "",
     ],
@@ -343,6 +346,12 @@ def test_more_commands_that_reach_outside_are_refused(tmp_path, command):
         "python3.13 -c 'print(\"=$A$1+1\")'",
         "python3.13 _scratch/a.py | head -4; sed -n '10,12p' fixtures/cases.jsonl",
         "sh _scratch/run.sh 02 && ./_bin/canonical_calc fixtures/a.json hydrate",
+        # Reading the script that drives Excel is not running it.
+        "grep -n monkeypatch tools/excel_oracle.py",
+        "sed -n '380,390p' tools/excel_oracle.py | head -3",
+        # A backslash inside double quotes is an escape.
+        'grep -n "first\\|second" docs/primitives.md',
+        'grep -c "say \\"this\\"" docs/primitives.md',
     ],
 )
 def test_ordinary_review_commands_are_allowed(tmp_path, command):

@@ -31,7 +31,7 @@ OUTPUT_LIMIT = 8000
 # the packet is absent from the list, so it does not need to be named.
 ALLOWED_PROGRAMS = frozenset({
     "python", "python3", "python3.13", "sh",
-    "grep", "sed", "head", "tail", "wc", "cat", "sort", "uniq", "cut", "ls", "diff", "true",
+    "grep", "sed", "head", "tail", "wc", "cat", "sort", "uniq", "cut", "ls", "diff", "cmp", "true",
 })
 # Between commands. Each command on either side is checked on its own.
 SEPARATORS = ("&&", "||", ";", "|")
@@ -58,7 +58,11 @@ def _words(command: str) -> list[tuple[str, bool]]:
         if quote:
             if character == quote:
                 quote = ""
-            elif quote == '"' and character in "$`\\":
+            elif quote == '"' and character == "\\" and index + 1 < len(command):
+                # An escape. The next character is taken as it is.
+                text += command[index + 1]
+                index += 1
+            elif quote == '"' and character in "$`":
                 raise _Refused(f"contains {character!r} inside double quotes, which the shell expands")
             else:
                 text += character
@@ -92,9 +96,13 @@ def _words(command: str) -> list[tuple[str, bool]]:
     return words
 
 
-def _check_word(word: str, root: Path) -> None:
-    if _STARTS_EXCEL.search(word):
-        raise _Refused(f"names {word!r}, which can start Excel")
+# Programs that run what they are given. The others only read it.
+RUNNERS = frozenset({"python", "python3", "python3.13", "sh"})
+
+
+def _check_word(word: str, root: Path, runs: bool) -> None:
+    if runs and _STARTS_EXCEL.search(word):
+        raise _Refused(f"runs {word!r}, which can start Excel")
     if "../" in word or word == ".." or word.endswith("/.."):
         raise _Refused(f"{word!r} climbs out of the working directory")
     if _ABSOLUTE.search(word):
@@ -127,6 +135,7 @@ def refusal(command: str, root: Path) -> str | None:
     try:
         expect_program = True
         seen = False
+        runs = True
         for word, quoted in _words(command):
             if not quoted and word in SEPARATORS:
                 if expect_program:
@@ -135,14 +144,13 @@ def refusal(command: str, root: Path) -> str | None:
                 continue
             seen = True
             if expect_program and not quoted and re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*=.*", word):
-                _check_word(word.split("=", 1)[1], root)
+                _check_word(word.split("=", 1)[1], root, runs=True)
                 continue
             if expect_program:
                 _check_program(word, root)
                 expect_program = False
-                if word == "sh":
-                    continue
-            _check_word(word, root)
+                runs = word in RUNNERS or "/" in word
+            _check_word(word, root, runs)
         if not seen or expect_program:
             raise _Refused("has nothing to run")
     except _Refused as reason:
