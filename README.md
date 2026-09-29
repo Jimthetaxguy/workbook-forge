@@ -1,6 +1,10 @@
 # Workbook Forge
 
-**North Star:** [docs/vision.md](docs/vision.md) — Excel compiler; three directions; typed SoT; build rules for this slice.
+<<<<<<< HEAD
+**North Star:** [docs/vision.md](docs/vision.md) — Excel compiler; three directions; typed SoT; build rules for this slice. Red flags: [docs/specs/red-flags.md](docs/specs/red-flags.md).
+=======
+**North Star:** [docs/vision.md](docs/vision.md). Red-flag specs: [docs/specs/red-flags.md](docs/specs/red-flags.md).
+>>>>>>> 5698f5b (docs: lock red-flag specs (schema, parity, detectors, versioning))
 
 **Workbook Forge is an SDK for Excel in formats agents can use.** Its goal is to
 make supported workbook data, formulas, dependencies, presentation, and business
@@ -32,6 +36,7 @@ agreement and established expected values; it does not replace either implementa
 | Task | Start here |
 | --- | --- |
 | Read the North Star (Excel compiler, three directions, build rules) | [Vision](docs/vision.md) |
+| Red-flag build contracts (schema, export parity, detectors, model versioning) | [Red-flag specs](docs/specs/red-flags.md) |
 | Run a formula against supplied cell values | [Python evaluator](#python-quick-start) |
 | Compose calculations with named inputs and no workbook | [Native primitives](docs/primitives.md) |
 | Author or modify a workbook and calculate its outputs | [Programmable workbooks](#programmable-workbooks) |
