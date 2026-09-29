@@ -103,11 +103,11 @@ the goal.
 
 | Vision point | Build rule |
 | --- | --- |
-| One typed model contract | Python and Rust hydrate the same versioned workbook meaning independently. Thin transport adapters may connect boundaries; no slice invents a competing model or translation-only DTO. |
+| One typed model contract | Canonical JSON bytes are the source of truth. Python and Rust hydrate the same versioned workbook meaning independently and calculate against those native model types directly. Thin transport adapters may connect calls; no slice invents a competing workbook model or translation-only DTO. |
 | Excel → model is SoR | Intake writes the typed `Workbook`. Markdown overview is a derived scan layer with evidence links into the cell map. |
 | Model → code | Calc-binding binds one supported formula path through Python and Rust against the same model types, with shared fixtures. |
 | Model → Excel | Export round-trips the model to `.xlsx` and proves open + calculate with evidence; no “export-only” schema. |
-| Headless agent path | Agent-headless exposes CLI/SDK ops over intake → model → calc → export; no GUI requirement in the happy path. |
+| Headless agent path | The Python CLI exposes the proven intake → model → calc → export path first, with no GUI requirement. Expose Rust to agents when the native Rust API offers the same operations. |
 | Candidate formula recovery | Hard-coded recovery writes candidates into a separate workbook or layer, tagged uncertain; never overwrite source formulas or claim recovery of originals. |
 | Intake: one pass, many observers | Core intake returns the model even if every observer is off. Observers register as plugins; results attach as optional annotations. |
 | Intake never blocks on metadata | Each probe has a timeout and a fallback (skip + diagnostic). A hung probe cannot stall `intake_workbook`. |
@@ -126,24 +126,28 @@ Call red flags are locked as build contracts in [docs/specs/red-flags.md](specs/
 1. **Canonical schema and `model_version` (`impl/v1-intake`, Specs 1 and 4).**
    The typed Python intake model and CLI already exist on that branch. Finish
    the canonical JSON Schema for `Cell`, `Formula`, `Sheet` and `Workbook`, add
-   `schema_version` and `model_version`, and prove Python and Rust can hydrate
-   the same serialized bytes and round-trip them without semantic drift. This
-   contract work can run while the calculation scenario is being prepared.
+   explicit named input/output bindings, `schema_version` and `model_version`,
+   and prove Python and Rust can hydrate the same JSON fixture bytes and
+   round-trip them without semantic drift. Keep the schema under `schemas/` and
+   golden workbook fixtures under `tests/fixtures/canonical/`. This contract
+   work can run while the calculation scenario is being prepared.
 2. **One bound calculation (`impl/v1-calc-binding`).** Choose a trusted SDK
    calculation, bind its named inputs and outputs to explicit worksheet cells,
-   then run that same definition in Python and Rust with shared fixtures. Each
-   slice imports `workbook_forge.model` directly; no adapter DTO or separately
-   authored calculation.
+   then run the same canonical JSON document through Python and Rust with
+   shared golden fixtures. Both sessions calculate directly against the
+   schema-hydrated native workbook types; no adapter DTO or separately authored
+   calculation.
 3. **Export behavioral parity (`impl/v1-export`, Spec 2).** Write the bound
    model to `.xlsx`, open it in Excel or the documented oracle, edit an input,
    force full recalculation, save and reimport. Diff formulas and behavior as
    well as values. Include the required volatile, iterative, supported-array
    and known-quirk cases. Matching cached XML values or SDK-only reimport is
    not a pass for this gate.
-4. **Headless path (`impl/v1-agent-headless`).** Put intake → versioned model →
-   calculation → export behind a ready-to-run CLI/SDK flow, without requiring a
-   GUI. Include `model_version` in summaries. Keep this surface thin until
-   steps 1–3 work.
+4. **Headless path (`impl/v1-agent-headless`).** Put the proven intake →
+   versioned model → calculation → export path behind the Python CLI/SDK first,
+   without requiring a GUI. Include `model_version` in summaries. Expose Rust
+   to agents once its native API supports the same operations. Keep this
+   surface thin until steps 1–3 work.
 5. **Broader intake (`impl/v1-intake`).** Use the roundtrip mismatches to decide
    which cells, relationships and unsupported features the cell map must
    capture next. Only after the spine is green, expand observers, diffusion,
@@ -160,7 +164,8 @@ Call the v1 product spine complete only when all of these are evidenced:
 - Its exported workbook survives open, edit, full recalculation, save and
   reimport, with a structured behavior/formula/value diff and recorded Excel or
   oracle version and settings.
-- The headless CLI can run that path and prints the model version.
+- The Python headless CLI can run that path and prints the model version; Rust
+  agent operations are exposed when the same native operations exist there.
 - No red-flag spec has an open waiver.
 
 Until those gates are met, keep impl branches separate from main. Do not spend

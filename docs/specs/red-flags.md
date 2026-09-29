@@ -15,16 +15,26 @@ Python and Rust must agree on the workbook model without sharing live objects
 across the language boundary. Ad-hoc dicts and dual native types drift.
 
 ### Contract
-1. **Serialized schema is SoT.** Define a versioned serialized form (JSON Schema
-   first; Protobuf allowed as a binary twin with the same logical fields). The
-   schema covers at least: `Cell`, `Formula`, `Sheet`, `Workbook`, plus document
-   metadata and the model version field from Spec 4.
+1. **Canonical bytes are SoT.** Define a versioned JSON document validated by a
+   checked-in JSON Schema. JSON is the canonical representation. Protobuf may
+   be added only as a binary twin with the same logical fields and a Python and
+   Rust reader; a Rust-only or Protobuf-only workbook path is not allowed.
+   The schema covers at least: `Cell`, `Formula`, `Sheet`, and `Workbook`, plus
+   document metadata, explicit named input/output bindings, and the model
+   version field from Spec 4.
 2. **Hydration only.** Python and Rust each deserialize the canonical bytes into
    their native types. No shared heap, no FFI object graph passed as SoT, no
-   “Python model is truth / Rust mirrors it” shortcut.
+   “Python model is truth / Rust mirrors it” shortcut. Engines, calculation
+   sessions, exporters, and intake must use those hydrated native model types
+   directly; a second workbook DTO inserted between schema and engine is not
+   allowed.
 3. **Field set (v1 minimum).**
    - `Workbook`: `schema_version`, `model_version`, `source_path` (optional),
-     `metadata` (object), `sheets` (array of Sheet).
+     `metadata` (object), explicit named input/output bindings, and `sheets`
+     (array of Sheet). Each binding identifies a direction, name, explicit
+     sheet and cell, value type, required status, and any declared constraints.
+     The schema owner chooses the serialized property names; slices must not
+     invent another binding schema.
    - `Sheet`: `name`, `dimensions` (optional `[min_row, max_row, min_col, max_col]`),
      `cells` (map of A1 address → Cell).
    - `Cell`: `address`, `value` (JSON null/number/string/bool or error object),
@@ -32,20 +42,25 @@ across the language boundary. Ad-hoc dicts and dual native types drift.
    - `Formula`: `expression`, `dependencies` (array of `Sheet!A1` strings),
      `result` (same value union as Cell.value).
 4. **Versioning.** `schema_version` is an integer on every serialized document.
-   Any breaking or additive schema change that readers must understand requires
-   a **version bump**. Ship a backward-compatible reader that accepts all
-   supported prior versions (or rejects with an explicit unsupported-version
-   error). Silent field drops are forbidden.
+   Bump it when the schema changes. Each reader accepts every supported older
+   version through an explicit compatibility path or rejects it with an
+   unsupported-version error. Silent field drops are forbidden.
 5. **Migration rule.** Old → new: a migrator upgrades bytes to the latest
    written version before hydrate when possible. New → old writers are optional;
    if absent, tools must refuse and say which version they need.
+6. **One fixture set.** Store schemas under `schemas/` and shared canonical
+   workbook and golden result fixtures under `tests/fixtures/canonical/`.
+   Python and Rust suites load the same files and bytes; neither suite keeps a
+   language-local copy of the canonical workbook or expected result.
 
 ### Done when
-- A checked-in schema file exists under `docs/specs/` or `schemas/` and both
-  language test suites round-trip a fixture through serialize → hydrate →
-  serialize with stable semantics.
-- CI fails if either language invents a parallel DTO that is not produced from
-  the schema (enforced by review checklist until automated).
+- A checked-in schema file exists under `schemas/`; Python and Rust independently
+  deserialize the same canonical fixture bytes into their native types, then
+  serialize them back with stable workbook meaning and bindings.
+- A CI matrix runs both language suites against the same schema and
+  `tests/fixtures/canonical/` files.
+- Both calculation sessions accept the canonical native workbook type directly;
+  no competing model or schema-to-DTO hop is needed.
 
 ---
 
@@ -72,6 +87,10 @@ differently for volatiles, iteration, arrays, and version quirks.
    - produces a structured diff (address, expected, actual, class),
    - **fails the test** on any mismatch outside an explicit allowlist (e.g.
      documented volatile tolerance windows).
+   The Python harness may drive `export_xlsx` for either backend. Pytest marks
+   distinguish `oracle_optional` local runs, which report an explicit skip
+   when the oracle is unavailable, from `oracle_required` acceptance runs,
+   where a missing oracle fails the gate.
 4. **Volatiles.** Do not assert bit-identical `NOW`/`RAND` across runs. Assert
    type/shape and, where applicable, that both sides recalculate. Non-volatile
    cells remain strict.
@@ -106,6 +125,9 @@ and sticky to one workbook’s quirks.
    hard-import detector modules for success.
 5. **Failure isolation.** Detector exceptions become diagnostics; they do not
    abort the canonical model (aligns with vision resilience).
+6. **Small explicit configuration.** Use a simple plugin registry (entry points
+   or explicit registration) and small dict/TOML flags. Each detector is
+   independently importable and can be disabled without code edits.
 
 ### Done when
 - Plugin/registry interface exists; disabling all detectors still yields a valid
@@ -124,7 +146,8 @@ schema moves. The extracted model is already a product artifact.
 1. **`model_version` field.** Every serialized workbook model carries
    `model_version` (semver string or integer sequence — pick one in the schema
    and stick to it; recommend integer `model_version` paired with
-   `schema_version`).
+   `schema_version`). `schema_version` tracks the byte contract; `model_version`
+   identifies the workbook model artifact. Both are validated on read/write.
 2. **Changelog.** `docs/specs/model-changelog.md` (create with the first bump)
    records each model_version: date, summary, breaking or not, migration notes.
 3. **Migration path.** When v2 ships, a reader for v1 remains available. Prefer
@@ -134,12 +157,66 @@ schema moves. The extracted model is already a product artifact.
    newly written files; readers may default missing → v1 only during a single
    compatibility window documented in the changelog, then reject.
 5. **Agents and CLI** print `model_version` in intake summaries so humans can
-   see which artifact generation they hold.
+   see which artifact generation they hold. Python's `intake_workbook` emits
+   serialized canonical JSON as well as its native model result; it is not
+   limited to an in-memory dataclass.
 
 ### Done when
 - Schema + Python/Rust hydrate enforce `model_version`.
 - Changelog file exists once the first bump is planned; v1 row is present when
   intake SoT ships.
+
+---
+
+## Language implementation contract
+
+### Python
+
+- `workbook_forge.model.Workbook` is the native hydration target. Keep its
+  fields in sync with `schemas/` (generated types are fine if they remain
+  readable and reviewable).
+- `intake_workbook` emits the canonical JSON artifact, including
+  `model_version`, as an explicit output; it may also return the native model
+  object for callers that need it. The headless intake CLI exposes those same
+  bytes and prints the model version in its summary.
+- The pure Python backend is the reference for expected results in shared
+  fixtures. Calculation binds named I/O on the canonical workbook types and
+  passes that object directly to the session.
+- The Python export harness drives `export_xlsx` and the Excel oracle. Local
+  optional oracle tests may skip clearly; the required acceptance job may not.
+- `python -m workbook_forge...` remains the thin, headless agent surface.
+
+### Rust
+
+- The native Rust crate mirrors `Cell`, `Formula`, `Sheet`, and `Workbook` from
+  the same schema and uses Serde to read canonical JSON. It does not call
+  Python to parse, calculate, or export.
+- Calculation sessions take the hydrated Rust `Workbook` directly. Existing
+  `WorkbookModel` session code may be retargeted or refactored, but must not
+  become a second serialized workbook meaning or an intermediate DTO.
+- Where Rust OOXML read/write already exists, it remains an independent Rust
+  path. Compare shared serialized meaning and observable results, not private
+  in-memory tree layouts.
+
+### Cross-language rules
+
+- Both suites load the exact same schema and files under
+  `tests/fixtures/canonical/`; CI runs both as a matrix against those files.
+- No live Python or Rust object crosses FFI as the contract. A future FFI may
+  speed calls, but it cannot replace the JSON schema.
+- When engines disagree, fix the failing engine or the shared fixture. Do not
+  hide a semantic mismatch behind an adapter.
+
+### Build order
+
+1. Check in the schema, then prove Python hydration/serialization and Rust
+   Serde round-trip against the same fixture bytes.
+2. Run one explicitly bound calculation from the same canonical JSON document
+   through the Python and Rust sessions and compare outputs.
+3. Export from either backend and run the full-recalculation Excel harness.
+4. Wrap the proven path in the Python headless CLI first. Expose Rust to agents
+   after its native API offers the same operations.
+5. Expand intake only from gaps exposed by round-trip diffs.
 
 ---
 
