@@ -17,3 +17,6 @@ Add one documented recipe: import fixture → intake report → run bound scenar
 - Do not rewrite history on `main` or force-push.
 - Do not modify Codex session files under `~/.codex`.
 - Keep shelf split: Forge owns compute + OOXML; cell-store owns the sealed event log (join later via FORGE_EDGE).
+
+## Vision
+Follow [docs/vision.md](docs/vision.md). Shared types and build rules there bind this slice to the others.
