@@ -352,6 +352,101 @@ def calculate(workbook: Workbook) -> Workbook:
     return _with_calculation(workbook, cells, analyzed, results, diagnostics)
 
 
+def with_input(workbook: Workbook, name: str, value: Any) -> Workbook:
+    """Replace one declared input and clear calculated formula state.
+
+    ``Formula.result``, dependencies, and diagnostics belong to the previous
+    inputs. ``calculate`` fills them again. Cell caches on formula cells are
+    left in place; they are not calculation results.
+    """
+    if workbook.bindings is None or name not in workbook.bindings.inputs:
+        raise ModelError("invalid_model", f"input binding '{name}' does not exist")
+    target = workbook.bindings.inputs[name]
+    sheet = workbook.sheet(target.sheet)
+    cell = None if sheet is None else sheet.cells.get(target.address)
+    if cell is None:
+        raise ModelError("invalid_model", f"input binding '{name}' does not identify a cell")
+    if cell.formula is not None:
+        raise ModelError("invalid_model", f"input binding '{name}' points at a formula cell")
+    coerced = _coerce_input(cell.data_type, value, name)
+    sheets: list[Sheet] = []
+    for item in workbook.sheets:
+        cells: dict[str, Cell] = {}
+        for address, current in item.cells.items():
+            formula = current.formula
+            if formula is not None:
+                formula = Formula(formula.expression, (), None)
+            if item.name == target.sheet and address == target.address:
+                current = Cell(
+                    current.address,
+                    coerced,
+                    current.data_type,
+                    current.number_format,
+                    None,
+                    current.provenance,
+                )
+            elif formula is not None:
+                current = Cell(
+                    current.address,
+                    current.value,
+                    current.data_type,
+                    current.number_format,
+                    formula,
+                    current.provenance,
+                )
+            cells[address] = current
+        sheets.append(Sheet(item.name, cells, item.dimensions))
+    return Workbook(
+        workbook.schema_version,
+        workbook.model_version,
+        copy.deepcopy(workbook.metadata),
+        tuple(sheets),
+        workbook.source_path,
+        workbook.provenance,
+        workbook.bindings,
+        (),
+    )
+
+
+def _coerce_input(data_type: str, value: Any, name: str) -> Any:
+    label = f"input binding '{name}'"
+    if data_type == "number":
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise ModelError("invalid_model", f"{label} requires a number")
+        if isinstance(value, float):
+            if not math.isfinite(value):
+                raise ModelError("invalid_model", f"{label} requires a finite number")
+            if value.is_integer() and abs(value) <= 2**53:
+                return int(value)
+            return value
+        if abs(value) > 2**53:
+            raise ModelError("invalid_model", f"{label} exceeds the exact integer range")
+        return value
+    if data_type == "text":
+        if not isinstance(value, str):
+            raise ModelError("invalid_model", f"{label} requires text")
+        return value
+    if data_type == "boolean":
+        if not isinstance(value, bool):
+            raise ModelError("invalid_model", f"{label} requires a boolean")
+        return value
+    if data_type == "blank":
+        if value is not None:
+            raise ModelError("invalid_model", f"{label} is blank and cannot take a value")
+        return None
+    if data_type == "error":
+        if (
+            not isinstance(value, dict)
+            or set(value) - _ERROR_FIELDS
+            or "error" not in value
+            or value["error"] not in _ERROR_CODES
+            or not isinstance(value.get("message"), (str, type(None)))
+        ):
+            raise ModelError("invalid_model", f"{label} requires a canonical error value")
+        return {"error": value["error"], "message": value.get("message")}
+    raise ModelError("invalid_model", f"{label} has an unsupported data type")
+
+
 def _with_calculation(
     workbook: Workbook,
     cells: dict[str, Cell],
