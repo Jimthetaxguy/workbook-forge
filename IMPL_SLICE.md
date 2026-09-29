@@ -41,3 +41,24 @@ Excel Desktop export oracle (Spec 2), intake detectors (Spec 3), and agent-headl
 ## Vision
 
 Follow [docs/vision.md](docs/vision.md). Shared types and build rules there bind this slice to the others.
+
+
+## Combined calc tip — 2026-09-28
+
+Branch `agent/combine-calc-best-20260928` keeps the Grok/Cursor PR #2 tip as the
+single schema SoT (`schemas/workbook-model.v1.schema.json`) and ports Mac/Codex
+`impl/v1-calc-binding` multi-case golden coverage without a second schema path.
+
+Kept from Grok: dual native hydrate, `schema_version`/`model_version`, provenance,
+workbook diagnostics, `Formula.result`, empty Python/Rust semantic diff, docs order
+(export → intake → agent-headless after this slice).
+
+Taken from Mac: `fixtures/operating-scenario-cases.json` and the shared golden
+input-case pytest (baseline / higher-price / price-equals-cost → `#N/A`), plus
+Excel dimension maxima on the existing schema.
+
+Dropped from Mac: `schemas/workbook-model-v1.schema.json` (second schema name),
+array-of-bindings + constraints DTO, `canonical_calc` session/revision API,
+intake bleed-in (`intake.py`, `test_intake.py`), and `tools/verify_canonical_calc.py`
+tied to that alternate binding shape. Constraints/session can land later on this
+schema if needed; they must not fork the serialized model.

@@ -1,0 +1,42 @@
+{
+  "model_fixture": "operating-scenario.workbook.json",
+  "numeric_tolerance": 1e-12,
+  "cases": [
+    {
+      "name": "baseline-price-20",
+      "inputs": {
+        "unit_price": 20
+      },
+      "expected": {
+        "revenue": 7400,
+        "profit": 1440,
+        "break_even_units": 83.33333333333333
+      }
+    },
+    {
+      "name": "higher-price-25",
+      "inputs": {
+        "unit_price": 25
+      },
+      "expected": {
+        "revenue": 9250,
+        "profit": 3290,
+        "break_even_units": 58.8235294117647
+      }
+    },
+    {
+      "name": "price-equals-cost",
+      "inputs": {
+        "unit_price": 8
+      },
+      "expected": {
+        "revenue": 2960,
+        "profit": -3000,
+        "break_even_units": {
+          "error": "#N/A",
+          "message": null
+        }
+      }
+    }
+  ]
+}
