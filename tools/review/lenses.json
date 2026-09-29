@@ -1,0 +1,96 @@
+{
+  "description": "What each review lens may see. Stage 1 is the contract only. Stage 2 adds the code. Patterns are repository-relative globs; ** crosses directories.",
+  "lenses": {
+    "contract": {
+      "question": "Does the canonical model do what its specification and schema require?",
+      "stage1": ["docs/specs/*.md", "schemas/*.json"],
+      "stage2": [
+        "python/workbook_forge/model.py",
+        "rust/src/model.rs",
+        "rust/examples/canonical_calc.rs",
+        "fixtures/operating-scenario*.json",
+        "python/workbook_forge/__init__.py"
+      ]
+    },
+    "parity": {
+      "question": "Where do the Python and Rust engines behave differently on the same input?",
+      "stage1": ["docs/behavior-profiles.md", "docs/primitives.md", "catalog/formulas.json", "catalog/primitive-catalog.json"],
+      "stage2": [
+        "python/workbook_forge/__init__.py",
+        "python/workbook_forge/expressions.py",
+        "python/workbook_forge/primitives.py",
+        "python/workbook_forge/python_engine.py",
+        "python/workbook_forge/catalog.py",
+        "rust/src/lib.rs",
+        "rust/src/primitives.rs",
+        "rust/src/toolkit.rs",
+        "rust/src/*.json",
+        "catalog/*.json",
+        "fixtures/formula-cases.jsonl"
+      ]
+    },
+    "silent-failure": {
+      "question": "Where can a failure be hidden, mislabelled, or turned into a plausible value?",
+      "stage1": ["docs/agent-protocol.md", "catalog/agent-operations.json"],
+      "stage2": [
+        "python/workbook_forge/*.py",
+        "rust/src/*.rs",
+        "native/src/lib.rs",
+        "catalog/*.json"
+      ]
+    },
+    "oracle": {
+      "question": "Which tests could not fail for the right reason, because their expected values depend on the code under test?",
+      "stage1": ["docs/specs/red-flags.md", "schemas/excel-roundtrip-contract.schema.json"],
+      "stage2": [
+        "python/tests/*.py",
+        "python/workbook_forge/*.py",
+        "fixtures/**",
+        "tools/excel_oracle.py",
+        "tools/canonical_excel_receipt.py",
+        "tools/sync_primitive_catalog.py",
+        "tools/sync_extraction_catalog.py",
+        "catalog/*.json",
+        "rust/src/*.json",
+        "pyproject.toml"
+      ]
+    },
+    "boundary": {
+      "question": "Which untrusted inputs can crash, hang, exhaust memory, or slip past a documented limit?",
+      "stage1": ["docs/extraction-patterns.md", "docs/agent-protocol.md", "docs/behavior-profiles.md"],
+      "stage2": [
+        "python/workbook_forge/*.py",
+        "rust/src/xlsx.rs",
+        "rust/src/xml_patterns.rs",
+        "rust/src/extraction.rs",
+        "rust/src/agent.rs",
+        "rust/src/toolkit.rs",
+        "rust/src/model.rs",
+        "catalog/*.json"
+      ]
+    },
+    "evidence": {
+      "question": "Which written claims have no committed evidence behind them?",
+      "stage1": ["docs/specs/red-flags.md"],
+      "stage2": [
+        "receipts/**",
+        "docs/excel-observations.md",
+        "fixtures/*contract.json",
+        "fixtures/excel-observation-cases.json"
+      ]
+    },
+    "simplification": {
+      "question": "Where is the same logic written more than once with different behaviour, and where is the tooling itself unsound?",
+      "stage1": ["docs/review-protocol.md"],
+      "stage2": [
+        "python/workbook_forge/*.py",
+        "tools/*.py",
+        "tools/*.sh",
+        "tools/review/*.py",
+        "tools/review/*.json",
+        "review/*.json",
+        "pyproject.toml"
+      ]
+    }
+  }
+}
