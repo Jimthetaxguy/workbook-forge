@@ -31,11 +31,8 @@ REL = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
 PACKAGE_REL = "http://schemas.openxmlformats.org/package/2006/relationships"
 CONTENT = "http://schemas.openxmlformats.org/package/2006/content-types"
 ADDRESS = re.compile(r"[A-Z]{1,3}[1-9][0-9]{0,6}\Z")
-# Sign, parentheses, and exponent spelling do not turn a number into a formula.
-_NUMERIC_CONSTANT_FORMULA = re.compile(
-    r"^=\s*[+-]?\s*(?:\(\s*[+-]?\s*)*"
-    r"(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?\s*(?:\)\s*)*$"
-)
+# Sign, parentheses, percent, and exponent spelling do not turn a number into a formula.
+_NUMBER_TOKEN = re.compile(r"(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?")
 EXPECTED_KINDS = {"independently_derived", "documented", "forge_profile"}
 SAFE_FUNCTIONS = {"SUM", "IF", "ISBLANK"}
 ROUNDTRIP_CLASSES = {"scenario", "volatile", "iteration", "array", "array_spill", "excel_quirk"}
@@ -799,7 +796,77 @@ def _formula_allowlist(contract: dict[str, Any], check_id: str) -> list[str]:
 
 def _numeric_constant_formula(formula: str | None) -> bool:
     """True when the spelling is only a number, not a cell formula."""
-    return isinstance(formula, str) and _NUMERIC_CONSTANT_FORMULA.fullmatch(formula) is not None
+    if not isinstance(formula, str) or not formula.startswith("="):
+        return False
+    source = formula[1:]
+    index = 0
+    length = len(source)
+
+    def skip() -> None:
+        nonlocal index
+        while index < length and source[index].isspace():
+            index += 1
+
+    def percent() -> None:
+        nonlocal index
+        while True:
+            skip()
+            if index < length and source[index] == "%":
+                index += 1
+                continue
+            return
+
+    def atom(depth: int) -> bool:
+        nonlocal index
+        skip()
+        if index >= length or depth > 32:
+            return False
+        if source[index] == "(":
+            index += 1
+            if not unary(depth + 1):
+                return False
+            skip()
+            if index >= length or source[index] != ")":
+                return False
+            index += 1
+            percent()
+            return True
+        match = _NUMBER_TOKEN.match(source, index)
+        if match is None:
+            return False
+        index = match.end()
+        percent()
+        return True
+
+    def unary(depth: int) -> bool:
+        nonlocal index
+        while True:
+            skip()
+            if index < length and source[index] in "+-":
+                index += 1
+                continue
+            return atom(depth)
+
+    if not unary(0):
+        return False
+    skip()
+    return index == length
+
+
+def _predicate_value_changed(
+    expected: dict[str, Any], before: dict[str, Any], after: dict[str, Any],
+) -> bool:
+    """True when a predicate's cached number was replaced by a different number."""
+    if expected.get("type") != "number" or "predicate" not in expected:
+        return False
+
+    def number(result: dict[str, Any]) -> float | None:
+        value = result.get("value")
+        if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
+            return None
+        return float(value)
+
+    return number(before) != number(after)
 
 
 def _formula_is_accepted(actual: str | None, expected: str, allowlist: list[str]) -> bool:
@@ -1067,16 +1134,17 @@ def _compare_roundtrip(
         before_observed = {"type": "blank"} if old is None else old["result"]
         expected_result = check["expected_result"]
         value_matches = roundtrip_result_matches(observed, expected_result)
-        # A cache that newly equals the expected number, under an unchanged formula,
-        # was not shown to be recalculated. A value already stored before Excel
-        # remains a value match; an unchanged file hash still cannot be observed.
+        # A result that newly agrees under an unchanged formula was not shown to be
+        # recalculated, including predicates, text, and booleans. A value already
+        # stored before Excel remains a value match. An unchanged file hash still
+        # cannot be observed.
         planted_expected_cache = (
             before_formula == after_formula
             and value_matches
-            and expected_result.get("type") == "number"
-            and "predicate" not in expected_result
-            and "value" in expected_result
-            and not roundtrip_result_matches(before_observed, expected_result)
+            and (
+                not roundtrip_result_matches(before_observed, expected_result)
+                or _predicate_value_changed(expected_result, before_observed, observed)
+            )
         )
         result_matches = value_matches and not planted_expected_cache
         settings_match = True
@@ -1092,7 +1160,9 @@ def _compare_roundtrip(
             local_mismatches.append("exported formula differs from contract")
         if not formula_matches:
             local_mismatches.append("reimported formula differs from contract")
-        if not value_matches:
+        if planted_expected_cache:
+            local_mismatches.append("cached result under an unchanged formula is not a recalculation")
+        elif not value_matches:
             local_mismatches.append("reimported result differs from expected behavior")
         if not settings_match:
             local_mismatches.append("Excel iterative calculation settings differ from contract")
@@ -1105,7 +1175,7 @@ def _compare_roundtrip(
             "expected_result": expected_result, "formula_matches": formula_matches,
             "result_matches": result_matches, "calculation_settings_match": settings_match,
             "allowlist_applied": allowlist,
-            "matches": not local_mismatches and not planted_expected_cache,
+            "matches": not local_mismatches,
             "mismatches": local_mismatches,
         }
         outcomes.append(outcome)

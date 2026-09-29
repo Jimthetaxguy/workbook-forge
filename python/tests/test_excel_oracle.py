@@ -431,7 +431,9 @@ def test_roundtrip_full_excel_cycle_reimports_formula_and_behavior_diff(tmp_path
 
     monkeypatch.setattr(oracle.subprocess, 'run', save_as_excel)
     path, receipt = oracle.run_roundtrip(source, _scenario_contract(), tmp_path / 'receipts', run_excel=True)
-    assert receipt['status'] == 'observed'
+    assert receipt['status'] == 'mismatch'
+    assert receipt['observations'][0]['result_matches'] is False
+    assert receipt['mismatches']
     assert receipt['full_rebuild_invoked'] is True
     assert receipt['observations'][0]['before_recalc']['formula'] == '=A1*2'
     assert receipt['observations'][0]['after_recalc_and_reimport']['result'] == {'type': 'number', 'value': 10.0}
