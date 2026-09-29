@@ -1,6 +1,6 @@
 # Workbook Forge
 
-**North Star:** [docs/vision.md](docs/vision.md) — Excel compiler; three directions; typed SoT; build rules for this slice. Red flags: [docs/specs/red-flags.md](docs/specs/red-flags.md).
+**North Star:** [docs/vision.md](docs/vision.md). Red-flag specs: [docs/specs/red-flags.md](docs/specs/red-flags.md).
 
 **Workbook Forge is an SDK for Excel in formats agents can use.** Its goal is to
 make supported workbook data, formulas, dependencies, presentation, and business
