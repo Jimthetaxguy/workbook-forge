@@ -45,3 +45,27 @@ def test_diagnostic_names_the_formula_cell_when_other_cells_follow_it(formula, c
     )
     result = calculate(hydrate(document))
     assert [(item.code, item.sheet, item.address) for item in result.diagnostics] == [(code, "S", "C1")]
+
+
+@pytest.mark.parametrize(
+    "formula",
+    ["=XFE1", "=A1048577", "=XFE1+A1048578", "=SUM(XFD1:XFE1)", "=SUM(A1048576:A1048577)"],
+)
+def test_a_reference_past_the_last_cell_is_an_invalid_reference(formula):
+    """XFD1048576 is the last cell of a worksheet. Nothing beyond it can be a dependency."""
+    document = _workbook(("S", [_cell("A1", 1), _cell("C1", formula=formula)]))
+    result = calculate(hydrate(document))
+    formula_cell = result.sheets[0].cells["C1"].formula
+    assert [(item.code, item.sheet, item.address) for item in result.diagnostics] == [
+        ("invalid_reference", "S", "C1")
+    ]
+    assert formula_cell.dependencies == ()
+    assert formula_cell.result is None
+
+
+@pytest.mark.parametrize("formula", ["=XFD1", "=A1048576", "=XFD1048576", "=SUM(XFC1:XFD1)"])
+def test_a_reference_to_the_last_cell_is_a_dependency(formula):
+    document = _workbook(("S", [_cell("A1", 1), _cell("C1", formula=formula)]))
+    result = calculate(hydrate(document))
+    assert result.diagnostics == ()
+    assert result.sheets[0].cells["C1"].formula.dependencies
