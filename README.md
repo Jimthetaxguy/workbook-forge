@@ -2,7 +2,7 @@
 
 **North Star:** [docs/vision.md](docs/vision.md). Red-flag specs: [docs/specs/red-flags.md](docs/specs/red-flags.md).
 
-Near-term order: Step 0 on `impl/v1-calc-binding` is the versioned workbook model ([Spec 1](docs/specs/red-flags.md#spec-1--canonical-intermediate-form), [Spec 4](docs/specs/red-flags.md#spec-4--model-versioning-from-day-one)), then calculation binding on that same branch, then export, intake, and agent-headless. Downstream branches rebase after this merges. Version rules: [model versioning](docs/specs/model-versioning.md).
+Near-term order: the versioned workbook model and the operating-scenario calc binding land first ([Spec 1](docs/specs/red-flags.md#spec-1--canonical-intermediate-form), [Spec 4](docs/specs/red-flags.md#spec-4--model-versioning-from-day-one)). Export then sends `fixtures/operating-scenario.workbook.json` through OOXML. Excel Desktop full recalc is still the Spec 2 oracle. The harness is `tools/excel_oracle.py`; `tools/canonical_excel_receipt.py` exports the canonical fixture and calls it. Intake and agent-headless come after that receipt. Version rules: [model versioning](docs/specs/model-versioning.md).
 
 **Workbook Forge is an SDK for Excel in formats agents can use.** Its goal is to
 make supported workbook data, formulas, dependencies, presentation, and business

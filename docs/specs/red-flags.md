@@ -75,7 +75,11 @@ differently for volatiles, iteration, arrays, and version quirks.
 4. **Volatiles.** Do not assert bit-identical `NOW`/`RAND` across runs. Assert
    type/shape and, where applicable, that both sides recalculate. Non-volatile
    cells remain strict.
-5. **No silent “values only” green.** A suite that only compares stored XML
+5. **Spilling arrays.** When a fixture returns multiple values into worksheet
+   cells, compare every declared cell in the spill range after Excel saves and
+   the SDK reimports the workbook. A formula that reduces an array to one value
+   does not prove spill placement.
+6. **No silent “values only” green.** A suite that only compares stored XML
    caches without recalc does not satisfy this spec.
 
 ### Done when

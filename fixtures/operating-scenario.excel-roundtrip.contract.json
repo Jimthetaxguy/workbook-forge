@@ -1,0 +1,163 @@
+{
+  "schema_version": 1,
+  "id": "operating-scenario-canonical-v1",
+  "model_version": 1,
+  "required_fixture_classes": ["scenario"],
+  "edits": [
+    {"sheet": "Assumptions", "address": "B1", "value": 25}
+  ],
+  "checks": [
+    {
+      "id": "total-revenue-after-price-edit",
+      "class": "scenario",
+      "sheet": "Forecast",
+      "address": "F2",
+      "expected_formula": "=SUM(C2:C4)",
+      "expected_result": {"type": "number", "value": 9250, "tolerance": {"absolute": 0, "relative": 0}}
+    },
+    {
+      "id": "total-profit-after-price-edit",
+      "class": "scenario",
+      "sheet": "Forecast",
+      "address": "F3",
+      "expected_formula": "=SUM(E2:E4)",
+      "expected_result": {"type": "number", "value": 3290, "tolerance": {"absolute": 0, "relative": 0}}
+    },
+    {
+      "id": "break-even-after-price-edit",
+      "class": "scenario",
+      "sheet": "Forecast",
+      "address": "F4",
+      "expected_formula": "=IF(Assumptions!B1>Assumptions!B2,Assumptions!B3/(Assumptions!B1-Assumptions!B2),NA())",
+      "expected_result": {"type": "number", "value": 58.8235294117647, "tolerance": {"absolute": 1e-10, "relative": 1e-12}}
+    },
+    {
+      "id": "period-1-revenue",
+      "class": "scenario",
+      "sheet": "Forecast",
+      "address": "C2",
+      "expected_formula": "=B2*Assumptions!$B$1",
+      "expected_result": {"type": "number", "value": 2500, "tolerance": {"absolute": 0, "relative": 0}}
+    },
+    {
+      "id": "period-2-revenue",
+      "class": "scenario",
+      "sheet": "Forecast",
+      "address": "C3",
+      "expected_formula": "=B3*Assumptions!$B$1",
+      "expected_result": {"type": "number", "value": 3000, "tolerance": {"absolute": 0, "relative": 0}}
+    },
+    {
+      "id": "period-3-revenue",
+      "class": "scenario",
+      "sheet": "Forecast",
+      "address": "C4",
+      "expected_formula": "=B4*Assumptions!$B$1",
+      "expected_result": {"type": "number", "value": 3750, "tolerance": {"absolute": 0, "relative": 0}}
+    },
+    {
+      "id": "period-1-variable-cost",
+      "class": "scenario",
+      "sheet": "Forecast",
+      "address": "D2",
+      "expected_formula": "=B2*Assumptions!$B$2",
+      "expected_result": {"type": "number", "value": 800, "tolerance": {"absolute": 0, "relative": 0}}
+    },
+    {
+      "id": "period-2-variable-cost",
+      "class": "scenario",
+      "sheet": "Forecast",
+      "address": "D3",
+      "expected_formula": "=B3*Assumptions!$B$2",
+      "expected_result": {"type": "number", "value": 960, "tolerance": {"absolute": 0, "relative": 0}}
+    },
+    {
+      "id": "period-3-variable-cost",
+      "class": "scenario",
+      "sheet": "Forecast",
+      "address": "D4",
+      "expected_formula": "=B4*Assumptions!$B$2",
+      "expected_result": {"type": "number", "value": 1200, "tolerance": {"absolute": 0, "relative": 0}}
+    },
+    {
+      "id": "period-1-profit",
+      "class": "scenario",
+      "sheet": "Forecast",
+      "address": "E2",
+      "expected_formula": "=C2-D2-Assumptions!$B$3",
+      "expected_result": {"type": "number", "value": 700, "tolerance": {"absolute": 0, "relative": 0}}
+    },
+    {
+      "id": "period-2-profit",
+      "class": "scenario",
+      "sheet": "Forecast",
+      "address": "E3",
+      "expected_formula": "=C3-D3-Assumptions!$B$3",
+      "expected_result": {"type": "number", "value": 1040, "tolerance": {"absolute": 0, "relative": 0}}
+    },
+    {
+      "id": "period-3-profit",
+      "class": "scenario",
+      "sheet": "Forecast",
+      "address": "E4",
+      "expected_formula": "=C4-D4-Assumptions!$B$3",
+      "expected_result": {"type": "number", "value": 1550, "tolerance": {"absolute": 0, "relative": 0}}
+    }
+  ],
+  "allowlist": [
+    {
+      "check_id": "period-1-revenue",
+      "field": "formula",
+      "accepted_values": ["=(B2*'Assumptions'!$B$1)", "=(B2*Assumptions!$B$1)"],
+      "reason": "Excel 16.113.2 parenthesized this formula and sometimes quoted Assumptions on the SDK export of the same arithmetic. Accept those exact spellings if Excel emits them again. They are not an observation of this canonical package until Desktop runs."
+    },
+    {
+      "check_id": "period-2-revenue",
+      "field": "formula",
+      "accepted_values": ["=(B3*'Assumptions'!$B$1)", "=(B3*Assumptions!$B$1)"],
+      "reason": "Excel 16.113.2 parenthesized this formula and sometimes quoted Assumptions on the SDK export of the same arithmetic. Accept those exact spellings if Excel emits them again."
+    },
+    {
+      "check_id": "period-3-revenue",
+      "field": "formula",
+      "accepted_values": ["=(B4*'Assumptions'!$B$1)", "=(B4*Assumptions!$B$1)"],
+      "reason": "Excel 16.113.2 parenthesized this formula and sometimes quoted Assumptions on the SDK export of the same arithmetic. Accept those exact spellings if Excel emits them again."
+    },
+    {
+      "check_id": "period-1-variable-cost",
+      "field": "formula",
+      "accepted_values": ["=(B2*'Assumptions'!$B$2)", "=(B2*Assumptions!$B$2)"],
+      "reason": "Excel 16.113.2 parenthesized this formula and sometimes quoted Assumptions on the SDK export of the same arithmetic. Accept those exact spellings if Excel emits them again."
+    },
+    {
+      "check_id": "period-2-variable-cost",
+      "field": "formula",
+      "accepted_values": ["=(B3*'Assumptions'!$B$2)", "=(B3*Assumptions!$B$2)"],
+      "reason": "Excel 16.113.2 parenthesized this formula and sometimes quoted Assumptions on the SDK export of the same arithmetic. Accept those exact spellings if Excel emits them again."
+    },
+    {
+      "check_id": "period-3-variable-cost",
+      "field": "formula",
+      "accepted_values": ["=(B4*'Assumptions'!$B$2)", "=(B4*Assumptions!$B$2)"],
+      "reason": "Excel 16.113.2 parenthesized this formula and sometimes quoted Assumptions on the SDK export of the same arithmetic. Accept those exact spellings if Excel emits them again."
+    },
+    {
+      "check_id": "period-1-profit",
+      "field": "formula",
+      "accepted_values": ["=((C2-D2)-'Assumptions'!$B$3)", "=((C2-D2)-Assumptions!$B$3)"],
+      "reason": "Excel 16.113.2 parenthesized this formula and sometimes quoted Assumptions on the SDK export of the same arithmetic. Accept those exact spellings if Excel emits them again."
+    },
+    {
+      "check_id": "period-2-profit",
+      "field": "formula",
+      "accepted_values": ["=((C3-D3)-'Assumptions'!$B$3)", "=((C3-D3)-Assumptions!$B$3)"],
+      "reason": "Excel 16.113.2 parenthesized this formula and sometimes quoted Assumptions on the SDK export of the same arithmetic. Accept those exact spellings if Excel emits them again."
+    },
+    {
+      "check_id": "period-3-profit",
+      "field": "formula",
+      "accepted_values": ["=((C4-D4)-'Assumptions'!$B$3)", "=((C4-D4)-Assumptions!$B$3)"],
+      "reason": "Excel 16.113.2 parenthesized this formula and sometimes quoted Assumptions on the SDK export of the same arithmetic. Accept those exact spellings if Excel emits them again."
+    }
+  ]
+}

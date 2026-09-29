@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Generate synthetic Excel cases; opt in to observing Excel Desktop on macOS.
+"""Generate synthetic Excel cases or observe an explicit SDK export in Excel.
 
-This tool never accepts an existing workbook. Every run owns a fresh directory
-and a newly generated macro-free package. Proposed expectations and actual Excel
-observations remain separate; an unavailable Excel is a blocked run, not parity.
+Observation mode creates its own workbook. Round-trip mode accepts an SDK-created
+workbook only when the caller explicitly requests Excel automation; it copies the
+input before editing. Proposed expectations and actual Excel observations remain
+separate; an unavailable Excel is a blocked run, not parity.
 """
 from __future__ import annotations
 
@@ -15,6 +16,7 @@ import math
 from pathlib import Path
 import platform
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -31,6 +33,22 @@ CONTENT = "http://schemas.openxmlformats.org/package/2006/content-types"
 ADDRESS = re.compile(r"[A-Z]{1,3}[1-9][0-9]{0,6}\Z")
 EXPECTED_KINDS = {"independently_derived", "documented", "forge_profile"}
 SAFE_FUNCTIONS = {"SUM", "IF", "ISBLANK"}
+ROUNDTRIP_CLASSES = {"scenario", "volatile", "iteration", "array", "array_spill", "excel_quirk"}
+REQUIRED_RED_FLAG_CLASSES = {"volatile", "iteration", "array", "array_spill", "excel_quirk"}
+EXTERNAL_DATA_FUNCTIONS = {"WEBSERVICE", "FILTERXML", "RTD", "STOCKHISTORY"}
+ROUNDTRIP_RESULT_TYPES = {"number", "text", "boolean", "blank", "error", "array"}
+
+ARRAY_FUNCTIONS = {"SEQUENCE", "FILTER", "SORT", "UNIQUE"}
+UNSUPPORTED_ROUNDTRIP_CAPABILITIES = {
+    "array_spill": {
+        "capability": "worksheet_dynamic_array_spill_placement",
+        "reason": (
+            "Workbook Forge export currently refuses worksheet array spill caches. "
+            "A scalar reduction such as SUM(SEQUENCE(...)) does not verify placement "
+            "into the declared spill cells."
+        ),
+    },
+}
 
 
 def _xml(root: ET.Element) -> bytes:
@@ -55,6 +73,28 @@ def _address_key(address: str) -> tuple[int, int]:
     if column > 16_384 or row > 1_048_576:
         raise ValueError("cell address exceeds Excel limits")
     return row, column
+
+
+def _column_name(column: int) -> str:
+    if column < 1 or column > 16_384:
+        raise ValueError("column is outside Excel limits")
+    letters = ""
+    while column:
+        column, remainder = divmod(column - 1, 26)
+        letters = chr(ord("A") + remainder) + letters
+    return letters
+
+
+def _spill_rectangle(anchor: str, shape: list[int]) -> list[str]:
+    row, column = _address_key(anchor)
+    rows, columns = shape
+    if row + rows - 1 > 1_048_576 or column + columns - 1 > 16_384:
+        raise ValueError("declared spill range exceeds Excel worksheet limits")
+    return [
+        f"{_column_name(col)}{row_index}"
+        for row_index in range(row, row + rows)
+        for col in range(column, column + columns)
+    ]
 
 
 def load_cases(path: Path = DEFAULT_CASES) -> dict[str, Any]:
@@ -485,16 +525,718 @@ end run
     return receipt_path, receipt
 
 
+def validate_roundtrip_contract(data: dict[str, Any]) -> dict[str, Any]:
+    """Validate the small, versioned contract consumed by the export harness."""
+    if not isinstance(data, dict) or data.get("schema_version") != 1:
+        raise ValueError("round-trip contract must use schema_version 1")
+    if not isinstance(data.get("id"), str) or not data["id"].strip():
+        raise ValueError("round-trip contract needs a nonempty id")
+    if "model_version" in data and (isinstance(data["model_version"], bool) or not isinstance(data["model_version"], int) or data["model_version"] < 1):
+        raise ValueError("model_version must be a positive integer")
+    checks = data.get("checks")
+    if not isinstance(checks, list) or not checks or len(checks) > 1_000:
+        raise ValueError("round-trip contract needs one to 1000 cell checks")
+    check_ids: set[str] = set()
+    checks_by_id: dict[str, dict[str, Any]] = {}
+    for check in checks:
+        if not isinstance(check, dict):
+            raise ValueError("each round-trip check must be an object")
+        identifier = check.get("id")
+        if not isinstance(identifier, str) or not re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9_.-]{0,63}", identifier):
+            raise ValueError("round-trip check IDs must be short and stable")
+        if identifier in check_ids:
+            raise ValueError("round-trip check IDs must be unique")
+        check_ids.add(identifier)
+        checks_by_id[identifier] = check
+        if check.get("class") not in ROUNDTRIP_CLASSES:
+            raise ValueError(f"unsupported round-trip fixture class: {check.get('class')!r}")
+        if not isinstance(check.get("sheet"), str) or not check["sheet"]:
+            raise ValueError(f"check {identifier} needs a worksheet name")
+        if len(check["sheet"]) > 31 or re.search(r"[\\/*?:\[\]\x00-\x1f]", check["sheet"]):
+            raise ValueError(f"check {identifier} has an invalid worksheet name")
+        _address_key(check.get("address"))
+        formula = check.get("expected_formula")
+        if not isinstance(formula, str) or not formula.startswith("=") or formula.startswith("==") or len(formula) > 8192:
+            raise ValueError(f"check {identifier} needs an expected Excel formula")
+        expected = check.get("expected_result")
+        if not isinstance(expected, dict) or expected.get("type") not in ROUNDTRIP_RESULT_TYPES:
+            raise ValueError(f"check {identifier} needs a typed expected_result")
+        if expected["type"] == "number":
+            if "predicate" in expected:
+                predicate = expected["predicate"]
+                if not isinstance(predicate, dict) or not predicate:
+                    raise ValueError(f"check {identifier} has an invalid numeric predicate")
+                for bound in ("minimum", "maximum"):
+                    if bound in predicate and (isinstance(predicate[bound], bool) or not isinstance(predicate[bound], (int, float)) or not math.isfinite(predicate[bound])):
+                        raise ValueError(f"check {identifier} has a non-finite predicate bound")
+                if "minimum" not in predicate and "maximum" not in predicate:
+                    raise ValueError(f"check {identifier} numeric predicate needs a bound")
+                for inclusion in ("minimum_inclusive", "maximum_inclusive"):
+                    if inclusion in predicate and not isinstance(predicate[inclusion], bool):
+                        raise ValueError(f"check {identifier} predicate flags must be Boolean")
+                if "minimum" in predicate and "maximum" in predicate and predicate["minimum"] > predicate["maximum"]:
+                    raise ValueError(f"check {identifier} predicate minimum exceeds maximum")
+            else:
+                value = expected.get("value")
+                if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
+                    raise ValueError(f"check {identifier} numeric expectation must be finite")
+                tolerance = expected.get("tolerance")
+                if not isinstance(tolerance, dict) or set(tolerance) != {"absolute", "relative"}:
+                    raise ValueError(f"check {identifier} numeric expectation needs explicit absolute and relative tolerances")
+                if any(isinstance(tolerance[key], bool) or not isinstance(tolerance[key], (int, float)) or not math.isfinite(tolerance[key]) or tolerance[key] < 0 for key in tolerance):
+                    raise ValueError(f"check {identifier} tolerances must be finite and nonnegative")
+        elif expected["type"] == "array":
+            if check["class"] != "array_spill":
+                raise ValueError(f"check {identifier} may use an array result only for class array_spill")
+            shape = expected.get("shape")
+            if (not isinstance(shape, list) or len(shape) != 2
+                    or any(isinstance(dimension, bool) or not isinstance(dimension, int) or dimension < 1 for dimension in shape)
+                    or shape[0] * shape[1] > 10_000):
+                raise ValueError(f"array spill check {identifier} needs a positive, bounded [rows, columns] shape")
+            expected_cells = _spill_rectangle(check["address"], shape)
+            spill_cells = check.get("spill_cells")
+            if spill_cells != expected_cells:
+                raise ValueError(f"array spill check {identifier} must enumerate its complete rectangular spill_cells")
+        elif "predicate" in expected:
+            raise ValueError(f"check {identifier} predicates currently apply only to numbers")
+        elif expected["type"] != "blank":
+            if "value" not in expected:
+                raise ValueError(f"check {identifier} needs an expected value")
+            wanted = expected["value"]
+            valid = (
+                isinstance(wanted, str) if expected["type"] in {"text", "error"}
+                else isinstance(wanted, bool) if expected["type"] == "boolean"
+                else False
+            )
+            if not valid:
+                raise ValueError(f"check {identifier} expected value does not match its declared type")
+
+        formula_functions = {
+            name.upper().rsplit(".", 1)[-1]
+            for name in re.findall(r"\b([A-Za-z_][A-Za-z0-9_.]*)\s*\(", formula)
+        }
+        if check["class"] == "volatile" and not formula_functions.intersection({"RAND", "RANDBETWEEN", "NOW", "TODAY"}):
+            raise ValueError(f"volatile check {identifier} must exercise a volatile function")
+        if check["class"] in {"array", "array_spill"} and not formula_functions.intersection(ARRAY_FUNCTIONS):
+            raise ValueError(f"array check {identifier} must exercise a supported dynamic-array function")
+        if check["class"] == "array_spill" and expected.get("type") != "array":
+            raise ValueError(f"array spill check {identifier} needs an explicit shape result")
+        if check["class"] != "array_spill" and "spill_cells" in check:
+            raise ValueError(f"only array_spill checks may declare spill_cells ({identifier})")
+        if check["class"] == "iteration":
+            address = check["address"].replace("$", "")
+            column = address.rstrip("0123456789")
+            row = address[len(column):]
+            token = re.compile(rf"(?<![A-Z0-9_])\$?{column}\$?{row}(?![A-Z0-9_])", re.I)
+            # A direct self-reference makes the iteration fixture auditable; the
+            # harness never invents a circular formula on the user's behalf.
+            if not token.search(formula):
+                raise ValueError(f"iteration check {identifier} must refer to its own cell")
+
+    required_classes = data.get("required_fixture_classes", sorted(REQUIRED_RED_FLAG_CLASSES))
+    if not isinstance(required_classes, list) or any(not isinstance(item, str) or item not in ROUNDTRIP_CLASSES for item in required_classes):
+        raise ValueError("required_fixture_classes contains an unsupported class")
+    if len(required_classes) != len(set(required_classes)):
+        raise ValueError("required_fixture_classes must not repeat classes")
+    present_classes = {check["class"] for check in checks}
+    missing = set(required_classes) - present_classes
+    if missing:
+        raise ValueError("round-trip contract is missing required fixture classes: " + ", ".join(sorted(missing)))
+
+    edits = data.get("edits", [])
+    if not isinstance(edits, list) or len(edits) > 100:
+        raise ValueError("round-trip contract supports at most 100 declared input edits")
+    edit_keys: set[tuple[str, str]] = set()
+    for edit in edits:
+        if not isinstance(edit, dict) or not isinstance(edit.get("sheet"), str):
+            raise ValueError("each round-trip edit needs a worksheet and address")
+        if len(edit["sheet"]) > 31 or re.search(r"[\\/*?:\[\]\x00-\x1f]", edit["sheet"]):
+            raise ValueError("round-trip edit has an invalid worksheet name")
+        _address_key(edit.get("address"))
+        key = (edit["sheet"], edit["address"])
+        if key in edit_keys:
+            raise ValueError("round-trip edits must target distinct cells")
+        edit_keys.add(key)
+        value = edit.get("value")
+        if value is not None and not isinstance(value, (str, bool, int, float)):
+            raise ValueError("round-trip edits must be scalar values")
+        if isinstance(value, float) and not math.isfinite(value):
+            raise ValueError("round-trip numeric edits must be finite")
+
+    calculation_settings = data.get("calculation_settings", {})
+    if not isinstance(calculation_settings, dict):
+        raise ValueError("calculation_settings must be an object")
+    if any(check["class"] == "iteration" for check in checks):
+        if calculation_settings.get("iteration") is not True:
+            raise ValueError("iteration fixtures require calculation_settings.iteration=true")
+        count = calculation_settings.get("max_iterations")
+        change = calculation_settings.get("max_change")
+        if isinstance(count, bool) or not isinstance(count, int) or count < 1:
+            raise ValueError("iteration fixtures require a positive max_iterations value")
+        if isinstance(change, bool) or not isinstance(change, (int, float)) or not math.isfinite(change) or change <= 0:
+            raise ValueError("iteration fixtures require a positive finite max_change value")
+
+    allowlist = data.get("allowlist", [])
+    if not isinstance(allowlist, list) or len(allowlist) > 1_000:
+        raise ValueError("allowlist must be a list of at most 1000 entries")
+    allowlist_keys: set[tuple[str, str]] = set()
+    for item in allowlist:
+        if not isinstance(item, dict) or item.get("check_id") not in checks_by_id:
+            raise ValueError("allowlist entry must name a known check")
+        field = item.get("field")
+        key = (item["check_id"], field)
+        if key in allowlist_keys:
+            raise ValueError("allowlist check and field pairs must be unique")
+        allowlist_keys.add(key)
+        reason = item.get("reason")
+        if not isinstance(reason, str) or not reason.strip():
+            raise ValueError("allowlist entries require a human-readable reason")
+        check = checks_by_id[item["check_id"]]
+        if field == "result" and item.get("policy") == "volatile_predicate":
+            if check["class"] != "volatile" or "predicate" not in check["expected_result"]:
+                raise ValueError("volatile result allowlist requires a volatile predicate check")
+        elif field == "formula":
+            accepted = item.get("accepted_values")
+            if not isinstance(accepted, list) or not accepted or any(not isinstance(value, str) or not value.startswith("=") for value in accepted):
+                raise ValueError("formula allowlists require exact accepted_values")
+        else:
+            raise ValueError("unsupported round-trip allowlist policy")
+    for check in checks:
+        if check["class"] == "volatile" and (check["id"], "result") not in allowlist_keys:
+            raise ValueError(f"volatile check {check['id']} needs an explicit result allowlist entry")
+
+    return data
+
+
+def load_roundtrip_contract(path: Path) -> dict[str, Any]:
+    return validate_roundtrip_contract(json.loads(path.read_text(encoding="utf-8")))
+
+
+def roundtrip_cell_value(cell: dict[str, Any] | None) -> dict[str, Any]:
+    """Convert an imported SDK cell to a stable typed receipt value."""
+    if cell is None:
+        return {"type": "blank"}
+    value = cell.get("cached_value") if cell.get("formula") is not None else cell.get("value")
+    if value is None:
+        return {"type": "blank"}
+    if isinstance(value, dict) and set(value) == {"error"}:
+        return {"type": "error", "value": value["error"]}
+    if isinstance(value, bool):
+        return {"type": "boolean", "value": value}
+    if isinstance(value, str):
+        return {"type": "text", "value": value}
+    if isinstance(value, (int, float)) and math.isfinite(value):
+        return {"type": "number", "value": float(value)}
+    return {"type": "unsupported", "python_type": type(value).__name__}
+
+
+def _formula_text(value: Any) -> str | None:
+    if not isinstance(value, str) or not value:
+        return None
+    return value if value.startswith("=") else "=" + value
+
+
+def _model_view(path: Path) -> tuple[dict[str, dict[str, Any]], dict[str, Any]]:
+    from workbook_forge.xlsx import import_xlsx
+
+    model = import_xlsx(path, backend="python")
+    document = model.to_dict()
+    cells: dict[str, dict[str, Any]] = {}
+    for sheet in document["sheets"]:
+        for address, data in sheet["cells"].items():
+            cells[f"{sheet['name']}!{address}"] = {
+                "sheet": sheet["name"],
+                "address": address,
+                "formula": _formula_text(data.get("formula")),
+                "result": roundtrip_cell_value(data),
+                "blocked_reason": data.get("blocked_reason"),
+            }
+    return cells, document
+
+
+def _validate_excel_safe_package(path: Path, cells: dict[str, dict[str, Any]]) -> tuple[dict[str, str], bool]:
+    """Reject external data sources before the workbook is handed to Excel."""
+    from workbook_forge.workbook import Workbook, _safe_xml
+
+    with Workbook.open(path) as workbook:
+        part_names = {name.casefold() for name in workbook._parts}
+        if any("externallink" in name or "connections.xml" in name or "querytables" in name for name in part_names):
+            raise ValueError("Excel round-trip refuses external links, connections, and query tables")
+        for name, content in workbook._parts.items():
+            if not name.endswith(".rels"):
+                continue
+            rels = _safe_xml(content, name)
+            if any(item.attrib.get("TargetMode", "").casefold() == "external" for item in rels):
+                raise ValueError("Excel round-trip refuses external package relationships")
+        calculation = _safe_xml(workbook._parts[workbook._workbook_part], workbook._workbook_part).find(_q("calcPr"))
+        properties = {} if calculation is None else dict(calculation.attrib)
+        uses_1904 = workbook._uses_1904_date_system
+    for item in cells.values():
+        formula = item["formula"] or ""
+        functions = {name.upper().rsplit(".", 1)[-1] for name in re.findall(r"\b([A-Za-z_][A-Za-z0-9_.]*)\s*\(", formula)}
+        denied = functions.intersection(EXTERNAL_DATA_FUNCTIONS)
+        if denied:
+            raise ValueError("Excel round-trip refuses external-data formula functions: " + ", ".join(sorted(denied)))
+    return properties, uses_1904
+
+
+def _contract_check_map(contract: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    return {f"{check['sheet']}!{check['address']}": check for check in contract["checks"]}
+
+
+def _formula_allowlist(contract: dict[str, Any], check_id: str) -> list[str]:
+    accepted = []
+    for entry in contract.get("allowlist", []):
+        if entry["check_id"] == check_id and entry["field"] == "formula":
+            accepted.extend(entry["accepted_values"])
+    return accepted
+
+
+def roundtrip_result_matches(actual: dict[str, Any], expected: dict[str, Any]) -> bool:
+    if actual.get("type") != expected["type"]:
+        return False
+    if expected["type"] == "array":
+        return actual == {"type": "array", "shape": expected["shape"]}
+    if expected["type"] == "number":
+        value = actual.get("value")
+        if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
+            return False
+        if "predicate" in expected:
+            bounds = expected["predicate"]
+            if "minimum" in bounds:
+                if value < bounds["minimum"] or (value == bounds["minimum"] and not bounds.get("minimum_inclusive", True)):
+                    return False
+            if "maximum" in bounds:
+                if value > bounds["maximum"] or (value == bounds["maximum"] and not bounds.get("maximum_inclusive", True)):
+                    return False
+            return True
+        tolerance = expected["tolerance"]
+        return math.isclose(value, expected["value"], rel_tol=tolerance["relative"], abs_tol=tolerance["absolute"])
+    if expected["type"] == "blank":
+        return actual == {"type": "blank"}
+    return actual == {"type": expected["type"], "value": expected["value"]}
+
+
+def _typed_applescript_value(value: Any) -> str:
+    if isinstance(value, str):
+        return _as_string(value)
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if value is None:
+        return "missing value"
+    if isinstance(value, (int, float)) and math.isfinite(value):
+        return repr(value)
+    raise ValueError("unsupported AppleScript cell edit value")
+
+
+def build_roundtrip_applescript(contract: dict[str, Any], *, timeout: float = 180) -> str:
+    """Build a script scoped to one copied workbook and one explicit contract."""
+    validate_roundtrip_contract(contract)
+    edits = []
+    for edit in contract.get("edits", []):
+        edits.append(
+            f"set value of range {_as_string(edit['address'])} of worksheet {_as_string(edit['sheet'])} of targetBook to {_typed_applescript_value(edit['value'])}"
+        )
+    if contract.get("calculation_settings", {}).get("iteration"):
+        settings = contract["calculation_settings"]
+        preflight = f'''if iterationBefore is "missing value" then error "Excel iteration setting is not observable; harness will not change global settings"
+            if maxIterationsBefore is "missing value" then error "Excel max_iterations setting is not observable; harness will not change global settings"
+            if maxChangeBefore is "missing value" then error "Excel max_change setting is not observable; harness will not change global settings"
+            if iteration is not true then error "Excel iteration must already be enabled; harness will not change global settings"
+            if (max iterations) is not {settings["max_iterations"]} then error "Excel iteration settings do not match; harness will not change global settings"
+            if (max change) is not {settings["max_change"]} then error "Excel iteration settings do not match; harness will not change global settings"
+            '''
+    else:
+        preflight = ""
+    return f'''on canonicalPath(pathText)
+    if pathText starts with "/" then
+        return POSIX path of ((POSIX file pathText) as alias)
+    end if
+    return POSIX path of (pathText as alias)
+end canonicalPath
+
+on run argv
+    set workbookPath to item 1 of argv
+    set workbookName to item 2 of argv
+    set workbookFile to (POSIX file workbookPath) as alias
+    with timeout of {max(1, math.ceil(timeout))} seconds
+        tell application "Microsoft Excel"
+            if (count of workbooks) is not 0 then error "Full rebuild requires Excel to have no other open workbooks"
+            set modeBefore to calculation as text
+            set iterationBefore to iteration as text
+            set maxIterationsBefore to max iterations as text
+            set maxChangeBefore to max change as text
+            ''' + preflight + '''
+            log "stage:open"
+            open workbookFile
+            log "stage:identity"
+            if not (exists workbook workbookName) then error "SDK workbook did not open"
+            set targetBook to workbook workbookName
+            if (name of targetBook) is not workbookName then error "SDK workbook identity mismatch"
+            set openedPath to my canonicalPath(full name of targetBook)
+            if openedPath is not workbookPath then error "SDK workbook path mismatch"
+            if (count of workbooks) is not 1 then error "Unexpected workbook opened during isolated round-trip"
+            ''' + "\n            ".join(edits) + '''
+            log "stage:full_rebuild"
+            calculate full rebuild
+            log "stage:save"
+            save targetBook
+            log "stage:close"
+            close targetBook saving no
+            set modeAfter to calculation as text
+            set iterationAfter to iteration as text
+            set maxIterationsAfter to max iterations as text
+            set maxChangeAfter to max change as text
+            set metadata to "engine=Microsoft Excel Desktop" & linefeed
+            set metadata to metadata & "excel_version=" & (version as text) & linefeed
+            set metadata to metadata & "calculation_version=" & (calculation version as text) & linefeed
+            set metadata to metadata & "calculation_mode_before=" & modeBefore & linefeed
+            set metadata to metadata & "calculation_mode_after=" & modeAfter & linefeed
+            set metadata to metadata & "iteration_before=" & iterationBefore & linefeed
+            set metadata to metadata & "iteration_after=" & iterationAfter & linefeed
+            set metadata to metadata & "max_iterations_before=" & maxIterationsBefore & linefeed
+            set metadata to metadata & "max_iterations_after=" & maxIterationsAfter & linefeed
+            set metadata to metadata & "max_change_before=" & maxChangeBefore & linefeed
+            set metadata to metadata & "max_change_after=" & maxChangeAfter & linefeed
+            set metadata to metadata & "full_rebuild_invoked=true" & linefeed
+            set metadata to metadata & "saved=true" & linefeed
+            set metadata to metadata & "owned_workbook_closed=true"
+            return metadata
+        end tell
+    end timeout
+end run
+'''
+
+
+def _metadata_from_roundtrip(output: str) -> dict[str, str]:
+    metadata = dict(line.split("=", 1) for line in output.strip().splitlines() if "=" in line)
+    required = (
+        "excel_version", "calculation_version", "calculation_mode_before", "calculation_mode_after",
+        "iteration_before", "iteration_after", "max_iterations_before", "max_iterations_after",
+        "max_change_before", "max_change_after", "full_rebuild_invoked", "saved", "owned_workbook_closed",
+    )
+    for key in required:
+        if not metadata.get(key):
+            raise ValueError(f"Excel round-trip metadata is missing {key}")
+    if metadata["full_rebuild_invoked"] != "true" or metadata["saved"] != "true":
+        raise ValueError("Excel did not confirm full recalculation and save")
+    if metadata["owned_workbook_closed"] != "true":
+        raise ValueError("Excel did not confirm closing the owned workbook")
+    setting_names = ("iteration", "max_iterations", "max_change", "calculation_mode")
+    unavailable = []
+    for key in setting_names:
+        before = metadata.get(f"{key}_before")
+        after = metadata.get(f"{key}_after")
+        if before == "missing value" or after == "missing value":
+            unavailable.append(key)
+            continue
+        if before != after:
+            raise ValueError(f"Excel global {key} setting changed during the run")
+    metadata["global_settings_observable"] = "false" if unavailable else "true"
+    metadata["global_settings_unchanged"] = "unverified" if unavailable else "true"
+    metadata["global_settings_unavailable"] = ",".join(unavailable)
+    return metadata
+
+
+def _run_preflight(contract: dict[str, Any], cells: dict[str, dict[str, Any]], calc_properties: dict[str, str]) -> list[str]:
+    failures = []
+    checks = _contract_check_map(contract)
+    for key, check in checks.items():
+        cell = cells.get(key)
+        expected = check["expected_formula"]
+        accepted = [expected, *_formula_allowlist(contract, check["id"])]
+        actual = None if cell is None else cell["formula"]
+        if actual not in accepted:
+            failures.append(f"{key}: exported formula does not match contract {check['id']}")
+    for edit in contract.get("edits", []):
+        key = f"{edit['sheet']}!{edit['address']}"
+        cell = cells.get(key)
+        if cell is None:
+            failures.append(f"{key}: declared edit target is missing")
+        elif cell["formula"] is not None:
+            failures.append(f"{key}: declared edit target is a formula cell")
+    if any(check["class"] == "iteration" for check in contract["checks"]):
+        expected = contract["calculation_settings"]
+        if calc_properties.get("iterate", "0").casefold() not in {"1", "true"}:
+            failures.append("iteration fixture requires calcPr iterate=true in the exported workbook")
+        if int(calc_properties.get("iterateCount", "100")) != expected["max_iterations"]:
+            failures.append("iteration fixture max_iterations differs from exported calcPr")
+        try:
+            actual_change = float(calc_properties.get("iterateDelta", "0.001"))
+        except ValueError:
+            actual_change = math.nan
+        if not math.isclose(actual_change, expected["max_change"], rel_tol=0, abs_tol=1e-12):
+            failures.append("iteration fixture max_change differs from exported calcPr")
+    return failures
+
+
+def _roundtrip_capability_blockers(contract: dict[str, Any]) -> list[dict[str, Any]]:
+    blockers = []
+    for check in contract["checks"]:
+        limitation = UNSUPPORTED_ROUNDTRIP_CAPABILITIES.get(check["class"])
+        if limitation is None:
+            continue
+        blockers.append({
+            "check_id": check["id"],
+            "class": check["class"],
+            "cell": f"{check['sheet']}!{check['address']}",
+            "expected_formula": check["expected_formula"],
+            "expected_result": check["expected_result"],
+            "spill_cells": check.get("spill_cells", []),
+            "status": "blocked",
+            "blocker_kind": "unsupported_capability",
+            "capability": limitation["capability"],
+            "reason": limitation["reason"],
+        })
+    return blockers
+
+
+def _fixture_coverage(contract: dict[str, Any]) -> list[dict[str, Any]]:
+    required = contract.get("required_fixture_classes", sorted(REQUIRED_RED_FLAG_CLASSES))
+    checks_by_class: dict[str, list[str]] = {}
+    for check in contract["checks"]:
+        checks_by_class.setdefault(check["class"], []).append(check["id"])
+    return [
+        {"class": class_name, "check_ids": checks_by_class.get(class_name, []), "status": "not_observed"}
+        for class_name in required
+    ]
+
+
+def _compare_roundtrip(
+    before: dict[str, dict[str, Any]], after: dict[str, dict[str, Any]],
+    contract: dict[str, Any], metadata: dict[str, str],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[str]]:
+    checks_by_key = _contract_check_map(contract)
+    formula_diffs = []
+    all_formula_keys = sorted(
+        key for key in set(before) | set(after)
+        if (before.get(key) or {}).get("formula") is not None or (after.get(key) or {}).get("formula") is not None
+    )
+    for key in all_formula_keys:
+        prior = (before.get(key) or {}).get("formula")
+        current = (after.get(key) or {}).get("formula")
+        if prior == current:
+            continue
+        check = checks_by_key.get(key)
+        accepted = [] if check is None else [check["expected_formula"], *_formula_allowlist(contract, check["id"])]
+        allowed = current in accepted
+        formula_diffs.append({"cell": key, "before": prior, "after": current, "allowlisted": allowed})
+
+    outcomes = []
+    mismatches = []
+    for check in contract["checks"]:
+        key = f"{check['sheet']}!{check['address']}"
+        old = before.get(key)
+        new = after.get(key)
+        expected_formula = check["expected_formula"]
+        accepted_formulas = [expected_formula, *_formula_allowlist(contract, check["id"])]
+        before_formula = None if old is None else old["formula"]
+        after_formula = None if new is None else new["formula"]
+        before_matches = before_formula in accepted_formulas
+        formula_matches = after_formula in accepted_formulas
+        observed = {"type": "blank"} if new is None else new["result"]
+        expected_result = check["expected_result"]
+        result_matches = roundtrip_result_matches(observed, expected_result)
+        settings_match = True
+        if check["class"] == "iteration":
+            required = contract["calculation_settings"]
+            settings_match = (
+                metadata.get("iteration_after", "").casefold() == "true"
+                and int(metadata["max_iterations_after"]) == required["max_iterations"]
+                and math.isclose(float(metadata["max_change_after"]), required["max_change"], rel_tol=0, abs_tol=1e-12)
+            )
+        local_mismatches = []
+        if not before_matches:
+            local_mismatches.append("exported formula differs from contract")
+        if not formula_matches:
+            local_mismatches.append("reimported formula differs from contract")
+        if not result_matches:
+            local_mismatches.append("reimported result differs from expected behavior")
+        if not settings_match:
+            local_mismatches.append("Excel iterative calculation settings differ from contract")
+        allowlist = [entry for entry in contract.get("allowlist", []) if entry["check_id"] == check["id"]]
+        outcome = {
+            "id": check["id"], "class": check["class"], "cell": key,
+            "before_recalc": {"formula": before_formula, "result": {"type": "blank"} if old is None else old["result"]},
+            "after_recalc_and_reimport": {"formula": after_formula, "result": observed},
+            "expected_formula": expected_formula, "accepted_formula_values": accepted_formulas,
+            "expected_result": expected_result, "formula_matches": formula_matches,
+            "result_matches": result_matches, "calculation_settings_match": settings_match,
+            "allowlist_applied": allowlist, "matches": not local_mismatches,
+            "mismatches": local_mismatches,
+        }
+        outcomes.append(outcome)
+        mismatches.extend(f"{check['id']}: {message}" for message in local_mismatches)
+    for item in formula_diffs:
+        if not item["allowlisted"]:
+            mismatches.append(f"{item['cell']}: formula changed outside the exact allowlist")
+    return outcomes, formula_diffs, mismatches
+
+
+def run_roundtrip(
+    input_path: Path, contract: dict[str, Any], output_root: Path, *, run_excel: bool = False,
+    timeout: float = 180,
+) -> tuple[Path, dict[str, Any]]:
+    """Recalculate an SDK workbook in Excel, save a scratch copy, and SDK-reimport it."""
+    validate_roundtrip_contract(contract)
+    output_root.mkdir(parents=True, exist_ok=True)
+    directory = Path(tempfile.mkdtemp(prefix="workbook-forge-roundtrip-", dir=output_root)).resolve()
+    source = input_path.expanduser().resolve()
+    working_copy = directory / "roundtrip.xlsx"
+    receipt: dict[str, Any] = {
+        "schema_version": 1, "harness": "excel_export_roundtrip_v1",
+        "recorded_at_utc": datetime.now(timezone.utc).isoformat(), "status": "failed",
+        "contract_id": contract["id"], "contract_sha256": hashlib.sha256(json.dumps(contract, sort_keys=True).encode()).hexdigest(),
+        "model_version": contract.get("model_version"), "engine_requested": "Microsoft Excel Desktop",
+        "source_workbook": source.name, "observations": [], "formula_diffs": [],
+        "fixture_coverage": _fixture_coverage(contract),
+        "safety": {"source_overwritten": False, "global_settings_written": False, "external_sources_allowed": False},
+    }
+    try:
+        if not math.isfinite(timeout) or timeout <= 0:
+            raise ValueError("round-trip automation timeout must be positive and finite")
+        if source.suffix.casefold() != ".xlsx" or not source.is_file():
+            raise ValueError("round-trip input must be an existing macro-free .xlsx file")
+        source_hash = _hash(source)
+        receipt["source_workbook_sha256"] = source_hash
+        before, before_document = _model_view(source)
+        calc_properties, uses_1904 = _validate_excel_safe_package(source, before)
+        receipt["exported_model_sha256"] = hashlib.sha256(json.dumps(before_document, sort_keys=True, allow_nan=False).encode()).hexdigest()
+        receipt["date_system"] = "1904" if uses_1904 else "1900"
+        receipt["exported_calc_properties"] = calc_properties
+        receipt["formula_count_before"] = sum(item["formula"] is not None for item in before.values())
+        capability_blockers = _roundtrip_capability_blockers(contract)
+        preflight = [] if capability_blockers else _run_preflight(contract, before, calc_properties)
+        if capability_blockers:
+            for item in receipt["fixture_coverage"]:
+                if item["class"] in {blocker["class"] for blocker in capability_blockers}:
+                    item["status"] = "blocked"
+            receipt.update(
+                status="blocked", stage="capability_preflight", blocker_kind="unsupported_capability",
+                reason="A required workbook behavior cannot be tested by the current SDK export path",
+                capability_blockers=capability_blockers,
+                preflight_skipped=True,
+            )
+        elif preflight:
+            receipt.update(status="mismatch", stage="preflight", mismatches=preflight)
+        elif not run_excel:
+            receipt.update(status="prepared", stage="preflight", reason="Excel was not invoked; no recalculation or compatibility claim is made")
+        elif platform.system() != "Darwin":
+            receipt.update(status="blocked", stage="automation", reason="Microsoft Excel Desktop automation requires macOS")
+        else:
+            shutil.copyfile(source, working_copy)
+            script_path = directory / "roundtrip.applescript"
+            script_path.write_text(build_roundtrip_applescript(contract, timeout=timeout), encoding="utf-8")
+            receipt["working_copy"] = working_copy.name
+            receipt["working_copy_sha256_before_excel"] = _hash(working_copy)
+            receipt["script_sha256"] = _hash(script_path)
+            receipt["stage"] = "automation"
+            completed = subprocess.run(
+                ["/usr/bin/osascript", str(script_path), str(working_copy), working_copy.name],
+                capture_output=True, text=True, timeout=timeout, check=False,
+            )
+            if completed.returncode:
+                error = completed.stderr or ""
+                code = re.search(r"\((-?\d+)\)\s*$", error)
+                stage = re.findall(r"stage:(\w+)", error)
+                blocked = any(token in error.casefold() for token in (
+                    "not authorized", "-1743", "-1712", "-600", "no other open workbooks",
+                    "iteration setting is not observable", "max_iterations setting is not observable",
+                    "max_change setting is not observable", "iteration must already be enabled",
+                    "iteration settings do not match",
+                ))
+                receipt.update(
+                    status="blocked" if blocked else "failed", stage=stage[-1] if stage else "before_open",
+                    reason="Excel automation was blocked by the environment" if blocked else "Excel automation command failed",
+                    automation_error_code=code.group(1) if code else None,
+                    owned_workbook_may_remain_open="stage:open" in error or "stage:identity" in error,
+                )
+                if "no other open workbooks" in error.casefold():
+                    receipt["reason"] = "Full rebuild would affect all open workbooks; close them and retry"
+                if "iteration must already be enabled" in error.casefold():
+                    receipt["reason"] = "Excel iteration is disabled; harness will not change global settings"
+                if "setting is not observable" in error.casefold():
+                    receipt["reason"] = "Excel iteration settings are not observable; harness will not change global settings"
+                if "iteration settings do not match" in error.casefold():
+                    receipt["reason"] = "Excel iteration settings differ; harness will not change global settings"
+                if "not authorized" in error.casefold() or "-1743" in error:
+                    receipt["reason"] = "Excel Apple-event automation is not authorized"
+                if "-1712" in error:
+                    receipt["reason"] = "Excel Apple-event automation timed out"
+            else:
+                metadata = _metadata_from_roundtrip(completed.stdout)
+                receipt["excel"] = metadata
+                receipt["full_rebuild_invoked"] = True
+                receipt["saved_workbook_sha256"] = _hash(working_copy)
+                receipt["stage"] = "reimport"
+                after, after_document = _model_view(working_copy)
+                saved_calc_properties, saved_uses_1904 = _validate_excel_safe_package(working_copy, after)
+                receipt["reimported_model_sha256"] = hashlib.sha256(json.dumps(after_document, sort_keys=True, allow_nan=False).encode()).hexdigest()
+                receipt["saved_calc_properties"] = saved_calc_properties
+                receipt["formula_count_after"] = sum(item["formula"] is not None for item in after.values())
+                receipt["date_system_after"] = "1904" if saved_uses_1904 else "1900"
+                outcomes, formula_diffs, mismatches = _compare_roundtrip(before, after, contract, metadata)
+                receipt["observations"] = outcomes
+                receipt["formula_diffs"] = formula_diffs
+                if saved_uses_1904 != uses_1904:
+                    mismatches.append("workbook date system changed during Excel round-trip")
+                for edit in contract.get("edits", []):
+                    key = f"{edit['sheet']}!{edit['address']}"
+                    actual = (after.get(key) or {}).get("result", {"type": "blank"})
+                    expected = {"type": "blank"} if edit["value"] is None else {
+                        "type": "boolean" if isinstance(edit["value"], bool) else "number" if isinstance(edit["value"], (int, float)) else "text",
+                        **({} if edit["value"] is None else {"value": edit["value"]}),
+                    }
+                    if actual != expected:
+                        mismatches.append(f"{key}: edited input differs after save and reimport")
+                outcome_by_id = {outcome["id"]: outcome for outcome in outcomes}
+                for item in receipt["fixture_coverage"]:
+                    item["status"] = "observed" if all(outcome_by_id[check_id]["matches"] for check_id in item["check_ids"]) else "mismatch"
+                receipt.update(status="mismatch" if mismatches else "observed", stage="reimport", mismatches=mismatches)
+        receipt["source_unchanged"] = source.exists() and _hash(source) == receipt.get("source_workbook_sha256")
+    except subprocess.TimeoutExpired:
+        receipt.update(status="blocked", stage="automation", reason="Excel automation timed out; the owned scratch workbook may remain open", owned_workbook_may_remain_open=True)
+    except OSError as exc:
+        if receipt.get("stage") == "automation":
+            receipt.update(status="blocked", reason="Unable to start Excel automation: " + str(exc))
+        else:
+            receipt.update(status="failed", reason=f"{type(exc).__name__}: {exc}")
+    except Exception as exc:
+        receipt.update(status="failed", stage=receipt.get("stage", "preflight"), reason=f"{type(exc).__name__}: {exc}")
+    receipt["receipt"] = "receipt.json"
+    receipt_path = directory / "receipt.json"
+    receipt_path.write_text(json.dumps(receipt, indent=2, ensure_ascii=False, allow_nan=False) + "\n", encoding="utf-8")
+    return receipt_path, receipt
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--cases", type=Path, default=DEFAULT_CASES)
     parser.add_argument("--output-dir", type=Path, default=Path(tempfile.gettempdir()))
     parser.add_argument("--run-excel", action="store_true", help="Explicitly authorize local Excel automation for a new synthetic workbook")
     parser.add_argument("--live-scenario", action="store_true", help="With --run-excel, observe the toolkit scenario in a new unsaved Excel workbook")
-    parser.add_argument("--timeout", type=float, default=60)
+    parser.add_argument("--roundtrip", type=Path, help="Open an SDK-generated .xlsx copy in Excel, full-rebuild, save, and reimport it")
+    parser.add_argument("--contract", type=Path, help="Version 1 JSON contract for --roundtrip cell edits and behavior checks")
+    parser.add_argument("--timeout", type=float, default=180)
     args = parser.parse_args(argv)
     if not math.isfinite(args.timeout) or args.timeout <= 0:
         parser.error("--timeout must be positive and finite")
+    if args.roundtrip is not None:
+        if not args.run_excel:
+            parser.error("--roundtrip requires explicit --run-excel")
+        if args.live_scenario:
+            parser.error("--roundtrip cannot be combined with --live-scenario")
+        if args.contract is None:
+            parser.error("--roundtrip requires --contract")
+        try:
+            contract = load_roundtrip_contract(args.contract)
+        except (OSError, ValueError, json.JSONDecodeError) as exc:
+            parser.error(f"invalid round-trip contract: {exc}")
+        path, receipt = run_roundtrip(args.roundtrip, contract, args.output_dir, run_excel=True, timeout=args.timeout)
+        print(json.dumps({"status": receipt["status"], "receipt": str(path), "checks": len(receipt.get("observations", [])), "model_version": receipt.get("model_version")}))
+        return 0 if receipt["status"] == "observed" else 2
+    if args.contract is not None:
+        parser.error("--contract requires --roundtrip")
     if args.live_scenario:
         if not args.run_excel:
             parser.error("--live-scenario requires explicit --run-excel")
