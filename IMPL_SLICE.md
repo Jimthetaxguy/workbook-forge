@@ -26,3 +26,6 @@ Landed first concrete implementation:
 - `python/tests/test_intake.py` — fixture covers formula, cross-sheet ref, number format, empty cell
 
 Later slices (calc-binding, export, agent-headless) should import `workbook_forge.model` directly.
+
+## Vision
+Follow [docs/vision.md](docs/vision.md). Shared types and build rules there bind this slice to the others.
