@@ -1,0 +1,3 @@
+# Tests whose identifier changed. Old identifier, a tab, new identifier.
+# A new identifier also covers its parametrized cases.
+python/tests/test_evaluate.py::test_shared_golden_fixture	python/tests/test_evaluate.py::test_shared_golden_fixture

@@ -62,64 +62,69 @@ def _fixture_value(value):
     return value
 
 
-def test_shared_golden_fixture():
-    fixture = Path(__file__).parents[2] / "fixtures" / "formula-cases.jsonl"
-    for line in fixture.read_text().splitlines():
-        case = json.loads(line)
-        cells = {
-            address: _fixture_value(value)
-            for address, value in case.get("cells", {}).items()
-        }
-        expected = case["expected"]
-        value = (
-            evaluate_result(case["formula"], cells)
-            if "array" in expected
-            else evaluate(case["formula"], cells)
-        )
-        if "array" in expected:
-            target = expected["array"]
-            assert isinstance(value, ArrayValue), case["id"]
-            assert value.shape == (len(target), len(target[0])), case["id"]
-            for actual_row, expected_row in zip(value.rows, target, strict=True):
-                for actual_cell, expected_cell in zip(actual_row, expected_row, strict=True):
-                    if isinstance(expected_cell, (int, float)) and not isinstance(expected_cell, bool):
-                        assert (
-                            isinstance(actual_cell, (int, float))
-                            and not isinstance(actual_cell, bool)
-                            and math.isclose(
-                                actual_cell,
-                                expected_cell,
-                                rel_tol=1e-12,
-                                abs_tol=1e-12,
-                            )
-                        ), case["id"]
-                    elif isinstance(expected_cell, dict) and isinstance(expected_cell.get("error"), str):
-                        assert isinstance(actual_cell, ErrorValue) and actual_cell.code == expected_cell["error"], case["id"]
-                    else:
-                        assert actual_cell == expected_cell, case["id"]
-        elif "exact_number" in expected:
-            target = int(expected["exact_number"])
-            assert (
-                isinstance(value, (int, float))
-                and not isinstance(value, bool)
-                and value == target
-            ), case["id"]
-        elif "number" in expected:
-            assert (
-                isinstance(value, (int, float))
-                and not isinstance(value, bool)
-                and math.isclose(value, expected["number"], rel_tol=1e-12, abs_tol=1e-12)
-            ), case["id"]
-        elif "text" in expected:
-            assert value == expected["text"], case["id"]
-        elif "bool" in expected:
-            assert value is expected["bool"], case["id"]
-        elif expected.get("blank") is True:
-            assert value is None, case["id"]
-        elif "error" in expected:
-            assert isinstance(value, ErrorValue) and value.code == expected["error"], case["id"]
-        else:
-            raise AssertionError(f"unknown fixture result shape for {case['id']}")
+_GOLDEN_CASES = [
+    json.loads(line)
+    for line in (Path(__file__).parents[2] / "fixtures" / "formula-cases.jsonl").read_text().splitlines()
+]
+
+
+# One test per case, so that one wrong case does not hide the others.
+@pytest.mark.parametrize("case", _GOLDEN_CASES, ids=[case["id"] for case in _GOLDEN_CASES])
+def test_shared_golden_fixture(case):
+    cells = {
+        address: _fixture_value(value)
+        for address, value in case.get("cells", {}).items()
+    }
+    expected = case["expected"]
+    value = (
+        evaluate_result(case["formula"], cells)
+        if "array" in expected
+        else evaluate(case["formula"], cells)
+    )
+    if "array" in expected:
+        target = expected["array"]
+        assert isinstance(value, ArrayValue), case["id"]
+        assert value.shape == (len(target), len(target[0])), case["id"]
+        for actual_row, expected_row in zip(value.rows, target, strict=True):
+            for actual_cell, expected_cell in zip(actual_row, expected_row, strict=True):
+                if isinstance(expected_cell, (int, float)) and not isinstance(expected_cell, bool):
+                    assert (
+                        isinstance(actual_cell, (int, float))
+                        and not isinstance(actual_cell, bool)
+                        and math.isclose(
+                            actual_cell,
+                            expected_cell,
+                            rel_tol=1e-12,
+                            abs_tol=1e-12,
+                        )
+                    ), case["id"]
+                elif isinstance(expected_cell, dict) and isinstance(expected_cell.get("error"), str):
+                    assert isinstance(actual_cell, ErrorValue) and actual_cell.code == expected_cell["error"], case["id"]
+                else:
+                    assert actual_cell == expected_cell, case["id"]
+    elif "exact_number" in expected:
+        target = int(expected["exact_number"])
+        assert (
+            isinstance(value, (int, float))
+            and not isinstance(value, bool)
+            and value == target
+        ), case["id"]
+    elif "number" in expected:
+        assert (
+            isinstance(value, (int, float))
+            and not isinstance(value, bool)
+            and math.isclose(value, expected["number"], rel_tol=1e-12, abs_tol=1e-12)
+        ), case["id"]
+    elif "text" in expected:
+        assert value == expected["text"], case["id"]
+    elif "bool" in expected:
+        assert value is expected["bool"], case["id"]
+    elif expected.get("blank") is True:
+        assert value is None, case["id"]
+    elif "error" in expected:
+        assert isinstance(value, ErrorValue) and value.code == expected["error"], case["id"]
+    else:
+        raise AssertionError(f"unknown fixture result shape for {case['id']}")
 
 
 def test_result_api_preserves_array_shape_and_scalar_api_stays_scalar():
