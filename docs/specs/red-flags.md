@@ -24,7 +24,7 @@ These specs state requirements. This table states which of them the code on
 | Array spill, volatile, iteration and quirk classes observed (Spec 2) | Not observed. Spill placement is unsupported on export |
 | `oracle_optional` and `oracle_required` test runs (Spec 2) | Not built |
 | Detectors behind an off-switch (Spec 3) | Not built |
-| `intake_workbook` emitting the canonical model (Spec 4) | Not on `main`. `impl/v1-intake` has it for an earlier shape of the model |
+| `intake_workbook` emitting the canonical model (Spec 4) | Built: `python/workbook_forge/intake.py`, and the `workbook-forge intake` command |
 | A job that runs both suites on every change | Not built. `tools/gate.sh` runs them locally |
 
 ---
@@ -259,7 +259,7 @@ schema moves. The extracted model is already a product artifact.
 2. Run one explicitly bound calculation from the same canonical JSON document
    through the Python and Rust engines and compare outputs. Done.
 3. Export from either backend and run the full-recalculation Excel harness.
-4. Port intake so that it emits the canonical model.
+4. Port intake so that it emits the canonical model. Done.
 5. Wrap the proven path in the Python headless CLI first. Expose Rust to agents
    after its native API offers the same operations.
 6. Expand intake only from gaps exposed by round-trip diffs.

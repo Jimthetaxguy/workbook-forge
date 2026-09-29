@@ -138,11 +138,11 @@ Call red flags are locked as build contracts in [docs/specs/red-flags.md](specs/
    `tools/canonical_excel_receipt.py --excel` runs it on the canonical fixture.
    Package generation and reimport without Excel Desktop are useful checks.
    Matching cached XML values or SDK-only reimport is not a pass for this gate.
-3. **Workbook intake onto the canonical model.** `impl/v1-intake` has a typed
-   intake reader and CLI that emit canonical JSON in an earlier shape of the
-   model. Port it to the schema on `main`. Then use the gaps and mismatches the
-   round trip exposes to decide which cells, relationships and unsupported
-   features the cell map must capture next.
+3. **Workbook intake onto the canonical model. Built.** `workbook_forge.intake`
+   reads an `.xlsx` file into the canonical model and `workbook-forge intake`
+   prints it. It refuses array spill and grouped formulas with a reason. Use
+   the gaps and mismatches the round trip exposes to decide which cells,
+   relationships and unsupported features the cell map must capture next.
 4. **Headless path (`impl/v1-agent-headless`).** Put the proven intake →
    versioned model → calculation → export path behind the Python CLI/SDK first,
    without requiring a GUI. Include `model_version` in summaries. Expose Rust

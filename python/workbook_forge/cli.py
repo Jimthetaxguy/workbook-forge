@@ -79,6 +79,9 @@ def main(argv: list[str] | None = None) -> int:
     inspect = commands.add_parser("inspect", help="inspect an XLSX or a model interchange document")
     inspect.add_argument("source", type=Path)
     inspect.add_argument("--bindings", type=Path)
+    intake = commands.add_parser("intake", help="read an XLSX into the canonical workbook model")
+    intake.add_argument("source", type=Path)
+    intake.add_argument("--summary", action="store_true", help="print versions and counts instead of the model")
     extract = commands.add_parser("extract", help="extract namespace-aware XLSX patterns and formula mappings")
     extract.add_argument("source", type=Path)
     extract.add_argument("--pattern", dest="patterns", action="append", help="pattern ID; repeat to select multiple patterns")
@@ -103,6 +106,18 @@ def main(argv: list[str] | None = None) -> int:
         command.add_argument("--xlsx", type=Path, help="write a new Excel workbook")
     args = parser.parse_args(argv)
     try:
+        if args.command == "intake":
+            from .canonical_xlsx import CanonicalPackageError
+            from .intake import intake_workbook, intake_workbook_model, summarize
+
+            try:
+                if args.summary:
+                    print(json.dumps(summarize(intake_workbook_model(args.source)), ensure_ascii=False, allow_nan=False))
+                else:
+                    sys.stdout.write(intake_workbook(args.source).decode("utf-8") + "\n")
+            except CanonicalPackageError as error:
+                raise ValueError(str(error)) from error
+            return 0
         if args.command == "extract":
             from .extraction import extract_xlsx
 

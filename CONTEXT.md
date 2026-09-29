@@ -6,11 +6,11 @@ date: '2026-09-29T06:30:00-04:00'
 type: project-context
 task: Build an SDK for Excel in agent-ready formats using independent Python and Rust implementations
 status: active
-summary: Workbook Forge is an agent-ready Excel compiler; the v1 spine is a versioned canonical model, one shared Python/Rust calculation, Excel recalc roundtrip evidence, and a headless path before broader intake. The model and one bound calculation are on main; the Excel proof, intake onto that model and the headless path are outstanding.
+summary: Workbook Forge is an agent-ready Excel compiler; the v1 spine is a versioned canonical model, one shared Python/Rust calculation, Excel recalc roundtrip evidence, and a headless path before broader intake. The model, one bound calculation and workbook intake are built; the Excel proof and the headless path are outstanding.
 next_steps:
   - "On a Mac with Excel, run `python3 tools/canonical_excel_receipt.py --fixture fixtures/operating-scenario.workbook.json --output-dir receipts/canonical-operating-scenario-excel --excel` and commit the receipt. Spill placement stays blocked until export can write those cells."
   - Fix the confirmed defects in order of severity, starting with rounding of two-decimal amounts. Take expected values from Microsoft's examples or decimal arithmetic, never from either engine.
-  - Port workbook intake from impl/v1-intake so that it emits the canonical model in the schema on main, and print model_version in the CLI summary.
+  - Decide whether bindings get a value type, required status and constraints. That changes the schema and needs a new version.
   - Put the proven intake → model → calculation → export path behind the Python headless CLI, then expose Rust operations with matching behavior.
   - Use docs/product-specifications.md as the durable product and acceptance contract for intake, compilation, headless use, formula hypotheses and evidence-led coverage.
   - Expand the verified agent operation contract against concrete workbook tasks; keep framework/MCP adapters thin and retain source/revision-aware results.
@@ -18,7 +18,7 @@ next_steps:
   - After the core loop is evidenced, prioritize additional formula families by documented workbook use and dependency value.
 remaining:
   - Worksheet spill projection, volatile/iteration/quirk round-trip classes, cross-backend bound export, and broad Excel 365 coverage are not complete.
-  - Intake and the calculation session on impl/v1-intake and impl/v1-calc-binding use an earlier shape of the model and are not ported; agent-headless has not started its implementation.
+  - From impl/v1-intake and impl/v1-calc-binding, intake is ported. Typed binding constraints, the calculation session with revisions, and refusal of duplicate JSON keys are not. Agent-headless has not started its implementation.
   - No pull request so far has had checks run on it or a review; mergeability alone is not acceptance evidence. tools/gate.sh is the check to run.
   - 34 confirmed review findings are open; the most serious is rounding of two-decimal amounts in both engines.
   - "GitHub reports Jimthetaxguy/workbook-forge as public, verified 2026-09-28; historical private-release preparation notes in docs/run-history.md describe their original checkpoints."
@@ -80,7 +80,7 @@ The [current-state findings](docs/toolkit-delivery.md#current-state-findings) se
 The native primitive interface adds nine functions and ten binary operators, typed native values, named-input composition and inspectable operation identities without requiring a workbook. Both packages provide the canonical catalog and expression schema. All three PR boundary findings are fixed; final independent review also closed a direct-call size-limit mismatch. Contributor evidence and the outstanding Excel acceptance gate are recorded in `docs/toolkit-delivery.md`.
 At the accepted toolkit checkpoint, coverage was 115 implemented functions, 85 detailed semantic specs, 110 source records, and 1,371 shared fixtures; its complete suite recorded 923 Python and 88 Rust tests. The 521-entry source inventory is broader than implemented coverage, with 406 catalog-only functions. These checkpoint counts describe the toolkit baseline, not Excel-wide compatibility. FILTER, SORT, and UNIQUE return bounded, shape-preserving arrays; worksheet spill projection remains unsupported.
 
-The versioned canonical workbook schema, Python and Rust hydration, the bound operating-scenario calculation and its shared fixtures are on `main`: `schemas/workbook-model.v1.schema.json`, `python/workbook_forge/model.py`, `rust/src/model.rs` and `fixtures/operating-scenario.workbook.json`. Both engines read the same bytes and calculate with their own evaluators. `impl/v1-intake` and `impl/v1-calc-binding` hold an earlier shape of the model, with typed binding constraints, a calculation session and an intake reader that emits canonical JSON. That work is not on `main` and has to be ported to the schema above.
+The versioned canonical workbook schema, Python and Rust hydration, the bound operating-scenario calculation and its shared fixtures are on `main`: `schemas/workbook-model.v1.schema.json`, `python/workbook_forge/model.py`, `rust/src/model.rs` and `fixtures/operating-scenario.workbook.json`. Both engines read the same bytes and calculate with their own evaluators. `workbook_forge.intake` reads an `.xlsx` file into that model, and `workbook-forge intake` prints it, or with `--summary` its versions and counts. `impl/v1-intake` and `impl/v1-calc-binding` hold an earlier shape of the model. Their intake is ported. Their typed binding constraints and calculation session are not.
 
 The Excel round-trip harness is `tools/excel_oracle.py`, with `tools/canonical_excel_receipt.py` for the canonical fixture. The committed receipts under `receipts/canonical-operating-scenario/` are preflight only: they record that Excel was not invoked and that Spec 2 is not passed. `docs/excel-observations.md` describes one run of Microsoft Excel 16.113.2 on the older SDK scenario in which all 12 declared checks matched; no receipt for that run is committed. The full red-flag contract is blocked before Excel opens because export cannot place dynamic-array spill cells, and the volatile, iteration, scalar-array and Excel-quirk classes are unobserved.
 - The source-linked function inventory contains 521 records; it is a versioned discovery catalog, not an evaluator coverage claim.
@@ -96,6 +96,7 @@ The Excel round-trip harness is `tools/excel_oracle.py`, with `tools/canonical_e
 - `docs/excel-observations.md`: observation meanings, harness usage and actual Excel evidence.
 - `docs/run-history.md`: dated project activity, superseded checkpoint decisions, Runs 1–24 and the pre-loop baseline. Historical counts and repository visibility describe their original checkpoints.
 - `docs/behavior-profiles.md`: current behavior and profile notes by function family, plus workbook adapter details.
+- `python/workbook_forge/intake.py`: reads an `.xlsx` file into the canonical model; `workbook-forge intake` is its command.
 - `docs/review-protocol.md`: how to review this project so that the reviewer does not inherit the builder's view; `tools/review/` enforces it.
 - `tools/gate.sh`: the gate.
 - `.autoresearch/state.json`: the authoritative accepted-run ledger. `.autoresearch/config.json` holds the loop criteria and `eval_command`.
@@ -108,6 +109,12 @@ The Excel round-trip harness is `tools/excel_oracle.py`, with `tools/canonical_e
 - Append each run's summary to `docs/run-history.md`. Keep `README.md` and this file limited to the current state.
 - Run the Rust gates with `CARGO_TARGET_DIR` inside the checkout, as `eval_command` does. A shared target directory can mix build artifacts between copies of the crate.
 ## Latest maintenance
+### 2026-09-29 — claude-code — every local branch brought into one
+- One branch now holds the work of every agent: the review fixes, pull request 5 with Grok's two later commits, the Jev critic, the product specification, and Codex's spine documents.
+- Codex's documents described a shape of the model that `main` did not adopt. They now describe version 1 as built, and `docs/specs/red-flags.md` has a table of which requirements the code meets.
+- Intake from `impl/v1-intake` is ported to the canonical model. It reuses the existing package reader and adds no address parser of its own.
+- Not carried over, because each needs a decision or a change in both engines: typed binding constraints, the calculation session with revisions, refusal of duplicate JSON keys.
+- The Jev critic named a secret and a directory from one machine. Those now come from environment variables.
 ### 2026-09-29 — claude-code — adversarial review, gate and first fixes
 - `main` failed its own checks: `cargo clippy -D warnings` rejected `rust/src/model.rs`. Fixed. Nothing had been running the checks.
 - Added the gate, the review protocol and its tools. Seven reviewers, each given one lens and no history, reported 56 findings. Eleven were planted defects. Of the other 45, independent refuters knocked down four and the rest were reproduced on unchanged code.
