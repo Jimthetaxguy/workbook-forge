@@ -562,23 +562,27 @@ def _apply_binary_scalar(op: str, left: object, right: object) -> Scalar | Error
     if isinstance(b, ErrorValue):
         return b
     try:
-        if op == "+":
-            result = a + b
+        if op in ("+", "-", "*"):
+            if op == "+":
+                result = a + b
+            elif op == "-":
+                result = a - b
+            else:
+                result = a * b
             if isinstance(result, int) and result.bit_length() > _MAX_EXACT_EXPRESSION_BITS:
                 return ErrorValue("#NUM!", "integer expression exceeds the supported precision bound")
-            return result
-        if op == "-":
-            result = a - b
-            if isinstance(result, int) and result.bit_length() > _MAX_EXACT_EXPRESSION_BITS:
-                return ErrorValue("#NUM!", "integer expression exceeds the supported precision bound")
-            return result
-        if op == "*":
-            result = a * b
-            if isinstance(result, int) and result.bit_length() > _MAX_EXACT_EXPRESSION_BITS:
-                return ErrorValue("#NUM!", "integer expression exceeds the supported precision bound")
+            # Every arithmetic operator returns #NUM! when its binary64 result
+            # is not finite, the rule ^ already followed.
+            if isinstance(result, float) and not math.isfinite(result):
+                return ErrorValue("#NUM!", "numeric overflow")
             return result
         if op == "/":
-            return ErrorValue("#DIV/0!", "division by zero") if b == 0 else a / b
+            if b == 0:
+                return ErrorValue("#DIV/0!", "division by zero")
+            result = a / b
+            if isinstance(result, float) and not math.isfinite(result):
+                return ErrorValue("#NUM!", "numeric overflow")
+            return result
         if op == "^":
             if isinstance(a, int) and isinstance(b, int) and b >= 0 and abs(a) > 1:
                 minimum_result_bits = (abs(a).bit_length() - 1) * b + 1
@@ -616,9 +620,13 @@ def _number(value: object) -> float | int | ErrorValue:
             return ErrorValue("#VALUE!", f"{value!r} is not numeric")
         try:
             parsed = float(text)
-            return int(parsed) if parsed.is_integer() else parsed
         except ValueError:
             return ErrorValue("#VALUE!", f"{value!r} is not numeric")
+        # float() also reads "inf", "infinity" and "nan"; Excel does not treat
+        # those spellings as numbers, so they stay non-numeric text.
+        if not math.isfinite(parsed):
+            return ErrorValue("#VALUE!", f"{value!r} is not numeric")
+        return int(parsed) if parsed.is_integer() else parsed
     return ErrorValue("#VALUE!", "value cannot be converted to a number")
 
 

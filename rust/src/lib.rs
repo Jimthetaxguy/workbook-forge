@@ -1280,15 +1280,17 @@ fn eval_binary(op: &str, a: Value, b: Value) -> Result<Value, FormulaError> {
     }
     match op {
         "&" => join_values_bounded(&[&a, &b], "", false, MAX_TEXT_LENGTH_UNITS).map(Value::Text),
-        "+" => Ok(Value::Number(to_number(&a)? + to_number(&b)?)),
-        "-" => Ok(Value::Number(to_number(&a)? - to_number(&b)?)),
-        "*" => Ok(Value::Number(to_number(&a)? * to_number(&b)?)),
+        // Every arithmetic operator returns #NUM! when its binary64 result is
+        // not finite, so an overflow never reaches a result as a null number.
+        "+" => finite_arithmetic(to_number(&a)? + to_number(&b)?),
+        "-" => finite_arithmetic(to_number(&a)? - to_number(&b)?),
+        "*" => finite_arithmetic(to_number(&a)? * to_number(&b)?),
         "/" => {
             let d = to_number(&b)?;
             if d == 0.0 {
                 Err(FormulaError::Div0)
             } else {
-                Ok(Value::Number(to_number(&a)? / d))
+                finite_arithmetic(to_number(&a)? / d)
             }
         }
         "^" => {
@@ -1373,13 +1375,28 @@ fn compare(a: &Value, b: &Value) -> Result<i8, FormulaError> {
         _ => Err(FormulaError::Value),
     }
 }
+fn finite_arithmetic(result: f64) -> Result<Value, FormulaError> {
+    if result.is_finite() {
+        Ok(Value::Number(result))
+    } else {
+        Err(FormulaError::Num)
+    }
+}
+
 fn to_number(v: &Value) -> Result<f64, FormulaError> {
     match v {
         Value::Number(n) => Ok(*n),
         Value::Bool(b) => Ok(if *b { 1.0 } else { 0.0 }),
         Value::Blank => Ok(0.0),
         Value::Text(s) if s.trim().is_empty() => Ok(0.0),
-        Value::Text(s) => s.trim().parse::<f64>().map_err(|_| FormulaError::Value),
+        // Rust's float parser accepts "inf", "infinity" and "nan"; Excel does
+        // not treat those spellings as numbers, so they stay non-numeric text.
+        Value::Text(s) => s
+            .trim()
+            .parse::<f64>()
+            .ok()
+            .filter(|number| number.is_finite())
+            .ok_or(FormulaError::Value),
         Value::Error(e) => Err(e.clone()),
     }
 }

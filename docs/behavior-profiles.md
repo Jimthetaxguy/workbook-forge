@@ -31,6 +31,14 @@ Workbook Forge safety profiles. Resource limits also apply at the workbook,
 agent transport and native composition boundaries; one interface's larger input
 budget does not raise the evaluator limit.
 
+Arithmetic (`+`, `-`, `*`, `/`, `^`) returns `#NUM!` whenever its binary64 result
+is not finite, so an overflow such as `1E308*10` is an error rather than an
+infinite number; no formula value is ever non-finite. Text that a language float
+parser would read as infinity or NaN (`"inf"`, `"Infinity"`, `"nan"`) is not
+numeric text and coerces to `#VALUE!` like any other non-numeric text. Microsoft
+documents 9.99999999999999E+307 as the largest allowed number but not the exact
+error for an overflowing operator; the `#NUM!` choice is a Workbook Forge profile.
+
 Known OOXML compatibility prefixes are normalized for function dispatch and
 support lookup while imported formula text remains intact. A catalog entry or
 recognized prefix does not imply that an unsupported function can calculate.
