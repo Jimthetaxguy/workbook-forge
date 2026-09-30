@@ -141,7 +141,9 @@ if [ -n "$unexpected" ]; then
 fi
 
 echo "gate: running tools/verify_toolkit.sh"
-WORKBOOK_PYTHON="$PY" bash tools/verify_toolkit.sh
+# The suite already ran above with the skip report; running it twice adds
+# time and no evidence.
+WORKBOOK_PYTHON="$PY" WORKBOOK_PYTEST_DONE=1 bash tools/verify_toolkit.sh
 
 echo "gate: checking whitespace against HEAD"
 git diff --check HEAD
