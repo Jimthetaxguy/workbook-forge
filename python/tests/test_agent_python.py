@@ -16,7 +16,7 @@ def adapter(tmp_path, *, cells=None, outputs=None):
     if cells is None:
         model = operating_scenario()
     else:
-        model = WorkbookModel(document={"sheets": [{"id": "sheet", "name": "Data", "cells": cells}], "outputs": {name: {"sheet": "Data", "address": address} for name, address in (outputs or {}).items()}})
+        model = WorkbookModel(document={"schema_version": 1, "sheets": [{"id": "sheet", "name": "Data", "cells": cells}], "outputs": {name: {"sheet": "Data", "address": address} for name, address in (outputs or {}).items()}})
     return AgentWorkbook(model, output_dir=tmp_path), model
 
 

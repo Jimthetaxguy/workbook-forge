@@ -17,7 +17,7 @@ These specs state requirements. This table states which of them the code on
 | One bound calculation in both engines (Spec 1) | Built |
 | `schema_version` and `model_version` enforced on read (Spec 4) | Built, for the canonical model |
 | Versions enforced on write (Spec 4) | Not built. `Workbook.to_json` writes whatever version it holds. Intake checks its own output by reading it back |
-| A missing version refused everywhere (Spec 4) | Canonical reader only. The toolkit workbook form, read by `run`, `inspect` and `agent`, takes a missing `schema_version` as 1 in both engines |
+| A missing version refused everywhere (Spec 4) | Built. The canonical reader refuses it as `missing_required_field`; the toolkit workbook form, read by `run`, `inspect` and `agent`, refuses it as the typed `schema_version` diagnostic in both engines |
 | One serialized form for every tool (Spec 1) | Not built. Two forms exist. Intake, canonical export and the canonical receipt use the canonical model. The agent tools, the general export and `run`, `inspect`, `scenario` and `agent` use the older toolkit workbook form |
 | Model changelog (Spec 4) | Built: `model-changelog.md` |
 | Typed bindings with value type, required status and constraints | Not in the canonical model: version 1 bindings are name-to-cell maps. The toolkit workbook form has typed input bindings |
@@ -208,8 +208,8 @@ schema moves. The extracted model is already a product artifact.
 4. **No later.** Intake and export land with `model_version` set on day one of
    the typed model (v1). A blank or missing version is a validation error, on
    read as well as on write. There is no compatibility window that treats a
-   missing version as version 1. The canonical reader meets this. The toolkit
-   workbook form does not yet: see the table at the top.
+   missing version as version 1. Both the canonical reader and the toolkit
+   workbook form meet this on read: see the table at the top.
 5. **Agents and CLI** print `model_version` in intake summaries so humans can
    see which artifact generation they hold. Python's `intake_workbook` emits
    serialized canonical JSON as well as its native model result; it is not

@@ -265,6 +265,8 @@ def test_mixed_reference_copy_retains_axis_anchors(engine):
 
 
 @pytest.mark.parametrize("change", [
+    lambda d: d.pop("schema_version"),
+    lambda d: d.update(schema_version=0),
     lambda d: d.update(schema_version=2),
     lambda d: d.update(unknown_field=True),
     lambda d: d.update(revision=-1),
@@ -282,6 +284,15 @@ def test_document_schema_and_resource_boundaries(engine, change):
     change(document)
     with pytest.raises(ValueError):
         _session(engine, document)
+
+
+def test_a_missing_version_is_the_schema_version_diagnostic_in_both_engines(engine):
+    document = _model({"A1": {"value": 1}})
+    del document["schema_version"]
+    with pytest.raises(ValueError, match="schema_version: schema_version is required"):
+        _session(engine, document)
+    with pytest.raises(ValueError, match="schema_version: schema_version is required"):
+        engine.calculate(json.dumps(document))
 
 
 def test_oversized_edit_batch_is_atomic(engine):
@@ -331,7 +342,7 @@ def test_parallel_reads_observe_atomic_edit_batches(engine):
 
 @pytest.mark.parametrize("nonfinite", ["NaN", "Infinity", "1e999"])
 def test_nonfinite_json_input_cannot_enter_a_session(engine, nonfinite):
-    source = '{"sheets":[{"id":"d","name":"Data","cells":{"A1":{"value":' + nonfinite + '}}}]}'
+    source = '{"schema_version":1,"sheets":[{"id":"d","name":"Data","cells":{"A1":{"value":' + nonfinite + '}}}]}'
     with pytest.raises(ValueError):
         engine.Session(source)
 
@@ -372,6 +383,7 @@ def test_formula_corpus_survives_workbook_model_boundaries(engine):
         assert "XFD1048576" not in sheets["Data"], case["id"]
         sheets["Data"]["XFD1048576"] = {"formula": case["formula"]}
         document = {
+            "schema_version": 1,
             "sheets": [{"id": str(index), "name": name, "cells": cells} for index, (name, cells) in enumerate(sheets.items())],
             "outputs": {"result": {"sheet": "Data", "address": "XFD1048576"}},
         }
