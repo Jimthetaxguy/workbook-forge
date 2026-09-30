@@ -39,6 +39,8 @@ recognized prefix does not imply that an unsupported function can calculate.
 
 Python and Rust cap formula-produced text at 32,767 UTF-16 code units. `&`, `CONCAT`, `TEXTJOIN`, and `SUBSTITUTE` preflight result size before building joined or replaced strings; the evaluator boundary also checks literal, case-converted, and array text results. This follows [Excel's documented 32,767-character cell limit](https://support.microsoft.com/en-us/excel/excel-specifications-and-limits) while counting supplementary Unicode characters as two UTF-16 units.
 
+An error value passed to a text function or to `&` propagates unchanged: `LEN(NA())` is `#N/A`, and `MID(A1,1,2)` on an error cell returns that error, never the first characters of the error's name. This matches Microsoft's general rule that an error in an argument is the result.
+
 Numeric-to-text conversion is shared across Python and Rust for `CONCAT`, `TEXTJOIN`, `&`, and text functions: it uses shortest round-tripping decimal text, omits `.0` for integer-valued numbers, renders negative zero as `0`, and uses lowercase scientific notation with at least two exponent digits. Finite numeric values use binary64; integer literals outside its finite range return `#NUM!`. Microsoft says concatenation uses the underlying number value and recommends `TEXT` when explicit display formatting is needed ([combine text and numbers](https://support.microsoft.com/en-us/excel/combine-text-and-numbers)); the exact default spelling is a Workbook Forge profile and has not been checked directly in Excel.
 
 ## Functions by family

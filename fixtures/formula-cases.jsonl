@@ -1423,3 +1423,16 @@
 {"id":"rounddown-does-not-take-a-far-value-as-the-boundary","formula":"=ROUNDDOWN(19.9899999999999,2)","cells":{},"expected":{"number":19.98},"source_refs":["ms-excel-precision-limits"],"note":"The stored value is rounded exactly. Expected value is integer or decimal arithmetic. Not observed in Excel."}
 {"id":"round-does-not-take-a-far-value-as-the-half","formula":"=ROUND(1.00499999999999,2)","cells":{},"expected":{"number":1},"source_refs":["ms-excel-precision-limits"],"note":"The stored value is rounded exactly. Expected value is integer or decimal arithmetic. Not observed in Excel."}
 {"id":"rounddown-largest-number-to-the-largest-power-of-ten","formula":"=ROUNDDOWN(1.7976931348623157E308,-308)","cells":{},"expected":{"number":1e+308},"source_refs":["ms-excel-precision-limits"],"note":"Expected value is the power of ten itself, 1E+308."}
+{"id":"textfn-err-len-na","formula":"=LEN(NA())","cells":{},"expected":{"error":"#N/A"},"note":"An error argument propagates through text functions; it is never measured as the text of its name."}
+{"id":"textfn-err-len-div0","formula":"=LEN(1/0)","cells":{},"expected":{"error":"#DIV/0!"}}
+{"id":"textfn-err-len-value-cell","formula":"=LEN(A1)","cells":{"A1":{"error":"#VALUE!"}},"expected":{"error":"#VALUE!"}}
+{"id":"textfn-err-left-cell","formula":"=LEFT(A1,1)","cells":{"A1":{"error":"#N/A"}},"expected":{"error":"#N/A"}}
+{"id":"textfn-err-right-cell","formula":"=RIGHT(A1)","cells":{"A1":{"error":"#N/A"}},"expected":{"error":"#N/A"}}
+{"id":"textfn-err-mid-cell","formula":"=MID(A1,1,2)","cells":{"A1":{"error":"#N/A"}},"expected":{"error":"#N/A"}}
+{"id":"textfn-err-mid-count-cell","formula":"=MID(\"abc\",1,A1)","cells":{"A1":{"error":"#N/A"}},"expected":{"error":"#N/A"}}
+{"id":"textfn-err-find-cell","formula":"=FIND(\"a\",A1)","cells":{"A1":{"error":"#N/A"}},"expected":{"error":"#N/A"},"source_refs":["ms-find-search"]}
+{"id":"textfn-err-search-cell","formula":"=SEARCH(A1,\"abc\")","cells":{"A1":{"error":"#N/A"}},"expected":{"error":"#N/A"},"source_refs":["ms-find-search"]}
+{"id":"textfn-err-upper-cell","formula":"=UPPER(A1)","cells":{"A1":{"error":"#N/A"}},"expected":{"error":"#N/A"}}
+{"id":"textfn-err-lower-cell","formula":"=LOWER(A1)","cells":{"A1":{"error":"#N/A"}},"expected":{"error":"#N/A"}}
+{"id":"textfn-err-concat-cell","formula":"=CONCAT(\"a\",A1)","cells":{"A1":{"error":"#N/A"}},"expected":{"error":"#N/A"},"source_refs":["ms-concat"]}
+{"id":"textfn-err-ampersand-cell","formula":"=\"a\"&A1","cells":{"A1":{"error":"#N/A"}},"expected":{"error":"#N/A"}}
