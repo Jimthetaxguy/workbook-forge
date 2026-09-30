@@ -29,7 +29,18 @@ at 64 levels. Parenthesis nesting is limited to 96 levels, and wildcard matching
 to 5,000,000 matching-state steps per evaluation. The latter two limits are
 Workbook Forge safety profiles. Resource limits also apply at the workbook,
 agent transport and native composition boundaries; one interface's larger input
-budget does not raise the evaluator limit.
+budget does not raise the evaluator limit. The toolkit expression tree is capped
+at 96 levels counted from the root as level 1 in both engines, so a flat
+`1+1+...` chain of 96 terms is accepted and one of 97 terms is refused with
+`resource_limit`; the evaluator itself limits parenthesis nesting, not chain length.
+
+Arithmetic (`+`, `-`, `*`, `/`, `^`) returns `#NUM!` whenever its binary64 result
+is not finite, so an overflow such as `1E308*10` is an error rather than an
+infinite number; no formula value is ever non-finite. Text that a language float
+parser would read as infinity or NaN (`"inf"`, `"Infinity"`, `"nan"`) is not
+numeric text and coerces to `#VALUE!` like any other non-numeric text. Microsoft
+documents 9.99999999999999E+307 as the largest allowed number but not the exact
+error for an overflowing operator; the `#NUM!` choice is a Workbook Forge profile.
 
 Known OOXML compatibility prefixes are normalized for function dispatch and
 support lookup while imported formula text remains intact. A catalog entry or
@@ -38,6 +49,8 @@ recognized prefix does not imply that an unsupported function can calculate.
 ## Text limits and number-to-text conversion
 
 Python and Rust cap formula-produced text at 32,767 UTF-16 code units. `&`, `CONCAT`, `TEXTJOIN`, and `SUBSTITUTE` preflight result size before building joined or replaced strings; the evaluator boundary also checks literal, case-converted, and array text results. This follows [Excel's documented 32,767-character cell limit](https://support.microsoft.com/en-us/excel/excel-specifications-and-limits) while counting supplementary Unicode characters as two UTF-16 units.
+
+An error value passed to a text function or to `&` propagates unchanged: `LEN(NA())` is `#N/A`, and `MID(A1,1,2)` on an error cell returns that error, never the first characters of the error's name. This matches Microsoft's general rule that an error in an argument is the result.
 
 Numeric-to-text conversion is shared across Python and Rust for `CONCAT`, `TEXTJOIN`, `&`, and text functions: it uses shortest round-tripping decimal text, omits `.0` for integer-valued numbers, renders negative zero as `0`, and uses lowercase scientific notation with at least two exponent digits. Finite numeric values use binary64; integer literals outside its finite range return `#NUM!`. Microsoft says concatenation uses the underlying number value and recommends `TEXT` when explicit display formatting is needed ([combine text and numbers](https://support.microsoft.com/en-us/excel/combine-text-and-numbers)); the exact default spelling is a Workbook Forge profile and has not been checked directly in Excel.
 
@@ -88,7 +101,7 @@ Python and Rust implement the rule separately, Python with decimal arithmetic an
 
 ### Dates and times
 
-`MONTH`, `DAY`, and `YEAR` read the integer date portion of numeric serials; `DAYS` subtracts numeric serials, preserving time fractions; `EDATE` clamps to the target month; and `EOMONTH` returns the target month's last day. `HOUR`, `MINUTE`, and `SECOND` extract whole-second components from date/time serials; the 1900 serial ceiling and negative/non-finite error behavior are unverified evaluator boundaries. `TIME` normalizes components and returns a fraction of a day. The extractor's half-ULP precision correction and `TIME` fractional-component truncation are evaluator profile rules that need Excel spot-checks. `WEEKDAY` supports return types 1, 2, 3, and 11–17; `WEEKNUM` supports System 1 selectors 1, 2, and 11–17 plus ISO selector 21; and `ISOWEEKNUM` uses ISO week-year rules. These functions floor time fractions. Fractional selector truncation and exact results around the fictional serial 60 remain unverified evaluator-profile choices. Human-readable time strings such as `6:45 PM` are documented by Microsoft for the extractors but are not parsed here; numeric text follows the shared number coercion. `EDATE` and `EOMONTH` truncate fractional month offsets toward zero. Their date semantics use the 1900 system, preserve serial 60, and do not model workbook-specific 1904 settings or locale-sensitive text dates. `EDATE` and `EOMONTH` return whole-day serials and discard start-date time fractions as profile behavior that still needs an Excel spot-check.
+`MONTH`, `DAY`, and `YEAR` read the integer date portion of numeric serials; `DAYS` subtracts numeric serials, preserving time fractions; `EDATE` clamps to the target month; and `EOMONTH` returns the target month's last day. `HOUR`, `MINUTE`, and `SECOND` extract whole-second components from date/time serials; the 1900 serial ceiling and negative/non-finite error behavior are unverified evaluator boundaries. `TIME` normalizes components and returns a fraction of a day. The extractor's half-ULP precision correction and `TIME` fractional-component truncation are evaluator profile rules that need Excel spot-checks. `WEEKDAY` supports return types 1, 2, 3, and 11–17; `WEEKNUM` supports System 1 selectors 1, 2, and 11–17 plus ISO selector 21; and `ISOWEEKNUM` uses ISO week-year rules. These functions floor time fractions. Fractional selector truncation and exact results around the fictional serial 60 remain unverified evaluator-profile choices. Human-readable time strings such as `6:45 PM` are documented by Microsoft for the extractors but are not parsed here; numeric text follows the shared number coercion. `EDATE` and `EOMONTH` truncate fractional month offsets toward zero. Their date semantics use the 1900 system, preserve serial 60, and do not model workbook-specific 1904 settings or locale-sensitive text dates. `EDATE` and `EOMONTH` return whole-day serials and discard start-date time fractions as profile behavior that still needs an Excel spot-check. Both refuse a result before 1899-12-31 (serial 0) with `#NUM!`, which Microsoft documents for a result outside the supported range; `EOMONTH(1,-1)` is the lowest result, 0, and `EDATE(1,-1)` is `#NUM!` in both engines.
 
 ### Error predicates
 

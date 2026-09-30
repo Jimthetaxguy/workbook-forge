@@ -1280,15 +1280,17 @@ fn eval_binary(op: &str, a: Value, b: Value) -> Result<Value, FormulaError> {
     }
     match op {
         "&" => join_values_bounded(&[&a, &b], "", false, MAX_TEXT_LENGTH_UNITS).map(Value::Text),
-        "+" => Ok(Value::Number(to_number(&a)? + to_number(&b)?)),
-        "-" => Ok(Value::Number(to_number(&a)? - to_number(&b)?)),
-        "*" => Ok(Value::Number(to_number(&a)? * to_number(&b)?)),
+        // Every arithmetic operator returns #NUM! when its binary64 result is
+        // not finite, so an overflow never reaches a result as a null number.
+        "+" => finite_arithmetic(to_number(&a)? + to_number(&b)?),
+        "-" => finite_arithmetic(to_number(&a)? - to_number(&b)?),
+        "*" => finite_arithmetic(to_number(&a)? * to_number(&b)?),
         "/" => {
             let d = to_number(&b)?;
             if d == 0.0 {
                 Err(FormulaError::Div0)
             } else {
-                Ok(Value::Number(to_number(&a)? / d))
+                finite_arithmetic(to_number(&a)? / d)
             }
         }
         "^" => {
@@ -1373,13 +1375,28 @@ fn compare(a: &Value, b: &Value) -> Result<i8, FormulaError> {
         _ => Err(FormulaError::Value),
     }
 }
+fn finite_arithmetic(result: f64) -> Result<Value, FormulaError> {
+    if result.is_finite() {
+        Ok(Value::Number(result))
+    } else {
+        Err(FormulaError::Num)
+    }
+}
+
 fn to_number(v: &Value) -> Result<f64, FormulaError> {
     match v {
         Value::Number(n) => Ok(*n),
         Value::Bool(b) => Ok(if *b { 1.0 } else { 0.0 }),
         Value::Blank => Ok(0.0),
         Value::Text(s) if s.trim().is_empty() => Ok(0.0),
-        Value::Text(s) => s.trim().parse::<f64>().map_err(|_| FormulaError::Value),
+        // Rust's float parser accepts "inf", "infinity" and "nan"; Excel does
+        // not treat those spellings as numbers, so they stay non-numeric text.
+        Value::Text(s) => s
+            .trim()
+            .parse::<f64>()
+            .ok()
+            .filter(|number| number.is_finite())
+            .ok_or(FormulaError::Value),
         Value::Error(e) => Err(e.clone()),
     }
 }
@@ -2486,14 +2503,16 @@ fn number_text(number: f64) -> String {
     }
 }
 
-fn to_text(v: &Value) -> String {
+/// Text coercion for function arguments. An error value is never rendered as
+/// the text of its name; it propagates, so `LEN(NA())` is `#N/A`, not 4.
+fn to_text(v: &Value) -> Result<String, FormulaError> {
     match v {
-        Value::Number(n) => number_text(*n),
-        Value::Text(s) => s.clone(),
-        Value::Bool(true) => "TRUE".into(),
-        Value::Bool(false) => "FALSE".into(),
-        Value::Blank => String::new(),
-        Value::Error(e) => e.to_string(),
+        Value::Number(n) => Ok(number_text(*n)),
+        Value::Text(s) => Ok(s.clone()),
+        Value::Bool(true) => Ok("TRUE".into()),
+        Value::Bool(false) => Ok("FALSE".into()),
+        Value::Blank => Ok(String::new()),
+        Value::Error(e) => Err(e.clone()),
     }
 }
 
@@ -2535,12 +2554,13 @@ fn value_is_empty_text(value: &Value) -> bool {
     }
 }
 
-fn push_value_text(output: &mut String, value: &Value) {
+fn push_value_text(output: &mut String, value: &Value) -> Result<(), FormulaError> {
     if let Value::Text(text) = value {
         output.push_str(text);
     } else {
-        output.push_str(&to_text(value));
+        output.push_str(&to_text(value)?);
     }
+    Ok(())
 }
 
 fn join_values_bounded(
@@ -2573,7 +2593,7 @@ fn join_values_bounded(
         if written > 0 {
             output.push_str(delimiter);
         }
-        push_value_text(&mut output, value);
+        push_value_text(&mut output, value)?;
         written += 1;
     }
     Ok(output)
@@ -2904,7 +2924,7 @@ fn eval_call(name: &str, args: &[Expr], env: &Environment<'_>) -> Result<Value, 
         }
         "LEFT" | "RIGHT" => {
             arity(name, args, 1, 2)?;
-            let text = to_text(&flat[0]);
+            let text = to_text(&flat[0])?;
             let count = if flat.len() == 1 {
                 1
             } else {
@@ -2924,7 +2944,7 @@ fn eval_call(name: &str, args: &[Expr], env: &Environment<'_>) -> Result<Value, 
         }
         "MID" => {
             arity(name, args, 3, 3)?;
-            let chars: Vec<char> = to_text(&flat[0]).chars().collect();
+            let chars: Vec<char> = to_text(&flat[0])?.chars().collect();
             let start = to_number(&flat[1])? as isize;
             let count = to_number(&flat[2])? as isize;
             if start < 1 || count < 0 {
@@ -2937,7 +2957,7 @@ fn eval_call(name: &str, args: &[Expr], env: &Environment<'_>) -> Result<Value, 
         "LEN" => {
             arity(name, args, 1, 1)?;
             return Ok(Value::Number(
-                to_text(&one(name, &flat)?).chars().count() as f64
+                to_text(&one(name, &flat)?)?.chars().count() as f64
             ));
         }
         "ISBLANK" | "ISNUMBER" | "ISTEXT" | "ISLOGICAL" | "ISERR" | "ISERROR" | "ISNA" => {
@@ -2947,7 +2967,7 @@ fn eval_call(name: &str, args: &[Expr], env: &Environment<'_>) -> Result<Value, 
             arity(name, args, 1, 1)?;
             let value = one(name, &flat)?;
             propagate_value_error(&value)?;
-            let text = to_text(&value);
+            let text = to_text(&value)?;
             return Ok(Value::Text(if name == "UPPER" {
                 text.to_uppercase()
             } else {
@@ -2958,7 +2978,7 @@ fn eval_call(name: &str, args: &[Expr], env: &Environment<'_>) -> Result<Value, 
             arity(name, args, 1, 1)?;
             let value = one(name, &flat)?;
             propagate_value_error(&value)?;
-            let text = to_text(&value);
+            let text = to_text(&value)?;
             let normalized = text
                 .split(' ')
                 .filter(|part| !part.is_empty())
@@ -2971,9 +2991,9 @@ fn eval_call(name: &str, args: &[Expr], env: &Environment<'_>) -> Result<Value, 
             for value in flat.iter().take(4) {
                 propagate_value_error(value)?;
             }
-            let text = to_text(&flat[0]);
-            let old = to_text(&flat[1]);
-            let new = to_text(&flat[2]);
+            let text = to_text(&flat[0])?;
+            let old = to_text(&flat[1])?;
+            let new = to_text(&flat[2])?;
             if old.is_empty() {
                 return Err(FormulaError::Value);
             }
@@ -3007,8 +3027,8 @@ fn eval_call(name: &str, args: &[Expr], env: &Environment<'_>) -> Result<Value, 
             for value in flat.iter().take(3) {
                 propagate_value_error(value)?;
             }
-            let needle = to_text(&flat[0]);
-            let text = to_text(&flat[1]);
+            let needle = to_text(&flat[0])?;
+            let text = to_text(&flat[1])?;
             let start = if flat.len() == 3 {
                 to_number(&flat[2])?
             } else {
@@ -3054,7 +3074,7 @@ fn eval_call(name: &str, args: &[Expr], env: &Environment<'_>) -> Result<Value, 
             for value in flat.iter().take(2) {
                 propagate_value_error(value)?;
             }
-            let delimiter = to_text(&flat[0]);
+            let delimiter = to_text(&flat[0])?;
             let ignore_empty = truthy(&flat[1])?;
             let mut parts = Vec::new();
             for value in flat.iter().skip(2) {
@@ -4840,8 +4860,8 @@ fn text_extract(name: &str, args: &[Expr], env: &Environment<'_>) -> Result<Valu
     let delimiter_value = eval_scalar(&args[1], env)?;
     propagate_value_error(&text_value)?;
     propagate_value_error(&delimiter_value)?;
-    let text = to_text(&text_value);
-    let delimiter = to_text(&delimiter_value);
+    let text = to_text(&text_value)?;
+    let delimiter = to_text(&delimiter_value)?;
 
     let instance_value = optional_scalar(args, 2, env)?;
     let instance = match instance_value {
