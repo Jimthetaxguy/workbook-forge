@@ -157,8 +157,25 @@ impl Workbook {
         self.sheets.iter().find(|sheet| sheet.name == name)
     }
 
-    pub fn to_json(&self) -> String {
-        write_canonical(&workbook_json(self))
+    /// Refuse to write a workbook whose versions this tree does not read.
+    /// The same rule as hydration: version 1 only.
+    pub fn require_supported_versions(&self) -> Result<(), ModelError> {
+        version(
+            &JsonValue::from(self.schema_version),
+            "schema_version",
+            "unsupported_schema_version",
+        )?;
+        version(
+            &JsonValue::from(self.model_version),
+            "model_version",
+            "unsupported_model_version",
+        )?;
+        Ok(())
+    }
+
+    pub fn to_json(&self) -> Result<String, ModelError> {
+        self.require_supported_versions()?;
+        Ok(write_canonical(&workbook_json(self)))
     }
 }
 
@@ -1424,8 +1441,24 @@ mod tests {
             revenue.formula.as_ref().unwrap().result,
             Scalar::Blank
         ));
-        let again = hydrate(workbook.to_json().as_bytes()).unwrap();
-        assert_eq!(again.to_json(), workbook.to_json());
+        let again = hydrate(workbook.to_json().unwrap().as_bytes()).unwrap();
+        assert_eq!(again.to_json().unwrap(), workbook.to_json().unwrap());
+    }
+
+    #[test]
+    fn writing_an_unsupported_version_is_refused_before_any_bytes() {
+        let mut workbook = hydrate(&fixture()).unwrap();
+        workbook.schema_version = 7;
+        let error = workbook.to_json().unwrap_err();
+        assert_eq!(error.code, "unsupported_schema_version");
+        assert_eq!(error.message, "7");
+        workbook.schema_version = 1;
+        workbook.model_version = 9;
+        let error = workbook.to_json().unwrap_err();
+        assert_eq!(error.code, "unsupported_model_version");
+        assert_eq!(error.message, "9");
+        workbook.model_version = 1;
+        assert!(workbook.to_json().is_ok());
     }
 
     fn hydrate_edited(edit: impl FnOnce(&mut Map<String, JsonValue>)) -> ModelError {
@@ -1531,6 +1564,6 @@ mod tests {
         );
         assert_eq!(calculated.diagnostics[0].function.as_deref(), Some("NOW"));
         let again = calculate(&calculated).unwrap();
-        assert_eq!(again.to_json(), calculated.to_json());
+        assert_eq!(again.to_json().unwrap(), calculated.to_json().unwrap());
     }
 }

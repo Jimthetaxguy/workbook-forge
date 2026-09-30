@@ -16,7 +16,7 @@ These specs state requirements. This table states which of them the code on
 | Schema, and Python and Rust hydration of the same bytes (Spec 1) | Built |
 | One bound calculation in both engines (Spec 1) | Built |
 | `schema_version` and `model_version` enforced on read (Spec 4) | Built, for the canonical model |
-| Versions enforced on write (Spec 4) | Not built. `Workbook.to_json` writes whatever version it holds. Intake checks its own output by reading it back |
+| Versions enforced on write (Spec 4) | Built. `Workbook.to_dict`, `to_json` and `export_canonical` in Python and `Workbook::to_json` in Rust refuse any version other than 1 with the same `unsupported_*_version` errors as the reader, before any bytes or file are produced. The toolkit form's Rust exporter validates its model the same way |
 | A missing version refused everywhere (Spec 4) | Built. The canonical reader refuses it as `missing_required_field`; the toolkit workbook form, read by `run`, `inspect` and `agent`, refuses it as the typed `schema_version` diagnostic in both engines |
 | One serialized form for every tool (Spec 1) | Not built. Two forms exist. Intake, canonical export and the canonical receipt use the canonical model. The agent tools, the general export and `run`, `inspect`, `scenario` and `agent` use the older toolkit workbook form |
 | Model changelog (Spec 4) | Built: `model-changelog.md` |
@@ -200,7 +200,7 @@ schema moves. The extracted model is already a product artifact.
    and stick to it; recommend integer `model_version` paired with
    `schema_version`). `schema_version` tracks the byte contract; `model_version`
    identifies the workbook model artifact. Both must be validated on read
-   and on write. Today they are validated on read.
+   and on write. Both are.
 2. **Changelog.** `docs/specs/model-changelog.md` (create with the first bump)
    records each model_version: date, summary, breaking or not, migration notes.
 3. **Migration path.** When v2 ships, a reader for v1 remains available. Prefer

@@ -30,7 +30,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         "calculate" => calculate(&workbook)?,
         _ => return Err(format!("unknown mode {mode}").into()),
     };
-    let document: serde_json::Value = serde_json::from_str(&workbook.to_json())?;
+    let document: serde_json::Value = serde_json::from_str(&workbook.to_json()?)?;
     println!(
         "{}",
         serde_json::to_string(&serde_json::json!({ "workbook": document }))?

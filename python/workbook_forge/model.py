@@ -210,7 +210,17 @@ class Workbook:
                 return item
         return None
 
+    def require_supported_versions(self) -> None:
+        """Refuse to write a workbook whose versions this tree does not read.
+
+        The same rule as hydration: version 1 only. A writer that emitted
+        another version would produce a document no reader accepts.
+        """
+        _version(self.schema_version, "schema_version", "unsupported_schema_version")
+        _version(self.model_version, "model_version", "unsupported_model_version")
+
     def to_dict(self) -> dict[str, Any]:
+        self.require_supported_versions()
         data: dict[str, Any] = {
             "schema_version": self.schema_version,
             "model_version": self.model_version,

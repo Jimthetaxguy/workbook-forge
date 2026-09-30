@@ -126,6 +126,22 @@ def test_hydrate_round_trip_rejects_unknown_versions_and_fields():
     assert caught.value.message == "sheets[0].cells.A1.value"
 
 
+def test_writing_an_unsupported_version_is_refused():
+    import dataclasses
+
+    workbook = hydrate(FIXTURE.read_bytes())
+    with pytest.raises(ModelError) as caught:
+        dataclasses.replace(workbook, schema_version=7).to_json()
+    assert (caught.value.code, caught.value.message) == ("unsupported_schema_version", "7")
+    with pytest.raises(ModelError) as caught:
+        dataclasses.replace(workbook, model_version=9).to_dict()
+    assert (caught.value.code, caught.value.message) == ("unsupported_model_version", "9")
+    with pytest.raises(ModelError) as caught:
+        dataclasses.replace(workbook, model_version=None).to_json()
+    assert caught.value.code == "invalid_model"
+    assert json.loads(workbook.to_json())["model_version"] == 1
+
+
 def test_operating_scenario_calculation_keeps_versions_and_classifications():
     calculated = calculate(hydrate(FIXTURE.read_bytes()))
     assert calculated.schema_version == 1
