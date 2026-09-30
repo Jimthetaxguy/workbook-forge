@@ -132,6 +132,16 @@ Imported models retain an immutable source baseline. Directly changing the origi
 Python `Workbook` object does not update an already imported model; reimport after
 such changes to establish a new baseline.
 
+Cell text in shared strings, inline strings and string formula caches is read
+with the OOXML `_xHHHH_` escapes decoded (ECMA-376 part 1, ST_Xstring): `_x0009_`
+is a tab, `_x000D_` a carriage return, and `_x005F_x0041_` the literal text
+`_x0041_`. Decoding is one pass from the left, so the six characters after a
+decoded `_x005F_` are never rescanned. An escape that names a lone surrogate is
+left as written. Both writers use the same escapes for the characters XML 1.0
+cannot hold, for the carriage return, and for any literal `_xHHHH_`, so text
+survives a round trip. Excel's 32,767-character limit is measured on the text,
+not on its escaped spelling.
+
 Package limits include 130 MiB compressed input, 128 MiB expanded contents,
 32 MiB XML parts and central directory, and 10,000 entries. XML parsing is bounded
 to 1,000,000 elements and depth 128 per part. The Python reader scans directory

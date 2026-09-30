@@ -358,6 +358,8 @@ fn block_range(sheet: &mut Sheet, reference: &str, reason: &str, work: &mut usiz
     }
     Ok(())
 }
+/// Read a string part run. Each run is decoded on its own: an escape never
+/// spans two runs.
 pub(crate) fn rich_text(xml: &Xml, node: &Node) -> String {
     let mut out = String::new();
     for child in &node.children {
@@ -366,12 +368,84 @@ pub(crate) fn rich_text(xml: &Xml, node: &Node) -> String {
             continue;
         }
         if child.local == "t" {
-            out.push_str(&child.text);
+            out.push_str(&decode_ooxml_escapes(&child.text));
         } else if child.local == "r"
             && let Some(text) = xml.child(child, "t")
         {
-            out.push_str(&text.text);
+            out.push_str(&decode_ooxml_escapes(&text.text));
         }
+    }
+    out
+}
+
+// OOXML string parts write a character that XML 1.0 cannot hold as `_xHHHH_`
+// (ECMA-376 part 1, 22.9.2.19 ST_Xstring). Excel also writes a carriage
+// return that way, since an XML parser would fold it into a line feed. A
+// literal `_xHHHH_` is written with its underscore escaped: `_x005F_xHHHH_`.
+
+/// The character an `_xHHHH_` escape starting at `bytes[at]` stands for, if
+/// one starts there.
+fn ooxml_escape_at(bytes: &[u8], at: usize) -> Option<char> {
+    let hex = bytes.get(at..at + 7)?;
+    if hex[0] != b'_' || hex[1] != b'x' || hex[6] != b'_' {
+        return None;
+    }
+    let digits = std::str::from_utf8(&hex[2..6]).ok()?;
+    if !digits.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return None;
+    }
+    char::from_u32(u32::from_str_radix(digits, 16).ok()?)
+}
+
+/// Replace each `_xHHHH_` with the character it stands for, in one pass from
+/// the left, so `_x005F_x0041_` yields the literal `_x0041_`. An escape that
+/// names a surrogate is left as written.
+pub(crate) fn decode_ooxml_escapes(text: &str) -> String {
+    if !text.contains("_x") {
+        return text.to_string();
+    }
+    let bytes = text.as_bytes();
+    let mut out = String::with_capacity(text.len());
+    let mut at = 0;
+    while at < bytes.len() {
+        if let Some(decoded) = ooxml_escape_at(bytes, at) {
+            out.push(decoded);
+            at += 7;
+            continue;
+        }
+        let rest = &text[at..];
+        let next = rest.chars().next().unwrap();
+        out.push(next);
+        at += next.len_utf8();
+    }
+    out
+}
+
+/// Write text the way `decode_ooxml_escapes` reads it back unchanged.
+/// Characters XML 1.0 cannot hold, and the carriage return, become
+/// `_xHHHH_`; a literal `_xHHHH_` becomes `_x005F_xHHHH_`.
+pub(crate) fn encode_ooxml_escapes(text: &str) -> String {
+    let bytes = text.as_bytes();
+    let mut out = String::with_capacity(text.len());
+    let mut at = 0;
+    while at < bytes.len() {
+        if ooxml_escape_at(bytes, at).is_some() {
+            // The leading underscore is what makes it an escape; spell it
+            // out. The trailing underscore may begin the next escape-shaped
+            // token, as in `_x005F_x0041_`, so it is left for the next pass.
+            out.push_str("_x005F_");
+            out.push_str(&text[at + 1..at + 6]);
+            at += 6;
+            continue;
+        }
+        let next = text[at..].chars().next().unwrap();
+        let code = next as u32;
+        if (code < 0x20 && !matches!(next, '\t' | '\n')) || matches!(code, 0xFFFE | 0xFFFF) {
+            out.push_str(&format!("_x{code:04X}_"));
+        } else {
+            out.push(next);
+        }
+        at += next.len_utf8();
     }
     out
 }
@@ -394,7 +468,7 @@ pub(crate) fn stored_value(xml: &Xml, node: &Node, strings: &[String]) -> Result
             None => Ok(CellValue::Blank),
         },
         "str" | "d" => Ok(value
-            .map(|v| CellValue::Text(v.into()))
+            .map(|v| CellValue::Text(decode_ooxml_escapes(v)))
             .unwrap_or(CellValue::Blank)),
         "b" => Ok(match value {
             Some(v) => CellValue::Boolean(boolean(v)?),
@@ -1188,14 +1262,14 @@ fn cell_xml(
                 body.push_str(&format!("<{prefix}v>{}</{prefix}v>", xml_escape(error)?));
             }
             CellValue::Text(text) => {
+                let text = xml_escape(&encode_ooxml_escapes(text))?;
                 if cell.formula.is_some() {
                     attributes.insert("t".into(), "str".into());
-                    body.push_str(&format!("<{prefix}v>{}</{prefix}v>", xml_escape(text)?));
+                    body.push_str(&format!("<{prefix}v>{text}</{prefix}v>"));
                 } else {
                     attributes.insert("t".into(), "inlineStr".into());
                     body.push_str(&format!(
-                        "<{prefix}is><{prefix}t xml:space=\"preserve\">{}</{prefix}t></{prefix}is>",
-                        xml_escape(text)?
+                        "<{prefix}is><{prefix}t xml:space=\"preserve\">{text}</{prefix}t></{prefix}is>",
                     ));
                 }
             }
@@ -1957,6 +2031,112 @@ mod tests {
         assert!(import_xlsx(invalid, BTreeMap::new(), BTreeMap::new()).is_err());
     }
 
+    #[test]
+    fn ooxml_escapes_decode_and_encode_as_excel_writes_them() {
+        assert_eq!(decode_ooxml_escapes("_x0041_B"), "AB");
+        assert_eq!(decode_ooxml_escapes("tab_x0009_sep"), "tab\tsep");
+        assert_eq!(decode_ooxml_escapes("a_x000D_"), "a\r");
+        assert_eq!(decode_ooxml_escapes("_x005F_x0041_"), "_x0041_");
+        assert_eq!(decode_ooxml_escapes("_x005F__x0041_"), "_A");
+        assert_eq!(
+            decode_ooxml_escapes("_x00G1_ _x41_ _X0041_ _x0041"),
+            "_x00G1_ _x41_ _X0041_ _x0041"
+        );
+        assert_eq!(decode_ooxml_escapes("_xD800_ stays"), "_xD800_ stays");
+        assert_eq!(decode_ooxml_escapes("東京_x0009_大阪"), "東京\t大阪");
+        assert_eq!(encode_ooxml_escapes("a\r\nb\tc"), "a_x000D_\nb\tc");
+        assert_eq!(encode_ooxml_escapes("bell\u{7}"), "bell_x0007_");
+        assert_eq!(encode_ooxml_escapes("_x0041_"), "_x005F_x0041_");
+        assert_eq!(
+            encode_ooxml_escapes("\u{fffe}\u{1f600}"),
+            "_xFFFE_\u{1f600}"
+        );
+        for text in [
+            "a\rb",
+            "_x0041_",
+            "_x005F_x0041_",
+            "\u{1}\u{1f}\u{fffe}",
+            "plain",
+        ] {
+            assert_eq!(decode_ooxml_escapes(&encode_ooxml_escapes(text)), text);
+        }
+    }
+    #[test]
+    fn string_parts_decode_escapes_and_written_text_round_trips() {
+        let temp = Temp::new();
+        let mut package = scenario_package();
+        modify(
+            &mut package,
+            "xl/worksheets/sheet1.xml",
+            "</sheetData>",
+            "<row r=\"20\"><c r=\"A20\" t=\"inlineStr\"><is><t>_x0041_B</t></is></c>\
+             <c r=\"B20\" t=\"inlineStr\"><is><r><t>literal _x005F_x0041_</t></r><r><t> kept</t></r></is></c>\
+             <c r=\"C20\" t=\"s\"><v>0</v></c>\
+             <c r=\"D20\" t=\"str\"><f>\"a\"&amp;CHAR(13)</f><v>a_x000D_</v></c></row></sheetData>",
+        );
+        modify(
+            &mut package,
+            "[Content_Types].xml",
+            "</Types>",
+            "<Override PartName=\"/xl/sharedStrings.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml\"/></Types>",
+        );
+        package.parts.insert(
+            "xl/sharedStrings.xml".into(),
+            format!("<sst xmlns=\"{MAIN}\" count=\"1\" uniqueCount=\"1\"><si><t>tab_x0009_sep</t></si></sst>")
+                .into_bytes(),
+        );
+        let source = temp.path("escaped.xlsx");
+        publish(&package, &source).unwrap();
+        let imported = import_xlsx(&source, BTreeMap::new(), BTreeMap::new()).unwrap();
+        let cells = &imported.snapshot().sheets[0].cells;
+        assert_eq!(cells["A20"].value, CellValue::Text("AB".into()));
+        assert_eq!(
+            cells["B20"].value,
+            CellValue::Text("literal _x0041_ kept".into())
+        );
+        assert_eq!(cells["C20"].value, CellValue::Text("tab\tsep".into()));
+        assert_eq!(
+            cells["D20"].cached_value,
+            Some(CellValue::Text("a\r".into()))
+        );
+
+        let mut sheet = toolkit::Sheet::new("Text");
+        let written = [
+            ("A1", "line one\r\nline two"),
+            ("A2", "bell\u{7} and tab\t"),
+            ("A3", "literal _x0041_ stays literal"),
+            ("A4", "\u{fffe} is escaped, \u{1f600} is not"),
+        ];
+        for (address, text) in written {
+            sheet.cells.insert(
+                address.into(),
+                toolkit::Cell::value(CellValue::Text(text.into())),
+            );
+        }
+        let model = WorkbookModel {
+            sheets: vec![sheet],
+            ..WorkbookModel::default()
+        };
+        let target = temp.path("written.xlsx");
+        export_xlsx(&model, &target).unwrap();
+        let stored = String::from_utf8(
+            Package::read(&target).unwrap().parts["xl/worksheets/sheet1.xml"].clone(),
+        )
+        .unwrap();
+        assert!(stored.contains("line one_x000D_\nline two"));
+        assert!(stored.contains("bell_x0007_ and tab\t"));
+        assert!(stored.contains("literal _x005F_x0041_ stays literal"));
+        assert!(stored.contains("_xFFFE_ is escaped, \u{1f600} is not"));
+        let reopened = import_xlsx(&target, BTreeMap::new(), BTreeMap::new()).unwrap();
+        let cells = &reopened.snapshot().sheets[0].cells;
+        for (address, text) in written {
+            assert_eq!(
+                cells[address].value,
+                CellValue::Text(text.into()),
+                "{address}"
+            );
+        }
+    }
     #[test]
     fn xml_entities_namespaces_phonetics_and_archive_limits() {
         assert!(Xml::parse(b"<!DOCTYPE x [<!ENTITY boom 'x'>]><x>&boom;</x>").is_err());

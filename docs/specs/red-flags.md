@@ -33,7 +33,7 @@ These specs state requirements. This table states which of them the code on
 | `intake_workbook` emitting the canonical model (Spec 4) | Built, Python only: `python/workbook_forge/intake.py`, and the `workbook-forge intake` command. It returns nothing the canonical reader would refuse. Everything in the file that version 1 does not carry is listed by name in `metadata.intake.not_carried`. The list says that something is there, not what it meant |
 | Intake of array, shared and data-table formulas (Spec 4) | Refused with a reason. Every workbook with a filled-down formula is refused |
 | Intake of dates written as text, 1904 dates and macros (Spec 4) | Refused with a reason |
-| Intake decoding `_xHHHH_` escapes in text | Not built, in either reader |
+| Intake decoding `_xHHHH_` escapes in text | Built, in both readers and both writers, for shared strings, inline strings and string formula caches. The rule is in `docs/behavior-profiles.md` |
 | A job that runs both suites on every change | Not built. `tools/gate.sh` runs them locally |
 
 ---

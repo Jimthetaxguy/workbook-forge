@@ -26,7 +26,10 @@ from xml.sax.saxutils import quoteattr
 
 from . import ArrayValue, ErrorValue, analyze_formula, evaluate_result
 from .catalog import function_status
-from .xml_patterns import XMLLimitError, XMLPatternError, parse_xml, rich_text, select_path
+from .xml_patterns import (
+    XMLLimitError, XMLPatternError, decode_ooxml_escapes, encode_ooxml_escapes, parse_xml,
+    rich_text, select_path,
+)
 
 MAIN = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
 REL_DOC = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
@@ -360,7 +363,6 @@ def _relationship_part(part: str) -> str:
 
 
 def _validate_xml_text(value: str, label: str, max_utf16_units: int | None = None) -> None:
-    units = 0
     for char in value:
         codepoint = ord(char)
         if not (
@@ -370,9 +372,27 @@ def _validate_xml_text(value: str, label: str, max_utf16_units: int | None = Non
             or 0x10000 <= codepoint <= 0x10FFFF
         ):
             raise ValueError(f"{label} contains a character not allowed by XML 1.0")
-        units += 2 if codepoint > 0xFFFF else 1
-    if max_utf16_units is not None and units > max_utf16_units:
+    _validate_text_length(value, label, max_utf16_units)
+
+
+def _validate_text_length(value: str, label: str, max_utf16_units: int | None) -> None:
+    if max_utf16_units is None:
+        return
+    units = sum(2 if ord(char) > 0xFFFF else 1 for char in value)
+    if units > max_utf16_units:
         raise ValueError(f"{label} exceeds Excel's {max_utf16_units}-character limit")
+
+
+def _string_part_text(value: str, label: str, max_utf16_units: int) -> str:
+    """The form of a cell string as a string part stores it.
+
+    Excel's length limit applies to the text itself, not to its escaped
+    spelling. The escaped spelling is what must be legal XML.
+    """
+    _validate_text_length(value, label, max_utf16_units)
+    encoded = encode_ooxml_escapes(value)
+    _validate_xml_text(encoded, label)
+    return encoded
 
 
 def _cell_position(address: str) -> tuple[int, int]:
@@ -961,7 +981,7 @@ class Workbook:
             return number
         if isinstance(value, str):
             try:
-                _validate_xml_text(value, "formula result", 32_767)
+                _string_part_text(value, "formula result", 32_767)
             except ValueError as error:
                 raise UnsupportedWorkbook(
                     f"formula string result is outside the XLSX cell limit at {sheet}!{address}"
@@ -987,7 +1007,7 @@ class Workbook:
         elif isinstance(value, str):
             cell.set("t", "str")
             cached = ET.Element(_q("v"))
-            cached.text = value
+            cached.text = _string_part_text(value, "formula result", 32_767)
         elif value is None:
             cell.attrib.pop("t", None)
             cached = ET.Element(_q("v"))
@@ -1339,8 +1359,10 @@ class Workbook:
         elif cell_type == "inlineStr":
             inline = element.find(_q("is"))
             value = "" if inline is None else self._inline_text(inline)
-        elif cell_type == "str" and value_node is not None and value is None:
-            value = ""
+        elif cell_type == "str":
+            value = "" if value_node is not None and value is None else value
+            if value is not None:
+                value = decode_ooxml_escapes(value)
         elif cell_type == "b" and value is not None:
             if value not in {"0", "1"}:
                 raise WorkbookError(f"invalid Boolean value at {address}")
@@ -1379,7 +1401,7 @@ class Workbook:
         if isinstance(value, float) and (value != value or value in (float("inf"), float("-inf"))):
             raise ValueError("Excel cell numbers must be finite")
         if isinstance(value, str):
-            _validate_xml_text(value, "cell text", 32_767)
+            value = _string_part_text(value, "cell text", 32_767)
         cell = self._writable_cell(sheet, address)
         self._request_recalculation()
         for child in list(cell):
