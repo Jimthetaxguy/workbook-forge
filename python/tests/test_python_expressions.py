@@ -101,6 +101,9 @@ def test_construction_and_source_budgets_are_enforced():
     assert expression.render().startswith("=")
     with pytest.raises(ValueError, match="depth limit"):
         expression + Expression.literal(1)
+    # The root is level 1, so a 96-term chain is the deepest flat chain
+    # accepted; Rust draws the line at the same term.
+    assert parse_expression("=" + "+".join(["1"] * 96)) is not None
     with pytest.raises(ValueError, match="depth limit"):
         parse_expression("=" + "+".join(["1"] * 97))
     with pytest.raises(ValueError, match="8192"):

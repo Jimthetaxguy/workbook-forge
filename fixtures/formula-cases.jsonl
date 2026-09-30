@@ -1451,3 +1451,4 @@
 {"id":"edate-neg-eomonth-lands-on-serial-zero","formula":"=EOMONTH(1,-1)","cells":{},"expected":{"number":0},"source_refs":["ms-eomonth"],"note":"1899-12-31 is serial 0, the lowest serial either engine returns."}
 {"id":"edate-neg-edate-lands-on-serial-zero","formula":"=EDATE(31,-1)","cells":{},"expected":{"number":0},"source_refs":["ms-edate"]}
 {"id":"edate-neg-edate-lands-on-serial-one","formula":"=EDATE(32,-1)","cells":{},"expected":{"number":1},"source_refs":["ms-edate"]}
+{"id":"depth-flat-97-term-chain-evaluates","formula":"=1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1+1","cells":{},"expected":{"number":97},"note":"The evaluator limit is parenthesis nesting, so a flat chain is not refused here. The toolkit expression tree limit, which both engines apply from depth 1, refuses this chain; see the toolkit tests."}

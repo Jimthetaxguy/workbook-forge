@@ -538,7 +538,9 @@ fn parse_expr(formula: &str) -> Result<Expr, ToolkitError> {
     Ok(expr)
 }
 fn validate_expression_depth(expr: &Expr) -> Result<(), ToolkitError> {
-    let mut pending = vec![(expr, 0)];
+    // The root is level 1, as in the Python expression validator, so a
+    // 96-term chain is the deepest tree either engine accepts.
+    let mut pending = vec![(expr, 1)];
     while let Some((e, depth)) = pending.pop() {
         if depth > crate::MAX_EXPRESSION_NESTING {
             return Err(ToolkitError::new(
@@ -2526,6 +2528,19 @@ mod tests {
             .collect();
         assert_eq!(catalog_names, SUPPORTED_FUNCTIONS.iter().copied().collect());
     }
+    #[test]
+    fn expression_depth_limit_matches_python_from_the_root() {
+        // A flat left-associative chain of n terms is a tree of depth n when
+        // the root counts as level 1. Python accepts 96 terms and refuses 97;
+        // Rust must draw the line at the same term.
+        let chain = |terms: usize| format!("={}", vec!["1"; terms].join("+"));
+        assert!(Expression::parse(&chain(96)).is_ok());
+        assert_eq!(
+            Expression::parse(&chain(97)).unwrap_err().code,
+            "resource_limit"
+        );
+    }
+
     #[test]
     fn resource_limits_and_style_validation_are_predictable() {
         assert!(Expression::parse(&format!("={}", "1+".repeat(4200))).is_err());

@@ -29,7 +29,10 @@ at 64 levels. Parenthesis nesting is limited to 96 levels, and wildcard matching
 to 5,000,000 matching-state steps per evaluation. The latter two limits are
 Workbook Forge safety profiles. Resource limits also apply at the workbook,
 agent transport and native composition boundaries; one interface's larger input
-budget does not raise the evaluator limit.
+budget does not raise the evaluator limit. The toolkit expression tree is capped
+at 96 levels counted from the root as level 1 in both engines, so a flat
+`1+1+...` chain of 96 terms is accepted and one of 97 terms is refused with
+`resource_limit`; the evaluator itself limits parenthesis nesting, not chain length.
 
 Arithmetic (`+`, `-`, `*`, `/`, `^`) returns `#NUM!` whenever its binary64 result
 is not finite, so an overflow such as `1E308*10` is an error rather than an

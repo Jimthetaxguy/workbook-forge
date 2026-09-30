@@ -353,13 +353,17 @@ def _assert_fixture_value(actual, expected):
 
 
 def test_formula_corpus_survives_workbook_model_boundaries(engine):
-    # The source corpus remains authoritative. Only these three resource cases
+    # The source corpus remains authoritative. Only these four resource cases
     # use a different boundary: workbook model/graph validation refuses them
     # before the standalone evaluator can return an ordinary Excel error value.
+    # The 97-term chain is refused by the toolkit expression tree limit, which
+    # both engines count from the root as level 1, while the evaluator's own
+    # limit is parenthesis nesting and evaluates the chain.
     model_refusals = {"text-literal-supplementary-utf16-limit"}
     graph_refusals = {
         "sort-range-over-100000-cell-profile",
         "unique-range-over-100000-cell-profile",
+        "depth-flat-97-term-chain-evaluates",
     }
     seen_refusals = set()
     cases = [json.loads(line) for line in (ROOT / "fixtures/formula-cases.jsonl").read_text().splitlines()]
