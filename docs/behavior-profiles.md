@@ -47,11 +47,19 @@ Numeric-to-text conversion is shared across Python and Rust for `CONCAT`, `TEXTJ
 
 `IFS` returns the first true condition's value; `SWITCH` returns the result for the first matching value, with optional defaults. Both use a documented short-circuiting profile that still needs an Excel spot-check; their selected branches may return shaped arrays through `evaluate_result`. The SWITCH comparison profile treats ASCII text without case and non-ASCII text exactly; it does not coerce across types or apply locale collation, and it still needs an Excel spot-check.
 
+### Counting (COUNT, COUNTA)
+
+`COUNT` counts numbers and does not count error values or logical values found in a range; `COUNTA` counts every non-empty cell, including error values. Neither returns an error found in its arguments. This follows Microsoft's COUNT and COUNTA examples, in which a range holding a date, two numbers, TRUE and `#DIV/0!` counts as 3 and 5. `SUM`, `AVERAGE`, `MIN` and `MAX` still return the first error in their range.
+
 ### Criteria and conditional aggregation
 
 Criteria support comparison operators, case-insensitive text, `*` and `?` wildcards, and `~` escapes. `COUNTBLANK` counts empty cells and empty text but excludes zero. `MINIFS` and `MAXIFS` require equal-shaped ranges and return zero when no numeric result matches.
 
 A criterion operand takes the type its text spells: `TRUE` and `FALSE` are logical, numeric text such as `">1"` is a number, and anything else is text. A cell is compared only against an operand of its own type; a cell of another type is unequal, so `<>` selects it and every other operator skips it. `COUNTIF(A1:A7,">1")` over 5, 7, `fig`, `kiwi`, TRUE, the text `TRUE` and the text `2` is therefore 2, and `COUNTIF(A7,2)` over the text `2` is 0. This is a Workbook Forge profile shared by both engines; it has not been checked in Excel, which is reported to count numbers stored as text against a numeric criterion.
+
+An error cell in a criteria range never propagates: it is skipped by every criterion except `<>`, which counts it as unequal, and an error criterion. Criterion text spelling an Excel error code (`"#N/A"`, `"<>#N/A"`) or an error value (`NA()`) selects cells holding that error; errors have no order, so a relational operator with an error operand selects nothing. An error in the summed, averaged, or min/max range is read only for matched cells, and then propagates. The error rules are a Workbook Forge profile that has not been checked in Excel.
+
+`SUMIF` and `AVERAGEIF` currently require matching criteria and value-range shapes even though Excel aligns differently sized value ranges from their top-left cell; that gap is explicit in the semantic catalog.
 
 ### Text (TEXTBEFORE, TEXTAFTER)
 

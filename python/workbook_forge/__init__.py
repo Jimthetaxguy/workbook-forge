@@ -1923,9 +1923,16 @@ def _wildcard_matches(
     return previous[width]
 
 
+# Error codes both engines can hold in a cell; criterion text spelling one of
+# them selects cells holding that error.
+_CRITERION_ERROR_CODES = frozenset({"#VALUE!", "#DIV/0!", "#REF!", "#NAME?", "#NUM!", "#N/A", "#CALC!"})
+
+
 def _parse_criterion(value: object) -> _Criterion | ErrorValue:
     if isinstance(value, ErrorValue):
-        return value
+        # An error as the criterion selects cells holding that error; it is
+        # not a failure of the call.
+        return _Criterion("=", ErrorValue(value.code.upper()))
     if isinstance(value, _Range):
         return ErrorValue("#VALUE!", "criteria must be scalar")
     if value is None:
@@ -1948,6 +1955,9 @@ def _parse_criterion(value: object) -> _Criterion | ErrorValue:
         return _Criterion(operator, None, blank=True)
     if operand == "" or operand[0] in "<>=":
         return ErrorValue("#VALUE!", "malformed criteria operator or operand")
+    if operand.upper() in _CRITERION_ERROR_CODES:
+        # Checked before wildcards so that the ? in #NAME? is not a pattern.
+        return _Criterion(operator, ErrorValue(operand.upper()))
 
     wildcard = _wildcard_pattern(operand)
     if isinstance(wildcard, ErrorValue):
@@ -1972,12 +1982,22 @@ def _criterion_matches(
     criterion: _Criterion,
     budget: _WildcardBudget,
 ) -> bool | ErrorValue:
+    expected = criterion.expected
     if isinstance(value, ErrorValue):
-        return value
+        # An error cell never propagates out of a criteria range. It equals
+        # an error criterion with the same code and nothing else; errors have
+        # no order, so relational operators never select them.
+        if isinstance(expected, ErrorValue):
+            same = value.code.upper() == expected.code
+            if criterion.operator == "=":
+                return same
+            return not same if criterion.operator == "<>" else False
+        return criterion.operator == "<>"
     if criterion.blank:
         is_blank = value is None or value == ""
         return is_blank if criterion.operator == "=" else not is_blank
-    expected = criterion.expected
+    if isinstance(expected, ErrorValue):
+        return criterion.operator == "<>"
     if criterion.wildcard is not None:
         matched = (
             _wildcard_matches(criterion.wildcard, value, budget)
@@ -2840,6 +2860,12 @@ def _function(
     }:
         return ErrorValue("#VALUE!", f"{name} does not accept a range argument in this evaluator")
     flat = _flatten(args)
+    if name == "COUNT":
+        # Microsoft: arguments that are error values are not counted.
+        return sum(isinstance(value, (int, float)) and not isinstance(value, bool) for value in flat)
+    if name == "COUNTA":
+        # Microsoft: COUNTA counts any type of information, including error values.
+        return sum(value is not None for value in flat)
     if any(isinstance(value, ErrorValue) for value in flat):
         return next(value for value in flat if isinstance(value, ErrorValue))
     if name == "NPER":
@@ -2854,12 +2880,10 @@ def _function(
         return _cumulative_payment_call(name, args)
     if name in {"FV", "PV", "PMT"}:
         return _tvm_call(name, args)
-    if name in {"SUM", "AVERAGE", "COUNT", "MIN", "MAX"}:
+    if name in {"SUM", "AVERAGE", "MIN", "MAX"}:
         numbers = _numeric_values(flat)
         if isinstance(numbers, ErrorValue):
             return numbers
-        if name == "COUNT":
-            return sum(isinstance(value, (int, float)) and not isinstance(value, bool) for value in flat)
         if name == "SUM":
             return sum(numbers)
         if name == "AVERAGE":
@@ -2867,8 +2891,6 @@ def _function(
         if not numbers:
             return 0
         return min(numbers) if name == "MIN" else max(numbers)
-    if name == "COUNTA":
-        return sum(value is not None for value in flat)
     if name in {"AND", "OR"}:
         truth_values = [_truth(value) for value in flat if value is not None]
         if any(isinstance(value, ErrorValue) for value in truth_values):

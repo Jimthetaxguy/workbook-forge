@@ -20,7 +20,7 @@ remaining:
   - Worksheet spill projection, volatile/iteration/quirk round-trip classes, cross-backend bound export, and broad Excel 365 coverage are not complete.
   - From impl/v1-intake and impl/v1-calc-binding, intake is ported. Typed binding constraints, the calculation session with revisions, and refusal of duplicate JSON keys are not. Agent-headless has not started its implementation.
   - No pull request so far has had checks run on it or a review; mergeability alone is not acceptance evidence. tools/gate.sh is the check to run.
-  - 33 confirmed findings from the first review are open; the most serious are the counting functions, which return an error when any cell in the range holds one.
+  - 31 confirmed findings from the first review are open. The counting functions and the criteria type rule (parity-02 and parity-04) are fixed on agent/claude-quality-counting-20260930; the fixes carry Workbook Forge profiles that have not been checked in Excel.
   - Six more are open from the review of the unified branch: the toolkit workbook form takes a missing version as 1; versions are not checked on write; a formula that refers to a blank cell has a null result; no calculation report or origin `calculated`; a formula that uses a defined name is reported as a parse error; `_xHHHH_` escapes in text are not decoded.
   - "GitHub reports Jimthetaxguy/workbook-forge as public, verified 2026-09-28; historical private-release preparation notes in docs/run-history.md describe their original checkpoints."
 open_questions: []
@@ -110,6 +110,9 @@ The Excel round-trip harness is `tools/excel_oracle.py`, with `tools/canonical_e
 - Append each run's summary to `docs/run-history.md`. Keep `README.md` and this file limited to the current state.
 - Run the Rust gates with `CARGO_TARGET_DIR` inside the checkout, as `eval_command` does. A shared target directory can mix build artifacts between copies of the crate.
 ## Latest maintenance
+### 2026-09-30 — claude-code — counting functions and criteria types
+- `COUNT` no longer returns an error found in its range and `COUNTA` counts error cells; the values come from Microsoft's COUNT and COUNTA examples. `SUM`, `AVERAGE`, `MIN` and `MAX` still propagate.
+- Criteria functions skip error cells unless the criterion is `<>` or names that error (`"#N/A"`, `NA()`); a matched error in the summed range still propagates. The Rust matcher now types its operand and compares within one type, as Python did. Both rules are in `docs/behavior-profiles.md` as profiles not checked in Excel; the numeric-text case (`COUNTIF(A7,2)` over text `2` is 0) is the one most likely to differ from Excel.
 ### 2026-09-29 — claude-code — every local branch brought into one
 - One branch now holds the work of every agent: the review fixes, pull request 5 with Grok's two later commits, the Jev critic, the product specification, and Codex's spine documents.
 - Codex's documents described a shape of the model that `main` did not adopt. They now describe version 1 as built, and `docs/specs/red-flags.md` has a table of which requirements the code meets.
@@ -124,7 +127,7 @@ The Excel round-trip harness is `tools/excel_oracle.py`, with `tools/canonical_e
 - Fixed in the Python canonical model: a diagnostic filed against the wrong cell, and formula references past XFD1048576 treated as ordinary references.
 - The rounding functions round the stored value exactly, except that a number within two binary64 values of a boundary is taken as lying on it. A two-decimal amount is no longer moved by a cent. The rule is in `docs/behavior-profiles.md` and has not been checked in Excel.
 - **Boundary allowance:** the two binary64 values either side of a rounding boundary within which a number is taken as lying on the boundary.
-- Known and not yet fixed, most serious first: counting functions return an error when any cell in the range holds one; the engines disagree on criteria over mixed cell types.
+- Known and not yet fixed, most serious first: counting functions return an error when any cell in the range holds one; the engines disagree on criteria over mixed cell types. Both are fixed on 2026-09-30 (see below).
 ### 2026-09-28 — codex/Codex — canonical model and export evidence
 - Updated the v1 dependency order: the shared JSON model is on `impl/v1-intake`, direct Python/Rust calculation is in progress on `impl/v1-calc-binding`, and headless wiring follows the bound export proof.
 - Recorded the existing Python SDK Excel round trip (12/12 checks) separately from the still-blocked full export gate (dynamic spill placement unsupported; global Excel settings unverified).
