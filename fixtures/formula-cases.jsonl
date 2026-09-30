@@ -1444,3 +1444,10 @@
 {"id":"arith-nonfinite-inf-text-operand","formula":"=\"inf\"+1","cells":{},"expected":{"error":"#VALUE!"},"note":"Text that a language float parser reads as infinity or NaN is not numeric text; it is #VALUE! like any other non-numeric text."}
 {"id":"arith-nonfinite-nan-text-operand","formula":"=\"nan\"*1","cells":{},"expected":{"error":"#VALUE!"}}
 {"id":"arith-nonfinite-infinity-text-cell","formula":"=A1*1","cells":{"A1":"Infinity"},"expected":{"error":"#VALUE!"}}
+{"id":"edate-neg-one-month-before-serial-one","formula":"=EDATE(1,-1)","cells":{},"expected":{"error":"#NUM!"},"source_refs":["ms-edate"],"note":"1899-12-01 has no serial in the 1900 date system, so the result is #NUM!, which Microsoft documents for a result outside the supported range."}
+{"id":"edate-neg-twelve-months-before-serial-one","formula":"=EDATE(1,-12)","cells":{},"expected":{"error":"#NUM!"},"source_refs":["ms-edate"]}
+{"id":"edate-neg-twelve-months-before-march-1900","formula":"=EDATE(61,-12)","cells":{},"expected":{"error":"#NUM!"},"source_refs":["ms-edate"]}
+{"id":"edate-neg-eomonth-two-months-before-serial-one","formula":"=EOMONTH(1,-2)","cells":{},"expected":{"error":"#NUM!"},"source_refs":["ms-eomonth"]}
+{"id":"edate-neg-eomonth-lands-on-serial-zero","formula":"=EOMONTH(1,-1)","cells":{},"expected":{"number":0},"source_refs":["ms-eomonth"],"note":"1899-12-31 is serial 0, the lowest serial either engine returns."}
+{"id":"edate-neg-edate-lands-on-serial-zero","formula":"=EDATE(31,-1)","cells":{},"expected":{"number":0},"source_refs":["ms-edate"]}
+{"id":"edate-neg-edate-lands-on-serial-one","formula":"=EDATE(32,-1)","cells":{},"expected":{"number":1},"source_refs":["ms-edate"]}

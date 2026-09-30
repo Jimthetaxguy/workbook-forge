@@ -3083,9 +3083,14 @@ def _function(
         else:
             target_day = _days_in_month(target_year, target_month)
         try:
-            return _excel_ymd_to_serial(target_year, target_month, target_day)
+            target_serial = _excel_ymd_to_serial(target_year, target_month, target_day)
         except (OverflowError, ValueError):
             return ErrorValue("#NUM!", "target date is outside the supported date range")
+        # Dates before 1899-12-31 (serial 0) have no serial in the 1900 date
+        # system; the year check above does not catch them.
+        if not 0 <= target_serial <= _MAX_EXCEL_DATE_SERIAL:
+            return ErrorValue("#NUM!", "target date is outside the supported date range")
+        return target_serial
     if name == "MOD":
         number, divisor = _number(args[0]), _number(args[1])
         if isinstance(number, ErrorValue):
