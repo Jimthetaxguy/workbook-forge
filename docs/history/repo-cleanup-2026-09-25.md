@@ -19,7 +19,7 @@ workspace: "."
 ---
 # Workbook Forge cleanup continuation — 2026-09-27
 
-This is a historical cleanup record. Repository visibility, package contents, next steps, and test results below describe their dated checkpoints. The 2026-09-28 documentation review clarified that scope and removed personal conversation references and machine-specific locations; it did not rerun those historical checks. See [CONTEXT.md](../CONTEXT.md) for current project state. Ignored archive paths below identify local recovery evidence that is not shipped with the repository.
+This is a historical cleanup record. Repository visibility, package contents, next steps, and test results below describe their dated checkpoints. The 2026-09-28 documentation review clarified that scope and removed personal conversation references and machine-specific locations; it did not rerun those historical checks. See [CONTEXT.md](../../CONTEXT.md) for current project state. Ignored archive paths below identify local recovery evidence that is not shipped with the repository.
 
 ## Main-only public candidate — 2026-09-28 00:34 EDT
 
