@@ -249,7 +249,7 @@ def _close(actual, expected, tolerance: float) -> bool:
     return actual == expected
 
 
-def test_shared_golden_input_cases_match_python_and_rust():
+def test_shared_golden_input_cases_match_python_and_rust(tmp_path):
     """Mac-lineage multi-case coverage on the Grok schema/bindings path."""
     cases = json.loads(CASES.read_text(encoding="utf-8"))
     fixture = json.loads(FIXTURE.read_text(encoding="utf-8"))
@@ -268,16 +268,12 @@ def test_shared_golden_input_cases_match_python_and_rust():
             assert _close(actual, expected, tolerance), (case["name"], name, actual, expected)
 
         # Rust must agree on the same rewritten bytes (values, errors, deps).
-        # Write a temp sibling so the rust example can read a path.
-        temp = ROOT / "fixtures" / f".tmp-{case['name']}.workbook.json"
-        try:
-            temp.write_bytes(raw)
-            rust_calculated = _rust_path(temp, "calculate")["workbook"]
-            py_dict = calculated.to_dict()
-            assert _canonical(py_dict) == _canonical(rust_calculated), case["name"]
-        finally:
-            if temp.exists():
-                temp.unlink()
+        # Write a temp file so the rust example can read a path.
+        temp = tmp_path / f"{case['name']}.workbook.json"
+        temp.write_bytes(raw)
+        rust_calculated = _rust_path(temp, "calculate")["workbook"]
+        py_dict = calculated.to_dict()
+        assert _canonical(py_dict) == _canonical(rust_calculated), case["name"]
 
 
 def _rust_path(path: Path, mode: str) -> dict:
