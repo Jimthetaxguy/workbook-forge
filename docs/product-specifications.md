@@ -1,5 +1,5 @@
 ---
-author: James Pustorino with Codex
+author: codex/Codex
 created: 2026-09-28
 agent: codex/Codex
 date: '2026-09-28T20:03:14-04:00'
@@ -8,9 +8,8 @@ task: Specify Workbook Forge user outcomes and executable engineering path
 status: active-specification
 summary: Defines user-facing goals, workbook intake and translation contracts, formula recovery boundaries, research questions, and staged acceptance criteria.
 next_steps:
-  - Implement and verify the smallest named-calculation-to-workbook binding path described in Spec 2.
-  - Establish a repeatable Excel Desktop roundtrip harness and record its first complete evidence.
-  - Prototype the paired overview and structural workbook map in Spec 1 using synthetic workbooks.
+  - Run the Excel Desktop round trip on the canonical fixture and commit its receipt; the bound calculation (product spec 2) and the harness exist, the observed receipt does not.
+  - Prototype the paired overview and structural workbook map in product spec 1 using synthetic workbooks.
 remaining:
   - Product choices about intake report shape, candidate ranking and target application binding contract remain open to evidence from prototypes.
   - Broad Excel behavior coverage and hard-coded formula recovery are future capabilities, not current claims.
@@ -72,7 +71,7 @@ These requirements apply to every specification below:
    Excel Desktop behavior. Record the Excel version, action sequence and
    observed result for each direct compatibility claim.
 
-## Spec 1 — Fast, explainable workbook intake
+## Product spec 1 — Fast, explainable workbook intake
 
 ### User outcome
 
@@ -147,7 +146,7 @@ source workbook or let a generated narrative overwrite the extracted facts.
   measure report size and useful first-response context on representative
   synthetic workbooks before setting additional performance targets.
 
-## Spec 2 — One calculation across workbook, Python and Rust
+## Product spec 2 — One calculation across workbook, Python and Rust
 
 ### User outcome
 
@@ -223,7 +222,7 @@ not implied by this product contract.
   closure, cached-result handling or separation of formula meaning from
   workbook layout.
 
-## Spec 3 — Headless, pre-wired agent and application use
+## Product spec 3 — Headless, pre-wired agent and application use
 
 ### User outcome
 
@@ -276,7 +275,7 @@ agent framework or building a user interface first.
 - Defer a GUI choice until real workbook tasks show which operations and
   explanations people need repeatedly.
 
-## Spec 4 — Recovering likely formulas from hard-coded workbooks
+## Product spec 4 — Recovering likely formulas from hard-coded workbooks
 
 ### User outcome
 
@@ -342,7 +341,7 @@ formula text must be kept separate from the source workbook until reviewed.
 - Formula extraction and hypothesis generation use distinct report fields and
   language so consumers cannot confuse observed formulas with suggestions.
 
-## Spec 5 — Evidence-led formula and Excel behavior coverage
+## Product spec 5 — Evidence-led formula and Excel behavior coverage
 
 ### Goal
 

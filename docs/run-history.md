@@ -22,6 +22,33 @@ Earlier notes counted "evaluator slices". Slices 2–10 predate the autoresearch
 
 ## Project activity
 
+### 2026-09-29 — claude-code — every local branch brought into one
+- One branch now holds the work of every agent: the review fixes, pull request 5 with Grok's two later commits, the Jev critic, the product specification, and Codex's spine documents.
+- Codex's documents described a shape of the model that `main` did not adopt. They now describe version 1 as built, and `docs/specs/red-flags.md` has a table of which requirements the code meets.
+- Intake from `impl/v1-intake` is ported to the canonical model. It reuses the existing package reader and adds no address parser of its own.
+- Not carried over, because each needs a decision or a change in both engines: typed binding constraints, the calculation session with revisions, refusal of duplicate JSON keys.
+- Intake returns nothing the canonical reader would refuse, and lists by name everything in the file that version 1 does not carry in `metadata.intake.not_carried`. The table at the top of `docs/specs/red-flags.md` says which requirements are met.
+- The Jev critic reads its key from `TYPESAFE_API_KEY`, a `.env` file, or the command in `TYPESAFE_KEY_COMMAND`. It names no secret store and no directory. `tools/with-typesafe-key.sh` asks the critic for the key, so the two follow one rule.
+### 2026-09-29 — claude-code — adversarial review, gate and first fixes
+- `main` failed its own checks: `cargo clippy -D warnings` rejected `rust/src/model.rs`. Fixed. Nothing had been running the checks.
+- Added the gate, the review protocol and its tools. Seven reviewers, each given one lens and no history, reported 56 findings. Eleven were planted defects. Of the other 45, independent refuters knocked down four and the rest were reproduced on unchanged code.
+- Twelve small deliberate faults in limit checks were applied one at a time. Nine left every test passing. Tests now catch eight; the ninth is a redundant check.
+- Fixed in the Python canonical model: a diagnostic filed against the wrong cell, and formula references past XFD1048576 treated as ordinary references.
+- The rounding functions round the stored value exactly, except that a number within two binary64 values of a boundary is taken as lying on it. A two-decimal amount is no longer moved by a cent. The rule is in `docs/behavior-profiles.md` and has not been checked in Excel.
+- **Boundary allowance:** the two binary64 values either side of a rounding boundary within which a number is taken as lying on the boundary.
+- Known and not yet fixed, most serious first: counting functions return an error when any cell in the range holds one; the engines disagree on criteria over mixed cell types.
+### 2026-09-28 — codex/Codex — canonical model and export evidence
+- Updated the v1 dependency order: the shared JSON model is on `impl/v1-intake`, direct Python/Rust calculation is in progress on `impl/v1-calc-binding`, and headless wiring follows the bound export proof.
+- Recorded the existing Python SDK Excel round trip (12/12 checks) separately from the still-blocked full export gate (dynamic spill placement unsupported; global Excel settings unverified).
+- Rechecked PR #2: its remote head advanced and is now mergeable, but remains draft with no CI checks; no merge or conflict-fix push was made from this checkout.
+### 2026-09-28 — codex/Codex — public documentation review
+- Reviewed all project guides and historical notes, verified portable examples, and removed unnecessary personal context and machine locations.
+- Recorded the contributor checks and separate published-history decision in [toolkit delivery](toolkit-delivery.md#activity).
+### 2026-09-28 — codex/Codex — native primitives and reviewed boundaries
+- Added reusable calculations without workbooks, preserving the four product uses: extraction, software execution, programmatic Excel generation and a later application interface.
+- Recorded independent contributor verification and reference-project analysis in [toolkit delivery](toolkit-delivery.md). Known behavior differences remain explicit.
+- Prior branch organization and implementation checkpoints remain in the delivery record and [project history](run-history.md#project-activity).
+
 ### 2026-09-29 — cursor agent — export harness restarted on the combine tip
 - Changed: the export branch now starts at `agent/combine-calc-best-20260928` @ `4d56af6` (draft PR #3). Schema path stays `schemas/workbook-model.v1.schema.json`. Fixture path stays `fixtures/operating-scenario.workbook.json`. Mac multi-case goldens stay. The Excel harness is still `origin/impl/v1-export` @ `bea3ee1`. PR #2 stays open.
 - Evidence: focused tests on this host. Excel Desktop did not run. Spec 2 is not passed. Array spill stays blocked.

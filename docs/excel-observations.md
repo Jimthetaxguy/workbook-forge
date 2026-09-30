@@ -192,7 +192,7 @@ and expected spill cells `B7:B9`. SDK export currently raises
 `UnsupportedWorkbook` for worksheet array spill caches, so the receipt marks
 that required class `blocked` with `blocker_kind=unsupported_capability` and
 leaves volatile, iteration, scalar-array and quirk classes `not_observed`. The
-three-output scenario round-trip is evidence for that supported scenario slice;
+twelve-cell scenario round-trip is evidence for that supported scenario slice;
 it does not close the full export gate.
 
 ## Completing workbook acceptance

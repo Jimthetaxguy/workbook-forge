@@ -171,7 +171,7 @@ Call the v1 product spine complete only when all of these are evidenced:
   agent operations are exposed when the same native operations exist there.
 - No red-flag spec has an open waiver.
 
-Step 1 is on `main`. Until the remaining gates are met, land each further slice
+Steps 1 and 3 are on `main`. Until the remaining gates are met, land each further slice
 only with its evidence. Do not spend the critical path on a fourth tree, duplicate model store, adapter DTOs,
 broad formula-family expansion, or detector tuning against a single golden
 workbook. Detectors remain optional plugins with an off-switch and diverse

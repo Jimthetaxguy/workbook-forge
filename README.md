@@ -2,7 +2,7 @@
 
 **North Star:** [docs/vision.md](docs/vision.md). Red-flag specs: [docs/specs/red-flags.md](docs/specs/red-flags.md).
 
-Near-term order: the versioned workbook model and the operating-scenario calc binding land first ([Spec 1](docs/specs/red-flags.md#spec-1--canonical-intermediate-form), [Spec 4](docs/specs/red-flags.md#spec-4--model-versioning-from-day-one)). Export then sends `fixtures/operating-scenario.workbook.json` through OOXML. Excel Desktop full recalc is still the Spec 2 oracle. The harness is `tools/excel_oracle.py`; `tools/canonical_excel_receipt.py` exports the canonical fixture and calls it. Intake onto the canonical model is built, in Python. Agent-headless comes after an Excel receipt. Version rules: [model versioning](docs/specs/model-versioning.md).
+Near-term order: the versioned workbook model and the operating-scenario calc binding land first ([Spec 1](docs/specs/red-flags.md#spec-1--canonical-intermediate-form), [Spec 4](docs/specs/red-flags.md#spec-4--model-versioning-from-day-one)). Export then sends `fixtures/operating-scenario.workbook.json` through OOXML. Excel Desktop full recalc is still the red-flag Spec 2 oracle. The harness is `tools/excel_oracle.py`; `tools/canonical_excel_receipt.py` exports the canonical fixture and calls it. Intake onto the canonical model is built, in Python. Agent-headless comes after an Excel receipt. Version rules: [model versioning](docs/specs/model-versioning.md).
 
 **Workbook Forge is an SDK for Excel in formats agents can use.** Its goal is to
 make supported workbook data, formulas, dependencies, presentation, and business
@@ -294,11 +294,13 @@ The Microsoft function index currently contributes 521 named entries across its 
 - `docs/extraction-patterns.md` — extraction semantics, provenance, shared-formula inspection, and resource limits.
 - `docs/toolkit-delivery.md` — architecture, delivery evidence, dependency audit, and remaining acceptance gates.
 - `docs/excel-observations.md` — independent Excel observation harness and its recorded evidence.
-- `tools/` — complete verification gate, installed-package checks, Excel observations, and extraction catalog synchronization.
+- `tools/gate.sh` — the one command that decides whether a commit is acceptable; `tools/` also holds installed-package checks, Excel observations, the review protocol tools, and catalog synchronization.
 - `docs/behavior-profiles.md` — behavior notes and Workbook Forge profiles by function family, plus workbook adapter limits.
 - `docs/run-history.md` — dated project activity and what each autoresearch run added, preserving the facts at each checkpoint.
-- `.autoresearch/` — loop configuration (`config.json`), the accepted-run ledger (`state.json`), and Jev advisory receipts.
-- `_working-files/` — dated checkpoint and review notes.
+- `.autoresearch/` — loop configuration (`config.json`) and the accepted-run ledger (`state.json`).
+- `docs/specs/` — the red-flag specs, model versioning rules and the model changelog; `schemas/` holds the canonical workbook schema.
+- `docs/history/` — superseded briefs, notes and Jev advisory receipts, kept for the record.
+- `receipts/` — committed Excel round-trip receipts.
 
 Catalogs under `catalog/` are the maintained sources. Rust embeds the agent-operation,
 extraction and primitive catalogs, along with the primitive expression schema,
@@ -324,7 +326,7 @@ toolkit adds model and adapter capabilities without expanding the function count
 | XML extraction patterns | 10 |
 | Detailed semantic specs | 85 |
 | Formula and compatibility source records | 110 |
-| Direct Excel Desktop observations | 3 targeted formula checks; full workbook roundtrip outstanding |
+| Direct Excel Desktop observations | one SDK export round trip, 12 of 12 cell checks matched (2026-09-28); the canonical-fixture receipt is outstanding |
 
 The Python and Rust evaluators currently cover 115 functions, including scalar arithmetic, references, text and logical functions, the periodic financial functions FV, PV, PMT, NPER, IPMT, PPMT, CUMIPMT, CUMPRINC, SLN, SYD, DB, DDB, VDB, AMORLINC, and AMORDEGRC (deprecated legacy), dates, lookups, `TEXTBEFORE`/`TEXTAFTER`, error predicates (`ISNA`, `ISERR`, `ISERROR`), `NA`, `COUNTBLANK`, six conditional aggregations (`COUNTIF(S)`, `SUMIF(S)`, `AVERAGEIF(S)`), conditional extrema (`MINIFS`, `MAXIFS`), date/time functions (`HOUR`, `MINUTE`, `SECOND`, `TIME`, `WEEKDAY`, `WEEKNUM`, `ISOWEEKNUM`, `DAYS360`, `YEARFRAC`, `WORKDAY`, `NETWORKDAYS`, `WORKDAY.INTL`, `NETWORKDAYS.INTL`, `COUPDAYBS`, `COUPDAYS`, `COUPDAYSNC`, `COUPNCD`, `COUPNUM`, `COUPPCD`), and scalar rounding/remainder functions (`EVEN`, `ODD`, `INT`, `TRUNC`, `ROUND`, `ROUNDUP`, `ROUNDDOWN`, `MOD`, and `QUOTIENT`), plus parity predicates (`ISEVEN` and `ISODD`), plus factorial and combinatorics (`FACT`, `FACTDOUBLE`, `COMBIN`, `COMBINA`, `PERMUT`, and `PERMUTATIONA`), plus integer math (`GCD` and `LCM`), and bounded array generation with `SEQUENCE`, row/column ordering with `SORT`, and stable distinct-row/column selection with `UNIQUE`.
 
@@ -415,9 +417,19 @@ Package limits, dependency-closure bounds, and the adapter's supported scope are
 
 ## Verification
 
+One command decides whether a commit is acceptable:
+
+```sh
+bash tools/gate.sh
+```
+
+It rebuilds the native bridge from the checkout's `.venv`, runs both test suites,
+ruff, clippy and rustfmt, fails on a skipped test, and files its log under
+`.verification/gates/` by commit. The pieces it runs, for working on one side:
+
 ```sh
 python -m pytest -q
-python -m compileall -q python
+python -m ruff check python tools examples setup.py
 (cd rust && cargo fmt --check && CARGO_TARGET_DIR="$PWD/target" cargo check --locked && CARGO_TARGET_DIR="$PWD/target" cargo test --locked && CARGO_TARGET_DIR="$PWD/target" cargo clippy --all-targets --locked -- -D warnings)
 ```
 
@@ -426,7 +438,7 @@ low-level file decoding. The optional Python extension uses PyO3. The default
 Python runtime uses only the standard library. Exact dependency versions,
 permissive licenses, and source checksums are
 recorded in `catalog/dependency-licenses.json` and checked against both lockfiles.
-The complete development gate compares both independent engines. Install the
+`tools/verify_toolkit.sh` is the part of the gate that compares both engines. To run it alone, install the
 verified development lock and explicitly build the optional bridge first:
 
 ```sh

@@ -68,6 +68,7 @@ Build an **SDK for Excel in agent-ready formats**: expose supported workbook dat
 - **Review packet:** a plain copy of the files one reviewer may see, with no version history and no status claims. It is built by `tools/review/build_packet.py`.
 - **Lens:** the single question a reviewer is asked, and the list of files that question needs. Listed in `tools/review/lenses.json`.
 - **Planted defect:** a small deliberate fault used to find out whether the tests, or a reviewer, would notice a real one. A planted defect that the tests miss is a gap in the tests.
+- **Boundary allowance:** the two binary64 values either side of a rounding boundary within which a number is taken as lying on the boundary.
 - **Finding:** one defect claim with a location, a command that shows it, and the command's output. It is confirmed only when an independent refuter fails to knock it down and the coordinator reproduces it on unchanged code.
 ## Boundaries
 - Target: Excel for Microsoft 365 desktop, with availability/version metadata retained.
@@ -100,39 +101,17 @@ The Excel round-trip harness is `tools/excel_oracle.py`, with `tools/canonical_e
 - `python/workbook_forge/intake.py`: reads an `.xlsx` file into the canonical model; `workbook-forge intake` is its command.
 - `docs/review-protocol.md`: how to review this project so that the reviewer does not inherit the builder's view; `tools/review/` enforces it.
 - `tools/gate.sh`: the gate.
-- `.autoresearch/state.json`: the authoritative accepted-run ledger. `.autoresearch/config.json` holds the loop criteria and `eval_command`.
-- `_working-files/`: dated checkpoint and review notes.
-- `_archive-2026-09-25-L1/`: a git-ignored archive of the pre-git backup copies (`*.bak-*`, `.autoresearch/_archive-*`, `.autoresearch/backups/`), with `MANIFEST.tsv` and `ROLLBACK.sh`.
+- `docs/vision.md`: the North Star and the v1 spine order.
+- `docs/specs/`: red-flag specs, model versioning rules and the model changelog. `schemas/workbook-model.v1.schema.json` is the canonical schema.
+- `receipts/`: committed Excel round-trip receipts. `tools/review/findings.schema.json`: the shape of a review finding.
+- `docs/history/`: superseded branch briefs, dated notes and Jev advisory receipts, kept for the record and not current guidance.
+- `.autoresearch/state.json`: the authoritative accepted-run ledger. `.autoresearch/config.json` holds the loop criteria; its `eval_command` is `tools/gate.sh`.
 ## Working conventions
 - Keep public examples and records portable: use repository-relative paths or documented environment variables, synthetic data, and project-focused decisions. Do not copy home-directory paths, personal conversations, private contact details or local tool credentials into tracked files.
 - Preserve license and source attribution. Before publishing a privacy cleanup, inspect reachable Git history and commit metadata as well as current files; an ordinary cleanup commit does not erase earlier versions.
 - Checkpoint accepted work with local git commits. The ignore rules exclude `*.bak-*`, `_archive-*/`, and `.autoresearch/backups/`, so ad-hoc backup copies are no longer needed.
 - Append each run's summary to `docs/run-history.md`. Keep `README.md` and this file limited to the current state.
+- The Jev critic reads its key from `TYPESAFE_API_KEY`, a `.env` file, or the command in `TYPESAFE_KEY_COMMAND`; tracked files name no secret store and no directory.
 - Run the Rust gates with `CARGO_TARGET_DIR` inside the checkout, as `eval_command` does. A shared target directory can mix build artifacts between copies of the crate.
 ## Latest maintenance
-### 2026-09-29 — claude-code — every local branch brought into one
-- One branch now holds the work of every agent: the review fixes, pull request 5 with Grok's two later commits, the Jev critic, the product specification, and Codex's spine documents.
-- Codex's documents described a shape of the model that `main` did not adopt. They now describe version 1 as built, and `docs/specs/red-flags.md` has a table of which requirements the code meets.
-- Intake from `impl/v1-intake` is ported to the canonical model. It reuses the existing package reader and adds no address parser of its own.
-- Not carried over, because each needs a decision or a change in both engines: typed binding constraints, the calculation session with revisions, refusal of duplicate JSON keys.
-- Intake returns nothing the canonical reader would refuse, and lists by name everything in the file that version 1 does not carry in `metadata.intake.not_carried`. The table at the top of `docs/specs/red-flags.md` says which requirements are met.
-- The Jev critic reads its key from `TYPESAFE_API_KEY`, a `.env` file, or the command in `TYPESAFE_KEY_COMMAND`. It names no secret store and no directory. `tools/with-typesafe-key.sh` asks the critic for the key, so the two follow one rule.
-### 2026-09-29 — claude-code — adversarial review, gate and first fixes
-- `main` failed its own checks: `cargo clippy -D warnings` rejected `rust/src/model.rs`. Fixed. Nothing had been running the checks.
-- Added the gate, the review protocol and its tools. Seven reviewers, each given one lens and no history, reported 56 findings. Eleven were planted defects. Of the other 45, independent refuters knocked down four and the rest were reproduced on unchanged code.
-- Twelve small deliberate faults in limit checks were applied one at a time. Nine left every test passing. Tests now catch eight; the ninth is a redundant check.
-- Fixed in the Python canonical model: a diagnostic filed against the wrong cell, and formula references past XFD1048576 treated as ordinary references.
-- The rounding functions round the stored value exactly, except that a number within two binary64 values of a boundary is taken as lying on it. A two-decimal amount is no longer moved by a cent. The rule is in `docs/behavior-profiles.md` and has not been checked in Excel.
-- **Boundary allowance:** the two binary64 values either side of a rounding boundary within which a number is taken as lying on the boundary.
-- Known and not yet fixed, most serious first: counting functions return an error when any cell in the range holds one; the engines disagree on criteria over mixed cell types.
-### 2026-09-28 — codex/Codex — canonical model and export evidence
-- Updated the v1 dependency order: the shared JSON model is on `impl/v1-intake`, direct Python/Rust calculation is in progress on `impl/v1-calc-binding`, and headless wiring follows the bound export proof.
-- Recorded the existing Python SDK Excel round trip (12/12 checks) separately from the still-blocked full export gate (dynamic spill placement unsupported; global Excel settings unverified).
-- Rechecked PR #2: its remote head advanced and is now mergeable, but remains draft with no CI checks; no merge or conflict-fix push was made from this checkout.
-### 2026-09-28 — codex/Codex — public documentation review
-- Reviewed all project guides and historical notes, verified portable examples, and removed unnecessary personal context and machine locations.
-- Recorded the contributor checks and separate published-history decision in [toolkit delivery](docs/toolkit-delivery.md#activity).
-### 2026-09-28 — codex/Codex — native primitives and reviewed boundaries
-- Added reusable calculations without workbooks, preserving the four product uses: extraction, software execution, programmatic Excel generation and a later application interface.
-- Recorded independent contributor verification and reference-project analysis in [toolkit delivery](docs/toolkit-delivery.md). Known behavior differences remain explicit.
-- Prior branch organization and implementation checkpoints remain in the delivery record and [project history](docs/run-history.md#project-activity).
+Dated entries live in `docs/run-history.md` under Project activity; this file keeps only the current state.
