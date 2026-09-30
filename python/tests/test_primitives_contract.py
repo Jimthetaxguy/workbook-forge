@@ -172,9 +172,11 @@ def test_no_numeric_aggregate_values_follow_declared_profile(primitive, name, ex
     assert value(primitive, call(name, literal({"range": [[None, "", False]]}))) == expected
 
 
-@pytest.mark.parametrize("name", ["SUM", "AVERAGE", "MIN", "MAX", "COUNT"])
-def test_aggregate_errors_propagate_without_becoming_validation_failures(primitive, name):
-    assert value(primitive, call(name, literal({"range": [[1, {"error": "#REF!"}, 2]]}))) == {"error": "#REF!"}
+@pytest.mark.parametrize("name,expected", [("SUM", {"error": "#REF!"}), ("AVERAGE", {"error": "#REF!"}), ("MIN", {"error": "#REF!"}), ("MAX", {"error": "#REF!"}), ("COUNT", 2)])
+def test_aggregate_errors_are_values_not_validation_failures(primitive, name, expected):
+    # An error inside a range is a spreadsheet value: SUM, AVERAGE, MIN and MAX
+    # return it, and COUNT counts past it as Microsoft's COUNT example does.
+    assert value(primitive, call(name, literal({"range": [[1, {"error": "#REF!"}, 2]]}))) == expected
 
 
 @pytest.mark.parametrize("operator,expected", [("+", 10), ("-", 6), ("*", 16), ("/", 4), ("=", False), ("<>", True), ("<", False), ("<=", False), (">", True), (">=", True)])
