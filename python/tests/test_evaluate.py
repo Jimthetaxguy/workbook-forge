@@ -466,6 +466,20 @@ def test_countblank_and_ifs_handle_error_cells_by_range_role():
     assert isinstance(value, ErrorValue) and value.code == "#N/A"
 
 
+def test_criteria_operands_compare_within_one_type_only():
+    cells = {"A1": 5, "A2": 7, "A3": "fig", "A4": "kiwi", "A5": True, "A6": "TRUE", "A7": "2"}
+    assert evaluate('=COUNTIF(A1:A7,"<>fig")', cells) == 6
+    assert evaluate('=COUNTIF(A1:A7,">1")', cells) == 2
+    assert evaluate('=COUNTIF(A1:A7,"<>5")', cells) == 6
+    assert evaluate("=COUNTIF(A7,2)", cells) == 0
+    assert evaluate('=COUNTIF(A1:A7,"TRUE")', cells) == 1
+    assert evaluate("=COUNTIF(A1:A7,TRUE)", cells) == 1
+    assert evaluate('=COUNTIF(A1:A7,">g")', cells) == 2
+    assert evaluate('=COUNTIF(A1:A7,"<>~x")', cells) == 7
+    assert evaluate('=SUMIF(A3:A4,">0",A1:A2)', cells) == 0
+    assert evaluate('=MAXIFS(A1:A2,A1:A2,"<>fig")', cells) == 7
+
+
 @pytest.mark.parametrize(
     ("formula", "code"),
     [

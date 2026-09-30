@@ -51,7 +51,7 @@ Numeric-to-text conversion is shared across Python and Rust for `CONCAT`, `TEXTJ
 
 Criteria support comparison operators, case-insensitive text, `*` and `?` wildcards, and `~` escapes. `COUNTBLANK` counts empty cells and empty text but excludes zero. `MINIFS` and `MAXIFS` require equal-shaped ranges and return zero when no numeric result matches.
 
-`SUMIF` and `AVERAGEIF` currently require matching criteria and value-range shapes even though Excel aligns differently sized value ranges from their top-left cell; that gap is explicit in the semantic catalog.
+A criterion operand takes the type its text spells: `TRUE` and `FALSE` are logical, numeric text such as `">1"` is a number, and anything else is text. A cell is compared only against an operand of its own type; a cell of another type is unequal, so `<>` selects it and every other operator skips it. `COUNTIF(A1:A7,">1")` over 5, 7, `fig`, `kiwi`, TRUE, the text `TRUE` and the text `2` is therefore 2, and `COUNTIF(A7,2)` over the text `2` is 0. This is a Workbook Forge profile shared by both engines; it has not been checked in Excel, which is reported to count numbers stored as text against a numeric criterion.
 
 ### Text (TEXTBEFORE, TEXTAFTER)
 

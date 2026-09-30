@@ -5157,7 +5157,6 @@ enum CriteriaOperator {
 struct Criteria {
     operator: CriteriaOperator,
     operand: Value,
-    wildcard: bool,
     wildcard_pattern: Option<WildcardPattern>,
 }
 
@@ -5337,7 +5336,7 @@ fn parse_criteria(value: &CalcValue) -> Result<Criteria, FormulaError> {
     if let Value::Error(error) = value {
         return Err(error.clone());
     }
-    let (operator, operand, wildcard) = match value {
+    let (operator, operand) = match value {
         Value::Text(text) => {
             let (operator, rest) = if let Some(rest) = text.strip_prefix("<=") {
                 (CriteriaOperator::LessEqual, rest)
@@ -5381,9 +5380,21 @@ fn parse_criteria(value: &CalcValue) -> Result<Criteria, FormulaError> {
             {
                 return Err(FormulaError::Value);
             }
-            (operator, Value::Text(rest.to_string()), has_wildcard)
+            // The operand takes the type its text spells, as the Python
+            // engine does: TRUE and FALSE are logical, numeric text is a
+            // number, and anything else stays text. A cell then compares
+            // only against an operand of its own type.
+            let operand = match rest.to_ascii_uppercase().as_str() {
+                "TRUE" => Value::Bool(true),
+                "FALSE" => Value::Bool(false),
+                _ => match rest.trim().parse::<f64>() {
+                    Ok(number) if !has_wildcard => Value::Number(number),
+                    _ => Value::Text(rest.to_string()),
+                },
+            };
+            (operator, operand)
         }
-        scalar => (CriteriaOperator::Equal, scalar.clone(), false),
+        scalar => (CriteriaOperator::Equal, scalar.clone()),
     };
     let wildcard_pattern = match &operand {
         Value::Text(pattern) if pattern.contains(['*', '?', '~']) => {
@@ -5394,7 +5405,6 @@ fn parse_criteria(value: &CalcValue) -> Result<Criteria, FormulaError> {
     Ok(Criteria {
         operator,
         operand,
-        wildcard,
         wildcard_pattern,
     })
 }
@@ -5404,6 +5414,8 @@ fn criterion_matches(
     criteria: &Criteria,
     wildcard_work_remaining: &Cell<usize>,
 ) -> Result<bool, FormulaError> {
+    use std::cmp::Ordering;
+    let negated = criteria.operator == CriteriaOperator::NotEqual;
     if let Value::Error(error) = candidate {
         return Err(error.clone());
     }
@@ -5417,59 +5429,36 @@ fn criterion_matches(
     {
         let is_blank = matches!(candidate, Value::Blank)
             || matches!(candidate, Value::Text(text) if text.is_empty());
-        return Ok(if criteria.operator == CriteriaOperator::Equal {
-            is_blank
-        } else {
-            !is_blank
-        });
+        return Ok(is_blank != negated);
     }
-    if let (Value::Text(expected), Value::Text(candidate_text)) = (&criteria.operand, candidate)
-        && matches!(
-            criteria.operator,
-            CriteriaOperator::Equal | CriteriaOperator::NotEqual
-        )
-    {
-        let matched = if let Some(pattern) = &criteria.wildcard_pattern {
-            wildcard_match(pattern, candidate_text, wildcard_work_remaining)?
-        } else {
-            candidate_text.to_lowercase() == expected.to_lowercase()
+    if let Some(pattern) = &criteria.wildcard_pattern {
+        let matched = match candidate {
+            Value::Text(text) => wildcard_match(pattern, text, wildcard_work_remaining)?,
+            _ => false,
         };
-        return Ok(if criteria.operator == CriteriaOperator::NotEqual {
-            !matched
-        } else {
-            matched
-        });
+        return Ok(matched != negated);
     }
-    if criteria.wildcard && !matches!(candidate, Value::Text(_)) {
-        return Ok(criteria.operator == CriteriaOperator::NotEqual);
-    }
-    let ordering = match compare_criteria_values(candidate, &criteria.operand) {
-        Ok(ordering) => ordering,
-        Err(FormulaError::Value) => return Ok(false),
-        Err(error) => return Err(error),
+    // A cell compares only against an operand of its own type; any other
+    // cell is unequal, so <> selects it and every other operator skips it.
+    let ordering = match (candidate, &criteria.operand) {
+        (Value::Text(text), Value::Text(expected)) => {
+            text.to_lowercase().cmp(&expected.to_lowercase())
+        }
+        (Value::Bool(value), Value::Bool(expected)) => value.cmp(expected),
+        (Value::Number(number), Value::Number(expected)) => match number.partial_cmp(expected) {
+            Some(ordering) => ordering,
+            None => return Ok(negated),
+        },
+        _ => return Ok(negated),
     };
     Ok(match criteria.operator {
-        CriteriaOperator::Equal => ordering == 0,
-        CriteriaOperator::NotEqual => ordering != 0,
-        CriteriaOperator::Less => ordering < 0,
-        CriteriaOperator::LessEqual => ordering <= 0,
-        CriteriaOperator::Greater => ordering > 0,
-        CriteriaOperator::GreaterEqual => ordering >= 0,
+        CriteriaOperator::Equal => ordering == Ordering::Equal,
+        CriteriaOperator::NotEqual => ordering != Ordering::Equal,
+        CriteriaOperator::Less => ordering == Ordering::Less,
+        CriteriaOperator::LessEqual => ordering != Ordering::Greater,
+        CriteriaOperator::Greater => ordering == Ordering::Greater,
+        CriteriaOperator::GreaterEqual => ordering != Ordering::Less,
     })
-}
-
-fn compare_criteria_values(a: &Value, b: &Value) -> Result<i8, FormulaError> {
-    match (a, b) {
-        (Value::Number(_), Value::Text(text)) => {
-            let number = text.parse::<f64>().map_err(|_| FormulaError::Value)?;
-            compare(a, &Value::Number(number))
-        }
-        (Value::Text(text), Value::Number(_)) => {
-            let number = text.parse::<f64>().map_err(|_| FormulaError::Value)?;
-            compare(&Value::Number(number), b).map(|ordering| -ordering)
-        }
-        _ => compare(a, b),
-    }
 }
 
 #[derive(Clone)]
@@ -7313,6 +7302,33 @@ mod tests {
             evaluate("=MINIFS(B1:B2,A1:A2,\"skip\")", &c, "S"),
             Err(FormulaError::NA)
         );
+    }
+
+    #[test]
+    fn criteria_operands_compare_within_one_type_only() {
+        let c = cells(&[
+            ("A1", Value::Number(5.0)),
+            ("A2", Value::Number(7.0)),
+            ("A3", Value::Text("fig".into())),
+            ("A4", Value::Text("kiwi".into())),
+            ("A5", Value::Bool(true)),
+            ("A6", Value::Text("TRUE".into())),
+            ("A7", Value::Text("2".into())),
+        ]);
+        for (formula, expected) in [
+            ("=COUNTIF(A1:A7,\"<>fig\")", 6.0),
+            ("=COUNTIF(A1:A7,\">1\")", 2.0),
+            ("=COUNTIF(A1:A7,\"<>5\")", 6.0),
+            ("=COUNTIF(A7,2)", 0.0),
+            ("=COUNTIF(A1:A7,\"TRUE\")", 1.0),
+            ("=COUNTIF(A1:A7,TRUE)", 1.0),
+            ("=COUNTIF(A1:A7,\">g\")", 2.0),
+            ("=COUNTIF(A1:A7,\"<>~x\")", 7.0),
+            ("=SUMIF(A3:A4,\">0\",A1:A2)", 0.0),
+            ("=MAXIFS(A1:A2,A1:A2,\"<>fig\")", 7.0),
+        ] {
+            assert_eq!(number_in(formula, &c), expected, "{formula}");
+        }
     }
 
     #[test]
