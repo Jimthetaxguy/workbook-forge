@@ -160,6 +160,11 @@ edits invalidate stale calculation-chain metadata and request Excel recalculatio
 on next open. A scalar formula reference to a blank cell is cached as numeric zero;
 an explicit empty string remains a string cache, matching
 [Microsoft's documented reference behavior](https://support.microsoft.com/en-us/excel/clear-cells-of-contents-or-formats).
+The canonical model follows the same rule: a scalar formula whose value is a
+blank reference (`=B1`, `=IF(TRUE,B1)` with B1 empty) has `Formula.result` 0 in
+both engines, never `null`, so a null result always means "not calculated".
+Text context is the evaluator's own coercion: `=B1&"x"` is `"x"`. The referenced
+cell itself stays an authored blank.
 
 Python `calculate_cells_to` accepts only functions marked `conformance-tested`
 for Python and evaluates the requested scalar formula cells and their transitive

@@ -665,6 +665,11 @@ def _evaluate(
                 "parse_error", "parse_error", "formula could not be parsed", sheet_name, address
             )
         return {"error": outcome.code, "message": None}
+    if outcome is None:
+        # A scalar formula whose value is a blank reference is 0 in Excel, and
+        # that is what the workbook adapter caches. A null result would be
+        # indistinguishable from "not calculated" (docs/behavior-profiles.md).
+        return 0
     return _json_scalar(outcome)
 
 

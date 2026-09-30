@@ -545,7 +545,10 @@ fn evaluate(
             Value::Number(number) => scalar_from_f64(number),
             Value::Text(text) => Outcome::Value(Scalar::Text(text)),
             Value::Bool(value) => Outcome::Value(Scalar::Boolean(value)),
-            Value::Blank => Outcome::Value(Scalar::Blank),
+            // A scalar formula whose value is a blank reference is 0 in Excel,
+            // and that is what the workbook adapter caches. A null result
+            // would be indistinguishable from "not calculated".
+            Value::Blank => Outcome::Value(Scalar::Number(Number::from(0))),
             Value::Error(error) => from_formula_error(error, sheet_name, address),
         },
         Ok(FormulaResult::Array(_)) => Outcome::Diagnostic(Diagnostic::cell(
@@ -1443,6 +1446,33 @@ mod tests {
         ));
         let again = hydrate(workbook.to_json().unwrap().as_bytes()).unwrap();
         assert_eq!(again.to_json().unwrap(), workbook.to_json().unwrap());
+    }
+
+    #[test]
+    fn a_blank_reference_calculates_to_zero_not_null() {
+        let document = br#"{"schema_version":1,"model_version":1,"metadata":{},"sheets":[{"name":"S","cells":{
+            "A1":{"address":"A1","value":null,"data_type":"blank","formula":{"expression":"=B1","dependencies":[],"result":null}},
+            "A2":{"address":"A2","value":null,"data_type":"blank","formula":{"expression":"=B1+0","dependencies":[],"result":null}},
+            "A3":{"address":"A3","value":null,"data_type":"blank","formula":{"expression":"=B1&\"x\"","dependencies":[],"result":null}},
+            "A4":{"address":"A4","value":null,"data_type":"blank","formula":{"expression":"=IF(TRUE,B1)","dependencies":[],"result":null}}
+        }}]}"#;
+        let calculated = calculate(&hydrate(document).unwrap()).unwrap();
+        assert!(
+            calculated.diagnostics.is_empty(),
+            "{:?}",
+            calculated.diagnostics
+        );
+        assert_eq!(result_number(&calculated, "S", "A1"), 0.0);
+        assert_eq!(result_number(&calculated, "S", "A2"), 0.0);
+        assert_eq!(result_number(&calculated, "S", "A4"), 0.0);
+        let text = &calculated.sheet("S").unwrap().cells["A3"]
+            .formula
+            .as_ref()
+            .unwrap()
+            .result;
+        assert_eq!(*text, Scalar::Text("x".into()));
+        // The referenced cell stays an authored blank; only the formula result is 0.
+        assert_eq!(calculated.sheet("S").unwrap().cells.get("B1"), None);
     }
 
     #[test]

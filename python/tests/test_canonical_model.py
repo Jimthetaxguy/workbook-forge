@@ -126,6 +126,28 @@ def test_hydrate_round_trip_rejects_unknown_versions_and_fields():
     assert caught.value.message == "sheets[0].cells.A1.value"
 
 
+def test_a_blank_reference_calculates_to_zero_not_null():
+    def formula(address, expression):
+        return {"address": address, "value": None, "data_type": "blank",
+                "formula": {"expression": expression, "dependencies": [], "result": None}}
+
+    document = {
+        "schema_version": 1, "model_version": 1, "metadata": {},
+        "sheets": [{"name": "S", "cells": {
+            "A1": formula("A1", "=B1"),
+            "A2": formula("A2", "=B1+0"),
+            "A3": formula("A3", '=B1&"x"'),
+            "A4": formula("A4", "=IF(TRUE,B1)"),
+        }}],
+    }
+    calculated = calculate(hydrate(json.dumps(document).encode()))
+    assert calculated.diagnostics == ()
+    cells = calculated.sheet("S").cells
+    assert {a: cells[a].formula.result for a in ("A1", "A2", "A3", "A4")} == {"A1": 0, "A2": 0, "A3": "x", "A4": 0}
+    assert type(cells["A1"].formula.result) is int
+    assert "B1" not in cells
+
+
 def test_writing_an_unsupported_version_is_refused():
     import dataclasses
 

@@ -22,7 +22,7 @@ These specs state requirements. This table states which of them the code on
 | Model changelog (Spec 4) | Built: `model-changelog.md` |
 | Typed bindings with value type, required status and constraints | Not in the canonical model: version 1 bindings are name-to-cell maps. The toolkit workbook form has typed input bindings |
 | A calculation report with backend and model provenance, and origin `calculated` (Spec 1, item 7) | Not built. `calculate` returns a workbook, provenance is copied unchanged, and export keeps no receipt |
-| A result that tells "not calculated" from "calculated, and blank" (Spec 1) | Not built. A formula that refers to a blank cell has a null result after calculation |
+| A result that tells "not calculated" from "calculated, and blank" (Spec 1) | Built. A scalar formula whose value is a blank reference has result 0 in both engines, as the workbook adapter caches it; a null `Formula.result` means "not calculated". The rule is in `docs/behavior-profiles.md` |
 | Shared fixtures only, with no language-local expected values (Spec 1, item 6) | Partly. Both suites read `fixtures/`. Both also assert literal expected values, and Rust reads `operating-scenario-cases.json` only when the Python test runs it |
 | Migrator from an older version (Spec 1) | Not built. Only version 1 exists |
 | Excel round-trip harness (Spec 2) | Built: `tools/excel_oracle.py` |
