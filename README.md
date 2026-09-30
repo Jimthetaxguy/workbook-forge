@@ -320,7 +320,7 @@ toolkit adds model and adapter capabilities without expanding the function count
 |---|---|
 | Functions implemented and conformance-tested in both engines | 115 |
 | Inventory functions that are still catalog-only | 406 of 521 |
-| Shared fixture cases | 1,371 |
+| Shared fixture cases | 1,490 |
 | Native primitive interface | 9 functions and 10 binary operators in each language |
 | Agent workbook operations | 9 |
 | XML extraction patterns | 10 |

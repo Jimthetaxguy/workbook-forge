@@ -9,7 +9,8 @@ status: active
 summary: Workbook Forge is an agent-ready Excel compiler; the v1 spine is a versioned canonical model, one shared Python/Rust calculation, Excel recalc roundtrip evidence, and a headless path before broader intake. The model, one bound calculation and workbook intake are built; the Excel proof and the headless path are outstanding.
 next_steps:
   - "On a Mac with Excel, run `python3 tools/canonical_excel_receipt.py --fixture fixtures/operating-scenario.workbook.json --output-dir receipts/canonical-operating-scenario-excel --excel` and commit the receipt. Spill placement stays blocked until export can write those cells."
-  - Fix the confirmed defects in order of severity, starting with the counting functions. Take expected values from Microsoft's examples or decimal arithmetic, never from either engine.
+  - Fix the remaining confirmed defects in order of severity: the SUM accumulation rule, the serial-0 date, the typed reason on unsupported-function results, the diagnostic for a formula that uses a defined name, and a calculation report with origin `calculated`. Take expected values from Microsoft's examples or decimal arithmetic, never from either engine.
+  - Settle the profiles that were written from Microsoft's prose rather than an example in one Excel session: criteria over numbers stored as text, error cells under criteria, text functions over errors, EDATE before serial 1.
   - Decide whether bindings get a value type, required status and constraints. That changes the schema and needs a new version.
   - Put the proven intake → model → calculation → export path behind the Python headless CLI, then expose Rust operations with matching behavior.
   - Use docs/product-specifications.md as the durable product and acceptance contract for intake, compilation, headless use, formula hypotheses and evidence-led coverage.
@@ -20,8 +21,7 @@ remaining:
   - Worksheet spill projection, volatile/iteration/quirk round-trip classes, cross-backend bound export, and broad Excel 365 coverage are not complete.
   - From impl/v1-intake and impl/v1-calc-binding, intake is ported. Typed binding constraints, the calculation session with revisions, and refusal of duplicate JSON keys are not. Agent-headless has not started its implementation.
   - No pull request so far has had checks run on it or a review; mergeability alone is not acceptance evidence. tools/gate.sh is the check to run.
-  - 31 confirmed findings from the first review are open. The counting functions and the criteria type rule (parity-02 and parity-04) are fixed on agent/claude-quality-counting-20260930; the fixes carry Workbook Forge profiles that have not been checked in Excel.
-  - Six more are open from the review of the unified branch: the toolkit workbook form takes a missing version as 1; versions are not checked on write; a formula that refers to a blank cell has a null result; no calculation report or origin `calculated`; a formula that uses a defined name is reported as a parse error; `_xHHHH_` escapes in text are not decoded.
+  - Of the 33 confirmed review findings that were open on 2026-09-29, ten were fixed on 2026-09-30 (counting and criteria functions, text functions over errors, arithmetic overflow, EDATE before serial 1, expression depth, `_xHHHH_` escapes, missing and unchecked versions, blank references). 23 remain, most serious first: the SUM accumulation rule, serial 0 as a date, a typed reason on unsupported-function results, no calculation report or origin `calculated`, a formula that uses a defined name reported as a parse error, and the per-cell memory bound. The 2026-09-30 fixes carry Workbook Forge profiles that have not been checked in Excel.
   - "GitHub reports Jimthetaxguy/workbook-forge as public, verified 2026-09-28; historical private-release preparation notes in docs/run-history.md describe their original checkpoints."
 open_questions: []
 ---

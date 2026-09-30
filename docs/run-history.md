@@ -22,6 +22,17 @@ Earlier notes counted "evaluator slices". Slices 2–10 predate the autoresearch
 
 ## Project activity
 
+### 2026-09-30 — claude-code — repository cleanup and ten defect fixes
+- Cleanup: superseded briefs, notes and Jev receipts moved to `docs/history/`; the findings schema sits beside the review tools; an orphaned rename table and `setup.cfg` are gone; test scratch files go under `tmp_path`; README example output is ignored.
+- Gate: `tools/gate.sh` runs the suite once and runs ruff with an explicit rule set; `.autoresearch/config.json` calls the gate instead of a second pinned command. A policy test now fails on home-directory paths and personal addresses in tracked files.
+- Guides: README names the gate and the observed 12 of 12 round trip; toolkit-delivery labels its counts as a checkpoint; product-specifications uses "product spec N" so "Spec N" means only the red-flag specs; CONTEXT's dated entries live here.
+- `COUNT` no longer returns an error found in its range and `COUNTA` counts error cells; the values come from Microsoft's COUNT and COUNTA examples. `SUM`, `AVERAGE`, `MIN` and `MAX` still propagate.
+- Criteria functions skip error cells unless the criterion is `<>` or names that error (`"#N/A"`, `NA()`); a matched error in the summed range still propagates. The Rust matcher now types its operand and compares within one type, as Python did. Both rules are in `docs/behavior-profiles.md` as profiles not checked in Excel; the numeric-text case (`COUNTIF(A7,2)` over text `2` is 0) is the one most likely to differ from Excel.
+- Rust text functions (`LEN`, `LEFT`, `RIGHT`, `MID`, `FIND`, `SEARCH`, `UPPER`, `LOWER`, `CONCAT`, `&`) propagate error values instead of rendering them as text. `+`, `-`, `*` and `/` return `#NUM!` when the result is not finite, in both engines, and text that spells `inf` or `nan` is `#VALUE!`. `EDATE` and `EOMONTH` refuse results before serial 0. Toolkit expression depth counts the root as level 1 in Rust as in Python. A poisoned session lock is recovered instead of turning every later call into a panic.
+- Both readers and both writers decode and encode OOXML `_xHHHH_` text escapes. The toolkit workbook form refuses a missing `schema_version`; canonical writers refuse an unsupported version before producing a file; a scalar formula over a blank reference has result 0 in both engines.
+- Evidence: gate passes at each merge; the final tree runs 3,080 or more Python tests and 118 Rust tests; the fixture corpus holds 1,490 cases. Fixture values come from Microsoft's examples where one exists, otherwise from the stated rule, marked `-profile` and not checked in Excel.
+- Next: the Excel session that settles the new profiles and produces the canonical receipt; the remaining 23 findings; the twelve decision briefs.
+
 ### 2026-09-29 — claude-code — every local branch brought into one
 - One branch now holds the work of every agent: the review fixes, pull request 5 with Grok's two later commits, the Jev critic, the product specification, and Codex's spine documents.
 - Codex's documents described a shape of the model that `main` did not adopt. They now describe version 1 as built, and `docs/specs/red-flags.md` has a table of which requirements the code meets.
@@ -36,7 +47,7 @@ Earlier notes counted "evaluator slices". Slices 2–10 predate the autoresearch
 - Fixed in the Python canonical model: a diagnostic filed against the wrong cell, and formula references past XFD1048576 treated as ordinary references.
 - The rounding functions round the stored value exactly, except that a number within two binary64 values of a boundary is taken as lying on it. A two-decimal amount is no longer moved by a cent. The rule is in `docs/behavior-profiles.md` and has not been checked in Excel.
 - **Boundary allowance:** the two binary64 values either side of a rounding boundary within which a number is taken as lying on the boundary.
-- Known and not yet fixed, most serious first: counting functions return an error when any cell in the range holds one; the engines disagree on criteria over mixed cell types.
+- Known and not yet fixed, most serious first: counting functions return an error when any cell in the range holds one; the engines disagree on criteria over mixed cell types. Both were fixed on 2026-09-30.
 ### 2026-09-28 — codex/Codex — canonical model and export evidence
 - Updated the v1 dependency order: the shared JSON model is on `impl/v1-intake`, direct Python/Rust calculation is in progress on `impl/v1-calc-binding`, and headless wiring follows the bound export proof.
 - Recorded the existing Python SDK Excel round trip (12/12 checks) separately from the still-blocked full export gate (dynamic spill placement unsupported; global Excel settings unverified).
