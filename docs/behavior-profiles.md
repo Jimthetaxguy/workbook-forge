@@ -153,6 +153,16 @@ Imported models retain an immutable source baseline. Directly changing the origi
 Python `Workbook` object does not update an already imported model; reimport after
 such changes to establish a new baseline.
 
+Cell text in shared strings, inline strings and string formula caches is read
+with the OOXML `_xHHHH_` escapes decoded (ECMA-376 part 1, ST_Xstring): `_x0009_`
+is a tab, `_x000D_` a carriage return, and `_x005F_x0041_` the literal text
+`_x0041_`. Decoding is one pass from the left, so the six characters after a
+decoded `_x005F_` are never rescanned. An escape that names a lone surrogate is
+left as written. Both writers use the same escapes for the characters XML 1.0
+cannot hold, for the carriage return, and for any literal `_xHHHH_`, so text
+survives a round trip. Excel's 32,767-character limit is measured on the text,
+not on its escaped spelling.
+
 Package limits include 130 MiB compressed input, 128 MiB expanded contents,
 32 MiB XML parts and central directory, and 10,000 entries. XML parsing is bounded
 to 1,000,000 elements and depth 128 per part. The Python reader scans directory
@@ -171,6 +181,11 @@ edits invalidate stale calculation-chain metadata and request Excel recalculatio
 on next open. A scalar formula reference to a blank cell is cached as numeric zero;
 an explicit empty string remains a string cache, matching
 [Microsoft's documented reference behavior](https://support.microsoft.com/en-us/excel/clear-cells-of-contents-or-formats).
+The canonical model follows the same rule: a scalar formula whose value is a
+blank reference (`=B1`, `=IF(TRUE,B1)` with B1 empty) has `Formula.result` 0 in
+both engines, never `null`, so a null result always means "not calculated".
+Text context is the evaluator's own coercion: `=B1&"x"` is `"x"`. The referenced
+cell itself stays an authored blank.
 
 Python `calculate_cells_to` accepts only functions marked `conformance-tested`
 for Python and evaluates the requested scalar formula cells and their transitive

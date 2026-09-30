@@ -378,13 +378,17 @@ impl InputBinding {
         }
     }
 }
-fn schema_version() -> u32 {
-    1
+/// A document with no `schema_version` is not a version 1 document, and there
+/// is no compatibility window that reads it as one (docs/specs/model-versioning.md).
+/// Serde fills the field with a value `validate` refuses, so every entry point
+/// reports the typed `schema_version` diagnostic instead of a serde message.
+fn missing_schema_version() -> u32 {
+    0
 }
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct WorkbookModel {
-    #[serde(default = "schema_version")]
+    #[serde(default = "missing_schema_version")]
     pub schema_version: u32,
     #[serde(default)]
     pub revision: u64,
@@ -811,6 +815,12 @@ fn key(sheet: &str, address: &str) -> String {
 }
 impl WorkbookModel {
     pub fn validate(&self) -> Result<(), ToolkitError> {
+        if self.schema_version == 0 {
+            return Err(ToolkitError::new(
+                "schema_version",
+                "schema_version is required",
+            ));
+        }
         if self.schema_version != 1 {
             return Err(ToolkitError::new(
                 "schema_version",
@@ -1916,6 +1926,23 @@ mod tests {
     }
     fn scalar(n: f64) -> CalculatedValue {
         CalculatedValue::Scalar(CellValue::Number(n))
+    }
+    #[test]
+    fn a_document_without_a_version_is_refused_with_a_typed_diagnostic() {
+        let mut document: JsonValue = serde_json::to_value(operating_scenario()).unwrap();
+        document.as_object_mut().unwrap().remove("schema_version");
+        let model: WorkbookModel = serde_json::from_value(document.clone()).unwrap();
+        let error = model.validate().unwrap_err();
+        assert_eq!(error.code, "schema_version");
+        assert_eq!(error.message, "schema_version is required");
+        assert!(Session::new(model.clone()).is_err());
+        assert_eq!(
+            inspect(&model)["diagnostics"][0]["code"],
+            JsonValue::from("schema_version")
+        );
+        document["schema_version"] = JsonValue::from(2);
+        let unsupported: WorkbookModel = serde_json::from_value(document).unwrap();
+        assert_eq!(unsupported.validate().unwrap_err().code, "schema_version");
     }
     #[test]
     fn scenario_json_roundtrip_and_reference_results() {
