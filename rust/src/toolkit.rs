@@ -8,7 +8,7 @@ use serde_json::{Value as JsonValue, json};
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fmt;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, MutexGuard};
 
 pub const MAX_WORKBOOK_CELLS: usize = 100_000;
 pub const MAX_DEPENDENCIES: usize = 100_000;
@@ -1620,6 +1620,18 @@ pub struct Session {
     state: Arc<Mutex<SessionState>>,
 }
 impl Session {
+    /// Locks the shared state, recovering it if a panic poisoned the mutex.
+    /// Recovery is sound because every fallible step under the lock works on
+    /// a private copy (`apply` builds and validates a candidate model,
+    /// `publish` clones the report) and only infallible field moves follow,
+    /// so an unwinding thread cannot leave the model, the published report
+    /// and the dirty set half-updated. Without this, one panic would turn
+    /// every later call on any clone into a panic through PyO3.
+    fn state(&self) -> MutexGuard<'_, SessionState> {
+        self.state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
     pub fn new(model: WorkbookModel) -> Result<Self, ToolkitError> {
         model.validate()?;
         Ok(Self {
@@ -1631,14 +1643,10 @@ impl Session {
         })
     }
     pub fn snapshot(&self) -> WorkbookModel {
-        self.state
-            .lock()
-            .expect("session lock poisoned")
-            .model
-            .clone()
+        self.state().model.clone()
     }
     pub fn published(&self) -> Option<CalculationReport> {
-        let state = self.state.lock().expect("session lock poisoned");
+        let state = self.state();
         state
             .published
             .as_ref()
@@ -1656,10 +1664,7 @@ impl Session {
                 "edit batch exceeds 10000 edits",
             ));
         }
-        let mut state = self
-            .state
-            .lock()
-            .map_err(|_| ToolkitError::new("session_failure", "session lock poisoned"))?;
+        let mut state = self.state();
         if expected_revision.is_some_and(|expected| expected != state.model.revision) {
             return Err(ToolkitError::new(
                 "revision_conflict",
@@ -1728,7 +1733,7 @@ impl Session {
     }
     pub fn calculate(&self, workers: usize) -> CalculationReport {
         let (model, previous, dirty) = {
-            let state = self.state.lock().expect("session lock poisoned");
+            let state = self.state();
             (
                 state.model.clone(),
                 state.published.clone(),
@@ -1739,7 +1744,7 @@ impl Session {
         self.publish(report)
     }
     fn publish(&self, mut report: CalculationReport) -> CalculationReport {
-        let mut state = self.state.lock().expect("session lock poisoned");
+        let mut state = self.state();
         if state.model.revision != report.revision {
             report.stale = true;
         } else {
@@ -2539,6 +2544,33 @@ mod tests {
             Expression::parse(&chain(97)).unwrap_err().code,
             "resource_limit"
         );
+    }
+
+    #[test]
+    fn session_recovers_after_a_panic_under_its_lock() {
+        let session = Session::new(operating_scenario()).unwrap();
+        let revision = session.snapshot().revision;
+        let poisoner = session.clone();
+        let outcome = std::thread::spawn(move || {
+            let _guard = poisoner.state.lock().unwrap();
+            panic!("deliberate panic while holding the session lock");
+        })
+        .join();
+        assert!(outcome.is_err(), "the spawned thread must have panicked");
+        assert!(session.state.is_poisoned());
+        // Every entry point still works on the intact state.
+        assert_eq!(session.snapshot().revision, revision);
+        assert!(session.published().is_none());
+        let next = session
+            .apply(
+                vec![Edit::value("Assumptions", "B1", CellValue::Number(20.0))],
+                Some(revision),
+            )
+            .unwrap();
+        assert_eq!(next, revision + 1);
+        let report = session.calculate(1);
+        assert!(!report.stale);
+        assert_eq!(session.published().map(|r| r.revision), Some(next));
     }
 
     #[test]
