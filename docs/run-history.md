@@ -2,7 +2,7 @@
 author: unknown
 created: null
 agent: codex/Codex
-date: '2026-10-01T19:56:55-04:00'
+date: '2026-10-01T20:10:08-04:00'
 type: project-history
 task: Preserve historical Workbook Forge checkpoints
 status: active
@@ -27,6 +27,12 @@ Earlier notes counted "evaluator slices". Slices 2–10 predate the autoresearch
 - Why: make the compiler stages useful and testable without overstating Excel support, creating pairwise translators, or leaking machine-local paths into shared artifacts.
 - Evidence: documentation-only update to the product spec, red-flag Spec 1, vision links, project vocabulary, README, and this history. The committed canonical receipt is preflight-only and explicitly leaves spill placement, volatile, iteration, array, and quirk coverage unobserved or blocked. No runtime, code or schema change was made.
 - Next/remaining: implement path redaction/fingerprinting in intake and summaries; complete the shared calculation report; record the scalar Excel observation; close full Spec 2 before integrating the paired report and proven path behind the headless interface.
+
+### 2026-10-01T20:10:08-04:00 — codex/Codex — compare adjacent spreadsheet layers
+- Changed: added a capability-layer comparison of OpenPyXL, HyperFormula and Workbook Forge to the compiler spec, with official documentation links, a current-version note and a license boundary for implementation references.
+- Why: explain the compiler's intended role without presenting it as a replacement for a workbook file library or a headless JavaScript calculation engine, and preserve the call's “examples, not a tool bundle” direction.
+- Evidence: OpenPyXL's official docs describe OOXML workbook reading/writing and distinguish formula text from the last stored value; HyperFormula's docs describe a headless formula engine, an external XLSX parser for import, an MCP integration marked unavailable, and GPLv3/commercial licensing. No dependency or source code was added.
+- Next/remaining: refresh the linked capability and license notes before any dependency decision; the compiler, privacy, and Excel acceptance gaps recorded above still stand.
 
 ### 2026-09-30 — claude-code — repository cleanup and ten defect fixes
 - Cleanup: superseded briefs, notes and Jev receipts moved to `docs/history/`; the findings schema sits beside the review tools; an orphaned rename table and `setup.cfg` are gone; test scratch files go under `tmp_path`; README example output is ignored.

@@ -2,7 +2,7 @@
 author: codex/Codex
 created: "2026-10-01T19:21:55-04:00"
 agent: codex/Codex
-date: "2026-10-01T19:56:55-04:00"
+date: "2026-10-01T20:10:08-04:00"
 type: technical-specification
 task: Define the shared Workbook Forge compiler pipeline
 status: proposed
@@ -99,6 +99,33 @@ flowchart LR
     IR --> VIEW[Markdown scan with cell-map references]
     CHECK --> RECEIPT[Diagnostics and run receipt]
 ```
+
+## How adjacent spreadsheet tools fit
+
+These tools cover useful neighboring layers. Workbook Forge should learn from
+their boundaries without combining them into a bundle of unrelated engines or
+claiming to replace them.
+
+| Tool | Documented strength | Difference from the Workbook Forge goal |
+| --- | --- | --- |
+| [OpenPyXL](https://openpyxl.readthedocs.io/en/stable/index.html) | Python library for reading and writing OOXML workbooks. [`data_only`](https://openpyxl.readthedocs.io/en/stable/api/openpyxl.reader.excel.html) exposes either formula text or the value last stored by Excel; its [formula tools](https://openpyxl.readthedocs.io/en/stable/formula.html) provide limited parsing, tokenizing and translation. | It is useful for Python workbook editing and package-level tasks. Workbook Forge adds a versioned cross-language model, independent Python/Rust calculation, agent/application operations, and evidence that distinguishes imported caches from fresh results. OpenPyXL is not a recalculation oracle. |
+| [HyperFormula](https://hyperformula.handsontable.com/docs/) | Headless TypeScript formula parser and evaluator with a [dependency graph](https://hyperformula.handsontable.com/docs/guide/dependency-graph.html) and spreadsheet operations for applications. | It is useful as a calculation layer inside a JavaScript application. Its [documented XLSX import](https://hyperformula.handsontable.com/docs/guide/file-import.html) uses a third-party workbook parser, then passes cell data as JavaScript arrays. The docs also describe an [MCP server preview](https://hyperformula.handsontable.com/docs/guide/mcp-server.html), marked unavailable as of this review. Workbook Forge's goal includes preserving a package-aware, versioned workbook model through Python and Rust as well as outputting editable OOXML. |
+| **Workbook Forge** | Intended end-to-end compiler: Excel package or structured calculation → one versioned model → Python/Rust, agent or app operations → editable `.xlsx`, with diagnostics and receipts. | Its product claim depends on the joined path and Excel evidence. The full open/edit/recalculate/save/reimport gate remains outstanding, so this is the target boundary, not a claim that Forge currently outperforms these tools. |
+
+The useful comparison is the layer each tool owns, not a feature-count contest.
+OpenPyXL can solve Python file manipulation; HyperFormula can solve headless
+JavaScript calculation. Workbook Forge is meant to make workbook meaning
+portable across runtimes and return it to Excel with an auditable account of
+what was preserved, calculated or refused. A future application may choose to
+use such tools at a boundary, but that choice does not change the canonical
+model or make them required dependencies.
+
+The official docs reviewed on 2026-10-01 identify OpenPyXL 3.1.3 and
+HyperFormula 3.4.0. HyperFormula documents GPLv3 or commercial licensing; under
+the current permissive-only policy in `catalog/open_source_patterns.json`, it
+is a product and architecture reference, not an eligible source for adapted
+code. Refresh versions, capabilities and license terms before any dependency
+decision.
 
 ## Concrete use cases for the shared pipeline
 
