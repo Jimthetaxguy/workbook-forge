@@ -28,6 +28,13 @@ one useful install-and-run path for agents and developers.
 3. **Model → Excel.** Emit an editable workbook again, with round-trip evidence
    that what left the model still opens and calculates in Excel.
 
+These are routes through one compiler, not independent converters. Excel
+intake and supported structured calculations produce the same versioned model;
+Python and Rust run that model through independent native engines; the OOXML
+writer emits the editable workbook. The model is the common meaning between
+the stages. Markdown is a linked reading view, not a competing workbook
+representation or source of truth.
+
 ## Typed composable pieces, one model contract
 
 The canonical model contract is the single source of truth. Each language
@@ -38,6 +45,14 @@ the `run`, `inspect`, `scenario` and `agent` commands still use the older
 toolkit workbook form. Thin transport or process adapters may
 connect package and tool boundaries, but must not invent competing workbook
 meaning or a parallel model that drifts from the contract.
+
+This is also the code-to-code path: a supported, structured calculation and its
+explicit bindings can run in either engine because both consume the same model
+contract. It does not claim that arbitrary Python and Rust source programs can
+be translated between languages. A Tauri/Rust shell, Python application or
+agent can use the matching library operations without owning separate Excel
+semantics. See the [compiler-pipeline spec](specs/compiler-pipeline.md) for the
+stages, reports, research questions and integration order.
 
 ## Headless agent path
 
@@ -108,7 +123,7 @@ the goal.
 | --- | --- |
 | One typed model contract | Canonical JSON bytes are the source of truth. Python and Rust hydrate the same versioned workbook meaning independently and calculate against those native model types directly. Thin transport adapters may connect calls; no slice invents a competing workbook model or translation-only DTO. |
 | Excel → model is SoR | Intake writes the typed `Workbook`. Markdown overview is a derived scan layer with evidence links into the cell map. |
-| Model → code | Calc-binding binds one supported formula path through Python and Rust against the same model types, with shared fixtures. |
+| Model → code and code → code | One supported, structured calculation uses explicit bindings and the same model through independent Python and Rust runtimes; this does not imply arbitrary source-code transpilation. |
 | Model → Excel | Export round-trips the model to `.xlsx` and proves open + calculate with evidence; no “export-only” schema. |
 | Headless agent path | The Python CLI exposes the proven intake → model → calc → export path first, with no GUI requirement. Expose Rust to agents when the native Rust API offers the same operations. |
 | Candidate formula recovery | Hard-coded recovery writes candidates into a separate workbook or layer, tagged uncertain; never overwrite source formulas or claim recovery of originals. |

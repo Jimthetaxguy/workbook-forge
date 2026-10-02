@@ -9,7 +9,9 @@ Related: [North Star vision](../vision.md).
 ## What is built (2026-09-29)
 
 These specs state requirements. This table states which of them the code on
-`main` meets, so that a requirement is not read as a fact.
+`main` meets, so that a requirement is not read as a fact. The shared compiler
+stages and source-path privacy rule are specified in
+[`compiler-pipeline.md`](compiler-pipeline.md).
 
 | Requirement | State |
 | --- | --- |
@@ -65,7 +67,10 @@ across the language boundary. Ad-hoc dicts and dual native types drift.
      each a map from a name to an explicit sheet and cell. A binding's value
      type, required status and declared constraints are wanted and are not in
      version 1. Adding them changes the schema and needs a new version. Slices
-     must not invent another binding schema.
+     must not invent another binding schema. A local absolute `source_path` is
+     invocation context, not shared model meaning: new serialized models omit
+     it or set it to `null` by default. Imported-cell provenance uses stable
+     source identity and package-part details, not a resolved filesystem path.
    - `Sheet`: `name`, `dimensions` (optional `[min_row, max_row, min_col, max_col]`),
      `cells` (map of A1 address → Cell).
    - `Cell`: `address`, authored `value` for literal/input cells (JSON

@@ -2,18 +2,20 @@
 author: Codex
 created: 2026-09-24
 agent: codex/Codex
-date: '2026-09-29T06:30:00-04:00'
+date: '2026-10-01T19:56:55-04:00'
 type: project-context
 task: Build an SDK for Excel in agent-ready formats using independent Python and Rust implementations
 status: active
-summary: Workbook Forge is an agent-ready Excel compiler; the v1 spine is a versioned canonical model, one shared Python/Rust calculation, Excel recalc roundtrip evidence, and a headless path before broader intake. The model, one bound calculation and workbook intake are built; the Excel proof and the headless path are outstanding.
+summary: "Workbook Forge is an agent-ready Excel compiler: supported inputs and calculations pass through one versioned model to independent Python/Rust runtimes and editable OOXML. The model, one bound calculation and workbook intake are built; the canonical Excel proof and joined headless path remain outstanding."
 next_steps:
-  - "On a Mac with Excel, run `python3 tools/canonical_excel_receipt.py --fixture fixtures/operating-scenario.workbook.json --output-dir receipts/canonical-operating-scenario-excel --excel` and commit the receipt. Spill placement stays blocked until export can write those cells."
+  - Finish the shared calculation report/provenance contract, then on a Mac with Excel run `python3 tools/canonical_excel_receipt.py --fixture fixtures/operating-scenario.workbook.json --output-dir receipts/canonical-operating-scenario-excel --excel` and commit the honest receipt. Spill placement stays blocked until export can write those cells.
   - Fix the remaining confirmed defects in order of severity: the SUM accumulation rule, the serial-0 date, the typed reason on unsupported-function results, the diagnostic for a formula that uses a defined name, and a calculation report with origin `calculated`. Take expected values from Microsoft's examples or decimal arithmetic, never from either engine.
   - Settle the profiles that were written from Microsoft's prose rather than an example in one Excel session: criteria over numbers stored as text, error cells under criteria, text functions over errors, EDATE before serial 1.
   - Decide whether bindings get a value type, required status and constraints. That changes the schema and needs a new version.
-  - Put the proven intake → model → calculation → export path behind the Python headless CLI, then expose Rust operations with matching behavior.
+  - After the full Excel export gate, put the proven intake → model → calculation → export path behind the Python headless CLI, then expose Rust operations with matching behavior.
   - Use docs/product-specifications.md as the durable product and acceptance contract for intake, compilation, headless use, formula hypotheses and evidence-led coverage.
+  - Use docs/specs/compiler-pipeline.md for the stage boundaries, code-to-code meaning, paired intake views, receipt contents and engineering order.
+  - Keep resolved local input paths out of canonical JSON and agent-facing reports by default; use fingerprints and cell/package locations as durable provenance.
   - Expand the verified agent operation contract against concrete workbook tasks; keep framework/MCP adapters thin and retain source/revision-aware results.
   - Use observed Excel results to validate Workbook Forge profiles and update shared fixtures before expanding formula-family coverage; keep observers optional and formula-recovery candidates separate and uncertain.
   - After the core loop is evidenced, prioritize additional formula families by documented workbook use and dependency value.
@@ -42,6 +44,11 @@ Build an **SDK for Excel in agent-ready formats**: expose supported workbook dat
 - **Input preview:** a detached calculation of proposed inputs, with before/after outputs and cell changes; it never changes the owned session or writes files.
 - **Calculation provenance:** source formulas, references, explicit bindings and model revision attached to a result; imported caches are never evidence that Forge calculated a value.
 - **Workbook model:** sparse sheets, authored content, formulas, styles, and explicit input/output bindings, implemented independently in each language and separate from XML.
+- **Compiler pipeline:** supported Excel and structured-calculation inputs pass through the canonical workbook model before runtime or OOXML output; every stage reports what it did and could not carry.
+- **Intermediate representation (IR):** the versioned canonical workbook model that preserves the shared meaning between front ends and Python/Rust/OOXML targets.
+- **Lowering:** turning a validated model operation into a backend calculation or OOXML output while preserving supported meaning or reporting a limitation.
+- **Compilation receipt:** source-linked record of input/model versions, engine, stage outcomes, diagnostics, outputs, semantic comparison and any Excel observation.
+- **Source fingerprint:** content-derived identity for a workbook input; it lets reports refer to the same bytes without exposing the caller's local path.
 - **Canonical workbook schema:** versioned serialized contract for `Cell`, `Formula`, `Sheet` and `Workbook`; Python and Rust hydrate native typed structures from the same bytes.
 - **`model_version`:** version of the serialized workbook artifact, distinct from schema-version evolution and visible in headless intake summaries.
 - **Markdown scan:** readable, potentially lossy view derived from the coordinate-preserving cell map; never the workbook source of record.
@@ -93,6 +100,7 @@ The Excel round-trip harness is `tools/excel_oracle.py`, with `tools/canonical_e
 - `docs/primitives.md`: native function calls, inspectable compositions, package discovery and explicit behavior limits.
 - `docs/toolkit-delivery.md`: architecture, ownership, milestone checklist, acceptance model and implementation evidence.
 - `docs/product-specifications.md`: product outcomes, intake/compiler/agent/formula-hypothesis specifications, research questions and executable dependency order.
+- `docs/specs/compiler-pipeline.md`: the shared model as compiler IR, translation stages, paired intake views, evidence levels, application use, research agenda and v1 order.
 - `docs/extraction-patterns.md`: independent XML parsing/extraction contract, limits, formula mappings and source provenance.
 - `docs/agent-protocol.md`: the versioned operation, pagination, error, provenance and JSON-lines transport contract; catalog/agent-operations.json owns its discoverable schemas.
 - `docs/excel-observations.md`: observation meanings, harness usage and actual Excel evidence.
@@ -102,7 +110,7 @@ The Excel round-trip harness is `tools/excel_oracle.py`, with `tools/canonical_e
 - `docs/review-protocol.md`: how to review this project so that the reviewer does not inherit the builder's view; `tools/review/` enforces it.
 - `tools/gate.sh`: the gate.
 - `docs/vision.md`: the North Star and the v1 spine order.
-- `docs/specs/`: red-flag specs, model versioning rules and the model changelog. `schemas/workbook-model.v1.schema.json` is the canonical schema.
+- `docs/specs/`: compiler pipeline, red-flag contracts, model versioning rules and the model changelog. `schemas/workbook-model.v1.schema.json` is the canonical schema.
 - `receipts/`: committed Excel round-trip receipts. `tools/review/findings.schema.json`: the shape of a review finding.
 - `docs/history/`: superseded branch briefs, dated notes and Jev advisory receipts, kept for the record and not current guidance.
 - `.autoresearch/state.json`: the authoritative accepted-run ledger. `.autoresearch/config.json` holds the loop criteria; its `eval_command` is `tools/gate.sh`.

@@ -1,8 +1,8 @@
 # Workbook Forge
 
-**North Star:** [docs/vision.md](docs/vision.md). Red-flag specs: [docs/specs/red-flags.md](docs/specs/red-flags.md).
+**North Star:** [docs/vision.md](docs/vision.md). Compiler stages and shared-model contract: [docs/specs/compiler-pipeline.md](docs/specs/compiler-pipeline.md). Red-flag specs: [docs/specs/red-flags.md](docs/specs/red-flags.md).
 
-Near-term order: the versioned workbook model and the operating-scenario calc binding land first ([Spec 1](docs/specs/red-flags.md#spec-1--canonical-intermediate-form), [Spec 4](docs/specs/red-flags.md#spec-4--model-versioning-from-day-one)). Export then sends `fixtures/operating-scenario.workbook.json` through OOXML. Excel Desktop full recalc is still the red-flag Spec 2 oracle. The harness is `tools/excel_oracle.py`; `tools/canonical_excel_receipt.py` exports the canonical fixture and calls it. Intake onto the canonical model is built, in Python. Agent-headless comes after an Excel receipt. Version rules: [model versioning](docs/specs/model-versioning.md).
+Current state: the versioned workbook model, the operating-scenario calculation binding, Python/Rust calculation, canonical export and Python intake are in place. The shared calculation report and Excel Desktop behavior are still open. Next: complete that report, record the scalar Excel open/edit/full-recalc/save/reimport observation, then close the full Spec 2 gate (including spill placement, volatile, iterative and quirk cases). The receipt harness is `tools/excel_oracle.py`, driven by `tools/canonical_excel_receipt.py`. Prototype privacy-safe paired intake views alongside that work; integrate them and the proven calculation/export path behind the headless workflow after the full gate. See the [compiler pipeline spec](docs/specs/compiler-pipeline.md) and [model versioning](docs/specs/model-versioning.md).
 
 **Workbook Forge is an SDK for Excel in formats agents can use.** Its goal is to
 make supported workbook data, formulas, dependencies, presentation, and business
@@ -34,6 +34,7 @@ agreement and established expected values; it does not replace either implementa
 | Task | Start here |
 | --- | --- |
 | Read the North Star (Excel compiler, three directions, build rules) | [Vision](docs/vision.md) |
+| Understand how intake, Python/Rust, agents/apps and OOXML fit as one compiler | [Compiler pipeline and shared-model contract](docs/specs/compiler-pipeline.md) |
 | Red-flag build contracts (schema, export parity, detectors, model versioning) | [Red-flag specs](docs/specs/red-flags.md) |
 | Run a formula against supplied cell values | [Python evaluator](#python-quick-start) |
 | Compose calculations with named inputs and no workbook | [Native primitives](docs/primitives.md) |

@@ -2,21 +2,22 @@
 author: codex/Codex
 created: 2026-09-28
 agent: codex/Codex
-date: '2026-09-28T20:03:14-04:00'
+date: '2026-10-01T19:56:55-04:00'
 type: product-specification
 task: Specify Workbook Forge user outcomes and executable engineering path
 status: active-specification
-summary: Defines user-facing goals, workbook intake and translation contracts, formula recovery boundaries, research questions, and staged acceptance criteria.
+summary: Defines the user outcomes and compiler contract for explainable workbook intake, shared calculations across Python and Rust, Excel output, headless use, formula hypotheses, and evidence-led coverage.
 next_steps:
-  - Run the Excel Desktop round trip on the canonical fixture and commit its receipt; the bound calculation (product spec 2) and the harness exist, the observed receipt does not.
-  - Prototype the paired overview and structural workbook map in product spec 1 using synthetic workbooks.
+  - Finish one versioned calculation report for the operating scenario in both engines, then record the canonical scalar Excel open, edit, recalculate, save, and reimport cycle.
+  - Close the full Excel export gate, including declared result ranges and required volatile, iterative, array/spill, and quirk cases, before joining the proven path behind the headless interface.
+  - Prototype the paired overview and structural map in parallel, with privacy-safe source identity, then integrate them into the headless path.
 remaining:
-  - Product choices about intake report shape, candidate ranking and target application binding contract remain open to evidence from prototypes.
-  - Broad Excel behavior coverage and hard-coded formula recovery are future capabilities, not current claims.
+  - The compiler pipeline's shared report contract, full Excel acceptance evidence, privacy-safe source handling, and joined headless path are not complete.
+  - Full dynamic-array spill, volatile, iterative and Excel-quirk acceptance, broader formula coverage, and hard-coded formula analysis remain evidence-gated.
 open_questions:
-  - Which first real-world workbook task should drive intake priorities after the synthetic operating scenario?
-  - Which candidate-formula evidence is useful enough to show without implying that the original formula is known?
-  - Which workbook structures must be preserved in the first accepted Excel Desktop roundtrip?
+  - Which real workbook task should drive intake priorities after the synthetic operating scenario?
+  - Which OOXML structures must be preserved or cause a safe refusal in the first supported round trip?
+  - Which evidence is useful enough to rank formula candidates without suggesting the original formula is known?
 ---
 
 # Workbook Forge product specifications
@@ -45,6 +46,15 @@ interface. The same underlying library should also be usable from application
 code. A spreadsheet-like interface is a possible client of the model, not a
 prerequisite for using or validating the core.
 
+The compiler design is shared across directions: Excel intake and supported
+authored calculations become the same versioned workbook model; Python, Rust,
+agents and applications use that model through stable operations; and the OOXML
+writer emits editable Excel from it. “Code to code” means one supported,
+structured calculation can run on different backends. It does not mean
+arbitrary Python or Rust programs can be transpiled. The engineering stages,
+evidence and implementation gaps are specified in
+[`docs/specs/compiler-pipeline.md`](specs/compiler-pipeline.md).
+
 ## Shared requirements
 
 These requirements apply to every specification below:
@@ -70,6 +80,30 @@ These requirements apply to every specification below:
    matching Python/Rust output or successful reimport does not alone establish
    Excel Desktop behavior. Record the Excel version, action sequence and
    observed result for each direct compatibility claim.
+7. **Route supported translations through the canonical model.** Excel input,
+   structured authored calculations and every runtime or file target share one
+   versioned meaning. Direct one-off converters must not create parallel
+   semantics.
+8. **Keep machine-local paths out of shared artifacts by default.** The
+   resolved input path may exist in per-run context while a file is open, but
+   canonical JSON omits it, and summaries, Markdown, agent responses and
+   receipts use a content fingerprint and source coordinates. Older v1 model
+   documents containing a path are redacted before they are returned to an
+   agent. A safe display label is opt-in; the absolute path is not emitted.
+
+## Compiler framing — one model, multiple routes
+
+Workbook Forge is not a collection of pairwise translators. The canonical
+workbook model is the intermediate description all supported routes share.
+Excel and structured calculations are front ends; Python and Rust are
+independent runtime targets; the OOXML writer is the Excel output target; and
+Markdown is a derived context view. Agent operations and application code call
+the same library behavior rather than reimplementing workbook semantics.
+
+The detailed stage contracts, diagnostics and evidence requirements, paired
+view loop, research questions, and execution order live in
+[`docs/specs/compiler-pipeline.md`](specs/compiler-pipeline.md). This document
+continues to define user outcomes and acceptance criteria.
 
 ## Product spec 1 — Fast, explainable workbook intake
 
@@ -395,20 +429,20 @@ limits near the feature summary and link to exact status and evidence.
 
 | Order | Work item | Can start now? | Depends on | Completion evidence |
 | --- | --- | --- | --- | --- |
-| 1 | Binding and transformation contract for the existing operating scenario | Yes | Existing primitive and workbook models | Versioned binding example; validation and refusal cases |
-| 2 | Independent Python/Rust composition-to-workbook transformation | Yes, after contract | 1 | Same authored definition works in both; formula and binding provenance retained |
-| 3 | SDK export/reimport comparison for bound scenario | Yes, after 1–2 | 1, 2 | Machine-readable before/after comparison and mismatch report |
-| 4 | Excel Desktop open/edit/save/reimport harness and first full observation | Harness investigation can start now; final acceptance depends on usable Excel automation | Generated scenario and automation environment | Versioned run record with exact actions and observed output |
-| 5 | Paired overview and structural map prototype | Yes, can proceed alongside 1–4 | Existing extraction APIs | Synthetic workbook reports, provenance checks, bounded output and unsupported diagnostics |
-| 6 | Formula-gap ranking and targeted Excel observations | Yes, research can proceed alongside 1–5 | Concrete tasks/cases | Ranked task-to-gap matrix with evidence and explicit next slice |
-| 7 | Hard-coded formula hypothesis research prototype | Research only now; production behavior later | Intake signals and labeled ground-truth corpus | Candidate results, ambiguity cases, false-positive analysis and no source mutation |
-| 8 | More pre-wired recipes and integration adapters | Yes, after operation contracts stabilize | 1, 3, 5 | Clean installed-consumer examples across Python/Rust and headless entry points |
+| 1 | Complete the shared calculation result and provenance contract for the operating scenario | Yes | Existing canonical model and explicit bindings | Same canonical bytes produce expected Python and Rust results; report identifies backend, model revision, source cells and diagnostics |
+| 2 | Record the canonical scalar Excel open/edit/full-recalc/save/reimport cycle | Yes; the harness exists | 1 and the current export path | Receipt records Excel build, edits, observed values, formula differences and unavailable settings honestly; explicitly marked as the first observation |
+| 3 | Close the full Excel export gate, including declared spill placement | After the scalar observation | 2 and a defined result-range contract | Excel receipts cover the declared spill range, volatile, iterative and known-quirk cases with explicit tolerances; unsupported required cases keep the gate open |
+| 4 | Prototype the paired overview, structural map and privacy-safe source handling | Yes, alongside 1–3 | Existing canonical intake | Synthetic cases show coordinate links and cross-view checks; serialized model, summary and scan omit a distinctive private input path while retaining fingerprint and cell evidence |
+| 5 | Put intake → model → supported calculation → export behind one headless workflow | After 1–4 | Shared result contract, full Excel gate, paired report and privacy acceptance | A caller-selected workbook produces versioned model output, bounded context, diagnostics, calculation evidence and a new `.xlsx` without a GUI |
+| 6 | Rank formula and workbook gaps by workflow value | Research can start now | Concrete workbook tasks and observed failures | A task-to-gap matrix ties each candidate to semantic rules, Python/Rust fixtures and Excel evidence needed |
+| 7 | Prove Python/Rust application embedding | After the headless operations stabilize | 1 and 5 | Clean consumers call each native library without a UI, duplicated model or agent framework |
+| 8 | Research hard-coded formula hypotheses | Research only for now | Paired intake signals and labeled ground-truth corpus | Candidate evidence, ambiguous cases, counterexamples and false-positive results; source workbook remains unchanged |
 
-The critical path to prove the compiler direction is **binding contract →
-independent transformations → SDK comparison → Excel Desktop observation**.
-Intake prototyping, repository-pattern research and formula-gap ranking can
-advance alongside that path, but should feed their findings into the same
-source-linked contracts and acceptance records.
+The first trust path is **shared calculation report → scalar Excel observation
+→ full Spec 2 evidence → headless workflow**. Paired intake and formula-gap
+research can advance alongside the Excel work, but the default agent path waits
+until the workbook behavior is evidenced and its outputs use privacy-safe,
+source-linked reports. Application reuse follows the same operation contract.
 
 ## What this specification does not claim
 

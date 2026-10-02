@@ -1,12 +1,12 @@
 ---
 author: unknown
 created: null
-agent: codex/agent_consumer
-date: '2026-09-28T16:05:17-04:00'
+agent: codex/Codex
+date: '2026-10-01T19:56:55-04:00'
 type: project-history
 task: Preserve historical Workbook Forge checkpoints
 status: active
-summary: Dated project activity and accepted evaluator runs; current guidance lives in CONTEXT.md.
+summary: Dated project activity and accepted evaluator runs; current compiler contract lives in docs/specs/compiler-pipeline.md and current state lives in CONTEXT.md.
 next_steps: [Prepend new project activity and retain checkpoint meaning and technical evidence]
 remaining: []
 open_questions: []
@@ -21,6 +21,12 @@ The 2026-09-28 documentation review removed personal conversation references and
 Earlier notes counted "evaluator slices". Slices 2–10 predate the autoresearch loop (the 65-function baseline). Slice *N* for *N* from 11 to 23 is Run *N*−10. From Run 14 onward the notes use run numbers only.
 
 ## Project activity
+
+### 2026-10-01T19:56:55-04:00 — codex/Codex — compiler stages and privacy-safe evidence
+- Changed: specified the shared model as compiler IR for Excel intake, structured calculations, Python/Rust runtimes, agent/application operations, and OOXML output. Clarified code-to-code reuse, paired Markdown/cell-map review, feature-evidence levels, application use, formula hypotheses, research questions, and stage boundaries. Added the default rule that resolved local paths stay out of serialized models and agent-facing reports; updated the product order so the full Excel gate precedes the joined headless path.
+- Why: make the compiler stages useful and testable without overstating Excel support, creating pairwise translators, or leaking machine-local paths into shared artifacts.
+- Evidence: documentation-only update to the product spec, red-flag Spec 1, vision links, project vocabulary, README, and this history. The committed canonical receipt is preflight-only and explicitly leaves spill placement, volatile, iteration, array, and quirk coverage unobserved or blocked. No runtime, code or schema change was made.
+- Next/remaining: implement path redaction/fingerprinting in intake and summaries; complete the shared calculation report; record the scalar Excel observation; close full Spec 2 before integrating the paired report and proven path behind the headless interface.
 
 ### 2026-09-30 — claude-code — repository cleanup and ten defect fixes
 - Cleanup: superseded briefs, notes and Jev receipts moved to `docs/history/`; the findings schema sits beside the review tools; an orphaned rename table and `setup.cfg` are gone; test scratch files go under `tmp_path`; README example output is ignored.
