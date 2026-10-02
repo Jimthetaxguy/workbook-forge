@@ -21,7 +21,7 @@ workspace: "."
 ---
 # Formula Atlas: repo health analysis (2026-09-24)
 
-This report describes the 2026-09-24 review snapshots, when the project was named Formula Atlas. Its results and recommendations were not rerun for the 2026-09-28 documentation review. Personal conversation references and machine-specific locations were removed; original technical findings, author, creation time, and checkpoint history remain. See [CONTEXT.md](../CONTEXT.md) for current project state. The ignored evidence archive below is local recovery material and is not shipped with the repository.
+This report describes the 2026-09-24 review snapshots, when the project was named Formula Atlas. Its results and recommendations were not rerun for the 2026-09-28 documentation review. Personal conversation references and machine-specific locations were removed; original technical findings, author, creation time, and checkpoint history remain. See [CONTEXT.md](../../CONTEXT.md) for current project state. The ignored evidence archive below is local recovery material and is not shipped with the repository.
 
 ## Progress check after Runs 21–22 (snapshot taken 21:00 EDT; both runs unaccepted)
 

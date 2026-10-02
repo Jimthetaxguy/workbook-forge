@@ -9,20 +9,22 @@ Related: [North Star vision](../vision.md).
 ## What is built (2026-09-29)
 
 These specs state requirements. This table states which of them the code on
-`main` meets, so that a requirement is not read as a fact.
+`main` meets, so that a requirement is not read as a fact. The shared compiler
+stages and source-path privacy rule are specified in
+[`compiler-pipeline.md`](compiler-pipeline.md).
 
 | Requirement | State |
 | --- | --- |
 | Schema, and Python and Rust hydration of the same bytes (Spec 1) | Built |
 | One bound calculation in both engines (Spec 1) | Built |
 | `schema_version` and `model_version` enforced on read (Spec 4) | Built, for the canonical model |
-| Versions enforced on write (Spec 4) | Not built. `Workbook.to_json` writes whatever version it holds. Intake checks its own output by reading it back |
-| A missing version refused everywhere (Spec 4) | Canonical reader only. The toolkit workbook form, read by `run`, `inspect` and `agent`, takes a missing `schema_version` as 1 in both engines |
+| Versions enforced on write (Spec 4) | Built. `Workbook.to_dict`, `to_json` and `export_canonical` in Python and `Workbook::to_json` in Rust refuse any version other than 1 with the same `unsupported_*_version` errors as the reader, before any bytes or file are produced. The toolkit form's Rust exporter validates its model the same way |
+| A missing version refused everywhere (Spec 4) | Built. The canonical reader refuses it as `missing_required_field`; the toolkit workbook form, read by `run`, `inspect` and `agent`, refuses it as the typed `schema_version` diagnostic in both engines |
 | One serialized form for every tool (Spec 1) | Not built. Two forms exist. Intake, canonical export and the canonical receipt use the canonical model. The agent tools, the general export and `run`, `inspect`, `scenario` and `agent` use the older toolkit workbook form |
 | Model changelog (Spec 4) | Built: `model-changelog.md` |
 | Typed bindings with value type, required status and constraints | Not in the canonical model: version 1 bindings are name-to-cell maps. The toolkit workbook form has typed input bindings |
 | A calculation report with backend and model provenance, and origin `calculated` (Spec 1, item 7) | Not built. `calculate` returns a workbook, provenance is copied unchanged, and export keeps no receipt |
-| A result that tells "not calculated" from "calculated, and blank" (Spec 1) | Not built. A formula that refers to a blank cell has a null result after calculation |
+| A result that tells "not calculated" from "calculated, and blank" (Spec 1) | Built. A scalar formula whose value is a blank reference has result 0 in both engines, as the workbook adapter caches it; a null `Formula.result` means "not calculated". The rule is in `docs/behavior-profiles.md` |
 | Shared fixtures only, with no language-local expected values (Spec 1, item 6) | Partly. Both suites read `fixtures/`. Both also assert literal expected values, and Rust reads `operating-scenario-cases.json` only when the Python test runs it |
 | Migrator from an older version (Spec 1) | Not built. Only version 1 exists |
 | Excel round-trip harness (Spec 2) | Built: `tools/excel_oracle.py` |
@@ -33,7 +35,7 @@ These specs state requirements. This table states which of them the code on
 | `intake_workbook` emitting the canonical model (Spec 4) | Built, Python only: `python/workbook_forge/intake.py`, and the `workbook-forge intake` command. It returns nothing the canonical reader would refuse. Everything in the file that version 1 does not carry is listed by name in `metadata.intake.not_carried`. The list says that something is there, not what it meant |
 | Intake of array, shared and data-table formulas (Spec 4) | Refused with a reason. Every workbook with a filled-down formula is refused |
 | Intake of dates written as text, 1904 dates and macros (Spec 4) | Refused with a reason |
-| Intake decoding `_xHHHH_` escapes in text | Not built, in either reader |
+| Intake decoding `_xHHHH_` escapes in text | Built, in both readers and both writers, for shared strings, inline strings and string formula caches. The rule is in `docs/behavior-profiles.md` |
 | A job that runs both suites on every change | Not built. `tools/gate.sh` runs them locally |
 
 ---
@@ -65,7 +67,10 @@ across the language boundary. Ad-hoc dicts and dual native types drift.
      each a map from a name to an explicit sheet and cell. A binding's value
      type, required status and declared constraints are wanted and are not in
      version 1. Adding them changes the schema and needs a new version. Slices
-     must not invent another binding schema.
+     must not invent another binding schema. A local absolute `source_path` is
+     invocation context, not shared model meaning: new serialized models omit
+     it or set it to `null` by default. Imported-cell provenance uses stable
+     source identity and package-part details, not a resolved filesystem path.
    - `Sheet`: `name`, `dimensions` (optional `[min_row, max_row, min_col, max_col]`),
      `cells` (map of A1 address → Cell).
    - `Cell`: `address`, authored `value` for literal/input cells (JSON
@@ -200,7 +205,7 @@ schema moves. The extracted model is already a product artifact.
    and stick to it; recommend integer `model_version` paired with
    `schema_version`). `schema_version` tracks the byte contract; `model_version`
    identifies the workbook model artifact. Both must be validated on read
-   and on write. Today they are validated on read.
+   and on write. Both are.
 2. **Changelog.** `docs/specs/model-changelog.md` (create with the first bump)
    records each model_version: date, summary, breaking or not, migration notes.
 3. **Migration path.** When v2 ships, a reader for v1 remains available. Prefer
@@ -208,8 +213,8 @@ schema moves. The extracted model is already a product artifact.
 4. **No later.** Intake and export land with `model_version` set on day one of
    the typed model (v1). A blank or missing version is a validation error, on
    read as well as on write. There is no compatibility window that treats a
-   missing version as version 1. The canonical reader meets this. The toolkit
-   workbook form does not yet: see the table at the top.
+   missing version as version 1. Both the canonical reader and the toolkit
+   workbook form meet this on read: see the table at the top.
 5. **Agents and CLI** print `model_version` in intake summaries so humans can
    see which artifact generation they hold. Python's `intake_workbook` emits
    serialized canonical JSON as well as its native model result; it is not

@@ -34,7 +34,7 @@ by executable Python and Rust code, not just descriptions or formula strings.
 The new primitive layer has nine function identities and ten binary operators.
 Native calls and inspectable compositions reuse each language's own evaluator.
 The canonical catalog and expression schema are available in both package APIs.
-The integrated suite passes 923 Python and 88 Rust tests. Fresh installed wheels
+At the 2026-09-28 toolkit checkpoint the integrated suite passed 923 Python and 88 Rust tests; `tools/gate.sh` reports the current counts. Fresh installed wheels
 and a packaged Rust consumer pass outside the checkout. Known aggregate coercion
 differences are explicit Forge behavior.
 A stricter application-oriented numeric profile remains a future design choice;
@@ -45,7 +45,7 @@ it is not implemented by silently changing the current spreadsheet profile.
 | codex/agent_consumer | Python primitives, example/tests, prefix handling and Python packaging | 37 focused primitive/prefix tests and 14 expression tests pass; fresh pure/native wheels pass outside the checkout on Python 3.12/3.14 | No assigned work remains |
 | codex/xlsx_adapter | Rust primitives, standalone runners, prefix handling and Rust packaging | All 88 Rust tests pass on stable and Rust 1.88; packaged external consumer verifies calculations, schema discovery and workbook workflows | No assigned work remains |
 | codex/architecture_review | Independent contract and PR regression review | 233 initial primitive cases and 12 PR regressions pass; final direct-call size and schema-export findings independently closed | No review findings remain |
-| codex/Codex | Shared catalog/schema, integration, reference analysis and shared records | Full gates pass 923 Python and 88 Rust tests, including the additional schema test and direct-call regressions; package receipts inspected | Full Excel Desktop acceptance and hosted CI remain outstanding |
+| codex/Codex | Shared catalog/schema, integration, reference analysis and shared records | Full gates at that checkpoint passed 923 Python and 88 Rust tests, including the additional schema test and direct-call regressions; package receipts inspected | Full Excel Desktop acceptance and hosted CI remain outstanding |
 
 This record has one coordinating writer, codex/Codex. Contributors report what
 changed, actual checks and unresolved work at meaningful milestones. Their

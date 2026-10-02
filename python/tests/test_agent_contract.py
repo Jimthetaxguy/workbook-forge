@@ -161,6 +161,7 @@ def _error(client, operation, arguments=None, code=None):
 
 def _model(cells, outputs=None, inputs=None):
     return {
+        "schema_version": 1,
         "sheets": [{"id": "data", "name": "Data", "cells": cells}],
         "outputs": {name: {"sheet": "Data", "address": address} for name, address in (outputs or {}).items()},
         "inputs": inputs or {},
@@ -285,6 +286,7 @@ def test_preview_apply_calculate_explain_and_export_journey(agent_factory):
 
 def test_paged_dependency_closure_has_natural_order_blanks_and_provenance(agent_factory):
     document = {
+        "schema_version": 1,
         "sheets": [
             {"id": "z", "name": "Zeta", "cells": {"B2": {"formula": "=SUM(A1:A3)+Alpha!B1"}, "A3": {"value": 3}, "A1": {"value": 1}}},
             {"id": "a", "name": "Alpha", "cells": {"B1": {"value": 7}}},

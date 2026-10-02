@@ -61,7 +61,7 @@ The two stages are separate runs so that stage 1 cannot look ahead.
 
 ## What a reviewer hands back
 
-One JSON object per line, matching `review/findings.schema.json`.
+One JSON object per line, matching `tools/review/findings.schema.json`.
 
 - **A defect needs a reproduction**: a command and the output it printed.
   A description of what the code "would do" is not evidence.

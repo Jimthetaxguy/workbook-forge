@@ -9,7 +9,7 @@ from workbook_forge import python_engine as engine
 
 
 def model(cells=None, outputs=None, inputs=None, sheets=None):
-    document = {"sheets": sheets or [{"id": "Data", "name": "Data", "cells": cells or {}}], "outputs": {name: {"sheet": "Data", "address": address} for name, address in (outputs or {}).items()}, "inputs": inputs or {}}
+    document = {"schema_version": 1, "sheets": sheets or [{"id": "Data", "name": "Data", "cells": cells or {}}], "outputs": {name: {"sheet": "Data", "address": address} for name, address in (outputs or {}).items()}, "inputs": inputs or {}}
     return json.dumps(document)
 
 
@@ -205,10 +205,19 @@ def test_cell_shaped_sheet_name_is_supported_without_mutating_source():
     assert json.loads(session.snapshot())["sheets"][1]["cells"]["B1"]["formula"] == "=S1!A1+2"
 
 
-@pytest.mark.parametrize("source", ['{"sheets":[],"revision":true}', '{"sheets":[],"schema_version":true}', '{"sheets":[],"extra":1}', '{"sheets":[{"id":"1","name":"S","cells":{"a1":{"value":1}}}]}'])
+@pytest.mark.parametrize("source", ['{"sheets":[],"revision":true}', '{"sheets":[],"schema_version":true}', '{"sheets":[],"extra":1}', '{"schema_version":1,"sheets":[{"id":"1","name":"S","cells":{"a1":{"value":1}}}]}'])
 def test_model_contract_rejects_invalid_scalar_and_schema_types(source):
     with pytest.raises(ValueError):
         engine.Session(source)
+
+
+def test_a_document_without_a_version_is_refused_with_a_typed_diagnostic():
+    source = '{"sheets":[{"id":"1","name":"S","cells":{"A1":{"value":1}}}],"outputs":{}}'
+    for entry in (engine.Session, engine.calculate, engine.inspect):
+        with pytest.raises(engine.ToolkitError) as caught:
+            entry(source)
+        assert caught.value.code == "schema_version"
+        assert caught.value.message == "schema_version is required"
 
 
 def test_integral_reference_arguments_and_stored_error_messages():

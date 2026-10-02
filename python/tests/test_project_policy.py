@@ -163,3 +163,35 @@ def test_rust_crate_has_no_unreviewed_third_party_dependencies():
             assert _spdx_is_permissive(record["license"]), record
             assert record["license_files"], record
     assert not problems, "\n".join(problems)
+
+
+# CONTEXT.md, "Working conventions": tracked files use repository-relative
+# paths and synthetic data, never home-directory paths or personal contact
+# details. The check reads the tracked file list from git so untracked scratch
+# files do not trip it.
+PORTABILITY_PATTERNS = {
+    "home-directory path": re.compile(r"(?<![\w/])(/Users/|/home/)[A-Za-z0-9._-]+/"),
+    "personal email address": re.compile(r"\b[\w.+-]+@(gmail|outlook|hotmail|yahoo|icloud|proton|pm)\.[a-z]+\b", re.I),
+}
+# Synthetic inputs a test feeds to the review tools, which must reject such paths.
+PORTABILITY_ALLOWED = {"python/tests/test_review_tools.py"}
+BINARY_SUFFIXES = {".xlsx", ".so", ".png"}
+
+
+def test_tracked_files_are_portable():
+    import subprocess
+
+    listing = subprocess.run(
+        ["git", "ls-files", "-z"], cwd=ROOT, capture_output=True, check=True,
+    ).stdout.decode("utf-8")
+    offences = []
+    for name in filter(None, listing.split("\0")):
+        path = ROOT / name
+        if name in PORTABILITY_ALLOWED or path.suffix in BINARY_SUFFIXES or not path.is_file():
+            continue
+        text = path.read_text(encoding="utf-8", errors="replace")
+        for line_number, line in enumerate(text.splitlines(), start=1):
+            for label, pattern in PORTABILITY_PATTERNS.items():
+                if pattern.search(line):
+                    offences.append(f"{name}:{line_number}: {label}: {line.strip()[:80]}")
+    assert not offences, "\n".join(offences)

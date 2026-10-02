@@ -54,6 +54,7 @@ def export_canonical(workbook: Workbook, output: str | Path) -> Path:
     formula text without a cache. An array result refuses the whole package
     before any file is published.
     """
+    workbook.require_supported_versions()
     calculated = calculate(workbook)
     spills = _spill_sites(calculated)
     if spills:

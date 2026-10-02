@@ -16,7 +16,7 @@ open_questions: []
 
 # Run 24 — Evaluator safety checkpoint
 
-This is the accepted Run 24 checkpoint from 2026-09-24, when the project was named Formula Atlas. The verification results and next dependency below describe that checkpoint; they were not rerun for the 2026-09-28 documentation review. See [CONTEXT.md](../CONTEXT.md) for current project state.
+This is the accepted Run 24 checkpoint from 2026-09-24, when the project was named Formula Atlas. The verification results and next dependency below describe that checkpoint; they were not rerun for the 2026-09-28 documentation review. See [CONTEXT.md](../../CONTEXT.md) for current project state.
 
 ## Scope
 

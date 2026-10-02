@@ -46,6 +46,21 @@ def _sort_spill() -> dict:
     }
 
 
+def test_export_refuses_an_unsupported_version_before_writing_a_file(tmp_path):
+    import dataclasses
+
+    from workbook_forge.model import ModelError
+
+    target = tmp_path / "unsupported.xlsx"
+    for field, code in (("schema_version", "unsupported_schema_version"), ("model_version", "unsupported_model_version")):
+        workbook = dataclasses.replace(hydrate(FIXTURE.read_bytes()), **{field: 2})
+        with pytest.raises(ModelError) as caught:
+            export_canonical(workbook, target)
+        assert (caught.value.code, caught.value.message) == (code, "2")
+        assert not target.exists()
+        assert list(tmp_path.iterdir()) == []
+
+
 def test_canonical_fixture_exports_and_reimports_formula_text(tmp_path):
     original = hydrate(FIXTURE.read_bytes())
     path = export_canonical(original, tmp_path / "operating-scenario.exported.xlsx")

@@ -189,6 +189,7 @@ def test_new_input_constraints_cannot_silently_replace_imported_validation(tmp_p
 
 def test_input_constraints_are_native_and_generate_explicit_excel_rules(tmp_path):
     document = {
+        "schema_version": 1,
         "sheets": [{"id": "inputs", "name": "Inputs", "cells": {
             "A1": {"value": 4}, "B1": {"value": "Base"}, "C1": {"value": True},
         }}],
@@ -218,6 +219,7 @@ def test_input_constraints_are_native_and_generate_explicit_excel_rules(tmp_path
 
 def test_scalar_error_caches_roundtrip_but_array_spills_refuse_output(tmp_path):
     model = WorkbookModel(document={
+        "schema_version": 1,
         "sheets": [{"id": "one", "name": "Sheet1", "cells": {
             "A1": {"formula": "=1/0"},
         }}],

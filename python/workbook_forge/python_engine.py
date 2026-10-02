@@ -192,7 +192,11 @@ def _validate_input_value(binding: dict, value: Any):
 
 def _normalize_model(source: Any) -> dict:
     source = _object(source, {"schema_version", "revision", "sheets", "inputs", "outputs"})
-    version, revision = source.get("schema_version", 1), source.get("revision", 0)
+    if "schema_version" not in source:
+        # A document with no version is not a version 1 document. There is no
+        # compatibility window that reads it as one (docs/specs/model-versioning.md).
+        _fail("schema_version", "schema_version is required")
+    version, revision = source["schema_version"], source.get("revision", 0)
     if type(version) is not int or version != 1:
         _fail("schema_version", "expected workbook schema version 1")
     if type(revision) is not int or not 0 <= revision <= _UINT64_MAX:

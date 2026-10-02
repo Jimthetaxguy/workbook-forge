@@ -32,7 +32,7 @@ except ModuleNotFoundError:  # loaded by path, outside its own directory
     refusal = _module.refusal
 
 ROOT = Path(__file__).resolve().parents[2]
-SCHEMA = ROOT / "review" / "findings.schema.json"
+SCHEMA = ROOT / "tools" / "review" / "findings.schema.json"
 _PATCH = re.compile(r"^(diff --git |--- a/|\+\+\+ b/|@@ -\d+)", re.MULTILINE)
 _SEVERITY = {"critical": 0, "high": 1, "medium": 2, "low": 3}
 

@@ -226,7 +226,7 @@ def test_both_engines_give_the_same_bits_for_written_and_stored_numbers():
         )):
             cells[f"{column}{row}"] = {"formula": template.format(row, places, f"{value:f}")}
             outputs[f"{column}{row}"] = {"sheet": "Data", "address": f"{column}{row}"}
-    document = json.dumps({"sheets": [{"id": "0", "name": "Data", "cells": cells}], "outputs": outputs})
+    document = json.dumps({"schema_version": 1, "sheets": [{"id": "0", "name": "Data", "cells": cells}], "outputs": outputs})
     ours = json.loads(python_engine.calculate(document))
     theirs = json.loads(native.calculate(document))
     assert ours["diagnostics"] == [] and theirs["diagnostics"] == []

@@ -182,6 +182,35 @@ def test_other_kinds_of_file_are_refused(tmp_path, name):
         intake_workbook_model(tmp_path / name)
 
 
+def test_escapes_in_string_parts_are_decoded(tmp_path):
+    shared = (
+        f'<?xml version="1.0"?><sst xmlns="{MAIN}" count="1" uniqueCount="1">'
+        "<si><t>tab_x0009_sep</t></si></sst>"
+    )
+    book = _write(
+        tmp_path / "escaped.xlsx",
+        {
+            "S": (
+                '<row r="1"><c r="A1" t="inlineStr"><is><t>_x0041_B</t></is></c>'
+                '<c r="B1" t="s"><v>0</v></c>'
+                '<c r="C1" t="inlineStr"><is><t>_x005F_x0041_</t></is></c></row>'
+            )
+        },
+        parts={
+            "xl/sharedStrings.xml": (
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml",
+                shared,
+            )
+        },
+    )
+    cells = intake_workbook_model(book).sheet("S").cells
+    assert {address: cell.value for address, cell in cells.items()} == {
+        "A1": "AB",
+        "B1": "tab\tsep",
+        "C1": "_x0041_",
+    }
+
+
 def test_a_missing_file_is_refused(tmp_path):
     with pytest.raises(WorkbookError, match="not found"):
         intake_workbook_model(tmp_path / "absent.xlsx")
