@@ -3107,7 +3107,18 @@ fn eval_call(name: &str, args: &[Expr], env: &Environment<'_>) -> Result<Value, 
         }
         "MONTH" | "DAY" | "YEAR" => {
             arity(name, args, 1, 1)?;
-            let date = excel_serial_ymd(to_number(&one(name, &flat)?)?)?;
+            let serial = to_number(&one(name, &flat)?)?;
+            let floored = serial.floor();
+            // Excel displays serial 0 as 1900-01-00, a non-existent date.
+            if floored == 0.0 {
+                let value = match name {
+                    "MONTH" => 1,
+                    "DAY" => 0,
+                    _ => 1900,
+                };
+                return Ok(Value::Number(value as f64));
+            }
+            let date = excel_serial_ymd(serial)?;
             let value = match name {
                 "MONTH" => date.1,
                 "DAY" => date.2,

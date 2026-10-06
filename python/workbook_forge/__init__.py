@@ -2964,6 +2964,13 @@ def _function(
         if isinstance(serial, ErrorValue):
             return serial
         try:
+            floored = math.floor(float(serial))
+        except (OverflowError, ValueError):
+            return ErrorValue("#NUM!", "date serial is outside supported range")
+        # Excel displays serial 0 as 1900-01-00, a non-existent date.
+        if floored == 0:
+            return {"MONTH": 1, "DAY": 0, "YEAR": 1900}[name]
+        try:
             year, month, day = _excel_serial_ymd(float(serial))
         except (OverflowError, ValueError):
             return ErrorValue("#NUM!", "date serial is outside supported range")

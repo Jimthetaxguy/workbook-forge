@@ -65,7 +65,7 @@
 {"id":"mod-whitespace-numeric-text","formula":"=MOD(\" 3 \",2)","cells":{},"expected":{"number":1}}
 {"id":"quotient-whitespace-numeric-text","formula":"=QUOTIENT(\" 8 \",3)","cells":{},"expected":{"number":2}}
 {"id":"quotient-rejects-infinite-divisor","formula":"=QUOTIENT(1,1E308*1E308)","cells":{},"expected":{"error":"#NUM!"}}
-{"id":"month-serial-zero","formula":"=MONTH(0)","cells":{},"expected":{"number":12}}
+{"id":"month-serial-zero","formula":"=MONTH(0)","cells":{},"expected":{"number":1}}
 {"id":"month-serial-one","formula":"=MONTH(1)","cells":{},"expected":{"number":1}}
 {"id":"month-serial-59","formula":"=MONTH(59)","cells":{},"expected":{"number":2}}
 {"id":"month-serial-60","formula":"=MONTH(60)","cells":{},"expected":{"number":2}}
@@ -141,7 +141,8 @@
 {"id":"averageifs-logical-values-coerce-to-numbers","formula":"=AVERAGEIFS(B1:B2,A1:A2,\"yes\")","cells":{"A1":"yes","A2":"yes","B1":true,"B2":false},"expected":{"number":0.5}}
 {"id":"date-negative-year","formula":"=DATE(-1,1,1)","cells":{},"expected":{"error":"#NUM!"}}
 {"id":"date-beyond-excel-range","formula":"=DATE(9999,12,32)","cells":{},"expected":{"error":"#NUM!"}}
-{"id":"excel-serial-zero-day","formula":"=DAY(0)","cells":{},"expected":{"number":31}}
+{"id":"excel-serial-zero-day","formula":"=DAY(0)","cells":{},"expected":{"number":0}}
+{"id":"year-serial-zero","formula":"=YEAR(0)","cells":{},"expected":{"number":1900}}
 {"id":"excel-negative-date-serial","formula":"=YEAR(-1)","cells":{},"expected":{"error":"#NUM!"}}
 {"id":"countblank-empty-cell-empty-text-and-zero","formula":"=COUNTBLANK(A1:A5)","cells":{"A2":"","A3":0,"A4":false,"A5":"text"},"expected":{"number":2}}
 {"id":"countblank-single-cell-reference","formula":"=COUNTBLANK(A1)","cells":{},"expected":{"number":1}}

@@ -540,7 +540,12 @@ def _analyze(
 ) -> tuple[tuple[str, ...], Diagnostic | None]:
     try:
         analysis = analyze_formula(expression)
-    except (TypeError, ValueError, RecursionError):
+    except (TypeError, ValueError, RecursionError) as exc:
+        message = str(exc)
+        if message.startswith("unsupported name "):
+            return (), _cell_diagnostic(
+                "unsupported_formula", "unsupported", message, sheet_name, address
+            )
         return (), _cell_diagnostic(
             "parse_error", "parse_error", "formula could not be parsed", sheet_name, address
         )

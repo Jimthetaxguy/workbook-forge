@@ -412,6 +412,19 @@ fn analyze(
 ) -> (Vec<String>, Option<Diagnostic>) {
     let expression_parsed = match Expression::parse(expression) {
         Ok(expression) => expression,
+        Err(e) if e.code == "unsupported_formula" => {
+            return (
+                Vec::new(),
+                Some(Diagnostic::cell(
+                    "unsupported_formula",
+                    "unsupported",
+                    &e.message,
+                    sheet_name,
+                    address,
+                    None,
+                )),
+            );
+        }
         Err(_) => {
             return (
                 Vec::new(),
@@ -573,6 +586,16 @@ fn from_formula_error(error: FormulaError, sheet: &str, address: &str) -> Outcom
             sheet,
             address,
             Some(function.to_string()),
+        ));
+    }
+    if let FormulaError::Unsupported(ref reason) = error {
+        return Outcome::Diagnostic(Diagnostic::cell(
+            "unsupported_formula",
+            "unsupported",
+            reason,
+            sheet,
+            address,
+            None,
         ));
     }
     if let Some(code) = error.excel_code() {
