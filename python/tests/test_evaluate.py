@@ -466,6 +466,62 @@ def test_countblank_and_ifs_handle_error_cells_by_range_role():
     assert isinstance(value, ErrorValue) and value.code == "#N/A"
 
 
+def test_count_and_counta_ignore_error_cells_but_other_aggregates_propagate():
+    # Values from Microsoft's COUNT and COUNTA examples: a date serial, 19,
+    # 22.24, TRUE, #DIV/0! and a blank in A2:A7.
+    cells = {"A2": 39790, "A3": 19, "A4": 22.24, "A5": True, "A6": ErrorValue("#DIV/0!")}
+    assert evaluate("=COUNT(A2:A7)", cells) == 3
+    assert evaluate("=COUNT(A5:A7)", cells) == 0
+    assert evaluate("=COUNT(A2:A7,2)", cells) == 4
+    assert evaluate("=COUNTA(A2:A7)", cells) == 5
+    assert evaluate("=COUNT(1,NA(),2)") == 2
+    assert evaluate("=COUNTA(1,NA())") == 2
+    for formula in ("=SUM(A2:A7)", "=AVERAGE(A2:A7)", "=MIN(A2:A7)", "=MAX(A2:A7)"):
+        value = evaluate(formula, cells)
+        assert isinstance(value, ErrorValue) and value.code == "#DIV/0!", formula
+
+
+def test_criteria_functions_skip_error_cells_unless_the_criterion_is_that_error():
+    cells = {
+        "A1": "x", "A2": ErrorValue("#N/A"), "A3": "x", "A4": 1,
+        "B1": 1, "B2": 2, "B3": 3, "B4": 4,
+    }
+    assert evaluate('=COUNTIF(A1:A4,"x")', cells) == 2
+    assert evaluate('=COUNTIF(A1:A4,">0")', cells) == 1
+    assert evaluate('=COUNTIF(A1:A4,"<>x")', cells) == 2
+    assert evaluate('=COUNTIF(A1:A4,"#N/A")', cells) == 1
+    assert evaluate('=COUNTIF(A1:A4,"#n/a")', cells) == 1
+    assert evaluate('=COUNTIF(A1:A4,NA())', cells) == 1
+    assert evaluate('=COUNTIF(A1:A4,"<>#N/A")', cells) == 3
+    assert evaluate('=COUNTIF(A1:A4,"#DIV/0!")', cells) == 0
+    assert evaluate('=COUNTIF(A1:A4,">#N/A")', cells) == 0
+    assert evaluate('=SUMIF(A1:A4,"x",B1:B4)', cells) == 4
+    assert evaluate('=SUMIF(A1:A4,"#N/A",B1:B4)', cells) == 2
+    assert evaluate('=SUMIFS(B1:B4,A1:A4,"x")', cells) == 4
+    assert evaluate('=COUNTIFS(A1:A4,"x",B1:B4,">1")', cells) == 1
+    assert evaluate('=AVERAGEIF(A1:A4,"x",B1:B4)', cells) == 2
+    assert evaluate('=AVERAGEIFS(B1:B4,A1:A4,"x")', cells) == 2
+    assert evaluate('=MAXIFS(B1:B4,A1:A4,"x")', cells) == 3
+    assert evaluate('=MINIFS(B1:B4,A1:A4,"x")', cells) == 1
+    # A matched error in the summed range is still part of the result.
+    value = evaluate('=SUMIF(A1:A4,"<>x",B1:B4)', {**cells, "B2": ErrorValue("#DIV/0!")})
+    assert isinstance(value, ErrorValue) and value.code == "#DIV/0!"
+
+
+def test_criteria_operands_compare_within_one_type_only():
+    cells = {"A1": 5, "A2": 7, "A3": "fig", "A4": "kiwi", "A5": True, "A6": "TRUE", "A7": "2"}
+    assert evaluate('=COUNTIF(A1:A7,"<>fig")', cells) == 6
+    assert evaluate('=COUNTIF(A1:A7,">1")', cells) == 2
+    assert evaluate('=COUNTIF(A1:A7,"<>5")', cells) == 6
+    assert evaluate("=COUNTIF(A7,2)", cells) == 0
+    assert evaluate('=COUNTIF(A1:A7,"TRUE")', cells) == 1
+    assert evaluate("=COUNTIF(A1:A7,TRUE)", cells) == 1
+    assert evaluate('=COUNTIF(A1:A7,">g")', cells) == 2
+    assert evaluate('=COUNTIF(A1:A7,"<>~x")', cells) == 7
+    assert evaluate('=SUMIF(A3:A4,">0",A1:A2)', cells) == 0
+    assert evaluate('=MAXIFS(A1:A2,A1:A2,"<>fig")', cells) == 7
+
+
 @pytest.mark.parametrize(
     ("formula", "code"),
     [

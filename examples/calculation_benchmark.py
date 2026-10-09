@@ -31,6 +31,7 @@ def workload(name: str) -> dict:
             cell = {"formula": "=SUM(SORT(SEQUENCE(10000,1,10000,-1)))"}
         cells[f"A{row}"] = cell
     return {
+        "schema_version": 1,
         "sheets": [{"id": "benchmark", "name": "Benchmark", "cells": cells}],
         "outputs": {"last": {"sheet": "Benchmark", "address": f"A{count}"}} if name == "chain" else {},
     }

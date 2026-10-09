@@ -210,7 +210,17 @@ class Workbook:
                 return item
         return None
 
+    def require_supported_versions(self) -> None:
+        """Refuse to write a workbook whose versions this tree does not read.
+
+        The same rule as hydration: version 1 only. A writer that emitted
+        another version would produce a document no reader accepts.
+        """
+        _version(self.schema_version, "schema_version", "unsupported_schema_version")
+        _version(self.model_version, "model_version", "unsupported_model_version")
+
     def to_dict(self) -> dict[str, Any]:
+        self.require_supported_versions()
         data: dict[str, Any] = {
             "schema_version": self.schema_version,
             "model_version": self.model_version,
@@ -530,7 +540,12 @@ def _analyze(
 ) -> tuple[tuple[str, ...], Diagnostic | None]:
     try:
         analysis = analyze_formula(expression)
-    except (TypeError, ValueError, RecursionError):
+    except (TypeError, ValueError, RecursionError) as exc:
+        message = str(exc)
+        if message.startswith("unsupported name "):
+            return (), _cell_diagnostic(
+                "unsupported_formula", "unsupported", message, sheet_name, address
+            )
         return (), _cell_diagnostic(
             "parse_error", "parse_error", "formula could not be parsed", sheet_name, address
         )
@@ -655,6 +670,11 @@ def _evaluate(
                 "parse_error", "parse_error", "formula could not be parsed", sheet_name, address
             )
         return {"error": outcome.code, "message": None}
+    if outcome is None:
+        # A scalar formula whose value is a blank reference is 0 in Excel, and
+        # that is what the workbook adapter caches. A null result would be
+        # indistinguishable from "not calculated" (docs/behavior-profiles.md).
+        return 0
     return _json_scalar(outcome)
 
 

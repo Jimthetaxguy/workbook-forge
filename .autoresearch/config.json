@@ -28,7 +28,7 @@
     "Run 19 uses only pinned MIT/Apache-2.0 Formualizer v0.7.0 architecture/license references; no source code or runtime dependency is copied.",
     "Rust checks use the checkout-local rust/target directory through CARGO_TARGET_DIR, avoiding Cargo artifacts shared by other checkouts."
   ],
-  "eval_command": "python3.13 -m pytest -q && python3.13 -m compileall -q python && (cd rust && cargo fmt --check && CARGO_TARGET_DIR=\"$PWD/target\" cargo check --locked && CARGO_TARGET_DIR=\"$PWD/target\" cargo test --locked && CARGO_TARGET_DIR=\"$PWD/target\" cargo clippy --all-targets --locked -- -D warnings)",
+  "eval_command": "bash tools/gate.sh",
   "validation_set": [
     "days-preserves-time-fraction",
     "round-negative-midpoint",

@@ -13,7 +13,7 @@ license-files = ["LICENSE", "THIRD_PARTY_NOTICES.txt"]
 dependencies = []
 
 [project.optional-dependencies]
-test = ["pytest>=9.1.1", "jsonschema>=4.26.0", "packaging>=26.3", "setuptools>=84.0.0", "setuptools-rust>=1.13.0,<2", "build>=1.6.1"]
+test = ["pytest>=9.1.1", "jsonschema>=4.26.0", "packaging>=26.3", "setuptools>=84.0.0", "setuptools-rust>=1.13.0,<2", "build>=1.6.1", "ruff>=0.14.14"]
 
 [project.scripts]
 workbook-forge = "workbook_forge.cli:main"
@@ -44,6 +44,10 @@ where = ["python"]
 include = ["workbook_forge*"]
 namespaces = false
 
+# The wheel targets the stable ABI so one build serves every CPython from 3.12 on.
+[tool.distutils.bdist_wheel]
+py_limited_api = "cp312"
+
 [tool.pytest.ini_options]
 testpaths = ["python/tests"]
 pythonpath = ["python"]
@@ -51,3 +55,12 @@ pythonpath = ["python"]
 [tool.ruff]
 line-length = 100
 target-version = "py312"
+
+[tool.ruff.lint]
+# The rule set is stated so a new ruff release cannot change what the gate checks.
+select = ["E4", "E7", "E9", "F"]
+
+[tool.ruff.lint.per-file-ignores]
+# This module imports pytest fixtures from sibling test modules. Pytest
+# resolves them by name, which ruff reads as unused imports and redefinitions.
+"python/tests/test_review_boundaries.py" = ["F401", "F811"]

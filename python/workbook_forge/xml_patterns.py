@@ -6,6 +6,7 @@ or accept a same-named descendant in place of a direct child.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
 from xml.etree import ElementTree as ET
@@ -114,14 +115,62 @@ def walk_paths(root: ET.Element) -> Iterator[XMLNode]:
     yield from walk(root, (root.tag,), f"/{local_name}[1]", ())
 
 
+# OOXML string parts write a character that XML 1.0 cannot hold as `_xHHHH_`
+# (ECMA-376 part 1, 22.9.2.19 ST_Xstring). Excel also writes a carriage
+# return that way, since an XML parser would fold it into a line feed. A
+# literal `_xHHHH_` is written with its underscore escaped: `_x005F_xHHHH_`.
+_OOXML_ESCAPE = re.compile(r"_x([0-9A-Fa-f]{4})_")
+# The same shape without consuming the trailing underscore: in a literal
+# `_x005F_x0041_` two tokens share that underscore, and both need escaping.
+_OOXML_ESCAPE_SHAPE = re.compile(r"_x([0-9A-Fa-f]{4})(?=_)")
+
+
+def decode_ooxml_escapes(text: str) -> str:
+    """Replace each `_xHHHH_` in a string part with the character it stands for.
+
+    One pass, left to right, so `_x005F_x0041_` yields the literal `_x0041_`.
+    """
+    if "_x" not in text:
+        return text
+    return _OOXML_ESCAPE.sub(_decoded_escape, text)
+
+
+def _decoded_escape(match: re.Match[str]) -> str:
+    codepoint = int(match.group(1), 16)
+    if 0xD800 <= codepoint <= 0xDFFF:
+        # A lone surrogate is not a character; the escape stays as written.
+        return match.group(0)
+    return chr(codepoint)
+
+
+def encode_ooxml_escapes(text: str) -> str:
+    """Write text the way `decode_ooxml_escapes` reads it back unchanged.
+
+    Characters XML 1.0 cannot hold, and the carriage return, become
+    `_xHHHH_`; a literal `_xHHHH_` becomes `_x005F_xHHHH_`.
+    """
+    escaped = _OOXML_ESCAPE_SHAPE.sub(lambda match: f"_x005F_x{match.group(1)}", text)
+    return "".join(
+        f"_x{ord(char):04X}_" if _needs_ooxml_escape(char) else char for char in escaped
+    )
+
+
+def _needs_ooxml_escape(char: str) -> bool:
+    codepoint = ord(char)
+    return (codepoint < 0x20 and codepoint not in (0x9, 0xA)) or codepoint in (0xFFFE, 0xFFFF)
+
+
 def rich_text(element: ET.Element, namespace: str) -> str:
-    """Resolve plain/rich strings without phonetic or extension descendants."""
+    """Resolve plain/rich strings without phonetic or extension descendants.
+
+    Each run is decoded on its own: an escape never spans two runs.
+    """
     chunks: list[str] = []
     for child in element:
         if child.tag == qualified(namespace, "t"):
-            chunks.append(direct_text(child))
+            chunks.append(decode_ooxml_escapes(direct_text(child)))
         elif child.tag == qualified(namespace, "r"):
             text = child.find(qualified(namespace, "t"))
             if text is not None:
-                chunks.append(direct_text(text))
+                chunks.append(decode_ooxml_escapes(direct_text(text)))
     return "".join(chunks)

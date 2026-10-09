@@ -1280,15 +1280,17 @@ fn eval_binary(op: &str, a: Value, b: Value) -> Result<Value, FormulaError> {
     }
     match op {
         "&" => join_values_bounded(&[&a, &b], "", false, MAX_TEXT_LENGTH_UNITS).map(Value::Text),
-        "+" => Ok(Value::Number(to_number(&a)? + to_number(&b)?)),
-        "-" => Ok(Value::Number(to_number(&a)? - to_number(&b)?)),
-        "*" => Ok(Value::Number(to_number(&a)? * to_number(&b)?)),
+        // Every arithmetic operator returns #NUM! when its binary64 result is
+        // not finite, so an overflow never reaches a result as a null number.
+        "+" => finite_arithmetic(to_number(&a)? + to_number(&b)?),
+        "-" => finite_arithmetic(to_number(&a)? - to_number(&b)?),
+        "*" => finite_arithmetic(to_number(&a)? * to_number(&b)?),
         "/" => {
             let d = to_number(&b)?;
             if d == 0.0 {
                 Err(FormulaError::Div0)
             } else {
-                Ok(Value::Number(to_number(&a)? / d))
+                finite_arithmetic(to_number(&a)? / d)
             }
         }
         "^" => {
@@ -1373,13 +1375,28 @@ fn compare(a: &Value, b: &Value) -> Result<i8, FormulaError> {
         _ => Err(FormulaError::Value),
     }
 }
+fn finite_arithmetic(result: f64) -> Result<Value, FormulaError> {
+    if result.is_finite() {
+        Ok(Value::Number(result))
+    } else {
+        Err(FormulaError::Num)
+    }
+}
+
 fn to_number(v: &Value) -> Result<f64, FormulaError> {
     match v {
         Value::Number(n) => Ok(*n),
         Value::Bool(b) => Ok(if *b { 1.0 } else { 0.0 }),
         Value::Blank => Ok(0.0),
         Value::Text(s) if s.trim().is_empty() => Ok(0.0),
-        Value::Text(s) => s.trim().parse::<f64>().map_err(|_| FormulaError::Value),
+        // Rust's float parser accepts "inf", "infinity" and "nan"; Excel does
+        // not treat those spellings as numbers, so they stay non-numeric text.
+        Value::Text(s) => s
+            .trim()
+            .parse::<f64>()
+            .ok()
+            .filter(|number| number.is_finite())
+            .ok_or(FormulaError::Value),
         Value::Error(e) => Err(e.clone()),
     }
 }
@@ -2486,14 +2503,16 @@ fn number_text(number: f64) -> String {
     }
 }
 
-fn to_text(v: &Value) -> String {
+/// Text coercion for function arguments. An error value is never rendered as
+/// the text of its name; it propagates, so `LEN(NA())` is `#N/A`, not 4.
+fn to_text(v: &Value) -> Result<String, FormulaError> {
     match v {
-        Value::Number(n) => number_text(*n),
-        Value::Text(s) => s.clone(),
-        Value::Bool(true) => "TRUE".into(),
-        Value::Bool(false) => "FALSE".into(),
-        Value::Blank => String::new(),
-        Value::Error(e) => e.to_string(),
+        Value::Number(n) => Ok(number_text(*n)),
+        Value::Text(s) => Ok(s.clone()),
+        Value::Bool(true) => Ok("TRUE".into()),
+        Value::Bool(false) => Ok("FALSE".into()),
+        Value::Blank => Ok(String::new()),
+        Value::Error(e) => Err(e.clone()),
     }
 }
 
@@ -2535,12 +2554,13 @@ fn value_is_empty_text(value: &Value) -> bool {
     }
 }
 
-fn push_value_text(output: &mut String, value: &Value) {
+fn push_value_text(output: &mut String, value: &Value) -> Result<(), FormulaError> {
     if let Value::Text(text) = value {
         output.push_str(text);
     } else {
-        output.push_str(&to_text(value));
+        output.push_str(&to_text(value)?);
     }
+    Ok(())
 }
 
 fn join_values_bounded(
@@ -2573,7 +2593,7 @@ fn join_values_bounded(
         if written > 0 {
             output.push_str(delimiter);
         }
-        push_value_text(&mut output, value);
+        push_value_text(&mut output, value)?;
         written += 1;
     }
     Ok(output)
@@ -2787,15 +2807,24 @@ fn eval_call(name: &str, args: &[Expr], env: &Environment<'_>) -> Result<Value, 
                     _ => None,
                 })
                 .collect();
+            // Microsoft: COUNT does not count error arguments and COUNTA
+            // counts them as information; neither propagates an error found
+            // in a range. The other aggregates return the first error.
+            if name == "COUNT" {
+                let count = flat
+                    .iter()
+                    .filter(|v| matches!(v, Value::Number(_)))
+                    .count();
+                return Ok(Value::Number(count as f64));
+            }
+            if name == "COUNTA" {
+                let count = flat.iter().filter(|v| !matches!(v, Value::Blank)).count();
+                return Ok(Value::Number(count as f64));
+            }
             if let Some(Value::Error(e)) = flat.iter().find(|v| matches!(v, Value::Error(_))) {
                 return Err(e.clone());
             }
             let n = match name {
-                "COUNT" => flat
-                    .iter()
-                    .filter(|v| matches!(v, Value::Number(_)))
-                    .count() as f64,
-                "COUNTA" => flat.iter().filter(|v| !matches!(v, Value::Blank)).count() as f64,
                 "SUM" => nums.iter().sum(),
                 "AVERAGE" => {
                     if nums.is_empty() {
@@ -2895,7 +2924,7 @@ fn eval_call(name: &str, args: &[Expr], env: &Environment<'_>) -> Result<Value, 
         }
         "LEFT" | "RIGHT" => {
             arity(name, args, 1, 2)?;
-            let text = to_text(&flat[0]);
+            let text = to_text(&flat[0])?;
             let count = if flat.len() == 1 {
                 1
             } else {
@@ -2915,7 +2944,7 @@ fn eval_call(name: &str, args: &[Expr], env: &Environment<'_>) -> Result<Value, 
         }
         "MID" => {
             arity(name, args, 3, 3)?;
-            let chars: Vec<char> = to_text(&flat[0]).chars().collect();
+            let chars: Vec<char> = to_text(&flat[0])?.chars().collect();
             let start = to_number(&flat[1])? as isize;
             let count = to_number(&flat[2])? as isize;
             if start < 1 || count < 0 {
@@ -2928,7 +2957,7 @@ fn eval_call(name: &str, args: &[Expr], env: &Environment<'_>) -> Result<Value, 
         "LEN" => {
             arity(name, args, 1, 1)?;
             return Ok(Value::Number(
-                to_text(&one(name, &flat)?).chars().count() as f64
+                to_text(&one(name, &flat)?)?.chars().count() as f64
             ));
         }
         "ISBLANK" | "ISNUMBER" | "ISTEXT" | "ISLOGICAL" | "ISERR" | "ISERROR" | "ISNA" => {
@@ -2938,7 +2967,7 @@ fn eval_call(name: &str, args: &[Expr], env: &Environment<'_>) -> Result<Value, 
             arity(name, args, 1, 1)?;
             let value = one(name, &flat)?;
             propagate_value_error(&value)?;
-            let text = to_text(&value);
+            let text = to_text(&value)?;
             return Ok(Value::Text(if name == "UPPER" {
                 text.to_uppercase()
             } else {
@@ -2949,7 +2978,7 @@ fn eval_call(name: &str, args: &[Expr], env: &Environment<'_>) -> Result<Value, 
             arity(name, args, 1, 1)?;
             let value = one(name, &flat)?;
             propagate_value_error(&value)?;
-            let text = to_text(&value);
+            let text = to_text(&value)?;
             let normalized = text
                 .split(' ')
                 .filter(|part| !part.is_empty())
@@ -2962,9 +2991,9 @@ fn eval_call(name: &str, args: &[Expr], env: &Environment<'_>) -> Result<Value, 
             for value in flat.iter().take(4) {
                 propagate_value_error(value)?;
             }
-            let text = to_text(&flat[0]);
-            let old = to_text(&flat[1]);
-            let new = to_text(&flat[2]);
+            let text = to_text(&flat[0])?;
+            let old = to_text(&flat[1])?;
+            let new = to_text(&flat[2])?;
             if old.is_empty() {
                 return Err(FormulaError::Value);
             }
@@ -2998,8 +3027,8 @@ fn eval_call(name: &str, args: &[Expr], env: &Environment<'_>) -> Result<Value, 
             for value in flat.iter().take(3) {
                 propagate_value_error(value)?;
             }
-            let needle = to_text(&flat[0]);
-            let text = to_text(&flat[1]);
+            let needle = to_text(&flat[0])?;
+            let text = to_text(&flat[1])?;
             let start = if flat.len() == 3 {
                 to_number(&flat[2])?
             } else {
@@ -3045,7 +3074,7 @@ fn eval_call(name: &str, args: &[Expr], env: &Environment<'_>) -> Result<Value, 
             for value in flat.iter().take(2) {
                 propagate_value_error(value)?;
             }
-            let delimiter = to_text(&flat[0]);
+            let delimiter = to_text(&flat[0])?;
             let ignore_empty = truthy(&flat[1])?;
             let mut parts = Vec::new();
             for value in flat.iter().skip(2) {
@@ -3078,7 +3107,18 @@ fn eval_call(name: &str, args: &[Expr], env: &Environment<'_>) -> Result<Value, 
         }
         "MONTH" | "DAY" | "YEAR" => {
             arity(name, args, 1, 1)?;
-            let date = excel_serial_ymd(to_number(&one(name, &flat)?)?)?;
+            let serial = to_number(&one(name, &flat)?)?;
+            let floored = serial.floor();
+            // Excel displays serial 0 as 1900-01-00, a non-existent date.
+            if floored == 0.0 {
+                let value = match name {
+                    "MONTH" => 1,
+                    "DAY" => 0,
+                    _ => 1900,
+                };
+                return Ok(Value::Number(value as f64));
+            }
+            let date = excel_serial_ymd(serial)?;
             let value = match name {
                 "MONTH" => date.1,
                 "DAY" => date.2,
@@ -4831,8 +4871,8 @@ fn text_extract(name: &str, args: &[Expr], env: &Environment<'_>) -> Result<Valu
     let delimiter_value = eval_scalar(&args[1], env)?;
     propagate_value_error(&text_value)?;
     propagate_value_error(&delimiter_value)?;
-    let text = to_text(&text_value);
-    let delimiter = to_text(&delimiter_value);
+    let text = to_text(&text_value)?;
+    let delimiter = to_text(&delimiter_value)?;
 
     let instance_value = optional_scalar(args, 2, env)?;
     let instance = match instance_value {
@@ -5157,8 +5197,22 @@ enum CriteriaOperator {
 struct Criteria {
     operator: CriteriaOperator,
     operand: Value,
-    wildcard: bool,
     wildcard_pattern: Option<WildcardPattern>,
+}
+
+/// The error codes both engines can hold in a cell. Criterion text spelling
+/// one of them selects cells holding that error.
+fn error_from_excel_code(code: &str) -> Option<FormulaError> {
+    Some(match code.to_ascii_uppercase().as_str() {
+        "#VALUE!" => FormulaError::Value,
+        "#DIV/0!" => FormulaError::Div0,
+        "#REF!" => FormulaError::Ref,
+        "#NAME?" => FormulaError::Name,
+        "#NUM!" => FormulaError::Num,
+        "#N/A" => FormulaError::NA,
+        "#CALC!" => FormulaError::Calc,
+        _ => return None,
+    })
 }
 
 fn criteria_function(
@@ -5335,9 +5389,15 @@ fn parse_criteria(value: &CalcValue) -> Result<Criteria, FormulaError> {
         return Err(FormulaError::Value);
     };
     if let Value::Error(error) = value {
-        return Err(error.clone());
+        // An error as the criterion selects cells holding that error; it is
+        // not a failure of the call.
+        return Ok(Criteria {
+            operator: CriteriaOperator::Equal,
+            operand: Value::Error(error.clone()),
+            wildcard_pattern: None,
+        });
     }
-    let (operator, operand, wildcard) = match value {
+    let (operator, operand) = match value {
         Value::Text(text) => {
             let (operator, rest) = if let Some(rest) = text.strip_prefix("<=") {
                 (CriteriaOperator::LessEqual, rest)
@@ -5362,6 +5422,15 @@ fn parse_criteria(value: &CalcValue) -> Result<Criteria, FormulaError> {
             {
                 return Err(FormulaError::Value);
             }
+            if let Some(error) = error_from_excel_code(rest) {
+                // Checked before wildcards so that the ? in #NAME? is not a
+                // pattern.
+                return Ok(Criteria {
+                    operator,
+                    operand: Value::Error(error),
+                    wildcard_pattern: None,
+                });
+            }
             let mut escaped = false;
             let mut has_wildcard = false;
             for ch in rest.chars() {
@@ -5381,9 +5450,21 @@ fn parse_criteria(value: &CalcValue) -> Result<Criteria, FormulaError> {
             {
                 return Err(FormulaError::Value);
             }
-            (operator, Value::Text(rest.to_string()), has_wildcard)
+            // The operand takes the type its text spells, as the Python
+            // engine does: TRUE and FALSE are logical, numeric text is a
+            // number, and anything else stays text. A cell then compares
+            // only against an operand of its own type.
+            let operand = match rest.to_ascii_uppercase().as_str() {
+                "TRUE" => Value::Bool(true),
+                "FALSE" => Value::Bool(false),
+                _ => match rest.trim().parse::<f64>() {
+                    Ok(number) if !has_wildcard => Value::Number(number),
+                    _ => Value::Text(rest.to_string()),
+                },
+            };
+            (operator, operand)
         }
-        scalar => (CriteriaOperator::Equal, scalar.clone(), false),
+        scalar => (CriteriaOperator::Equal, scalar.clone()),
     };
     let wildcard_pattern = match &operand {
         Value::Text(pattern) if pattern.contains(['*', '?', '~']) => {
@@ -5394,7 +5475,6 @@ fn parse_criteria(value: &CalcValue) -> Result<Criteria, FormulaError> {
     Ok(Criteria {
         operator,
         operand,
-        wildcard,
         wildcard_pattern,
     })
 }
@@ -5404,8 +5484,18 @@ fn criterion_matches(
     criteria: &Criteria,
     wildcard_work_remaining: &Cell<usize>,
 ) -> Result<bool, FormulaError> {
+    use std::cmp::Ordering;
+    let negated = criteria.operator == CriteriaOperator::NotEqual;
     if let Value::Error(error) = candidate {
-        return Err(error.clone());
+        // An error cell never propagates out of a criteria range. It equals
+        // an error criterion with the same code and nothing else; errors have
+        // no order, so relational operators never select them.
+        return Ok(match (&criteria.operand, criteria.operator) {
+            (Value::Error(expected), CriteriaOperator::Equal) => expected == error,
+            (Value::Error(expected), CriteriaOperator::NotEqual) => expected != error,
+            (Value::Error(_), _) => false,
+            _ => negated,
+        });
     }
     let blank_operand = matches!(criteria.operand, Value::Blank)
         || matches!(&criteria.operand, Value::Text(text) if text.is_empty());
@@ -5417,59 +5507,39 @@ fn criterion_matches(
     {
         let is_blank = matches!(candidate, Value::Blank)
             || matches!(candidate, Value::Text(text) if text.is_empty());
-        return Ok(if criteria.operator == CriteriaOperator::Equal {
-            is_blank
-        } else {
-            !is_blank
-        });
+        return Ok(is_blank != negated);
     }
-    if let (Value::Text(expected), Value::Text(candidate_text)) = (&criteria.operand, candidate)
-        && matches!(
-            criteria.operator,
-            CriteriaOperator::Equal | CriteriaOperator::NotEqual
-        )
-    {
-        let matched = if let Some(pattern) = &criteria.wildcard_pattern {
-            wildcard_match(pattern, candidate_text, wildcard_work_remaining)?
-        } else {
-            candidate_text.to_lowercase() == expected.to_lowercase()
+    if matches!(criteria.operand, Value::Error(_)) {
+        return Ok(negated);
+    }
+    if let Some(pattern) = &criteria.wildcard_pattern {
+        let matched = match candidate {
+            Value::Text(text) => wildcard_match(pattern, text, wildcard_work_remaining)?,
+            _ => false,
         };
-        return Ok(if criteria.operator == CriteriaOperator::NotEqual {
-            !matched
-        } else {
-            matched
-        });
+        return Ok(matched != negated);
     }
-    if criteria.wildcard && !matches!(candidate, Value::Text(_)) {
-        return Ok(criteria.operator == CriteriaOperator::NotEqual);
-    }
-    let ordering = match compare_criteria_values(candidate, &criteria.operand) {
-        Ok(ordering) => ordering,
-        Err(FormulaError::Value) => return Ok(false),
-        Err(error) => return Err(error),
+    // A cell compares only against an operand of its own type; any other
+    // cell is unequal, so <> selects it and every other operator skips it.
+    let ordering = match (candidate, &criteria.operand) {
+        (Value::Text(text), Value::Text(expected)) => {
+            text.to_lowercase().cmp(&expected.to_lowercase())
+        }
+        (Value::Bool(value), Value::Bool(expected)) => value.cmp(expected),
+        (Value::Number(number), Value::Number(expected)) => match number.partial_cmp(expected) {
+            Some(ordering) => ordering,
+            None => return Ok(negated),
+        },
+        _ => return Ok(negated),
     };
     Ok(match criteria.operator {
-        CriteriaOperator::Equal => ordering == 0,
-        CriteriaOperator::NotEqual => ordering != 0,
-        CriteriaOperator::Less => ordering < 0,
-        CriteriaOperator::LessEqual => ordering <= 0,
-        CriteriaOperator::Greater => ordering > 0,
-        CriteriaOperator::GreaterEqual => ordering >= 0,
+        CriteriaOperator::Equal => ordering == Ordering::Equal,
+        CriteriaOperator::NotEqual => ordering != Ordering::Equal,
+        CriteriaOperator::Less => ordering == Ordering::Less,
+        CriteriaOperator::LessEqual => ordering != Ordering::Greater,
+        CriteriaOperator::Greater => ordering == Ordering::Greater,
+        CriteriaOperator::GreaterEqual => ordering != Ordering::Less,
     })
-}
-
-fn compare_criteria_values(a: &Value, b: &Value) -> Result<i8, FormulaError> {
-    match (a, b) {
-        (Value::Number(_), Value::Text(text)) => {
-            let number = text.parse::<f64>().map_err(|_| FormulaError::Value)?;
-            compare(a, &Value::Number(number))
-        }
-        (Value::Text(text), Value::Number(_)) => {
-            let number = text.parse::<f64>().map_err(|_| FormulaError::Value)?;
-            compare(&Value::Number(number), b).map(|ordering| -ordering)
-        }
-        _ => compare(a, b),
-    }
 }
 
 #[derive(Clone)]
@@ -7313,6 +7383,110 @@ mod tests {
             evaluate("=MINIFS(B1:B2,A1:A2,\"skip\")", &c, "S"),
             Err(FormulaError::NA)
         );
+    }
+
+    #[test]
+    fn count_and_counta_ignore_error_cells_but_other_aggregates_propagate() {
+        // Values from Microsoft's COUNT and COUNTA examples: a date serial,
+        // 19, 22.24, TRUE, #DIV/0! and a blank in A2:A7.
+        let c = cells(&[
+            ("A2", Value::Number(39790.0)),
+            ("A3", Value::Number(19.0)),
+            ("A4", Value::Number(22.24)),
+            ("A5", Value::Bool(true)),
+            ("A6", Value::Error(FormulaError::Div0)),
+        ]);
+        for (formula, expected) in [
+            ("=COUNT(A2:A7)", 3.0),
+            ("=COUNT(A5:A7)", 0.0),
+            ("=COUNT(A2:A7,2)", 4.0),
+            ("=COUNTA(A2:A7)", 5.0),
+            ("=COUNT(1,NA(),2)", 2.0),
+            ("=COUNTA(1,NA())", 2.0),
+        ] {
+            assert_eq!(number_in(formula, &c), expected, "{formula}");
+        }
+        for formula in [
+            "=SUM(A2:A7)",
+            "=AVERAGE(A2:A7)",
+            "=MIN(A2:A7)",
+            "=MAX(A2:A7)",
+        ] {
+            assert_eq!(
+                evaluate(formula, &c, "S"),
+                Err(FormulaError::Div0),
+                "{formula}"
+            );
+        }
+    }
+
+    #[test]
+    fn criteria_functions_skip_error_cells_unless_the_criterion_is_that_error() {
+        let c = cells(&[
+            ("A1", Value::Text("x".into())),
+            ("A2", Value::Error(FormulaError::NA)),
+            ("A3", Value::Text("x".into())),
+            ("A4", Value::Number(1.0)),
+            ("B1", Value::Number(1.0)),
+            ("B2", Value::Number(2.0)),
+            ("B3", Value::Number(3.0)),
+            ("B4", Value::Number(4.0)),
+        ]);
+        for (formula, expected) in [
+            ("=COUNTIF(A1:A4,\"x\")", 2.0),
+            ("=COUNTIF(A1:A4,\">0\")", 1.0),
+            ("=COUNTIF(A1:A4,\"<>x\")", 2.0),
+            ("=COUNTIF(A1:A4,\"#N/A\")", 1.0),
+            ("=COUNTIF(A1:A4,\"#n/a\")", 1.0),
+            ("=COUNTIF(A1:A4,NA())", 1.0),
+            ("=COUNTIF(A1:A4,\"<>#N/A\")", 3.0),
+            ("=COUNTIF(A1:A4,\"#DIV/0!\")", 0.0),
+            ("=COUNTIF(A1:A4,\">#N/A\")", 0.0),
+            ("=SUMIF(A1:A4,\"x\",B1:B4)", 4.0),
+            ("=SUMIF(A1:A4,\"#N/A\",B1:B4)", 2.0),
+            ("=SUMIFS(B1:B4,A1:A4,\"x\")", 4.0),
+            ("=COUNTIFS(A1:A4,\"x\",B1:B4,\">1\")", 1.0),
+            ("=AVERAGEIF(A1:A4,\"x\",B1:B4)", 2.0),
+            ("=AVERAGEIFS(B1:B4,A1:A4,\"x\")", 2.0),
+            ("=MAXIFS(B1:B4,A1:A4,\"x\")", 3.0),
+            ("=MINIFS(B1:B4,A1:A4,\"x\")", 1.0),
+        ] {
+            assert_eq!(number_in(formula, &c), expected, "{formula}");
+        }
+        // A matched error in the summed range is still part of the result.
+        let mut summed = c.clone();
+        summed.insert("B2".into(), Value::Error(FormulaError::Div0));
+        assert_eq!(
+            evaluate("=SUMIF(A1:A4,\"<>x\",B1:B4)", &summed, "S"),
+            Err(FormulaError::Div0)
+        );
+    }
+
+    #[test]
+    fn criteria_operands_compare_within_one_type_only() {
+        let c = cells(&[
+            ("A1", Value::Number(5.0)),
+            ("A2", Value::Number(7.0)),
+            ("A3", Value::Text("fig".into())),
+            ("A4", Value::Text("kiwi".into())),
+            ("A5", Value::Bool(true)),
+            ("A6", Value::Text("TRUE".into())),
+            ("A7", Value::Text("2".into())),
+        ]);
+        for (formula, expected) in [
+            ("=COUNTIF(A1:A7,\"<>fig\")", 6.0),
+            ("=COUNTIF(A1:A7,\">1\")", 2.0),
+            ("=COUNTIF(A1:A7,\"<>5\")", 6.0),
+            ("=COUNTIF(A7,2)", 0.0),
+            ("=COUNTIF(A1:A7,\"TRUE\")", 1.0),
+            ("=COUNTIF(A1:A7,TRUE)", 1.0),
+            ("=COUNTIF(A1:A7,\">g\")", 2.0),
+            ("=COUNTIF(A1:A7,\"<>~x\")", 7.0),
+            ("=SUMIF(A3:A4,\">0\",A1:A2)", 0.0),
+            ("=MAXIFS(A1:A2,A1:A2,\"<>fig\")", 7.0),
+        ] {
+            assert_eq!(number_in(formula, &c), expected, "{formula}");
+        }
     }
 
     #[test]

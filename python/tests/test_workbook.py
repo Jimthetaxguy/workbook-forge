@@ -58,6 +58,92 @@ def make_table_xlsx(path, worksheet_xml, table_attributes, table_column_xml):
     return parts
 
 
+SHARED_STRINGS_PART = (
+    b'<?xml version="1.0"?><sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="2" uniqueCount="2">'
+    b"<si><t>tab_x0009_sep</t></si>"
+    b"<si><r><t>line one_x000D_</t></r><r><t>line two</t></r></si>"
+    b"</sst>"
+)
+
+
+def make_escaped_xlsx(path):
+    """A workbook whose string parts use every spelling of an `_xHHHH_` escape."""
+    parts = make_xlsx(path, {
+        "xl/worksheets/sheet1.xml": (
+            b'<?xml version="1.0"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>'
+            b'<row r="1">'
+            b'<c r="A1" t="inlineStr"><is><t>_x0041_B</t></is></c>'
+            b'<c r="B1" t="inlineStr"><is><t>literal _x005F_x0041_ kept</t></is></c>'
+            b'<c r="C1" t="s"><v>0</v></c>'
+            b'<c r="D1" t="s"><v>1</v></c>'
+            b'<c r="E1" t="str"><f>"a"&amp;CHAR(13)</f><v>a_x000D_</v></c>'
+            b'<c r="F1" t="inlineStr"><is><t>not an escape _x00G1_ or _x41_ or _X0041_</t></is></c>'
+            b"</row></sheetData></worksheet>"
+        ),
+    })
+    parts["[Content_Types].xml"] = parts["[Content_Types].xml"].replace(
+        b"</Types>",
+        b'<Override PartName="/xl/sharedStrings.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml"/></Types>',
+    )
+    parts["xl/sharedStrings.xml"] = SHARED_STRINGS_PART
+    write_parts(path, parts)
+    return parts
+
+
+ESCAPED_EXPECTED = {
+    "A1": "AB",
+    "B1": "literal _x0041_ kept",
+    "C1": "tab\tsep",
+    "D1": "line one\rline two",
+    "E1": "a\r",
+    "F1": "not an escape _x00G1_ or _x41_ or _X0041_",
+}
+
+
+def test_ooxml_escape_codec_matches_the_reader():
+    from workbook_forge.xml_patterns import decode_ooxml_escapes, encode_ooxml_escapes
+
+    assert decode_ooxml_escapes("_x005F_x0041_") == "_x0041_"
+    assert decode_ooxml_escapes("_x005F__x0041_") == "_A"
+    assert decode_ooxml_escapes("_xD800_ stays") == "_xD800_ stays"
+    assert encode_ooxml_escapes("_x0041_") == "_x005F_x0041_"
+    assert encode_ooxml_escapes("_x005F_x0041_") == "_x005F_x005F_x005F_x0041_"
+    for text in ["a\rb", "_x0041_", "_x005F_x0041_", "\x01\x1f\ufffe", "plain", "_x0041_x0042_"]:
+        assert decode_ooxml_escapes(encode_ooxml_escapes(text)) == text
+
+
+def test_string_parts_decode_ooxml_escapes(tmp_path):
+    source = tmp_path / "escaped.xlsx"
+    make_escaped_xlsx(source)
+    with Workbook.open(source) as workbook:
+        assert {address: workbook.get("Sheet1", address).value for address in ESCAPED_EXPECTED} == ESCAPED_EXPECTED
+
+
+def test_written_text_survives_a_round_trip_through_the_escapes(tmp_path):
+    source = tmp_path / "source.xlsx"
+    make_xlsx(source)
+    written = {
+        "A1": "line one\r\nline two",
+        "A2": "bell\x07 and tab\t",
+        "A3": "literal _x0041_ stays literal",
+        "A4": "\ufffe is escaped, \U0001f600 is not",
+    }
+    target = tmp_path / "written.xlsx"
+    with Workbook.open(source) as workbook:
+        for address, text in written.items():
+            workbook.set_value("Sheet1", address, text)
+        workbook.save_as(target)
+    sheet = ET.fromstring(zipfile.ZipFile(target).read("xl/worksheets/sheet1.xml"))
+    ns = {"m": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
+    stored = {c.attrib["r"]: c.find("m:is/m:t", ns).text for c in sheet.iterfind(".//m:c", ns) if c.attrib["r"] in written}
+    assert stored["A1"] == "line one_x000D_\nline two"
+    assert stored["A2"] == "bell_x0007_ and tab\t"
+    assert stored["A3"] == "literal _x005F_x0041_ stays literal"
+    assert stored["A4"] == "_xFFFE_ is escaped, \U0001f600 is not"
+    with Workbook.open(target) as reopened:
+        assert {address: reopened.get("Sheet1", address).value for address in written} == written
+
+
 def test_reads_inline_strings_and_formulas(tmp_path):
     source = tmp_path / "source.xlsx"
     make_xlsx(source)
@@ -243,10 +329,16 @@ def test_edit_inputs_reject_invalid_xml_and_excel_lengths(tmp_path):
     source = tmp_path / "source.xlsx"
     make_xlsx(source)
     with Workbook.open(source) as workbook:
+        # A control character is written as an `_xHHHH_` escape, so only a
+        # character that has no XML spelling at all is refused.
         with pytest.raises(ValueError, match="XML 1.0"):
-            workbook.set_value("Sheet1", "C1", "invalid\x01text")
+            workbook.set_value("Sheet1", "C1", "lone surrogate \ud800")
         with pytest.raises(ValueError, match="32767-character"):
             workbook.set_value("Sheet1", "C1", "🙂" * 16_384)
+        with pytest.raises(ValueError, match="32767-character"):
+            # The limit counts the text, not its seven-character escapes.
+            workbook.set_value("Sheet1", "C1", "\x01" * 32_768)
+        workbook.set_value("Sheet1", "C1", "\x01" * 32_767)
         with pytest.raises(ValueError, match="XML 1.0"):
             workbook.set_formula("Sheet1", "C1", "=\x01")
         with pytest.raises(ValueError, match="8192-character"):

@@ -12,6 +12,14 @@ build/
 *.dylib
 .verification/
 
+# Scratch output of the README examples and of the canonical-model tests.
+fixtures/.tmp-*
+exports/
+exports-python/
+exports-rust/
+/scenario.xlsx
+/rust-scenario.xlsx
+
 # Local keys. The Jev critic reads .env; it must never be committed.
 .env
 .env.*

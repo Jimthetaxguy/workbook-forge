@@ -69,7 +69,8 @@ def extractor(request):
                     arguments.extend(["--" + key, str(value)])
             return run(arguments)
 
-        catalog = lambda: run(["--catalog"])
+        def catalog():
+            return run(["--catalog"])
 
     def checked(path, **options):
         before = path.read_bytes()

@@ -29,7 +29,18 @@ at 64 levels. Parenthesis nesting is limited to 96 levels, and wildcard matching
 to 5,000,000 matching-state steps per evaluation. The latter two limits are
 Workbook Forge safety profiles. Resource limits also apply at the workbook,
 agent transport and native composition boundaries; one interface's larger input
-budget does not raise the evaluator limit.
+budget does not raise the evaluator limit. The toolkit expression tree is capped
+at 96 levels counted from the root as level 1 in both engines, so a flat
+`1+1+...` chain of 96 terms is accepted and one of 97 terms is refused with
+`resource_limit`; the evaluator itself limits parenthesis nesting, not chain length.
+
+Arithmetic (`+`, `-`, `*`, `/`, `^`) returns `#NUM!` whenever its binary64 result
+is not finite, so an overflow such as `1E308*10` is an error rather than an
+infinite number; no formula value is ever non-finite. Text that a language float
+parser would read as infinity or NaN (`"inf"`, `"Infinity"`, `"nan"`) is not
+numeric text and coerces to `#VALUE!` like any other non-numeric text. Microsoft
+documents 9.99999999999999E+307 as the largest allowed number but not the exact
+error for an overflowing operator; the `#NUM!` choice is a Workbook Forge profile.
 
 Known OOXML compatibility prefixes are normalized for function dispatch and
 support lookup while imported formula text remains intact. A catalog entry or
@@ -39,6 +50,8 @@ recognized prefix does not imply that an unsupported function can calculate.
 
 Python and Rust cap formula-produced text at 32,767 UTF-16 code units. `&`, `CONCAT`, `TEXTJOIN`, and `SUBSTITUTE` preflight result size before building joined or replaced strings; the evaluator boundary also checks literal, case-converted, and array text results. This follows [Excel's documented 32,767-character cell limit](https://support.microsoft.com/en-us/excel/excel-specifications-and-limits) while counting supplementary Unicode characters as two UTF-16 units.
 
+An error value passed to a text function or to `&` propagates unchanged: `LEN(NA())` is `#N/A`, and `MID(A1,1,2)` on an error cell returns that error, never the first characters of the error's name. This matches Microsoft's general rule that an error in an argument is the result.
+
 Numeric-to-text conversion is shared across Python and Rust for `CONCAT`, `TEXTJOIN`, `&`, and text functions: it uses shortest round-tripping decimal text, omits `.0` for integer-valued numbers, renders negative zero as `0`, and uses lowercase scientific notation with at least two exponent digits. Finite numeric values use binary64; integer literals outside its finite range return `#NUM!`. Microsoft says concatenation uses the underlying number value and recommends `TEXT` when explicit display formatting is needed ([combine text and numbers](https://support.microsoft.com/en-us/excel/combine-text-and-numbers)); the exact default spelling is a Workbook Forge profile and has not been checked directly in Excel.
 
 ## Functions by family
@@ -47,9 +60,17 @@ Numeric-to-text conversion is shared across Python and Rust for `CONCAT`, `TEXTJ
 
 `IFS` returns the first true condition's value; `SWITCH` returns the result for the first matching value, with optional defaults. Both use a documented short-circuiting profile that still needs an Excel spot-check; their selected branches may return shaped arrays through `evaluate_result`. The SWITCH comparison profile treats ASCII text without case and non-ASCII text exactly; it does not coerce across types or apply locale collation, and it still needs an Excel spot-check.
 
+### Counting (COUNT, COUNTA)
+
+`COUNT` counts numbers and does not count error values or logical values found in a range; `COUNTA` counts every non-empty cell, including error values. Neither returns an error found in its arguments. This follows Microsoft's COUNT and COUNTA examples, in which a range holding a date, two numbers, TRUE and `#DIV/0!` counts as 3 and 5. `SUM`, `AVERAGE`, `MIN` and `MAX` still return the first error in their range.
+
 ### Criteria and conditional aggregation
 
 Criteria support comparison operators, case-insensitive text, `*` and `?` wildcards, and `~` escapes. `COUNTBLANK` counts empty cells and empty text but excludes zero. `MINIFS` and `MAXIFS` require equal-shaped ranges and return zero when no numeric result matches.
+
+A criterion operand takes the type its text spells: `TRUE` and `FALSE` are logical, numeric text such as `">1"` is a number, and anything else is text. A cell is compared only against an operand of its own type; a cell of another type is unequal, so `<>` selects it and every other operator skips it. `COUNTIF(A1:A7,">1")` over 5, 7, `fig`, `kiwi`, TRUE, the text `TRUE` and the text `2` is therefore 2, and `COUNTIF(A7,2)` over the text `2` is 0. This is a Workbook Forge profile shared by both engines; it has not been checked in Excel, which is reported to count numbers stored as text against a numeric criterion.
+
+An error cell in a criteria range never propagates: it is skipped by every criterion except `<>`, which counts it as unequal, and an error criterion. Criterion text spelling an Excel error code (`"#N/A"`, `"<>#N/A"`) or an error value (`NA()`) selects cells holding that error; errors have no order, so a relational operator with an error operand selects nothing. An error in the summed, averaged, or min/max range is read only for matched cells, and then propagates. The error rules are a Workbook Forge profile that has not been checked in Excel.
 
 `SUMIF` and `AVERAGEIF` currently require matching criteria and value-range shapes even though Excel aligns differently sized value ranges from their top-left cell; that gap is explicit in the semantic catalog.
 
@@ -80,7 +101,7 @@ Python and Rust implement the rule separately, Python with decimal arithmetic an
 
 ### Dates and times
 
-`MONTH`, `DAY`, and `YEAR` read the integer date portion of numeric serials; `DAYS` subtracts numeric serials, preserving time fractions; `EDATE` clamps to the target month; and `EOMONTH` returns the target month's last day. `HOUR`, `MINUTE`, and `SECOND` extract whole-second components from date/time serials; the 1900 serial ceiling and negative/non-finite error behavior are unverified evaluator boundaries. `TIME` normalizes components and returns a fraction of a day. The extractor's half-ULP precision correction and `TIME` fractional-component truncation are evaluator profile rules that need Excel spot-checks. `WEEKDAY` supports return types 1, 2, 3, and 11–17; `WEEKNUM` supports System 1 selectors 1, 2, and 11–17 plus ISO selector 21; and `ISOWEEKNUM` uses ISO week-year rules. These functions floor time fractions. Fractional selector truncation and exact results around the fictional serial 60 remain unverified evaluator-profile choices. Human-readable time strings such as `6:45 PM` are documented by Microsoft for the extractors but are not parsed here; numeric text follows the shared number coercion. `EDATE` and `EOMONTH` truncate fractional month offsets toward zero. Their date semantics use the 1900 system, preserve serial 60, and do not model workbook-specific 1904 settings or locale-sensitive text dates. `EDATE` and `EOMONTH` return whole-day serials and discard start-date time fractions as profile behavior that still needs an Excel spot-check.
+`MONTH`, `DAY`, and `YEAR` read the integer date portion of numeric serials; `DAYS` subtracts numeric serials, preserving time fractions; `EDATE` clamps to the target month; and `EOMONTH` returns the target month's last day. `HOUR`, `MINUTE`, and `SECOND` extract whole-second components from date/time serials; the 1900 serial ceiling and negative/non-finite error behavior are unverified evaluator boundaries. `TIME` normalizes components and returns a fraction of a day. The extractor's half-ULP precision correction and `TIME` fractional-component truncation are evaluator profile rules that need Excel spot-checks. `WEEKDAY` supports return types 1, 2, 3, and 11–17; `WEEKNUM` supports System 1 selectors 1, 2, and 11–17 plus ISO selector 21; and `ISOWEEKNUM` uses ISO week-year rules. These functions floor time fractions. Fractional selector truncation and exact results around the fictional serial 60 remain unverified evaluator-profile choices. Human-readable time strings such as `6:45 PM` are documented by Microsoft for the extractors but are not parsed here; numeric text follows the shared number coercion. `EDATE` and `EOMONTH` truncate fractional month offsets toward zero. Their date semantics use the 1900 system, preserve serial 60, and do not model workbook-specific 1904 settings or locale-sensitive text dates. `EDATE` and `EOMONTH` return whole-day serials and discard start-date time fractions as profile behavior that still needs an Excel spot-check. Both refuse a result before 1899-12-31 (serial 0) with `#NUM!`, which Microsoft documents for a result outside the supported range; `EOMONTH(1,-1)` is the lowest result, 0, and `EDATE(1,-1)` is `#NUM!` in both engines.
 
 ### Error predicates
 
@@ -132,6 +153,16 @@ Imported models retain an immutable source baseline. Directly changing the origi
 Python `Workbook` object does not update an already imported model; reimport after
 such changes to establish a new baseline.
 
+Cell text in shared strings, inline strings and string formula caches is read
+with the OOXML `_xHHHH_` escapes decoded (ECMA-376 part 1, ST_Xstring): `_x0009_`
+is a tab, `_x000D_` a carriage return, and `_x005F_x0041_` the literal text
+`_x0041_`. Decoding is one pass from the left, so the six characters after a
+decoded `_x005F_` are never rescanned. An escape that names a lone surrogate is
+left as written. Both writers use the same escapes for the characters XML 1.0
+cannot hold, for the carriage return, and for any literal `_xHHHH_`, so text
+survives a round trip. Excel's 32,767-character limit is measured on the text,
+not on its escaped spelling.
+
 Package limits include 130 MiB compressed input, 128 MiB expanded contents,
 32 MiB XML parts and central directory, and 10,000 entries. XML parsing is bounded
 to 1,000,000 elements and depth 128 per part. The Python reader scans directory
@@ -150,6 +181,11 @@ edits invalidate stale calculation-chain metadata and request Excel recalculatio
 on next open. A scalar formula reference to a blank cell is cached as numeric zero;
 an explicit empty string remains a string cache, matching
 [Microsoft's documented reference behavior](https://support.microsoft.com/en-us/excel/clear-cells-of-contents-or-formats).
+The canonical model follows the same rule: a scalar formula whose value is a
+blank reference (`=B1`, `=IF(TRUE,B1)` with B1 empty) has `Formula.result` 0 in
+both engines, never `null`, so a null result always means "not calculated".
+Text context is the evaluator's own coercion: `=B1&"x"` is `"x"`. The referenced
+cell itself stays an authored blank.
 
 Python `calculate_cells_to` accepts only functions marked `conformance-tested`
 for Python and evaluates the requested scalar formula cells and their transitive

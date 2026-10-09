@@ -25,7 +25,7 @@ from .workbook import (
     MAX_CALCULATION_REFERENCE_CELLS, MAX_PACKAGE_BYTES, MAX_PACKAGE_ENTRIES,
     MAX_XML_PART_BYTES, RANGE_RE, UnsupportedWorkbook, Workbook, WorkbookError,
     XML_NS, _XML_SERIALIZE_LOCK, _cell_address, _cell_position, _in_range, _normal_address, _q, _safe_xml,
-    _validate_xml_text,
+    _string_part_text, _validate_xml_text,
 )
 
 STYLES_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"
@@ -368,11 +368,10 @@ def _write_cell_content(element: ET.Element, cell: dict[str, Any]) -> None:
             raise ValueError("non-finite cell value")
         ET.SubElement(element, _q("v")).text = str(value)
     elif isinstance(value, str):
-        _validate_xml_text(value, "cell value", 32767)
         element.set("t", "inlineStr")
         text = ET.SubElement(ET.SubElement(element, _q("is")), _q("t"))
         text.set(f"{{{XML_NS}}}space", "preserve")
-        text.text = value
+        text.text = _string_part_text(value, "cell value", 32767)
     else:
         raise UnsupportedWorkbook("unsupported stored cell value")
 

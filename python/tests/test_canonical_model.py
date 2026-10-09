@@ -126,6 +126,44 @@ def test_hydrate_round_trip_rejects_unknown_versions_and_fields():
     assert caught.value.message == "sheets[0].cells.A1.value"
 
 
+def test_a_blank_reference_calculates_to_zero_not_null():
+    def formula(address, expression):
+        return {"address": address, "value": None, "data_type": "blank",
+                "formula": {"expression": expression, "dependencies": [], "result": None}}
+
+    document = {
+        "schema_version": 1, "model_version": 1, "metadata": {},
+        "sheets": [{"name": "S", "cells": {
+            "A1": formula("A1", "=B1"),
+            "A2": formula("A2", "=B1+0"),
+            "A3": formula("A3", '=B1&"x"'),
+            "A4": formula("A4", "=IF(TRUE,B1)"),
+        }}],
+    }
+    calculated = calculate(hydrate(json.dumps(document).encode()))
+    assert calculated.diagnostics == ()
+    cells = calculated.sheet("S").cells
+    assert {a: cells[a].formula.result for a in ("A1", "A2", "A3", "A4")} == {"A1": 0, "A2": 0, "A3": "x", "A4": 0}
+    assert type(cells["A1"].formula.result) is int
+    assert "B1" not in cells
+
+
+def test_writing_an_unsupported_version_is_refused():
+    import dataclasses
+
+    workbook = hydrate(FIXTURE.read_bytes())
+    with pytest.raises(ModelError) as caught:
+        dataclasses.replace(workbook, schema_version=7).to_json()
+    assert (caught.value.code, caught.value.message) == ("unsupported_schema_version", "7")
+    with pytest.raises(ModelError) as caught:
+        dataclasses.replace(workbook, model_version=9).to_dict()
+    assert (caught.value.code, caught.value.message) == ("unsupported_model_version", "9")
+    with pytest.raises(ModelError) as caught:
+        dataclasses.replace(workbook, model_version=None).to_json()
+    assert caught.value.code == "invalid_model"
+    assert json.loads(workbook.to_json())["model_version"] == 1
+
+
 def test_operating_scenario_calculation_keeps_versions_and_classifications():
     calculated = calculate(hydrate(FIXTURE.read_bytes()))
     assert calculated.schema_version == 1
@@ -249,7 +287,7 @@ def _close(actual, expected, tolerance: float) -> bool:
     return actual == expected
 
 
-def test_shared_golden_input_cases_match_python_and_rust():
+def test_shared_golden_input_cases_match_python_and_rust(tmp_path):
     """Mac-lineage multi-case coverage on the Grok schema/bindings path."""
     cases = json.loads(CASES.read_text(encoding="utf-8"))
     fixture = json.loads(FIXTURE.read_text(encoding="utf-8"))
@@ -268,16 +306,12 @@ def test_shared_golden_input_cases_match_python_and_rust():
             assert _close(actual, expected, tolerance), (case["name"], name, actual, expected)
 
         # Rust must agree on the same rewritten bytes (values, errors, deps).
-        # Write a temp sibling so the rust example can read a path.
-        temp = ROOT / "fixtures" / f".tmp-{case['name']}.workbook.json"
-        try:
-            temp.write_bytes(raw)
-            rust_calculated = _rust_path(temp, "calculate")["workbook"]
-            py_dict = calculated.to_dict()
-            assert _canonical(py_dict) == _canonical(rust_calculated), case["name"]
-        finally:
-            if temp.exists():
-                temp.unlink()
+        # Write a temp file so the rust example can read a path.
+        temp = tmp_path / f"{case['name']}.workbook.json"
+        temp.write_bytes(raw)
+        rust_calculated = _rust_path(temp, "calculate")["workbook"]
+        py_dict = calculated.to_dict()
+        assert _canonical(py_dict) == _canonical(rust_calculated), case["name"]
 
 
 def _rust_path(path: Path, mode: str) -> dict:

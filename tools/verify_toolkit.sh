@@ -6,7 +6,10 @@ WORKBOOK_PYTHON="${WORKBOOK_PYTHON:-python3.13}"
 "$WORKBOOK_PYTHON" -c 'from workbook_forge import _native; assert _native.Session'
 "$WORKBOOK_PYTHON" -c 'from workbook_forge.python_engine import Session; assert Session'
 "$WORKBOOK_PYTHON" tools/sync_primitive_catalog.py
-"$WORKBOOK_PYTHON" -m pytest -q
+if [ -z "${WORKBOOK_PYTEST_DONE:-}" ]; then
+  "$WORKBOOK_PYTHON" -m pytest -q
+fi
+"$WORKBOOK_PYTHON" -m ruff check python tools examples setup.py
 "$WORKBOOK_PYTHON" -m compileall -q python tools examples setup.py
 cargo fmt --manifest-path rust/Cargo.toml --check
 CARGO_TARGET_DIR="$PWD/rust/target" cargo check --manifest-path rust/Cargo.toml --locked

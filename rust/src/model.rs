@@ -157,8 +157,25 @@ impl Workbook {
         self.sheets.iter().find(|sheet| sheet.name == name)
     }
 
-    pub fn to_json(&self) -> String {
-        write_canonical(&workbook_json(self))
+    /// Refuse to write a workbook whose versions this tree does not read.
+    /// The same rule as hydration: version 1 only.
+    pub fn require_supported_versions(&self) -> Result<(), ModelError> {
+        version(
+            &JsonValue::from(self.schema_version),
+            "schema_version",
+            "unsupported_schema_version",
+        )?;
+        version(
+            &JsonValue::from(self.model_version),
+            "model_version",
+            "unsupported_model_version",
+        )?;
+        Ok(())
+    }
+
+    pub fn to_json(&self) -> Result<String, ModelError> {
+        self.require_supported_versions()?;
+        Ok(write_canonical(&workbook_json(self)))
     }
 }
 
@@ -395,6 +412,19 @@ fn analyze(
 ) -> (Vec<String>, Option<Diagnostic>) {
     let expression_parsed = match Expression::parse(expression) {
         Ok(expression) => expression,
+        Err(e) if e.code == "unsupported_formula" => {
+            return (
+                Vec::new(),
+                Some(Diagnostic::cell(
+                    "unsupported_formula",
+                    "unsupported",
+                    &e.message,
+                    sheet_name,
+                    address,
+                    None,
+                )),
+            );
+        }
         Err(_) => {
             return (
                 Vec::new(),
@@ -528,7 +558,10 @@ fn evaluate(
             Value::Number(number) => scalar_from_f64(number),
             Value::Text(text) => Outcome::Value(Scalar::Text(text)),
             Value::Bool(value) => Outcome::Value(Scalar::Boolean(value)),
-            Value::Blank => Outcome::Value(Scalar::Blank),
+            // A scalar formula whose value is a blank reference is 0 in Excel,
+            // and that is what the workbook adapter caches. A null result
+            // would be indistinguishable from "not calculated".
+            Value::Blank => Outcome::Value(Scalar::Number(Number::from(0))),
             Value::Error(error) => from_formula_error(error, sheet_name, address),
         },
         Ok(FormulaResult::Array(_)) => Outcome::Diagnostic(Diagnostic::cell(
@@ -553,6 +586,16 @@ fn from_formula_error(error: FormulaError, sheet: &str, address: &str) -> Outcom
             sheet,
             address,
             Some(function.to_string()),
+        ));
+    }
+    if let FormulaError::Unsupported(ref reason) = error {
+        return Outcome::Diagnostic(Diagnostic::cell(
+            "unsupported_formula",
+            "unsupported",
+            reason,
+            sheet,
+            address,
+            None,
         ));
     }
     if let Some(code) = error.excel_code() {
@@ -1424,8 +1467,51 @@ mod tests {
             revenue.formula.as_ref().unwrap().result,
             Scalar::Blank
         ));
-        let again = hydrate(workbook.to_json().as_bytes()).unwrap();
-        assert_eq!(again.to_json(), workbook.to_json());
+        let again = hydrate(workbook.to_json().unwrap().as_bytes()).unwrap();
+        assert_eq!(again.to_json().unwrap(), workbook.to_json().unwrap());
+    }
+
+    #[test]
+    fn a_blank_reference_calculates_to_zero_not_null() {
+        let document = br#"{"schema_version":1,"model_version":1,"metadata":{},"sheets":[{"name":"S","cells":{
+            "A1":{"address":"A1","value":null,"data_type":"blank","formula":{"expression":"=B1","dependencies":[],"result":null}},
+            "A2":{"address":"A2","value":null,"data_type":"blank","formula":{"expression":"=B1+0","dependencies":[],"result":null}},
+            "A3":{"address":"A3","value":null,"data_type":"blank","formula":{"expression":"=B1&\"x\"","dependencies":[],"result":null}},
+            "A4":{"address":"A4","value":null,"data_type":"blank","formula":{"expression":"=IF(TRUE,B1)","dependencies":[],"result":null}}
+        }}]}"#;
+        let calculated = calculate(&hydrate(document).unwrap()).unwrap();
+        assert!(
+            calculated.diagnostics.is_empty(),
+            "{:?}",
+            calculated.diagnostics
+        );
+        assert_eq!(result_number(&calculated, "S", "A1"), 0.0);
+        assert_eq!(result_number(&calculated, "S", "A2"), 0.0);
+        assert_eq!(result_number(&calculated, "S", "A4"), 0.0);
+        let text = &calculated.sheet("S").unwrap().cells["A3"]
+            .formula
+            .as_ref()
+            .unwrap()
+            .result;
+        assert_eq!(*text, Scalar::Text("x".into()));
+        // The referenced cell stays an authored blank; only the formula result is 0.
+        assert_eq!(calculated.sheet("S").unwrap().cells.get("B1"), None);
+    }
+
+    #[test]
+    fn writing_an_unsupported_version_is_refused_before_any_bytes() {
+        let mut workbook = hydrate(&fixture()).unwrap();
+        workbook.schema_version = 7;
+        let error = workbook.to_json().unwrap_err();
+        assert_eq!(error.code, "unsupported_schema_version");
+        assert_eq!(error.message, "7");
+        workbook.schema_version = 1;
+        workbook.model_version = 9;
+        let error = workbook.to_json().unwrap_err();
+        assert_eq!(error.code, "unsupported_model_version");
+        assert_eq!(error.message, "9");
+        workbook.model_version = 1;
+        assert!(workbook.to_json().is_ok());
     }
 
     fn hydrate_edited(edit: impl FnOnce(&mut Map<String, JsonValue>)) -> ModelError {
@@ -1531,6 +1617,6 @@ mod tests {
         );
         assert_eq!(calculated.diagnostics[0].function.as_deref(), Some("NOW"));
         let again = calculate(&calculated).unwrap();
-        assert_eq!(again.to_json(), calculated.to_json());
+        assert_eq!(again.to_json().unwrap(), calculated.to_json().unwrap());
     }
 }
