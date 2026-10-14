@@ -1539,7 +1539,7 @@ fn verify_validation(xml: &Xml, model: &WorkbookModel, sheet: &str) -> Result<()
                         .get("allowBlank")
                         .map(String::as_str)
                         .unwrap_or("0"),
-                )? == !binding.required
+                )? != binding.required
                 && xml.child(node, "formula1").is_some_and(|f| {
                     f.text.trim().trim_start_matches('=') == validation(binding).unwrap_or_default()
                 })

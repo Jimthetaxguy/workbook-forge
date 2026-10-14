@@ -2,7 +2,7 @@
 author: unknown
 created: null
 agent: codex/Codex
-date: '2026-10-01T20:10:08-04:00'
+date: '2026-10-14'
 type: project-history
 task: Preserve historical Workbook Forge checkpoints
 status: active
@@ -21,6 +21,12 @@ The 2026-09-28 documentation review removed personal conversation references and
 Earlier notes counted "evaluator slices". Slices 2–10 predate the autoresearch loop (the 65-function baseline). Slice *N* for *N* from 11 to 23 is Run *N*−10. From Run 14 onward the notes use run numbers only.
 
 ## Project activity
+
+### 2026-10-14 — cursor — calculation report, path redaction, and intake views
+- Changed: both engines emit `schemas/calculation-report.v1.schema.json` for a calculated canonical workbook. Python intake prints a summary, Markdown scan, cell map, or the pair. Canonical JSON, those views, and the report omit filesystem paths and identify input bytes with a sha256 fingerprint. Intake provenance uses OOXML part names. Duplicate JSON keys and documents nested past 128 containers are refused. `workbook-forge calculate` prints the report. `ruff` is pinned to 0.16.9.
+- Why: the compiler spec already required the report and the privacy rule, and the dev lock could not be installed with hashes because `typing-extensions` was missing.
+- Evidence: local pytest, ruff, cargo test, rustfmt, and clippy, recorded in the pull request. No Excel Desktop observation was run. `model_version` stayed 1.
+- Next/remaining: the scalar Excel receipt, the rest of Spec 2, and the joined headless workflow. Rust still does not print the Markdown scan or cell map.
 
 ### 2026-10-01T19:56:55-04:00 — codex/Codex — compiler stages and privacy-safe evidence
 - Changed: specified the shared model as compiler IR for Excel intake, structured calculations, Python/Rust runtimes, agent/application operations, and OOXML output. Clarified code-to-code reuse, paired Markdown/cell-map review, feature-evidence levels, application use, formula hypotheses, research questions, and stage boundaries. Added the default rule that resolved local paths stay out of serialized models and agent-facing reports; updated the product order so the full Excel gate precedes the joined headless path.

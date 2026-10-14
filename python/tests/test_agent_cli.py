@@ -26,7 +26,13 @@ def _run(tmp_path, lines, *source_args):
     return [json.loads(line) for line in result.stdout.splitlines()]
 
 
-@pytest.mark.parametrize("bad", [b"not json\n", b'[]\n', b'{"operation":"describe","arguments":{"x":NaN}}\n', b'\xff\n'])
+@pytest.mark.parametrize("bad", [
+    b"not json\n",
+    b'[]\n',
+    b'{"operation":"describe","arguments":{"x":NaN}}\n',
+    b'\xff\n',
+    b'{"id":"a","id":"b","operation":"describe","arguments":{}}\n',
+])
 def test_invalid_line_returns_error_and_following_request_still_runs(tmp_path, bad):
     error, good = _run(tmp_path, bad + _request("describe"))
     assert error["ok"] is False

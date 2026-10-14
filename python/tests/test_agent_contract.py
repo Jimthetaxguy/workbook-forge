@@ -439,7 +439,13 @@ def test_jsonl_runners_recover_after_invalid_and_oversized_lines(runner, request
     assert process.returncode == 0, process.stderr.decode(errors="replace")
     responses = [json.loads(line) for line in process.stdout.splitlines()]
     assert len(responses) == len(lines)
-    assert [item["error"]["code"] for item in responses[:-1]] == ["invalid_request", "invalid_request", "invalid_request", "resource_limit", "invalid_request"]
+    assert [item["error"]["code"] for item in responses[:-1]] == [
+        "invalid_request",
+        "invalid_request",
+        "invalid_request",
+        "resource_limit",
+        "resource_limit",
+    ]
     assert responses[-1]["ok"] and responses[-1]["id"] == "still-usable"
     assert responses[-1]["revision"] == 0
     assert responses[-1]["result"]["outputs"]["revenue"] == 7400

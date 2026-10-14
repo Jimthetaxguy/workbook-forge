@@ -5958,7 +5958,7 @@ fn weekend_mask(value: &Value) -> Result<[bool; 7], FormulaError> {
         return Ok(mask);
     }
     let code = to_number(value)?;
-    if !code.is_finite() || code.fract() != 0.0 || code < 1.0 || code > 17.0 {
+    if !code.is_finite() || code.fract() != 0.0 || !(1.0..=17.0).contains(&code) {
         return Err(FormulaError::Num);
     }
     let code = code as i64;

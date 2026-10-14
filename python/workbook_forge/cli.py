@@ -11,8 +11,25 @@ from .catalog import workbook_capabilities
 from .workbook import WorkbookError
 
 
+def _json_object(pairs: list[tuple[object, object]]) -> dict:
+    value: dict = {}
+    for key, item in pairs:
+        if not isinstance(key, str):
+            raise ValueError("JSON object keys must be strings")
+        if key in value:
+            raise ValueError(f"duplicate JSON key: {key}")
+        value[key] = item
+    return value
+
+
 def _object(source: str) -> dict:
-    value = json.loads(source)
+    from .model import reject_json_nesting
+
+    reject_json_nesting(source)
+    try:
+        value = json.loads(source, object_pairs_hook=_json_object)
+    except RecursionError as exc:
+        raise ValueError("JSON nesting exceeds the reader limit") from exc
     if not isinstance(value, dict):
         raise ValueError("expected a JSON object")
     return value
@@ -40,6 +57,8 @@ def _model(path: Path, bindings: Path | None, backend: str):
 
 def _agent_loop(adapter, source, destination) -> int:
     """Serve bounded JSON lines; a bad request never becomes multiple requests."""
+    from .model import ModelError, reject_json_nesting
+
     maximum = 1024 * 1024
 
     def reject(code: str, message: str) -> dict:
@@ -62,7 +81,15 @@ def _agent_loop(adapter, source, destination) -> int:
             response = reject("resource_limit", "request exceeds 1 MiB UTF-8")
         else:
             try:
-                request = json.loads(payload.decode("utf-8"), parse_constant=reject_constant)
+                text = payload.decode("utf-8")
+                reject_json_nesting(text)
+                request = json.loads(
+                    text,
+                    parse_constant=reject_constant,
+                    object_pairs_hook=_json_object,
+                )
+            except ModelError as error:
+                response = reject(error.code, error.message)
             except (ValueError, UnicodeError, RecursionError):
                 response = reject("invalid_request", "request must be one valid UTF-8 JSON object")
             else:
@@ -81,7 +108,20 @@ def main(argv: list[str] | None = None) -> int:
     inspect.add_argument("--bindings", type=Path)
     intake = commands.add_parser("intake", help="read an XLSX into the canonical workbook model")
     intake.add_argument("source", type=Path)
-    intake.add_argument("--summary", action="store_true", help="print versions and counts instead of the model")
+    intake_view = intake.add_mutually_exclusive_group()
+    intake_view.add_argument("--summary", action="store_true", help="print versions and counts instead of the model")
+    intake_view.add_argument("--markdown", action="store_true", help="print a readable scan with cell coordinates")
+    intake_view.add_argument("--map", action="store_true", help="print the coordinate-preserving cell map")
+    intake_view.add_argument("--paired", action="store_true", help="print the scan, the cell map, and their cross-check")
+    calculate_command = commands.add_parser(
+        "calculate", help="calculate a canonical workbook and print the shared report"
+    )
+    calculate_command.add_argument("source", type=Path)
+    calculate_command.add_argument(
+        "--bindings", type=Path, help="canonical inputs and outputs applied before calculation"
+    )
+    calculate_command.add_argument("--model", type=Path, help="write the calculated canonical model to a new JSON file")
+    calculate_command.add_argument("--xlsx", type=Path, help="write a new xlsx workbook")
     extract = commands.add_parser("extract", help="extract namespace-aware XLSX patterns and formula mappings")
     extract.add_argument("source", type=Path)
     extract.add_argument("--pattern", dest="patterns", action="append", help="pattern ID; repeat to select multiple patterns")
@@ -105,18 +145,56 @@ def main(argv: list[str] | None = None) -> int:
         command.add_argument("--workers", type=int, default=1)
         command.add_argument("--xlsx", type=Path, help="write a new Excel workbook")
     args = parser.parse_args(argv)
+    from .canonical_xlsx import CanonicalPackageError
+
     try:
         if args.command == "intake":
-            from .canonical_xlsx import CanonicalPackageError
-            from .intake import intake_workbook, intake_workbook_model, summarize
+            from .intake import intake_workbook_model, summarize
+            from .model import content_fingerprint
+            from .views import cell_map, markdown_scan, paired_views
 
-            try:
-                if args.summary:
-                    print(json.dumps(summarize(intake_workbook_model(args.source)), ensure_ascii=False, allow_nan=False))
-                else:
-                    sys.stdout.write(intake_workbook(args.source).decode("utf-8") + "\n")
-            except CanonicalPackageError as error:
-                raise ValueError(str(error)) from error
+            raw = args.source.read_bytes()
+            fingerprint = content_fingerprint(raw)
+            model = intake_workbook_model(args.source)
+            if args.summary:
+                print(json.dumps(summarize(model, source_fingerprint=fingerprint), ensure_ascii=False, allow_nan=False))
+            elif args.markdown:
+                sys.stdout.write(markdown_scan(model, source_fingerprint=fingerprint))
+            elif args.map:
+                print(json.dumps(cell_map(model, source_fingerprint=fingerprint), ensure_ascii=False, allow_nan=False))
+            elif args.paired:
+                print(json.dumps(paired_views(model, source_fingerprint=fingerprint), ensure_ascii=False, allow_nan=False))
+            else:
+                sys.stdout.write(model.to_json() + "\n")
+            return 0
+        if args.command == "calculate":
+            from .canonical_xlsx import export_canonical
+            from .intake import intake_workbook_model
+            from .model import calculate as calculate_model
+            from .model import calculation_report, hydrate
+
+            if args.source.stat().st_size > 128 * 1024 * 1024:
+                raise ValueError("input exceeds 128 MiB")
+            raw = args.source.read_bytes()
+            if args.source.suffix.lower() == ".xlsx":
+                workbook = intake_workbook_model(args.source)
+            else:
+                workbook = hydrate(raw)
+            if args.bindings is not None:
+                selected = _object(args.bindings.read_text(encoding="utf-8"))
+                if set(selected) - {"inputs", "outputs"}:
+                    raise ValueError("bindings accept only inputs and outputs")
+                document = workbook.to_dict()
+                document["bindings"] = selected
+                workbook = hydrate(json.dumps(document))
+            workbook = calculate_model(workbook)
+            if args.model is not None:
+                with args.model.open("x", encoding="utf-8") as stream:
+                    stream.write(workbook.to_json())
+                    stream.write("\n")
+            if args.xlsx is not None:
+                export_canonical(workbook, args.xlsx)
+            print(json.dumps(calculation_report(workbook, raw), ensure_ascii=False, allow_nan=False))
             return 0
         if args.command == "extract":
             from .extraction import extract_xlsx
@@ -162,8 +240,22 @@ def main(argv: list[str] | None = None) -> int:
                     stream.write("\n")
         print(json.dumps(result, ensure_ascii=False, allow_nan=False))
         return 0
-    except (ValueError, OSError, RuntimeError, KeyError, TypeError, ImportError, WorkbookError) as error:
-        print(json.dumps({"error": str(error)}, ensure_ascii=False), file=sys.stderr)
+    except (
+        ValueError,
+        OSError,
+        RuntimeError,
+        KeyError,
+        TypeError,
+        ImportError,
+        RecursionError,
+        WorkbookError,
+        CanonicalPackageError,
+    ) as error:
+        payload: dict[str, object] = {"error": str(error)}
+        code = getattr(error, "code", None)
+        if isinstance(code, str) and code:
+            payload["code"] = code
+        print(json.dumps(payload, ensure_ascii=False), file=sys.stderr)
         return 1
 
 
