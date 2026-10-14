@@ -163,11 +163,24 @@ def test_applescript_scope_uses_identity_checked_owned_workbook():
     assert script.count('close targetBook saving no') == 1
     assert 'save targetBook' in script
     assert 'save workbook as' not in script
+    assert script.count('on canonicalPath(pathText)') == 1
+    assert script.count('tell application "Microsoft Excel"') == 1
     assert script.index('set display alerts to false') < script.index('open workbookFile')
     assert script.index('end try') < script.index('return metadata')
     handler = script.split('on error errText number errNum', 1)[1].split('end try', 1)[0]
     assert 'set display alerts to alertsBefore' in handler
     assert 'close' not in handler
+
+
+def test_automation_error_timeout_reason_wins_over_an_authorization_token():
+    classified = oracle._classify_excel_automation_error(
+        'stage:open\nexecution error: Not authorized to send Apple events. (-1712)'
+    )
+    assert classified['status'] == 'blocked'
+    assert classified['stage'] == 'open'
+    assert classified['reason'] == 'Excel Apple-event automation timed out'
+    assert classified['automation_error_code'] == '-1712'
+    assert classified['owned_workbook_may_remain_open'] is True
 
 
 def test_automation_denial_is_blocked_without_an_observation(tmp_path, monkeypatch):
@@ -194,6 +207,22 @@ def test_timeout_does_not_send_cleanup_commands(tmp_path, monkeypatch):
     assert receipt['observations'] == []
     assert receipt['owned_workbook_may_remain_open'] is True
     assert len(calls) == 1
+
+
+def test_live_scenario_silences_alerts_before_it_creates_a_workbook(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+    import workbook_forge.toolkit as toolkit
+
+    monkeypatch.setattr(toolkit, 'operating_scenario', lambda: SimpleNamespace(to_dict=lambda: {'sheets': []}))
+    monkeypatch.setattr(oracle.platform, 'system', lambda: 'Darwin')
+    monkeypatch.setattr(oracle.subprocess, 'run', lambda *args, **kwargs: oracle.subprocess.CompletedProcess(args[0], 0, '', ''))
+    oracle.run_live_scenario(tmp_path)
+    script = next(tmp_path.rglob('observe-live.applescript')).read_text()
+    assert script.index('set display alerts to false') < script.index('make new workbook')
+    assert script.count('set display alerts to alertsBefore') == 2
+    handler = script.split('on error errText number errNum', 1)[1].split('end try', 1)[0]
+    assert 'close' not in handler
+    assert 'make new workbook' not in handler
 
 
 def test_live_scenario_retains_observations_after_cleanup_failure(tmp_path, monkeypatch):
@@ -476,6 +505,8 @@ def test_full_rebuild_script_scopes_to_owned_workbook_and_writes_no_global_setti
     assert 'count of workbooks' in script
     assert 'save targetBook' in script
     assert 'save workbook as' not in script
+    assert script.count('on canonicalPath(pathText)') == 1
+    assert script.count('tell application "Microsoft Excel"') == 1
     assert script.index('set display alerts to false') < script.index('open workbookFile')
     assert script.index('end try') < script.index('return metadata')
     assert script.count('set display alerts to alertsBefore') == 2

@@ -22,6 +22,12 @@ Earlier notes counted "evaluator slices". Slices 2–10 predate the autoresearch
 
 ## Project activity
 
+### 2026-10-14 — grok — scalar Excel observation, then one shared script frame
+- Changed: the file-open Excel harnesses share one AppleScript frame, and roundtrip automation failures go through one classifier that keeps the previous reason order. The unsaved live-scenario script turns alerts off before it creates a workbook and restores them on the success path and the error path, without closing a workbook from the error path. Excel 16.113.4 observed the canonical operating scenario (unit price edited to 25): revenue 9250, profit 3290, break-even 58.8235294117647. The working copy omitted `Forecast!J2` (`=1+`). `save targetBook` wrote the open file after full rebuild. A changed cache counts only when the calc chain names the cell.
+- Why: `save workbook as` returns -50 after a full rebuild on this Excel, and `<f>1+</f>` never opens while alerts are off. The two script builders had copied the path handler, so the next save or path fix could land in only one of them.
+- Evidence: two `--excel` receipts agreed, status `observed`, mismatches empty, `spec2_passed` false, array spill blocked. `bash tools/gate.sh` on the parent of that work exited 0 with 3108 Python tests and no unexpected skip. The receipt stays out of git because the saved package contains a machine-local path. Spec 2 was not marked passed.
+- Next/remaining: spill placement, then the volatile, iteration, scalar-array, and Excel-quirk classes. The joined headless path waits on Spec 2.
+
 ### 2026-10-14 — cursor — calculation report, path redaction, and intake views
 - Changed: both engines emit `schemas/calculation-report.v1.schema.json` for a calculated canonical workbook. Python intake prints a summary, Markdown scan, cell map, or the pair. Canonical JSON, those views, and the report omit filesystem paths and identify input bytes with a sha256 fingerprint. Intake provenance uses OOXML part names. Duplicate JSON keys and documents nested past 128 containers are refused. `workbook-forge calculate` prints the report. `ruff` is pinned to 0.16.9.
 - Why: the compiler spec already required the report and the privacy rule, and the dev lock could not be installed with hashes because `typing-extensions` was missing.
