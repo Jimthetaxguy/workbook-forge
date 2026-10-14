@@ -511,6 +511,7 @@ def run_live_scenario(output_root: Path, *, timeout: float = 30) -> tuple[Path, 
     script = '''on run argv
     with timeout of 20 seconds
         tell application "Microsoft Excel"
+            ''' + _alert_guard_open() + '''
             log ("excel_version=" & (version as text))
             log ("calculation_version=" & (calculation version as text))
             log ("calculation_mode=" & (calculation as text))
@@ -524,6 +525,7 @@ def run_live_scenario(output_root: Path, *, timeout: float = 30) -> tuple[Path, 
             ''' + "\n            ".join(statements) + f'''
             if (value of range "Z100" of worksheet 1 of ownedBook) is not {_as_string(marker)} then error "Synthetic marker mismatch"
             close ownedBook saving no
+            ''' + _alert_guard_close() + '''
             return "owned_workbook_closed=true"
         end tell
     end timeout

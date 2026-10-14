@@ -209,6 +209,22 @@ def test_timeout_does_not_send_cleanup_commands(tmp_path, monkeypatch):
     assert len(calls) == 1
 
 
+def test_live_scenario_silences_alerts_before_it_creates_a_workbook(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+    import workbook_forge.toolkit as toolkit
+
+    monkeypatch.setattr(toolkit, 'operating_scenario', lambda: SimpleNamespace(to_dict=lambda: {'sheets': []}))
+    monkeypatch.setattr(oracle.platform, 'system', lambda: 'Darwin')
+    monkeypatch.setattr(oracle.subprocess, 'run', lambda *args, **kwargs: oracle.subprocess.CompletedProcess(args[0], 0, '', ''))
+    oracle.run_live_scenario(tmp_path)
+    script = next(tmp_path.rglob('observe-live.applescript')).read_text()
+    assert script.index('set display alerts to false') < script.index('make new workbook')
+    assert script.count('set display alerts to alertsBefore') == 2
+    handler = script.split('on error errText number errNum', 1)[1].split('end try', 1)[0]
+    assert 'close' not in handler
+    assert 'make new workbook' not in handler
+
+
 def test_live_scenario_retains_observations_after_cleanup_failure(tmp_path, monkeypatch):
     from types import SimpleNamespace
     import workbook_forge.toolkit as toolkit
