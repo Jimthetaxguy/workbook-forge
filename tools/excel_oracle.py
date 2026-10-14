@@ -254,6 +254,39 @@ def _owned_workbook_save() -> str:
             save targetBook'''
 
 
+def _canonical_path_handler() -> str:
+    return '''on canonicalPath(pathText)
+    if pathText starts with "/" then
+        return POSIX path of ((POSIX file pathText) as alias)
+    end if
+    return POSIX path of (pathText as alias)
+end canonicalPath'''
+
+
+def _excel_automation_script(*, timeout_seconds: int, body: str) -> str:
+    """Frame shared by the file-open Excel harnesses.
+
+    The alias is built outside ``tell application`` because that coercion
+    returns -2763 inside the tell. One frame keeps the path check, the
+    timeout, and the application target from drifting between scripts.
+    """
+    if timeout_seconds < 1:
+        raise ValueError("AppleScript timeout must be at least one second")
+    return _canonical_path_handler() + f'''
+
+on run argv
+    set workbookPath to item 1 of argv
+    set workbookName to item 2 of argv
+    set workbookFile to (POSIX file workbookPath) as alias
+    with timeout of {timeout_seconds} seconds
+        tell application "Microsoft Excel"
+            ''' + body + '''
+        end tell
+    end timeout
+end run
+'''
+
+
 def build_applescript(data: dict[str, Any]) -> str:
     """Use explicit workbook references, with no error-handler close fallback."""
     operations = []
@@ -266,20 +299,7 @@ def build_applescript(data: dict[str, Any]) -> str:
     for _ in range(2):
         for sheet in data["sheets"]:
             operations.append(f"calculate (used range of worksheet {_as_string(sheet)} of targetBook)")
-    return '''on canonicalPath(pathText)
-    if pathText starts with "/" then
-        return POSIX path of ((POSIX file pathText) as alias)
-    end if
-    return POSIX path of (pathText as alias)
-end canonicalPath
-
-on run argv
-    set workbookPath to item 1 of argv
-    set workbookName to item 2 of argv
-    set workbookFile to (POSIX file workbookPath) as alias
-    with timeout of 45 seconds
-        tell application "Microsoft Excel"
-            ''' + _alert_guard_open() + '''
+    body = _alert_guard_open() + '''
             set modeBefore to calculation as text
             log ("excel_version=" & (version as text))
             log ("calculation_version=" & (calculation version as text))
@@ -310,11 +330,8 @@ on run argv
             close targetBook saving no
             set metadata to metadata & "calculation_mode_after=" & (calculation as text) & linefeed
             ''' + _alert_guard_close() + '''
-            return metadata & "owned_workbook_closed=true"
-        end tell
-    end timeout
-end run
-'''
+            return metadata & "owned_workbook_closed=true"'''
+    return _excel_automation_script(timeout_seconds=45, body=body)
 
 
 def normalize_cell(cell: ET.Element | None, shared_strings: list[str]) -> dict[str, Any]:
@@ -1035,20 +1052,7 @@ def build_roundtrip_applescript(contract: dict[str, Any], *, timeout: float = 18
             '''
     else:
         preflight = ""
-    return f'''on canonicalPath(pathText)
-    if pathText starts with "/" then
-        return POSIX path of ((POSIX file pathText) as alias)
-    end if
-    return POSIX path of (pathText as alias)
-end canonicalPath
-
-on run argv
-    set workbookPath to item 1 of argv
-    set workbookName to item 2 of argv
-    set workbookFile to (POSIX file workbookPath) as alias
-    with timeout of {max(1, math.ceil(timeout))} seconds
-        tell application "Microsoft Excel"
-            ''' + _alert_guard_open() + '''
+    body = _alert_guard_open() + '''
             if (count of workbooks) is not 0 then error "Full rebuild requires Excel to have no other open workbooks"
             set modeBefore to calculation as text
             set iterationBefore to iteration as text
@@ -1089,11 +1093,46 @@ on run argv
             set metadata to metadata & "saved=true" & linefeed
             set metadata to metadata & "owned_workbook_closed=true"
             ''' + _alert_guard_close() + '''
-            return metadata
-        end tell
-    end timeout
-end run
-'''
+            return metadata'''
+    return _excel_automation_script(timeout_seconds=max(1, math.ceil(timeout)), body=body)
+
+
+def _classify_excel_automation_error(error: str) -> dict[str, Any]:
+    """Map one AppleScript failure onto the roundtrip receipt fields.
+
+    Later matches replace the reason, which is the order the harness already
+    used. Status stays blocked only for an environment refusal.
+    """
+    folded = error.casefold()
+    code = re.search(r"\((-?\d+)\)\s*$", error)
+    stages = re.findall(r"stage:(\w+)", error)
+    blocked = any(token in folded for token in (
+        "not authorized", "-1743", "-1712", "-600", "no other open workbooks",
+        "iteration setting is not observable", "max_iterations setting is not observable",
+        "max_change setting is not observable", "iteration must already be enabled",
+        "iteration settings do not match",
+    ))
+    reason = "Excel automation was blocked by the environment" if blocked else "Excel automation command failed"
+    for token, text in (
+        ("no other open workbooks", "Full rebuild would affect all open workbooks; close them and retry"),
+        ("iteration must already be enabled", "Excel iteration is disabled; harness will not change global settings"),
+        ("setting is not observable", "Excel iteration settings are not observable; harness will not change global settings"),
+        ("iteration settings do not match", "Excel iteration settings differ; harness will not change global settings"),
+    ):
+        if token in folded:
+            reason = text
+    if "not authorized" in folded or "-1743" in error:
+        reason = "Excel Apple-event automation is not authorized"
+    if "-1712" in error:
+        reason = "Excel Apple-event automation timed out"
+    return {
+        "status": "blocked" if blocked else "failed",
+        "stage": stages[-1] if stages else "before_open",
+        "reason": reason,
+        "automation_error_code": code.group(1) if code else None,
+        "automation_error": " ".join(error.split())[:500],
+        "owned_workbook_may_remain_open": "stage:open" in error or "stage:identity" in error,
+    }
 
 
 def _metadata_from_roundtrip(output: str) -> dict[str, str]:
@@ -1395,34 +1434,7 @@ def run_roundtrip(
                 capture_output=True, text=True, timeout=timeout, check=False,
             )
             if completed.returncode:
-                error = completed.stderr or ""
-                code = re.search(r"\((-?\d+)\)\s*$", error)
-                stage = re.findall(r"stage:(\w+)", error)
-                blocked = any(token in error.casefold() for token in (
-                    "not authorized", "-1743", "-1712", "-600", "no other open workbooks",
-                    "iteration setting is not observable", "max_iterations setting is not observable",
-                    "max_change setting is not observable", "iteration must already be enabled",
-                    "iteration settings do not match",
-                ))
-                receipt.update(
-                    status="blocked" if blocked else "failed", stage=stage[-1] if stage else "before_open",
-                    reason="Excel automation was blocked by the environment" if blocked else "Excel automation command failed",
-                    automation_error_code=code.group(1) if code else None,
-                    automation_error=" ".join(error.split())[:500],
-                    owned_workbook_may_remain_open="stage:open" in error or "stage:identity" in error,
-                )
-                if "no other open workbooks" in error.casefold():
-                    receipt["reason"] = "Full rebuild would affect all open workbooks; close them and retry"
-                if "iteration must already be enabled" in error.casefold():
-                    receipt["reason"] = "Excel iteration is disabled; harness will not change global settings"
-                if "setting is not observable" in error.casefold():
-                    receipt["reason"] = "Excel iteration settings are not observable; harness will not change global settings"
-                if "iteration settings do not match" in error.casefold():
-                    receipt["reason"] = "Excel iteration settings differ; harness will not change global settings"
-                if "not authorized" in error.casefold() or "-1743" in error:
-                    receipt["reason"] = "Excel Apple-event automation is not authorized"
-                if "-1712" in error:
-                    receipt["reason"] = "Excel Apple-event automation timed out"
+                receipt.update(_classify_excel_automation_error(completed.stderr or ""))
             else:
                 metadata = _metadata_from_roundtrip(completed.stdout)
                 receipt["excel"] = metadata
