@@ -2,7 +2,7 @@
 
 **North Star:** [docs/vision.md](docs/vision.md). Compiler stages and shared-model contract: [docs/specs/compiler-pipeline.md](docs/specs/compiler-pipeline.md). Red-flag specs: [docs/specs/red-flags.md](docs/specs/red-flags.md).
 
-Current state: the versioned workbook model, the operating-scenario calculation binding, Python/Rust calculation, canonical export and Python intake are in place. The shared calculation report and Excel Desktop behavior are still open. Next: complete that report, record the scalar Excel open/edit/full-recalc/save/reimport observation, then close the full Spec 2 gate (including spill placement, volatile, iterative and quirk cases). The receipt harness is `tools/excel_oracle.py`, driven by `tools/canonical_excel_receipt.py`. Prototype privacy-safe paired intake views alongside that work; integrate them and the proven calculation/export path behind the headless workflow after the full gate. See the [compiler pipeline spec](docs/specs/compiler-pipeline.md) and [model versioning](docs/specs/model-versioning.md).
+Current state: the versioned workbook model, the operating-scenario calculation binding, Python/Rust calculation, canonical export, and Python intake are in place. Both engines write the same calculation report (`schemas/calculation-report.v1.schema.json`). Python intake can also print a summary, a Markdown scan, a cell map, or those two views together. Serialized models, those views, and the report name a file by a `sha256` fingerprint and by package-part names. They do not copy the path you passed. Excel Desktop behavior is still open. Next: record the scalar Excel open/edit/full-recalc/save/reimport observation, then close the full Spec 2 gate (including spill placement, volatile, iterative and quirk cases). The receipt harness is `tools/excel_oracle.py`, driven by `tools/canonical_excel_receipt.py`. The joined headless workflow waits until that gate is closed. See the [compiler pipeline spec](docs/specs/compiler-pipeline.md) and [model versioning](docs/specs/model-versioning.md).
 
 **Workbook Forge is an SDK for Excel in formats agents can use.** Its goal is to
 make supported workbook data, formulas, dependencies, presentation, and business
@@ -63,7 +63,7 @@ The product contract is to preserve workbook meaning across three surfaces:
 | Surface | Purpose | Current status |
 | --- | --- | --- |
 | Python and Rust SDKs | Construct and execute workbook operations through typed primitives | Independent implementations for the supported profile |
-| Structured interchange and reports | Give agents cell identities, formulas, named bindings, constraints, calculated values, revisions, and diagnostics | Versioned workbook JSON, inspection/calculation reports, and a JSON CLI exist |
+| Structured interchange and reports | Give agents cell identities, formulas, named bindings, constraints, calculated values, revisions, and diagnostics | Versioned workbook JSON, a shared calculation report, intake views, and a JSON CLI exist |
 | Editable Excel files | Exchange workbooks with people and existing Excel workflows | Bounded generation/import/export exist; complete live Excel roundtrip acceptance remains outstanding |
 
 The agent SDK exposes nine schema-described operations through independent
@@ -224,10 +224,15 @@ assert restored.calculate()["outputs"] == result["outputs"]
 workbook-forge scenario --inputs '{"unit_price":25}' --xlsx scenario.xlsx
 workbook-forge inspect scenario.xlsx
 workbook-forge capabilities
+workbook-forge intake plan.xlsx --summary
+workbook-forge intake plan.xlsx --paired
+workbook-forge calculate fixtures/operating-scenario.workbook.json
 cargo run --manifest-path rust/Cargo.toml --example operating_scenario
 cargo run --manifest-path rust/Cargo.toml --example xlsx_scenario -- generate rust-scenario.xlsx
 cargo run --manifest-path rust/Cargo.toml --example xlsx_scenario -- edit rust-scenario.xlsx rust-updated.xlsx 25
 ```
+
+`intake` prints the canonical model. `--summary`, `--markdown`, `--map`, and `--paired` are views of that same model. `calculate` prints the shared report for a canonical JSON file or an `.xlsx` file. `--model` and `--xlsx` write new files and do not replace the input. A failure on stderr is one JSON object with `error` and, when the failure has a stable name, `code`. Duplicate keys in a canonical document or in an agent request are refused. A document nested deeper than 128 containers is refused with `resource_limit`.
 
 Python typed expressions expose separate copy anchors and use the Python parser:
 

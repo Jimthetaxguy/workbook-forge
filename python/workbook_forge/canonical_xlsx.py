@@ -143,7 +143,7 @@ def import_canonical(path: str | Path) -> Workbook:
                 item["data_type"],
                 item["number_format"],
                 formula,
-                Provenance("imported", stored["source"]),
+                Provenance("imported", item["part"]),
             )
         sheets.append(Sheet(name, cells, _dimensions(cells)))
     return Workbook(
@@ -152,7 +152,7 @@ def import_canonical(path: str | Path) -> Workbook:
         {},
         tuple(sheets),
         stored["source"],
-        Provenance("imported", stored["source"]),
+        Provenance("imported", stored["workbook_part"]),
         None,
         (),
     )
@@ -199,8 +199,13 @@ def read_package(path: str | Path) -> dict[str, Any]:
                     }
                 )
         sheet_names = list(package.sheet_names)
+        sheet_parts = dict(package._sheet_parts)
+        workbook_part = package._workbook_part
+    for item in cells:
+        item["part"] = sheet_parts[item["sheet"]]
     return {
         "source": str(source),
+        "workbook_part": workbook_part,
         "date_system": date_system,
         "sheet_names": sheet_names,
         "cells": cells,

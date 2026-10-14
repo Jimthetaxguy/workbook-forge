@@ -211,7 +211,7 @@ pub fn extract_xlsx(path: impl AsRef<Path>, options: ExtractionOptions) -> Resul
             .map(|pattern| pattern["id"].as_str().unwrap().to_string())
             .collect()
     });
-    let selected = names.iter().collect::<BTreeSet<_>>();
+    let selected = names.iter().map(String::as_str).collect::<BTreeSet<_>>();
     if names.is_empty()
         || selected.len() != names.len()
         || names
@@ -224,7 +224,7 @@ pub fn extract_xlsx(path: impl AsRef<Path>, options: ExtractionOptions) -> Resul
     }
     let patterns = declared
         .iter()
-        .filter(|pattern| selected.contains(&pattern["id"].as_str().unwrap().to_string()))
+        .filter(|pattern| selected.contains(pattern["id"].as_str().unwrap()))
         .map(|pattern| Pattern {
             id: pattern["id"].as_str().unwrap().into(),
             part_kind: pattern["part_kind"].as_str().unwrap().into(),

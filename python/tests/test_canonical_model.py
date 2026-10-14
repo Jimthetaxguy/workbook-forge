@@ -4,12 +4,13 @@ import json
 import math
 import os
 import subprocess
+import sys
 from pathlib import Path
 
 import jsonschema
 import pytest
 
-from workbook_forge.model import ModelError, calculate, hydrate
+from workbook_forge.model import ModelError, calculate, calculation_report, content_fingerprint, hydrate
 
 ROOT = Path(__file__).parents[2]
 FIXTURE = ROOT / "fixtures" / "operating-scenario.workbook.json"
@@ -339,3 +340,132 @@ def _rust_path(path: Path, mode: str) -> dict:
     )
     assert completed.returncode == 0, completed.stderr
     return json.loads(completed.stdout)
+
+
+def test_calculation_report_agrees_except_for_the_engine_name():
+    raw = FIXTURE.read_bytes()
+    calculated = calculate(hydrate(raw))
+    python_report = calculation_report(calculated, raw)
+    rust_report = _rust("report")["report"]
+    compared_python = dict(python_report)
+    compared_rust = dict(rust_report)
+    compared_python["engine"] = compared_rust["engine"] = "compared"
+    assert _canonical(compared_python) == _canonical(compared_rust)
+
+    outputs = {row["name"]: row for row in python_report["outputs"]}
+    assert outputs["revenue"]["origin"] == "calculated"
+    assert outputs["revenue"]["result"] == 7400
+    assert outputs["profit"]["result"] == 1440
+    assert outputs["division_error"]["origin"] == "calculated"
+    assert outputs["division_error"]["result"]["error"] == "#DIV/0!"
+    assert outputs["unsupported_probe"]["origin"] == "not_calculated"
+    assert outputs["unsupported_probe"]["result"] is None
+    assert outputs["parse_probe"]["origin"] == "not_calculated"
+    inputs = {row["name"]: row for row in python_report["inputs"]}
+    assert inputs["unit_price"]["origin"] == "authored"
+    assert inputs["unit_price"]["value"] == 20
+    assert python_report["source_fingerprint"] == content_fingerprint(raw)
+    assert str(FIXTURE.resolve()) not in json.dumps(python_report)
+
+    cell = calculated.sheet("Forecast").cells["F2"]
+    assert cell.formula.result == 7400
+    assert cell.provenance is None or cell.provenance.origin != "calculated"
+
+    schema = json.loads((ROOT / "schemas" / "calculation-report.v1.schema.json").read_text(encoding="utf-8"))
+    jsonschema.Draft202012Validator.check_schema(schema)
+    jsonschema.validate(python_report, schema)
+    jsonschema.validate(rust_report, schema)
+
+
+def test_duplicate_keys_are_refused_and_old_paths_are_dropped(tmp_path):
+    with pytest.raises(ModelError) as raised:
+        hydrate(b'{"schema_version":1,"schema_version":1,"model_version":1,"metadata":{},"sheets":[]}')
+    assert raised.value.code == "duplicate_key"
+    assert raised.value.message == "schema_version"
+
+    private = f"{tmp_path}/secret-home-dir-do-not-leak/plan.xlsx"
+    document = {
+        "schema_version": 1,
+        "model_version": 1,
+        "metadata": {},
+        "source_path": private,
+        "provenance": {"origin": "imported", "source": private},
+        "sheets": [
+            {
+                "name": "S",
+                "cells": {
+                    "A1": {
+                        "address": "A1",
+                        "value": 1,
+                        "data_type": "number",
+                        "provenance": {"origin": "imported", "source": "xl/worksheets/sheet1.xml"},
+                    }
+                },
+            }
+        ],
+    }
+    raw = json.dumps(document).encode()
+    python_text = hydrate(raw).to_json()
+    stored = tmp_path / "private-model.json"
+    stored.write_bytes(raw)
+    rust_text = json.dumps(_rust_path(stored, "hydrate")["workbook"])
+    assert "secret-home-dir-do-not-leak" not in python_text
+    assert "secret-home-dir-do-not-leak" not in rust_text
+    assert "xl/worksheets/sheet1.xml" in python_text
+    assert _canonical(json.loads(python_text)) == _canonical(json.loads(rust_text))
+
+
+def test_calculate_command_hides_the_input_path(tmp_path):
+    private = tmp_path / "secret-home-dir-do-not-leak"
+    private.mkdir()
+    source = private / "model.json"
+    source.write_bytes(FIXTURE.read_bytes())
+    completed = subprocess.run(
+        [sys.executable, "-m", "workbook_forge.cli", "calculate", str(source)],
+        cwd=ROOT,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert completed.returncode == 0, completed.stderr
+    assert completed.stderr == ""
+    report = json.loads(completed.stdout)
+    assert report["engine"] == "python"
+    assert report["outputs"]
+    assert "secret-home-dir-do-not-leak" not in completed.stdout
+    assert "Traceback" not in completed.stderr
+
+
+def test_deeply_nested_json_is_refused_without_a_traceback(tmp_path):
+    from workbook_forge.model import JSON_NESTING_LIMIT
+
+    nested = "[" * (JSON_NESTING_LIMIT + 1) + "1" + "]" * (JSON_NESTING_LIMIT + 1)
+    document = (
+        '{"schema_version":1,"model_version":1,"metadata":' + nested + ',"sheets":[]}'
+    )
+    with pytest.raises(ModelError) as raised:
+        hydrate(document)
+    assert raised.value.code == "resource_limit"
+    path = tmp_path / "deep.json"
+    path.write_text(document, encoding="utf-8")
+    completed = subprocess.run(
+        [sys.executable, "-m", "workbook_forge.cli", "calculate", str(path)],
+        cwd=ROOT,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert completed.returncode == 1
+    assert "Traceback" not in completed.stderr
+    payload = json.loads(completed.stderr)
+    assert payload["code"] == "resource_limit"
+
+
+def test_brackets_inside_a_string_are_not_nesting():
+    document = {
+        "schema_version": 1,
+        "model_version": 1,
+        "metadata": {"note": "[" * 200},
+        "sheets": [],
+    }
+    assert hydrate(json.dumps(document)).metadata["note"] == "[" * 200

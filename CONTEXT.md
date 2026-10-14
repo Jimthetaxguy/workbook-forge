@@ -2,14 +2,14 @@
 author: Codex
 created: 2026-09-24
 agent: codex/Codex
-date: '2026-10-01T19:56:55-04:00'
+date: '2026-10-14'
 type: project-context
 task: Build an SDK for Excel in agent-ready formats using independent Python and Rust implementations
 status: active
-summary: "Workbook Forge is an agent-ready Excel compiler: supported inputs and calculations pass through one versioned model to independent Python/Rust runtimes and editable OOXML. The model, one bound calculation and workbook intake are built; the canonical Excel proof and joined headless path remain outstanding."
+summary: "Workbook Forge is an agent-ready Excel compiler: supported inputs and calculations pass through one versioned model to independent Python/Rust runtimes and editable OOXML. The model, one bound calculation, workbook intake, a shared calculation report, and privacy-safe Python intake views are built; the canonical Excel proof and joined headless path remain outstanding."
 next_steps:
-  - Finish the shared calculation report/provenance contract, then on a Mac with Excel run `python3 tools/canonical_excel_receipt.py --fixture fixtures/operating-scenario.workbook.json --output-dir receipts/canonical-operating-scenario-excel --excel` and commit the honest receipt. Spill placement stays blocked until export can write those cells.
-  - Fix the remaining confirmed defects in order of severity: the SUM accumulation rule, the serial-0 date, the typed reason on unsupported-function results, the diagnostic for a formula that uses a defined name, and a calculation report with origin `calculated`. Take expected values from Microsoft's examples or decimal arithmetic, never from either engine.
+  - On a Mac with Excel, run `python3 tools/canonical_excel_receipt.py --fixture fixtures/operating-scenario.workbook.json --output-dir receipts/canonical-operating-scenario-excel --excel` and commit the honest receipt. Spill placement stays blocked until export can write those cells.
+  - Fix remaining confirmed defects from Microsoft's examples or decimal arithmetic, never from either engine. The SUM accumulation rule, the serial-0 date, the typed reason on unsupported-function results, the defined-name diagnostic, and the calculation report are already in place.
   - Settle the profiles that were written from Microsoft's prose rather than an example in one Excel session: criteria over numbers stored as text, error cells under criteria, text functions over errors, EDATE before serial 1.
   - Decide whether bindings get a value type, required status and constraints. That changes the schema and needs a new version.
   - After the full Excel export gate, put the proven intake → model → calculation → export path behind the Python headless CLI, then expose Rust operations with matching behavior.
@@ -21,9 +21,9 @@ next_steps:
   - After the core loop is evidenced, prioritize additional formula families by documented workbook use and dependency value.
 remaining:
   - Worksheet spill projection, volatile/iteration/quirk round-trip classes, cross-backend bound export, and broad Excel 365 coverage are not complete.
-  - From impl/v1-intake and impl/v1-calc-binding, intake is ported. Typed binding constraints, the calculation session with revisions, and refusal of duplicate JSON keys are not. Agent-headless has not started its implementation.
+  - From impl/v1-intake and impl/v1-calc-binding, intake is ported. Duplicate JSON keys are refused. Typed binding constraints and the calculation session with revisions are not. The joined headless workflow has not started.
   - No pull request so far has had checks run on it or a review; mergeability alone is not acceptance evidence. tools/gate.sh is the check to run.
-  - Of the 33 confirmed review findings that were open on 2026-09-29, ten were fixed on 2026-09-30 (counting and criteria functions, text functions over errors, arithmetic overflow, EDATE before serial 1, expression depth, `_xHHHH_` escapes, missing and unchecked versions, blank references). On 2026-10-05 four more of the six named findings were resolved: the SUM accumulation rule and typed reason on unsupported-function results were already fixed in prior commits; serial 0 as a date was fixed (MONTH(0)=1, DAY(0)=0, YEAR(0)=1900 to match Excel's display of 1900-01-00); and a formula using a defined name is now reported as `unsupported_formula` instead of `parse_error`. Two named findings remain deferred (architectural): no calculation report or origin `calculated`, and the per-cell memory bound. The remaining 17 unnamed findings from the `.verification/` ledger could not be individually assessed (gitignored, not on disk). The 2026-09-30 fixes carry Workbook Forge profiles that have not been checked in Excel.
+  - Of the 33 confirmed review findings that were open on 2026-09-29, ten were fixed on 2026-09-30 (counting and criteria functions, text functions over errors, arithmetic overflow, EDATE before serial 1, expression depth, `_xHHHH_` escapes, missing and unchecked versions, blank references). On 2026-10-05 four more of the six named findings were resolved: the SUM accumulation rule and typed reason on unsupported-function results were already fixed in prior commits; serial 0 as a date was fixed (MONTH(0)=1, DAY(0)=0, YEAR(0)=1900 to match Excel's display of 1900-01-00); and a formula using a defined name is now reported as `unsupported_formula` instead of `parse_error`. The calculation report now exists. An output origin of `calculated` means `Formula.result` was produced by the engine; cell provenance is left unchanged so an imported cache is not promoted. The per-cell memory bound remains deferred. The remaining 17 unnamed findings from the `.verification/` ledger could not be individually assessed (gitignored, not on disk). The 2026-09-30 fixes carry Workbook Forge profiles that have not been checked in Excel.
   - "GitHub reports Jimthetaxguy/workbook-forge as public, verified 2026-09-28; historical private-release preparation notes in docs/run-history.md describe their original checkpoints."
 open_questions: []
 ---

@@ -15,7 +15,8 @@ import jsonschema
 import pytest
 
 from workbook_forge.intake import intake_workbook, intake_workbook_model, summarize
-from workbook_forge.model import calculate, hydrate
+from workbook_forge.model import calculate, calculation_report, content_fingerprint, hydrate
+from workbook_forge.views import paired_views
 from workbook_forge.workbook import WorkbookError
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -154,6 +155,8 @@ def test_calculation_replaces_nothing_it_was_given(book):
     assert total.formula.result == 100  # 40 * 2.5
     assert total.formula.dependencies == ("Inputs!B1", "Inputs!B2")
     assert total.value == 999  # what the workbook stored is still there
+    assert total.provenance.origin == "imported"
+    assert total.provenance.source == "xl/worksheets/sheet2.xml"
     assert follower.formula.result == 101  # from the calculated 100, not the stored 999
 
 
@@ -223,11 +226,11 @@ def _cli(*arguments):
     )
 
 
-def _expected_document(source: str) -> dict:
+def _expected_document() -> dict:
     """The document for `book`, written out from what `book` was given."""
-    origin = {"origin": "imported", "source": source}
 
-    def cell(address, data_type, value, expression=None):
+    def cell(address, data_type, value, expression=None, part="xl/worksheets/sheet1.xml"):
+        origin = {"origin": "imported", "source": part}
         written = {"address": address, "data_type": data_type, "provenance": origin, "value": value}
         if expression is not None:
             written["formula"] = {"dependencies": [], "expression": expression, "result": None}
@@ -236,8 +239,7 @@ def _expected_document(source: str) -> dict:
     return {
         "schema_version": 1,
         "model_version": 1,
-        "source_path": source,
-        "provenance": origin,
+        "provenance": {"origin": "imported", "source": "xl/workbook.xml"},
         "metadata": {"intake": {"not_carried": []}},
         "sheets": [
             {
@@ -254,8 +256,8 @@ def _expected_document(source: str) -> dict:
                 "name": "Totals",
                 "dimensions": [1, 1, 1, 2],
                 "cells": {
-                    "A1": cell("A1", "number", 999, "=Inputs!B1*Inputs!B2"),
-                    "B1": cell("B1", "blank", None, "=A1+1"),
+                    "A1": cell("A1", "number", 999, "=Inputs!B1*Inputs!B2", "xl/worksheets/sheet2.xml"),
+                    "B1": cell("B1", "blank", None, "=A1+1", "xl/worksheets/sheet2.xml"),
                 },
             },
         ],
@@ -265,11 +267,13 @@ def _expected_document(source: str) -> dict:
 def test_the_command_prints_the_model(book):
     finished = _cli(book)
     assert finished.returncode == 0, finished.stderr
-    assert json.loads(finished.stdout) == _expected_document(str(book.resolve()))
+    assert json.loads(finished.stdout) == _expected_document()
+    assert "secret-home-dir-do-not-leak" not in finished.stdout
+    assert str(book.resolve()) not in finished.stdout
 
 
 def test_the_function_returns_the_same_document_as_the_command(book):
-    assert json.loads(intake_workbook(book)) == _expected_document(str(book.resolve()))
+    assert json.loads(intake_workbook(book)) == _expected_document()
 
 
 def test_the_command_prints_the_model_version_in_its_summary(book):
@@ -277,6 +281,9 @@ def test_the_command_prints_the_model_version_in_its_summary(book):
     assert finished.returncode == 0, finished.stderr
     summary = json.loads(finished.stdout)
     assert summary["model_version"] == 1 and summary["formula_count"] == 2
+    assert "source_path" not in summary
+    assert summary["source_fingerprint"].startswith("sha256:")
+    assert str(book.resolve()) not in finished.stdout
 
 
 def test_the_command_refuses_an_array_formula_with_a_reason(tmp_path):
@@ -506,6 +513,45 @@ def test_a_part_joined_to_a_sheet_is_listed_by_how_it_is_joined(tmp_path):
         ("package", None, "relationship comments", 1),
         ("package", None, "relationship hyperlink", 1),
     ]
+
+
+def test_a_private_directory_name_stays_out_of_intake_views(tmp_path):
+    private = tmp_path / "secret-home-dir-do-not-leak"
+    private.mkdir()
+    path = _write(private / "plan.xlsx", {"Inputs": INPUTS, "Totals": TOTALS})
+    raw = path.read_bytes()
+    fingerprint = content_fingerprint(raw)
+    document = intake_workbook(path)
+    model = intake_workbook_model(path)
+    summary = summarize(model, source_fingerprint=fingerprint)
+    paired = paired_views(model, source_fingerprint=fingerprint)
+    report = calculation_report(calculate(model), raw)
+    published = "\n".join([
+        document.decode("utf-8"),
+        model.to_json(),
+        json.dumps(summary),
+        paired["markdown"],
+        json.dumps(paired["cell_map"]),
+        json.dumps(report),
+    ])
+    assert "secret-home-dir-do-not-leak" not in published
+    assert summary["source_fingerprint"] == fingerprint
+    assert paired["checks"]["missing_from_scan"] == []
+    assert paired["checks"]["coordinates_not_in_map"] == []
+    assert "Inputs!B1" in paired["markdown"]
+    assert report["calculated_formulas"] == 2
+    assert report["engine"] == "python"
+    # The caller who opened the file may still see the path in memory.
+    assert model.source_path == str(path.resolve())
+    assert "secret-home-dir-do-not-leak" not in model.to_json()
+
+
+def test_a_formula_corner_missing_from_the_sheet_is_named(tmp_path):
+    formula = '<row r="1"><c r="A1"><f>Z9+B2:B4</f><v>0</v></c></row>'
+    paired = paired_views(intake_workbook_model(_write(tmp_path / "gap.xlsx", {"Data": formula})))
+    assert paired["checks"]["missing_from_scan"] == []
+    assert paired["checks"]["coordinates_not_in_map"] == []
+    assert paired["checks"]["referenced_but_not_stored"] == ["Data!B2", "Data!B4", "Data!Z9"]
 
 
 def test_the_list_holds_names_from_the_file_and_no_paths(tmp_path):

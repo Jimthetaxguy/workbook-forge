@@ -9,6 +9,7 @@ is the wire shape. ``model_version`` is the semantic interpretation. See
 from __future__ import annotations
 
 import copy
+import hashlib
 import json
 import math
 import re
@@ -25,6 +26,7 @@ MAX_COLUMN = 16_384
 MAX_RANGE_CELLS = 100_000
 _A1 = re.compile(r"^\$?([A-Za-z]{1,3})\$?([1-9][0-9]*)$")
 _CANONICAL_A1 = re.compile(r"^[A-Z]{1,3}[1-9][0-9]{0,6}$")
+_FINGERPRINT = re.compile(r"sha256:[0-9a-f]{64}\Z")
 _DEPENDENCY = re.compile(r"^[^!]+![A-Z]{1,3}[1-9][0-9]{0,6}$")
 _ERROR_CODES = frozenset(
     {"#NULL!", "#DIV/0!", "#VALUE!", "#REF!", "#NAME?", "#NUM!", "#N/A", "#SPILL!", "#CALC!"}
@@ -86,8 +88,9 @@ class Provenance:
 
     def to_dict(self) -> dict[str, Any]:
         data: dict[str, Any] = {"origin": self.origin}
-        if self.source is not None:
-            data["source"] = self.source
+        source = _public_source(self.source)
+        if source is not None:
+            data["source"] = source
         return data
 
 
@@ -227,8 +230,6 @@ class Workbook:
             "metadata": _copy_json(self.metadata),
             "sheets": [sheet.to_dict() for sheet in self.sheets],
         }
-        if self.source_path is not None:
-            data["source_path"] = self.source_path
         if self.provenance is not None:
             data["provenance"] = self.provenance.to_dict()
         if self.bindings is not None:
@@ -248,6 +249,83 @@ class Workbook:
         )
 
 
+# A workbook document is a shallow tree. This cap stops a nested payload from
+# depending on whichever recursion limit the JSON reader happens to use.
+JSON_NESTING_LIMIT = 128
+
+
+def reject_json_nesting(text: str) -> None:
+    """Refuse a JSON text whose containers are nested past the reader limit."""
+    depth = 0
+    in_string = False
+    escape = False
+    for char in text:
+        if in_string:
+            if escape:
+                escape = False
+            elif char == "\\":
+                escape = True
+            elif char == '"':
+                in_string = False
+            continue
+        if char == '"':
+            in_string = True
+        elif char in "[{":
+            depth += 1
+            if depth > JSON_NESTING_LIMIT:
+                raise ModelError("resource_limit", "document nesting exceeds the reader limit")
+        elif char in "]}":
+            if depth:
+                depth -= 1
+
+
+def content_fingerprint(data: bytes | bytearray) -> str:
+    """Identity of exact input bytes. Not a filesystem path."""
+    if not isinstance(data, (bytes, bytearray)):
+        raise ModelError("invalid_model", "fingerprint input must be bytes")
+    return "sha256:" + hashlib.sha256(bytes(data)).hexdigest()
+
+
+def require_fingerprint(value: str) -> str:
+    if not isinstance(value, str) or _FINGERPRINT.fullmatch(value) is None:
+        raise ModelError("invalid_model", "source_fingerprint must be sha256 and 64 hex digits")
+    return value
+
+
+def is_filesystem_path(value: str) -> bool:
+    """A machine path, rather than a label or an OOXML package part."""
+    if not value:
+        return False
+    if "\\" in value or value.startswith(("~", "/")):
+        return True
+    if len(value) >= 2 and value[0].isalpha() and value[1] == ":":
+        return True
+    if "/" not in value:
+        return False
+    return not (
+        value.startswith("xl/")
+        or value.startswith("_rels/")
+        or value.startswith("[Content_Types].xml")
+    )
+
+
+def _public_source(source: str | None) -> str | None:
+    if source is None or is_filesystem_path(source):
+        return None
+    return source
+
+
+def _reject_duplicate_keys(pairs: list[tuple[Any, Any]]) -> dict[str, Any]:
+    data: dict[str, Any] = {}
+    for key, value in pairs:
+        if not isinstance(key, str):
+            raise ModelError("invalid_model", "JSON object keys must be strings")
+        if key in data:
+            raise ModelError("duplicate_key", key)
+        data[key] = value
+    return data
+
+
 def hydrate(document: bytes | str) -> Workbook:
     """Hydrate native types from canonical JSON bytes. Does not calculate."""
     if isinstance(document, str):
@@ -260,8 +338,11 @@ def hydrate(document: bytes | str) -> Workbook:
         text = raw.decode("utf-8")
     except UnicodeDecodeError as exc:
         raise ModelError("invalid_model", "document is not valid UTF-8") from exc
+    reject_json_nesting(text)
     try:
-        parsed = json.loads(text)
+        parsed = json.loads(text, object_pairs_hook=_reject_duplicate_keys)
+    except RecursionError as exc:
+        raise ModelError("resource_limit", "document nesting exceeds the reader limit") from exc
     except json.JSONDecodeError as exc:
         raise ModelError("invalid_model", "document is not valid JSON") from exc
     if not isinstance(parsed, dict):
@@ -360,6 +441,72 @@ def calculate(workbook: Workbook) -> Workbook:
             results[key] = outcome
 
     return _with_calculation(workbook, cells, analyzed, results, diagnostics)
+
+
+def calculation_report(workbook: Workbook, source: bytes | None = None) -> dict[str, Any]:
+    """Report fresh formula results. This is not a second workbook.
+
+    ``Cell.value`` keeps the stored cache and its provenance. An output origin
+    of ``calculated`` means ``Formula.result`` was produced by this engine.
+    A null formula result is ``not_calculated``. Passing the original file
+    bytes adds a content fingerprint and does not record a path.
+    """
+    workbook.require_supported_versions()
+    _require_bindings(workbook)
+    calculated_formulas = 0
+    unresolved_formulas = 0
+    for sheet in workbook.sheets:
+        for cell in sheet.cells.values():
+            if cell.formula is None:
+                continue
+            if cell.formula.result is None:
+                unresolved_formulas += 1
+            else:
+                calculated_formulas += 1
+    report: dict[str, Any] = {
+        "report_version": 1,
+        "stage": "calculate",
+        "engine": "python",
+        "behavior_profile": "workbook-forge",
+        "schema_version": workbook.schema_version,
+        "model_version": workbook.model_version,
+        "inputs": _binding_report(workbook, "input"),
+        "outputs": _binding_report(workbook, "output"),
+        "diagnostics": [item.to_dict() for item in workbook.diagnostics],
+        "calculated_formulas": calculated_formulas,
+        "unresolved_formulas": unresolved_formulas,
+    }
+    if source is not None:
+        report["source_fingerprint"] = content_fingerprint(source)
+    return report
+
+
+def _binding_report(workbook: Workbook, kind: str) -> list[dict[str, Any]]:
+    if workbook.bindings is None:
+        return []
+    mapping = workbook.bindings.inputs if kind == "input" else workbook.bindings.outputs
+    rows = []
+    for name in sorted(mapping):
+        target = mapping[name]
+        sheet = workbook.sheet(target.sheet)
+        cell = None if sheet is None else sheet.cells.get(target.address)
+        if cell is None:
+            raise ModelError("invalid_model", f"{kind} binding '{name}' does not identify a cell")
+        row = {"name": name, "sheet": target.sheet, "address": target.address}
+        if kind == "input":
+            row["origin"] = cell.provenance.origin if cell.provenance is not None else None
+            row["value"] = _copy_json(cell.value)
+        elif cell.formula is not None and cell.formula.result is None:
+            row["origin"] = "not_calculated"
+            row["result"] = None
+        elif cell.formula is not None:
+            row["origin"] = "calculated"
+            row["result"] = _copy_json(cell.formula.result)
+        else:
+            row["origin"] = cell.provenance.origin if cell.provenance is not None else None
+            row["result"] = _copy_json(cell.value)
+        rows.append(row)
+    return rows
 
 
 def with_input(workbook: Workbook, name: str, value: Any) -> Workbook:
@@ -738,9 +885,10 @@ def _workbook(data: dict[str, Any]) -> Workbook:
     model_version = _version(data["model_version"], "model_version", "unsupported_model_version")
     if not isinstance(data["metadata"], dict):
         raise ModelError("invalid_model", "metadata must be an object")
-    source_path = None
     if "source_path" in data:
-        source_path = _optional_string(data["source_path"], "source_path")
+        # Accepted on old documents, then dropped. A path is not model meaning.
+        _optional_string(data["source_path"], "source_path")
+    source_path = None
     provenance = _provenance(data["provenance"], "provenance") if "provenance" in data else None
     bindings = _bindings(data["bindings"]) if "bindings" in data else None
     diagnostics = _diagnostics(data["diagnostics"]) if "diagnostics" in data else ()
@@ -875,7 +1023,7 @@ def _provenance(data: Any, path: str) -> Provenance:
     origin = data["origin"]
     if origin not in _ORIGINS:
         raise ModelError("invalid_model", f"{path}.origin is not a supported origin")
-    source = _optional_string(data["source"], f"{path}.source") if "source" in data else None
+    source = _public_source(_optional_string(data["source"], f"{path}.source")) if "source" in data else None
     return Provenance(origin, source)
 
 

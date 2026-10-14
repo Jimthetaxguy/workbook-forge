@@ -2,17 +2,17 @@
 author: codex/Codex
 created: 2026-09-28
 agent: codex/Codex
-date: '2026-10-01T19:56:55-04:00'
+date: '2026-10-14'
 type: product-specification
 task: Specify Workbook Forge user outcomes and executable engineering path
 status: active-specification
 summary: Defines the user outcomes and compiler contract for explainable workbook intake, shared calculations across Python and Rust, Excel output, headless use, formula hypotheses, and evidence-led coverage.
 next_steps:
-  - Finish one versioned calculation report for the operating scenario in both engines, then record the canonical scalar Excel open, edit, recalculate, save, and reimport cycle.
+  - Record the canonical scalar Excel open, edit, recalculate, save, and reimport cycle.
   - Close the full Excel export gate, including declared result ranges and required volatile, iterative, array/spill, and quirk cases, before joining the proven path behind the headless interface.
-  - Prototype the paired overview and structural map in parallel, with privacy-safe source identity, then integrate them into the headless path.
+  - Keep the paired overview and structural map on the Python intake command until that gate is closed. Rust views and the joined headless path come after it.
 remaining:
-  - The compiler pipeline's shared report contract, full Excel acceptance evidence, privacy-safe source handling, and joined headless path are not complete.
+  - Full Excel acceptance evidence and the joined headless path are not complete. The shared calculation report and Python privacy-safe intake views are.
   - Full dynamic-array spill, volatile, iterative and Excel-quirk acceptance, broader formula coverage, and hard-coded formula analysis remain evidence-gated.
 open_questions:
   - Which real workbook task should drive intake priorities after the synthetic operating scenario?
@@ -429,10 +429,10 @@ limits near the feature summary and link to exact status and evidence.
 
 | Order | Work item | Can start now? | Depends on | Completion evidence |
 | --- | --- | --- | --- | --- |
-| 1 | Complete the shared calculation result and provenance contract for the operating scenario | Yes | Existing canonical model and explicit bindings | Same canonical bytes produce expected Python and Rust results; report identifies backend, model revision, source cells and diagnostics |
+| 1 | Complete the shared calculation result and provenance contract for the operating scenario | Done for the library report | Existing canonical model and explicit bindings | Same canonical bytes produce expected Python and Rust results; `schemas/calculation-report.v1.schema.json` identifies the engine, model versions, source cells and diagnostics. Excel observation is still separate |
 | 2 | Record the canonical scalar Excel open/edit/full-recalc/save/reimport cycle | Yes; the harness exists | 1 and the current export path | Receipt records Excel build, edits, observed values, formula differences and unavailable settings honestly; explicitly marked as the first observation |
 | 3 | Close the full Excel export gate, including declared spill placement | After the scalar observation | 2 and a defined result-range contract | Excel receipts cover the declared spill range, volatile, iterative and known-quirk cases with explicit tolerances; unsupported required cases keep the gate open |
-| 4 | Prototype the paired overview, structural map and privacy-safe source handling | Yes, alongside 1–3 | Existing canonical intake | Synthetic cases show coordinate links and cross-view checks; serialized model, summary and scan omit a distinctive private input path while retaining fingerprint and cell evidence |
+| 4 | Prototype the paired overview, structural map and privacy-safe source handling | Python intake does this; Rust views do not | Existing canonical intake | Synthetic cases show coordinate links and cross-view checks; serialized model, summary and scan omit a distinctive private input path while retaining fingerprint and cell evidence |
 | 5 | Put intake → model → supported calculation → export behind one headless workflow | After 1–4 | Shared result contract, full Excel gate, paired report and privacy acceptance | A caller-selected workbook produces versioned model output, bounded context, diagnostics, calculation evidence and a new `.xlsx` without a GUI |
 | 6 | Rank formula and workbook gaps by workflow value | Research can start now | Concrete workbook tasks and observed failures | A task-to-gap matrix ties each candidate to semantic rules, Python/Rust fixtures and Excel evidence needed |
 | 7 | Prove Python/Rust application embedding | After the headless operations stabilize | 1 and 5 | Clean consumers call each native library without a UI, duplicated model or agent framework |

@@ -13,7 +13,9 @@ license-files = ["LICENSE", "THIRD_PARTY_NOTICES.txt"]
 dependencies = []
 
 [project.optional-dependencies]
-test = ["pytest>=9.1.1", "jsonschema>=4.26.0", "packaging>=26.3", "setuptools>=84.0.0", "setuptools-rust>=1.13.0,<2", "build>=1.6.1", "ruff>=0.14.14"]
+# ruff stays on 0.16.9. A newer release can change results even with the same
+# selected rules, and 0.17.0 is not the gate.
+test = ["pytest>=9.1.1", "jsonschema>=4.26.0", "packaging>=26.3", "setuptools>=84.0.0", "setuptools-rust>=1.13.0,<2", "build>=1.6.1", "ruff==0.16.9"]
 
 [project.scripts]
 workbook-forge = "workbook_forge.cli:main"

@@ -2,19 +2,18 @@
 author: codex/Codex
 created: "2026-10-01T19:21:55-04:00"
 agent: codex/Codex
-date: "2026-10-01T20:10:08-04:00"
+date: "2026-10-14"
 type: technical-specification
 task: Define the shared Workbook Forge compiler pipeline
 status: proposed
 summary: Defines how Excel, calculation definitions, Python, Rust, agents, applications, and OOXML pass through one versioned workbook model, with stage results and compatibility evidence kept distinct.
 next_steps:
-  - Finish one versioned calculation report for the existing operating scenario in both engines.
   - Record the canonical scalar Excel open, edit, recalculate, save, and reimport cycle, then close the broader Spec 2 gate.
-  - Prototype privacy-safe paired intake views in parallel, then integrate the proven path behind the headless interface.
+  - Integrate the proven calculation and export path behind the headless interface only after that gate.
 remaining:
   - The shared model does not yet back every older toolkit and agent operation.
   - The committed canonical Excel receipt is preflight-only; Excel-observed spill, volatile, iterative, and quirk coverage remains open.
-  - Canonical intake currently carries the resolved source path into model provenance and the summary; agent-facing outputs need a privacy-safe default.
+  - The joined headless workflow is not the default. Python intake views exist; Rust does not print the Markdown scan or cell map.
 open_questions:
   - Which report fields are essential for a first useful compiler receipt without duplicating the canonical model?
   - Which unsupported OOXML parts must be preserved through an edit, and which should block that edit?
@@ -313,13 +312,13 @@ receipt. The caller's resolved path belongs to short-lived invocation context;
 canonical JSON omits it, while reports and receipts identify the input with a
 content fingerprint and stable sheet, cell and OOXML-part locations. The
 fingerprint belongs to the run/report linkage unless a future schema change
-defines it as workbook-model data. Add an acceptance case whose input path
-contains a distinctive private directory name, then verify that serialized
-model bytes, summaries, Markdown, diagnostics, agent responses and receipts
-omit that name while the report retains the fingerprint and cell-level
-evidence. The current Python intake path does not meet this contract yet: its
-workbook model and summary include the resolved source path, so close that gap
-before making the joined-up agent workflow the default.
+defines it as workbook-model data. An acceptance case whose input path contains
+a distinctive private directory name checks that serialized model bytes,
+summaries, Markdown, the cell map and the calculation report omit that name
+while the report retains the fingerprint and cell-level evidence. Python intake
+meets that contract for the model, the summary, and the paired views. The
+in-memory workbook may still hold the path for the caller who opened the file.
+The joined agent workflow is still not the default.
 
 Each diagnostic should identify its stage, stable code, severity, affected
 artifact/location, evidence, disposition and next useful action where known.
@@ -393,7 +392,10 @@ different questions about coordinates, formulas, cached values and results.
    operating-scenario model and bindings; pass the same canonical bytes to
    Python and Rust; return the same outputs with backend, model revision,
    input provenance and diagnostics. Do not author a second calculation for
-   the test.
+   the test. This report is now `schemas/calculation-report.v1.schema.json`.
+   The two engines differ by the `engine` name. An output origin of
+   `calculated` means `Formula.result` was produced by that engine. Cell
+   provenance stays the origin of the stored value.
 2. **Record the first scalar Excel observation.** Use the existing receipt
    harness to open, edit an input, force full recalculation, save, close and
    reimport. Commit an honest receipt, including settings the harness cannot
@@ -408,7 +410,9 @@ different questions about coordinates, formulas, cached values and results.
    workbook revision, then check each view against the other. Test weak labels,
    neighboring tables, blank gaps, layout and formula-driven assumptions.
    Enforce the privacy-safe source identity rule before serializing either
-   view.
+   view. Python `workbook-forge intake` now prints `--markdown`, `--map`, and
+   `--paired`. Rust does not. Weak-label and neighboring-table cases are still
+   open.
 5. **Join the proven path behind one headless workflow.** After 1–4, read a
    workbook, emit its versioned model and paired scan/report, bind or inspect a
    declared calculation, calculate with a selected backend, export a new

@@ -746,12 +746,27 @@ pub fn serve_json_lines<R: BufRead, W: Write>(
         let response = if oversized {
             agent.transport_error("resource_limit", "request exceeds 1 MiB")
         } else {
-            match serde_json::from_slice(&line) {
-                Ok(request) => agent.handle(request),
+            match std::str::from_utf8(&line) {
                 Err(_) => agent.transport_error(
                     "invalid_request",
                     "request line must contain valid UTF-8 JSON",
                 ),
+                Ok(text) => match crate::model::screen_json_text(text) {
+                    Err(error) if error.code == "resource_limit" => {
+                        agent.transport_error("resource_limit", &error.message)
+                    }
+                    Err(_) => agent.transport_error(
+                        "invalid_request",
+                        "request line must contain valid UTF-8 JSON",
+                    ),
+                    Ok(()) => match serde_json::from_str(text) {
+                        Ok(request) => agent.handle(request),
+                        Err(_) => agent.transport_error(
+                            "invalid_request",
+                            "request line must contain valid UTF-8 JSON",
+                        ),
+                    },
+                },
             }
         };
         serde_json::to_writer(&mut writer, &response)?;
@@ -1072,6 +1087,27 @@ mod tests {
         code(responses[2].clone(), "invalid_request");
         assert_eq!(responses[3]["ok"], true);
         assert_eq!(responses[4]["ok"], true);
+    }
+
+    #[test]
+    fn a_deeply_nested_line_is_limited_and_a_duplicate_key_is_invalid() {
+        let agent = scenario();
+        let mut nested = vec![b'['; 200];
+        nested.extend(std::iter::repeat_n(b']', 200));
+        nested.extend_from_slice(
+            b"\n{\"operation\":\"describe\",\"operation\":\"calculate\"}\n{\"operation\":\"describe\"}\n",
+        );
+        let mut output = Vec::new();
+        serve_json_lines(&agent, std::io::Cursor::new(nested), &mut output).unwrap();
+        let responses = output
+            .split(|byte| *byte == b'\n')
+            .filter(|line| !line.is_empty())
+            .map(|line| serde_json::from_slice::<Value>(line).unwrap())
+            .collect::<Vec<_>>();
+        assert_eq!(responses.len(), 3);
+        code(responses[0].clone(), "resource_limit");
+        code(responses[1].clone(), "invalid_request");
+        assert_eq!(responses[2]["ok"], true);
     }
     #[test]
     fn imported_preview_and_edits_enforce_the_preservation_boundary() {

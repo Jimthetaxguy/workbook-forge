@@ -29,7 +29,7 @@ import zipfile
 import zlib
 
 from .canonical_xlsx import import_canonical
-from .model import ModelError, Workbook, hydrate
+from .model import ModelError, Workbook, hydrate, require_fingerprint
 from .workbook import MAIN, Workbook as Package, WorkbookError, _safe_xml
 from .xlsx import _BUILTIN_FORMATS, STYLES_CONTENT_TYPE
 
@@ -202,8 +202,12 @@ def _format_ids(package: Package) -> list[int | None]:
     return result
 
 
-def summarize(workbook: Workbook) -> dict[str, Any]:
-    """Counts and versions for a person to read. Not the model itself."""
+def summarize(workbook: Workbook, *, source_fingerprint: str | None = None) -> dict[str, Any]:
+    """Counts and versions for a person to read. Not the model itself.
+
+    The resolved path stays on the in-memory workbook for the caller who
+    opened the file. This summary never includes it.
+    """
     sheets = [
         {
             "name": sheet.name,
@@ -213,12 +217,14 @@ def summarize(workbook: Workbook) -> dict[str, Any]:
         }
         for sheet in workbook.sheets
     ]
-    return {
+    summary = {
         "schema_version": workbook.schema_version,
         "model_version": workbook.model_version,
-        "source_path": workbook.source_path,
         "sheets": sheets,
         "cell_count": sum(sheet["cells"] for sheet in sheets),
         "formula_count": sum(sheet["formulas"] for sheet in sheets),
         "not_carried": workbook.metadata.get("intake", {}).get("not_carried", []),
     }
+    if source_fingerprint is not None:
+        summary["source_fingerprint"] = require_fingerprint(source_fingerprint)
+    return summary

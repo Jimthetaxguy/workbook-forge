@@ -6,6 +6,7 @@
 
 use crate::toolkit::{Expression, SUPPORTED_FUNCTIONS};
 use crate::{FormulaError, FormulaResult, Value, evaluate_result};
+use serde::de::{self, DeserializeSeed, Deserializer, MapAccess, SeqAccess, Visitor};
 use serde_json::{Map, Number, Value as JsonValue, json};
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fmt;
@@ -184,10 +185,16 @@ enum Outcome {
     Diagnostic(Diagnostic),
 }
 
+// A workbook document is a shallow tree. This cap does not depend on serde's
+// recursion limit.
+const JSON_NESTING_LIMIT: u32 = 128;
+
 /// Hydrate native types from canonical JSON bytes. Does not calculate.
 pub fn hydrate(bytes: &[u8]) -> Result<Workbook, ModelError> {
     let text = std::str::from_utf8(bytes)
         .map_err(|_| ModelError::new("invalid_model", "document is not valid UTF-8"))?;
+    reject_deep_nesting(text)?;
+    reject_duplicate_keys(text)?;
     let parsed: JsonValue = serde_json::from_str(text)
         .map_err(|_| ModelError::new("invalid_model", "document is not valid JSON"))?;
     let object = parsed
@@ -695,7 +702,9 @@ fn parse_workbook(data: &Map<String, JsonValue>) -> Result<Workbook, ModelError>
         .as_object()
         .cloned()
         .ok_or_else(|| ModelError::new("invalid_model", "metadata must be an object"))?;
-    let source_path = maybe(data, "source_path", "source_path", optional_string)?.flatten();
+    // Accepted on old documents, then dropped. A path is not model meaning.
+    let _source_path = maybe(data, "source_path", "source_path", optional_string)?.flatten();
+    let source_path = None;
     let provenance = maybe(data, "provenance", "provenance", parse_provenance)?;
     let bindings = maybe(data, "bindings", "bindings", |value, _path| {
         parse_bindings(value)
@@ -955,7 +964,9 @@ fn parse_provenance(data: &JsonValue, path: &str) -> Result<Provenance, ModelErr
             format!("{path}.origin is not a supported origin"),
         ));
     }
-    let source = maybe(object, "source", &format!("{path}.source"), optional_string)?.flatten();
+    let source = maybe(object, "source", &format!("{path}.source"), optional_string)?
+        .flatten()
+        .filter(|value| !is_filesystem_path(value));
     Ok(Provenance { origin, source })
 }
 
@@ -1260,9 +1271,6 @@ fn workbook_json(workbook: &Workbook) -> JsonValue {
         "sheets".into(),
         JsonValue::Array(workbook.sheets.iter().map(sheet_json).collect()),
     );
-    if let Some(source_path) = &workbook.source_path {
-        data.insert("source_path".into(), JsonValue::String(source_path.clone()));
-    }
     if let Some(provenance) = &workbook.provenance {
         data.insert("provenance".into(), provenance_json(provenance));
     }
@@ -1345,7 +1353,11 @@ fn provenance_json(provenance: &Provenance) -> JsonValue {
         "origin".into(),
         JsonValue::String(provenance.origin.clone()),
     );
-    if let Some(source) = &provenance.source {
+    if let Some(source) = provenance
+        .source
+        .as_ref()
+        .filter(|value| !is_filesystem_path(value))
+    {
         data.insert("source".into(), JsonValue::String(source.clone()));
     }
     JsonValue::Object(data)
@@ -1390,6 +1402,372 @@ fn diagnostic_json(diagnostic: &Diagnostic) -> JsonValue {
         data.insert("function".into(), JsonValue::String(function.clone()));
     }
     JsonValue::Object(data)
+}
+
+/// Report fresh formula results. This is not a second workbook.
+///
+/// Cell values keep their stored provenance. An output origin of `calculated`
+/// means `Formula.result` was produced by this engine. A blank formula result
+/// is `not_calculated`. `source` is the original file bytes, used only to
+/// name a content fingerprint.
+pub fn calculation_report(
+    workbook: &Workbook,
+    source: Option<&[u8]>,
+) -> Result<String, ModelError> {
+    workbook.require_supported_versions()?;
+    require_bindings(workbook)?;
+    Ok(write_canonical(&report_json(workbook, source)))
+}
+
+fn report_json(workbook: &Workbook, source: Option<&[u8]>) -> JsonValue {
+    let mut calculated_formulas = 0_i64;
+    let mut unresolved_formulas = 0_i64;
+    for sheet in &workbook.sheets {
+        for cell in sheet.cells.values() {
+            if cell.formula.is_none() {
+                continue;
+            }
+            if matches!(cell.formula.as_ref().unwrap().result, Scalar::Blank) {
+                unresolved_formulas += 1;
+            } else {
+                calculated_formulas += 1;
+            }
+        }
+    }
+    let mut data = Map::new();
+    data.insert("report_version".into(), JsonValue::from(1));
+    data.insert("stage".into(), JsonValue::String("calculate".into()));
+    data.insert("engine".into(), JsonValue::String("rust".into()));
+    data.insert(
+        "behavior_profile".into(),
+        JsonValue::String("workbook-forge".into()),
+    );
+    data.insert(
+        "schema_version".into(),
+        JsonValue::from(workbook.schema_version),
+    );
+    data.insert(
+        "model_version".into(),
+        JsonValue::from(workbook.model_version),
+    );
+    if let Some(bytes) = source {
+        data.insert(
+            "source_fingerprint".into(),
+            JsonValue::String(content_fingerprint(bytes)),
+        );
+    }
+    data.insert("inputs".into(), binding_report(workbook, true));
+    data.insert("outputs".into(), binding_report(workbook, false));
+    data.insert(
+        "diagnostics".into(),
+        JsonValue::Array(workbook.diagnostics.iter().map(diagnostic_json).collect()),
+    );
+    data.insert(
+        "calculated_formulas".into(),
+        JsonValue::from(calculated_formulas),
+    );
+    data.insert(
+        "unresolved_formulas".into(),
+        JsonValue::from(unresolved_formulas),
+    );
+    JsonValue::Object(data)
+}
+
+fn binding_report(workbook: &Workbook, inputs: bool) -> JsonValue {
+    let Some(bindings) = &workbook.bindings else {
+        return JsonValue::Array(Vec::new());
+    };
+    let mapping = if inputs {
+        &bindings.inputs
+    } else {
+        &bindings.outputs
+    };
+    let mut rows = Vec::new();
+    for (name, target) in mapping {
+        let cell = workbook
+            .sheet(&target.sheet)
+            .and_then(|sheet| sheet.cells.get(&target.address));
+        let Some(cell) = cell else {
+            continue;
+        };
+        let mut row = Map::new();
+        row.insert("name".into(), JsonValue::String(name.clone()));
+        row.insert("sheet".into(), JsonValue::String(target.sheet.clone()));
+        row.insert("address".into(), JsonValue::String(target.address.clone()));
+        if inputs {
+            row.insert("origin".into(), stored_origin(cell));
+            row.insert("value".into(), scalar_json(&cell.value));
+        } else if let Some(formula) = &cell.formula {
+            if matches!(formula.result, Scalar::Blank) {
+                row.insert("origin".into(), JsonValue::String("not_calculated".into()));
+                row.insert("result".into(), JsonValue::Null);
+            } else {
+                row.insert("origin".into(), JsonValue::String("calculated".into()));
+                row.insert("result".into(), scalar_json(&formula.result));
+            }
+        } else {
+            row.insert("origin".into(), stored_origin(cell));
+            row.insert("result".into(), scalar_json(&cell.value));
+        }
+        rows.push(JsonValue::Object(row));
+    }
+    JsonValue::Array(rows)
+}
+
+fn stored_origin(cell: &Cell) -> JsonValue {
+    match cell.provenance.as_ref().map(|item| item.origin.as_str()) {
+        Some(origin @ ("authored" | "imported" | "calculated")) => {
+            JsonValue::String(origin.to_string())
+        }
+        _ => JsonValue::Null,
+    }
+}
+
+pub fn content_fingerprint(bytes: &[u8]) -> String {
+    let digest = sha256(bytes);
+    let mut text = String::with_capacity(7 + 64);
+    text.push_str("sha256:");
+    for byte in digest {
+        text.push_str(&format!("{byte:02x}"));
+    }
+    text
+}
+
+fn is_filesystem_path(value: &str) -> bool {
+    if value.is_empty() {
+        return false;
+    }
+    if value.contains('\\') || value.starts_with('~') || value.starts_with('/') {
+        return true;
+    }
+    let mut chars = value.chars();
+    if let (Some(first), Some(':')) = (chars.next(), chars.next())
+        && first.is_ascii_alphabetic()
+    {
+        return true;
+    }
+    if !value.contains('/') {
+        return false;
+    }
+    !(value.starts_with("xl/")
+        || value.starts_with("_rels/")
+        || value.starts_with("[Content_Types].xml"))
+}
+
+fn reject_deep_nesting(text: &str) -> Result<(), ModelError> {
+    let mut depth = 0_u32;
+    let mut in_string = false;
+    let mut escape = false;
+    for ch in text.chars() {
+        if in_string {
+            if escape {
+                escape = false;
+            } else if ch == '\\' {
+                escape = true;
+            } else if ch == '"' {
+                in_string = false;
+            }
+            continue;
+        }
+        match ch {
+            '"' => in_string = true,
+            '[' | '{' => {
+                depth += 1;
+                if depth > JSON_NESTING_LIMIT {
+                    return Err(ModelError::new(
+                        "resource_limit",
+                        "document nesting exceeds the reader limit",
+                    ));
+                }
+            }
+            ']' | '}' => depth = depth.saturating_sub(1),
+            _ => {}
+        }
+    }
+    Ok(())
+}
+
+pub(crate) fn screen_json_text(text: &str) -> Result<(), ModelError> {
+    reject_deep_nesting(text)?;
+    reject_duplicate_keys(text)
+}
+
+fn reject_duplicate_keys(text: &str) -> Result<(), ModelError> {
+    let mut deserializer = serde_json::Deserializer::from_str(text);
+    match deserializer.deserialize_any(DuplicateKeyVisitor) {
+        Ok(()) => deserializer
+            .end()
+            .map_err(|_| ModelError::new("invalid_model", "document is not valid JSON")),
+        Err(error) => {
+            let message = error.to_string();
+            if let Some(rest) = message.strip_prefix("duplicate key ") {
+                let key = rest.split_whitespace().next().unwrap_or(rest);
+                Err(ModelError::new("duplicate_key", key))
+            } else {
+                Err(ModelError::new(
+                    "invalid_model",
+                    "document is not valid JSON",
+                ))
+            }
+        }
+    }
+}
+
+struct DuplicateKeyVisitor;
+
+struct DuplicateKeySeed;
+
+impl<'de> DeserializeSeed<'de> for DuplicateKeySeed {
+    type Value = ();
+
+    fn deserialize<D>(self, deserializer: D) -> Result<(), D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        deserializer.deserialize_any(DuplicateKeyVisitor)
+    }
+}
+
+impl<'de> Visitor<'de> for DuplicateKeyVisitor {
+    type Value = ();
+
+    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        formatter.write_str("JSON")
+    }
+
+    fn visit_bool<E: de::Error>(self, _value: bool) -> Result<(), E> {
+        Ok(())
+    }
+
+    fn visit_i64<E: de::Error>(self, _value: i64) -> Result<(), E> {
+        Ok(())
+    }
+
+    fn visit_u64<E: de::Error>(self, _value: u64) -> Result<(), E> {
+        Ok(())
+    }
+
+    fn visit_f64<E: de::Error>(self, _value: f64) -> Result<(), E> {
+        Ok(())
+    }
+
+    fn visit_str<E: de::Error>(self, _value: &str) -> Result<(), E> {
+        Ok(())
+    }
+
+    fn visit_string<E: de::Error>(self, _value: String) -> Result<(), E> {
+        Ok(())
+    }
+
+    fn visit_unit<E: de::Error>(self) -> Result<(), E> {
+        Ok(())
+    }
+
+    fn visit_none<E: de::Error>(self) -> Result<(), E> {
+        Ok(())
+    }
+
+    fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<(), A::Error> {
+        while seq.next_element_seed(DuplicateKeySeed)?.is_some() {}
+        Ok(())
+    }
+
+    fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> Result<(), A::Error> {
+        let mut seen = BTreeSet::new();
+        while let Some(key) = map.next_key::<String>()? {
+            if !seen.insert(key.clone()) {
+                return Err(de::Error::custom(format!("duplicate key {key}")));
+            }
+            map.next_value_seed(DuplicateKeySeed)?;
+        }
+        Ok(())
+    }
+}
+
+fn sha256(message: &[u8]) -> [u8; 32] {
+    const K: [u32; 64] = [
+        0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4,
+        0xab1c5ed5, 0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe,
+        0x9bdc06a7, 0xc19bf174, 0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f,
+        0x4a7484aa, 0x5cb0a9dc, 0x76f988da, 0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7,
+        0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967, 0x27b70a85, 0x2e1b2138, 0x4d2c6dfc,
+        0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85, 0xa2bfe8a1, 0xa81a664b,
+        0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070, 0x19a4c116,
+        0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
+        0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7,
+        0xc67178f2,
+    ];
+    let mut state = [
+        0x6a09e667_u32,
+        0xbb67ae85,
+        0x3c6ef372,
+        0xa54ff53a,
+        0x510e527f,
+        0x9b05688c,
+        0x1f83d9ab,
+        0x5be0cd19,
+    ];
+    let bit_len = (message.len() as u64)
+        .checked_mul(8)
+        .expect("fingerprint input exceeds sha256 length");
+    let mut padded = message.to_vec();
+    padded.push(0x80);
+    while padded.len() % 64 != 56 {
+        padded.push(0);
+    }
+    padded.extend_from_slice(&bit_len.to_be_bytes());
+    for chunk in padded.chunks_exact(64) {
+        let mut words = [0_u32; 64];
+        for index in 0..16 {
+            words[index] = u32::from_be_bytes(chunk[index * 4..index * 4 + 4].try_into().unwrap());
+        }
+        for index in 16..64 {
+            let s0 = words[index - 15].rotate_right(7)
+                ^ words[index - 15].rotate_right(18)
+                ^ (words[index - 15] >> 3);
+            let s1 = words[index - 2].rotate_right(17)
+                ^ words[index - 2].rotate_right(19)
+                ^ (words[index - 2] >> 10);
+            words[index] = words[index - 16]
+                .wrapping_add(s0)
+                .wrapping_add(words[index - 7])
+                .wrapping_add(s1);
+        }
+        let mut working = state;
+        for index in 0..64 {
+            let s1 = working[4].rotate_right(6)
+                ^ working[4].rotate_right(11)
+                ^ working[4].rotate_right(25);
+            let choice = (working[4] & working[5]) ^ (!working[4] & working[6]);
+            let temp1 = working[7]
+                .wrapping_add(s1)
+                .wrapping_add(choice)
+                .wrapping_add(K[index])
+                .wrapping_add(words[index]);
+            let s0 = working[0].rotate_right(2)
+                ^ working[0].rotate_right(13)
+                ^ working[0].rotate_right(22);
+            let majority =
+                (working[0] & working[1]) ^ (working[0] & working[2]) ^ (working[1] & working[2]);
+            let temp2 = s0.wrapping_add(majority);
+            working[7] = working[6];
+            working[6] = working[5];
+            working[5] = working[4];
+            working[4] = working[3].wrapping_add(temp1);
+            working[3] = working[2];
+            working[2] = working[1];
+            working[1] = working[0];
+            working[0] = temp1.wrapping_add(temp2);
+        }
+        for index in 0..8 {
+            state[index] = state[index].wrapping_add(working[index]);
+        }
+    }
+    let mut digest = [0_u8; 32];
+    for (index, word) in state.iter().enumerate() {
+        digest[index * 4..index * 4 + 4].copy_from_slice(&word.to_be_bytes());
+    }
+    digest
 }
 
 fn write_canonical(value: &JsonValue) -> String {
@@ -1618,5 +1996,52 @@ mod tests {
         assert_eq!(calculated.diagnostics[0].function.as_deref(), Some("NOW"));
         let again = calculate(&calculated).unwrap();
         assert_eq!(again.to_json().unwrap(), calculated.to_json().unwrap());
+    }
+
+    #[test]
+    fn fingerprint_matches_the_sha256_of_abc() {
+        assert_eq!(
+            content_fingerprint(b"abc"),
+            "sha256:ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+        );
+    }
+
+    #[test]
+    fn a_filesystem_path_is_not_copied_into_the_model() {
+        let document = br#"{"schema_version":1,"model_version":1,"metadata":{},"source_path":"/tmp/secret-home-dir-do-not-leak/plan.xlsx","provenance":{"origin":"imported","source":"/tmp/secret-home-dir-do-not-leak/plan.xlsx"},"sheets":[{"name":"S","cells":{"A1":{"address":"A1","value":1,"data_type":"number","provenance":{"origin":"imported","source":"xl/worksheets/sheet1.xml"}}}}]}"#;
+        let workbook = hydrate(document).unwrap();
+        let text = workbook.to_json().unwrap();
+        assert!(!text.contains("secret-home-dir-do-not-leak"));
+        assert!(text.contains("xl/worksheets/sheet1.xml"));
+        assert!(workbook.source_path.is_none());
+        assert!(workbook.provenance.as_ref().unwrap().source.is_none());
+    }
+
+    #[test]
+    fn duplicate_json_keys_are_refused() {
+        let document = br#"{"schema_version":1,"schema_version":1,"model_version":1,"metadata":{},"sheets":[]}"#;
+        let error = hydrate(document).unwrap_err();
+        assert_eq!(error.code, "duplicate_key");
+        assert_eq!(error.message, "schema_version");
+    }
+
+    #[test]
+    fn deeply_nested_json_is_refused() {
+        let mut document = String::from(r#"{"schema_version":1,"model_version":1,"metadata":"#);
+        document.push_str(&"[".repeat(super::JSON_NESTING_LIMIT as usize));
+        document.push('1');
+        document.push_str(&"]".repeat(super::JSON_NESTING_LIMIT as usize));
+        document.push('}');
+        let error = hydrate(document.as_bytes()).unwrap_err();
+        assert_eq!(error.code, "resource_limit");
+    }
+
+    #[test]
+    fn brackets_inside_a_string_are_not_nesting() {
+        let note = "[".repeat(200);
+        let document = format!(
+            r#"{{"schema_version":1,"model_version":1,"metadata":{{"note":{note:?}}},"sheets":[]}}"#
+        );
+        assert!(hydrate(document.as_bytes()).is_ok());
     }
 }
