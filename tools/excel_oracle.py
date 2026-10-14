@@ -22,6 +22,7 @@ import sys
 import tempfile
 from typing import Any
 import xml.etree.ElementTree as ET
+import xml.sax.saxutils
 import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -220,6 +221,39 @@ def _as_string(value: str) -> str:
     return '"' + value.replace("\\", "\\\\").replace('"', '\\"') + '"'
 
 
+def _alert_guard_open() -> str:
+    """Silence Excel alerts before a workbook opens, and restore them on failure.
+
+    Repair and replace prompts appear at open, before save. The guard records
+    the previous setting, turns alerts off, and the matching close restores it
+    on the success path and on the error path.
+    """
+    return '''set alertsBefore to display alerts
+            try
+                set display alerts to false'''
+
+
+def _alert_guard_close() -> str:
+    return '''set display alerts to alertsBefore
+            on error errText number errNum
+                set display alerts to alertsBefore
+                error errText number errNum
+            end try'''
+
+
+def _owned_workbook_save() -> str:
+    """Save the workbook Excel already has open.
+
+    ``save workbook as`` with a filename returns parameter error -50 after
+    ``calculate full rebuild`` on Excel 16.113, including a save back onto the
+    open path. ``save targetBook`` writes that open file in place. A different
+    filename asks for folder access and raises a dialog, so the harness does
+    not use one.
+    """
+    return '''log "stage:save"
+            save targetBook'''
+
+
 def build_applescript(data: dict[str, Any]) -> str:
     """Use explicit workbook references, with no error-handler close fallback."""
     operations = []
@@ -245,6 +279,7 @@ on run argv
     set workbookFile to (POSIX file workbookPath) as alias
     with timeout of 45 seconds
         tell application "Microsoft Excel"
+            ''' + _alert_guard_open() + '''
             set modeBefore to calculation as text
             log ("excel_version=" & (version as text))
             log ("calculation_version=" & (calculation version as text))
@@ -270,11 +305,11 @@ on run argv
             set metadata to metadata & "max_change=" & (max change as text) & linefeed
             set metadata to metadata & "date_1904=" & (date 1904 of targetBook as text) & linefeed
             set metadata to metadata & "precision_as_displayed=" & (precision as displayed of targetBook as text) & linefeed
-            log "stage:save"
-            save targetBook
+            ''' + _owned_workbook_save() + '''
             log "stage:close"
             close targetBook saving no
             set metadata to metadata & "calculation_mode_after=" & (calculation as text) & linefeed
+            ''' + _alert_guard_close() + '''
             return metadata & "owned_workbook_closed=true"
         end tell
     end timeout
@@ -738,6 +773,70 @@ def _formula_text(value: Any) -> str | None:
     return value if value.startswith("=") else "=" + value
 
 
+def _excel_can_open_formula(formula: str) -> bool:
+    """True when the formula is syntax Excel can load without a repair dialog.
+
+    ``display alerts`` false cancels that dialog, so the workbook never opens.
+    """
+    from workbook_forge import analyze_formula
+
+    try:
+        analyze_formula(formula if formula.startswith("=") else f"={formula}")
+    except (TypeError, ValueError, RecursionError):
+        return False
+    return True
+
+
+_CELL_ELEMENT = re.compile(
+    r'<c\b[^>]*\br="([A-Z]{1,3}[1-9][0-9]{0,6})"[^>]*>.*?</c>',
+    re.DOTALL,
+)
+_CELL_FORMULA = re.compile(r"<f\b[^>]*>([^<]*)</f>")
+
+
+def omit_formulas_excel_will_not_open(path: Path, *, protected: set[str] | None = None) -> list[str]:
+    """Remove syntax Excel will not open from a scratch workbook.
+
+    The bytes outside those cells stay put. Contract checks are protected, so a
+    scenario formula is never removed to make the open succeed. The returned
+    keys name the cells that were removed.
+    """
+    kept = protected or set()
+    with zipfile.ZipFile(path) as archive:
+        parts = {info.filename: archive.read(info.filename) for info in archive.infolist()}
+        order = [info.filename for info in archive.infolist()]
+    workbook = ET.fromstring(parts["xl/workbook.xml"])
+    relationships = ET.fromstring(parts["xl/_rels/workbook.xml.rels"])
+    targets = {item.attrib.get("Id"): item.attrib.get("Target", "") for item in relationships}
+    omitted: list[str] = []
+    for sheet in workbook.findall(f"{_q('sheets')}/{_q('sheet')}"):
+        name = sheet.attrib["name"]
+        target = targets.get(sheet.attrib.get(f"{{{REL}}}id"), "")
+        part = target.lstrip("/") if target.startswith("/") else target if target.startswith("xl/") else f"xl/{target}"
+        text = parts[part].decode("utf-8")
+        pieces: list[str] = []
+        cursor = 0
+        for match in _CELL_ELEMENT.finditer(text):
+            formula = _CELL_FORMULA.search(match.group(0))
+            key = f"{name}!{match.group(1)}"
+            if formula is None or key in kept or _excel_can_open_formula(xml.sax.saxutils.unescape(formula.group(1))):
+                continue
+            pieces.append(text[cursor:match.start()])
+            cursor = match.end()
+            omitted.append(key)
+        if cursor:
+            pieces.append(text[cursor:])
+            parts[part] = "".join(pieces).encode("utf-8")
+    if not omitted:
+        return []
+    temporary = path.with_suffix(".omitted.xlsx")
+    with zipfile.ZipFile(temporary, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        for name in order:
+            archive.writestr(name, parts[name])
+    temporary.replace(path)
+    return omitted
+
+
 def _model_view(path: Path) -> tuple[dict[str, dict[str, Any]], dict[str, Any]]:
     from workbook_forge.xlsx import import_xlsx
 
@@ -949,6 +1048,7 @@ on run argv
     set workbookFile to (POSIX file workbookPath) as alias
     with timeout of {max(1, math.ceil(timeout))} seconds
         tell application "Microsoft Excel"
+            ''' + _alert_guard_open() + '''
             if (count of workbooks) is not 0 then error "Full rebuild requires Excel to have no other open workbooks"
             set modeBefore to calculation as text
             set iterationBefore to iteration as text
@@ -967,8 +1067,7 @@ on run argv
             ''' + "\n            ".join(edits) + '''
             log "stage:full_rebuild"
             calculate full rebuild
-            log "stage:save"
-            save targetBook
+            ''' + _owned_workbook_save() + '''
             log "stage:close"
             close targetBook saving no
             set modeAfter to calculation as text
@@ -989,6 +1088,7 @@ on run argv
             set metadata to metadata & "full_rebuild_invoked=true" & linefeed
             set metadata to metadata & "saved=true" & linefeed
             set metadata to metadata & "owned_workbook_closed=true"
+            ''' + _alert_guard_close() + '''
             return metadata
         end tell
     end timeout
@@ -1090,11 +1190,44 @@ def _fixture_coverage(contract: dict[str, Any]) -> list[dict[str, Any]]:
     ]
 
 
+def _excel_calc_chain_cells(path: Path) -> set[str]:
+    """Cells named by Excel's saved calc chain, as ``Sheet!Address``.
+
+    The chain is written when Excel saves a calculation. A cache planted into
+    the sheet XML does not create one. The ``i`` attribute is the 1-based sheet
+    position; a following cell that omits ``i`` stays on that sheet.
+    """
+    with zipfile.ZipFile(path) as archive:
+        parts = {info.filename.casefold(): archive.read(info.filename) for info in archive.infolist()}
+    workbook_xml = parts.get("xl/workbook.xml")
+    chain_xml = parts.get("xl/calcchain.xml")
+    if workbook_xml is None or chain_xml is None:
+        return set()
+    workbook = ET.fromstring(workbook_xml)
+    sheets = [sheet.attrib["name"] for sheet in workbook.findall(f"{_q('sheets')}/{_q('sheet')}") if sheet.attrib.get("name")]
+    chain = ET.fromstring(chain_xml)
+    found: set[str] = set()
+    sheet_index: int | None = None
+    for cell in chain.findall(_q("c")):
+        if "i" in cell.attrib:
+            try:
+                sheet_index = int(cell.attrib["i"])
+            except ValueError:
+                sheet_index = None
+        ref = cell.attrib.get("r")
+        if ref and sheet_index is not None and 1 <= sheet_index <= len(sheets):
+            found.add(f"{sheets[sheet_index - 1]}!{ref}")
+    return found
+
+
 def _compare_roundtrip(
     before: dict[str, dict[str, Any]], after: dict[str, dict[str, Any]],
     contract: dict[str, Any], metadata: dict[str, str],
+    omitted_unopenable: set[str] | None = None,
+    calculated_cells: set[str] | None = None,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[str]]:
     checks_by_key = _contract_check_map(contract)
+    unopenable = omitted_unopenable or set()
     formula_diffs = []
     all_formula_keys = sorted(
         key for key in set(before) | set(after)
@@ -1111,7 +1244,14 @@ def _compare_roundtrip(
             allowed = _formula_is_accepted(
                 current, check["expected_formula"], _formula_allowlist(contract, check["id"]),
             )
-        formula_diffs.append({"cell": key, "before": prior, "after": current, "allowlisted": allowed})
+        # Excel cancels the open, with alerts suppressed, when a formula has no
+        # syntax. Those cells are removed before open. Their absence is the
+        # removal, not an Excel rewrite of a scenario formula.
+        excel_unopenable = key in unopenable and current is None and prior is not None
+        item = {"cell": key, "before": prior, "after": current, "allowlisted": allowed}
+        if excel_unopenable:
+            item["excel_unopenable"] = True
+        formula_diffs.append(item)
 
     outcomes = []
     mismatches = []
@@ -1135,9 +1275,10 @@ def _compare_roundtrip(
         expected_result = check["expected_result"]
         value_matches = roundtrip_result_matches(observed, expected_result)
         # A result that newly agrees under an unchanged formula was not shown to be
-        # recalculated, including predicates, text, and booleans. A value already
-        # stored before Excel remains a value match. An unchanged file hash still
-        # cannot be observed.
+        # recalculated, including predicates, text, and booleans, unless Excel's
+        # saved calc chain names the cell. A planter that only writes a cached
+        # value does not write that chain. A value already stored before Excel
+        # remains a value match. An unchanged file hash still cannot be observed.
         planted_expected_cache = (
             before_formula == after_formula
             and value_matches
@@ -1145,6 +1286,7 @@ def _compare_roundtrip(
                 not roundtrip_result_matches(before_observed, expected_result)
                 or _predicate_value_changed(expected_result, before_observed, observed)
             )
+            and key not in (calculated_cells or set())
         )
         result_matches = value_matches and not planted_expected_cache
         settings_match = True
@@ -1181,7 +1323,7 @@ def _compare_roundtrip(
         outcomes.append(outcome)
         mismatches.extend(f"{check['id']}: {message}" for message in local_mismatches)
     for item in formula_diffs:
-        if not item["allowlisted"]:
+        if not item["allowlisted"] and not item.get("excel_unopenable"):
             mismatches.append(f"{item['cell']}: formula changed outside the exact allowlist")
     return outcomes, formula_diffs, mismatches
 
@@ -1238,6 +1380,10 @@ def run_roundtrip(
             receipt.update(status="blocked", stage="automation", reason="Microsoft Excel Desktop automation requires macOS")
         else:
             shutil.copyfile(source, working_copy)
+            protected = {f"{check['sheet']}!{check['address']}" for check in contract["checks"]}
+            unopenable = omit_formulas_excel_will_not_open(working_copy, protected=protected)
+            if unopenable:
+                receipt["excel_unopenable_formulas"] = unopenable
             script_path = directory / "roundtrip.applescript"
             script_path.write_text(build_roundtrip_applescript(contract, timeout=timeout), encoding="utf-8")
             receipt["working_copy"] = working_copy.name
@@ -1262,6 +1408,7 @@ def run_roundtrip(
                     status="blocked" if blocked else "failed", stage=stage[-1] if stage else "before_open",
                     reason="Excel automation was blocked by the environment" if blocked else "Excel automation command failed",
                     automation_error_code=code.group(1) if code else None,
+                    automation_error=" ".join(error.split())[:500],
                     owned_workbook_may_remain_open="stage:open" in error or "stage:identity" in error,
                 )
                 if "no other open workbooks" in error.casefold():
@@ -1288,7 +1435,10 @@ def run_roundtrip(
                 receipt["saved_calc_properties"] = saved_calc_properties
                 receipt["formula_count_after"] = sum(item["formula"] is not None for item in after.values())
                 receipt["date_system_after"] = "1904" if saved_uses_1904 else "1900"
-                outcomes, formula_diffs, mismatches = _compare_roundtrip(before, after, contract, metadata)
+                calculated_cells = _excel_calc_chain_cells(working_copy)
+                outcomes, formula_diffs, mismatches = _compare_roundtrip(
+                    before, after, contract, metadata, set(unopenable), calculated_cells,
+                )
                 receipt["observations"] = outcomes
                 receipt["formula_diffs"] = formula_diffs
                 if saved_uses_1904 != uses_1904:

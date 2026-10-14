@@ -161,7 +161,13 @@ def test_applescript_scope_uses_identity_checked_owned_workbook():
     assert 'Synthetic workbook name is already open' in script
     assert script.index('Synthetic workbook path mismatch') < script.index('copy range')
     assert script.count('close targetBook saving no') == 1
-    assert 'on error' not in script
+    assert 'save targetBook' in script
+    assert 'save workbook as' not in script
+    assert script.index('set display alerts to false') < script.index('open workbookFile')
+    assert script.index('end try') < script.index('return metadata')
+    handler = script.split('on error errText number errNum', 1)[1].split('end try', 1)[0]
+    assert 'set display alerts to alertsBefore' in handler
+    assert 'close' not in handler
 
 
 def test_automation_denial_is_blocked_without_an_observation(tmp_path, monkeypatch):
@@ -390,11 +396,89 @@ def test_volatile_predicate_checks_type_and_domain_not_identical_value():
     assert not oracle.roundtrip_result_matches({'type': 'number', 'value': float('nan')}, expected)
 
 
+def test_parse_error_formula_is_removed_before_excel_can_open_it(tmp_path):
+    from workbook_forge.canonical_xlsx import export_canonical
+    from workbook_forge.model import hydrate
+
+    fixture = ROOT / 'fixtures' / 'operating-scenario.workbook.json'
+    source = export_canonical(hydrate(fixture.read_bytes()), tmp_path / 'source.xlsx')
+    original = source.read_bytes()
+    working = tmp_path / 'roundtrip.xlsx'
+    working.write_bytes(original)
+    omitted = oracle.omit_formulas_excel_will_not_open(working)
+    assert omitted == ['Forecast!J2']
+    assert source.read_bytes() == original
+    cells, _ = oracle._model_view(working)
+    assert 'Forecast!J2' not in cells
+    assert cells['Forecast!F2']['formula'] == '=SUM(C2:C4)'
+    assert cells['Forecast!J1']['formula'] == '=NOW()'
+    assert cells['Forecast!F5']['formula'] == '=1/0'
+    protected = tmp_path / 'protected.xlsx'
+    protected.write_bytes(original)
+    assert oracle.omit_formulas_excel_will_not_open(protected, protected={'Forecast!J2'}) == []
+
+
+def test_removed_parse_error_is_not_a_scenario_mismatch():
+    contract = _scenario_contract()
+    good = {'formula': '=A1*2', 'result': {'type': 'number', 'value': 10}}
+    before = {'Main!B1': good, 'Main!Z9': {'formula': '=1+', 'result': {'type': 'blank'}}}
+    after = {'Main!B1': dict(good)}
+    _, diffs, mismatches = oracle._compare_roundtrip(before, after, contract, {}, {'Main!Z9'})
+    assert mismatches == []
+    assert diffs == [{
+        'cell': 'Main!Z9', 'before': '=1+', 'after': None,
+        'allowlisted': False, 'excel_unopenable': True,
+    }]
+    _, _, flagged = oracle._compare_roundtrip(before, after, contract, {})
+    assert any(item.startswith('Main!Z9') for item in flagged)
+
+
+def test_calc_chain_names_cells_and_keeps_the_sheet_when_the_index_is_omitted(tmp_path):
+    path = tmp_path / "chain.xlsx"
+    with zipfile.ZipFile(path, "w") as archive:
+        archive.writestr("xl/workbook.xml", """<?xml version="1.0" encoding="UTF-8"?>
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+  <sheets>
+    <sheet name="Assumptions"/>
+    <sheet name="Forecast"/>
+  </sheets>
+</workbook>""")
+        archive.writestr("xl/calcChain.xml", """<?xml version="1.0" encoding="UTF-8"?>
+<calcChain xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+  <c r="F2" i="2"/>
+  <c r="F3"/>
+  <c r="B1" i="1"/>
+</calcChain>""")
+    assert oracle._excel_calc_chain_cells(path) == {"Forecast!F2", "Forecast!F3", "Assumptions!B1"}
+    empty = tmp_path / "empty.xlsx"
+    with zipfile.ZipFile(empty, "w") as archive:
+        archive.writestr("xl/workbook.xml", "<workbook/>")
+    assert oracle._excel_calc_chain_cells(empty) == set()
+
+
+def test_a_changed_cache_counts_only_when_excel_calc_chain_names_the_cell():
+    contract = _scenario_contract()
+    before = {"Main!B1": {"formula": "=A1*2", "result": {"type": "number", "value": 8}}}
+    after = {"Main!B1": {"formula": "=A1*2", "result": {"type": "number", "value": 10}}}
+    outcomes, _, mismatches = oracle._compare_roundtrip(before, after, contract, {})
+    assert outcomes[0]["result_matches"] is False
+    assert any("not a recalculation" in item for item in mismatches)
+    outcomes, _, mismatches = oracle._compare_roundtrip(before, after, contract, {}, None, {"Main!Z9"})
+    assert outcomes[0]["result_matches"] is False
+    outcomes, _, mismatches = oracle._compare_roundtrip(before, after, contract, {}, None, {"Main!B1"})
+    assert outcomes[0]["result_matches"] is True
+    assert mismatches == []
+
+
 def test_full_rebuild_script_scopes_to_owned_workbook_and_writes_no_global_settings():
     script = oracle.build_roundtrip_applescript(_scenario_contract())
     assert 'calculate full rebuild' in script
     assert 'count of workbooks' in script
     assert 'save targetBook' in script
+    assert 'save workbook as' not in script
+    assert script.index('set display alerts to false') < script.index('open workbookFile')
+    assert script.index('end try') < script.index('return metadata')
+    assert script.count('set display alerts to alertsBefore') == 2
     assert 'close targetBook saving no' in script
     assert not re.search(r'(?i)set\s+(calculation|iteration|max iterations|max change)\s+to\b', script)
     assert 'close every' not in script

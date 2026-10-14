@@ -1716,7 +1716,7 @@ fn sha256(message: &[u8]) -> [u8; 32] {
         padded.push(0);
     }
     padded.extend_from_slice(&bit_len.to_be_bytes());
-    for chunk in padded.chunks_exact(64) {
+    for chunk in padded.as_chunks::<64>().0 {
         let mut words = [0_u32; 64];
         for index in 0..16 {
             words[index] = u32::from_be_bytes(chunk[index * 4..index * 4 + 4].try_into().unwrap());

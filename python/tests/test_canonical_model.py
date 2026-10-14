@@ -300,11 +300,21 @@ def test_shared_golden_input_cases_match_python_and_rust(tmp_path):
         raw = _apply_inputs(document, case["inputs"])
         calculated = calculate(hydrate(raw))
         assert calculated.bindings is not None
+        python_outputs = {
+            row["name"]: row for row in calculation_report(calculated, raw)["outputs"]
+        }
         for name, expected in case["expected"].items():
             target = calculated.bindings.outputs[name]
             cell = calculated.sheet(target.sheet).cells[target.address]
             actual = cell.formula.result if cell.formula is not None else cell.value
             assert _close(actual, expected, tolerance), (case["name"], name, actual, expected)
+            assert python_outputs[name]["origin"] == "calculated", (case["name"], name)
+            assert _close(python_outputs[name]["result"], expected, tolerance), (
+                case["name"],
+                name,
+                python_outputs[name]["result"],
+                expected,
+            )
 
         # Rust must agree on the same rewritten bytes (values, errors, deps).
         # Write a temp file so the rust example can read a path.
@@ -313,6 +323,17 @@ def test_shared_golden_input_cases_match_python_and_rust(tmp_path):
         rust_calculated = _rust_path(temp, "calculate")["workbook"]
         py_dict = calculated.to_dict()
         assert _canonical(py_dict) == _canonical(rust_calculated), case["name"]
+        rust_outputs = {
+            row["name"]: row for row in _rust_path(temp, "report")["report"]["outputs"]
+        }
+        for name, expected in case["expected"].items():
+            assert rust_outputs[name]["origin"] == "calculated", (case["name"], name)
+            assert _close(rust_outputs[name]["result"], expected, tolerance), (
+                case["name"],
+                name,
+                rust_outputs[name]["result"],
+                expected,
+            )
 
 
 def _rust_path(path: Path, mode: str) -> dict:
@@ -340,6 +361,51 @@ def _rust_path(path: Path, mode: str) -> dict:
     )
     assert completed.returncode == 0, completed.stderr
     return json.loads(completed.stdout)
+
+
+def test_imported_formula_cache_is_not_reported_as_calculated(tmp_path):
+    """A stored cache stays on the cell. The report uses a fresh result or nothing."""
+    cases = json.loads(CASES.read_text(encoding="utf-8"))
+    tolerance = float(cases["numeric_tolerance"])
+    baseline = next(case for case in cases["cases"] if case["name"] == "baseline-price-20")
+    expected_revenue = baseline["expected"]["revenue"]
+    document = json.loads(FIXTURE.read_text(encoding="utf-8"))
+    sheets = {sheet["name"]: sheet for sheet in document["sheets"]}
+    forecast = sheets["Forecast"]["cells"]
+    forecast["F2"]["value"] = 111
+    forecast["F2"]["data_type"] = "number"
+    forecast["F2"]["provenance"] = {"origin": "imported", "source": "xl/worksheets/sheet2.xml"}
+    forecast["J1"]["value"] = 222
+    forecast["J1"]["data_type"] = "number"
+    forecast["J1"]["provenance"] = {"origin": "imported", "source": "xl/worksheets/sheet2.xml"}
+    raw = json.dumps(document).encode("utf-8")
+    calculated = calculate(hydrate(raw))
+    python_outputs = {row["name"]: row for row in calculation_report(calculated, raw)["outputs"]}
+    revenue = calculated.sheet("Forecast").cells["F2"]
+    probe = calculated.sheet("Forecast").cells["J1"]
+    assert revenue.value == 111
+    assert revenue.provenance is not None and revenue.provenance.origin == "imported"
+    assert revenue.formula is not None and _close(
+        revenue.formula.result, expected_revenue, tolerance
+    )
+    assert python_outputs["revenue"]["origin"] == "calculated"
+    assert _close(python_outputs["revenue"]["result"], expected_revenue, tolerance)
+    assert python_outputs["revenue"]["result"] != revenue.value
+    assert probe.value == 222
+    assert probe.provenance is not None and probe.provenance.origin == "imported"
+    assert probe.formula is not None and probe.formula.result is None
+    assert python_outputs["unsupported_probe"]["origin"] == "not_calculated"
+    assert python_outputs["unsupported_probe"]["result"] is None
+
+    planted = tmp_path / "imported-cache.workbook.json"
+    planted.write_bytes(raw)
+    rust_workbook = _rust_path(planted, "calculate")["workbook"]
+    assert _canonical(calculated.to_dict()) == _canonical(rust_workbook)
+    rust_outputs = {row["name"]: row for row in _rust_path(planted, "report")["report"]["outputs"]}
+    assert rust_outputs["revenue"]["origin"] == "calculated"
+    assert _close(rust_outputs["revenue"]["result"], expected_revenue, tolerance)
+    assert rust_outputs["unsupported_probe"]["origin"] == "not_calculated"
+    assert rust_outputs["unsupported_probe"]["result"] is None
 
 
 def test_calculation_report_agrees_except_for_the_engine_name():
