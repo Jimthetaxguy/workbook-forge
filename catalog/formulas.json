@@ -853,7 +853,9 @@
       "status": {
         "python": "conformance-tested",
         "rust": "conformance-tested"
-      }
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
     },
     {
       "name": "AMORDEGRC",
@@ -867,7 +869,9 @@
       "status": {
         "python": "conformance-tested",
         "rust": "conformance-tested"
-      }
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
     },
     {
       "name": "AMORLINC",
@@ -881,7 +885,9 @@
       "status": {
         "python": "conformance-tested",
         "rust": "conformance-tested"
-      }
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
     },
     {
       "name": "AND",
@@ -895,7 +901,9 @@
       "status": {
         "python": "conformance-tested",
         "rust": "conformance-tested"
-      }
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
     },
     {
       "name": "AVERAGE",
@@ -909,7 +917,9 @@
       "status": {
         "python": "conformance-tested",
         "rust": "conformance-tested"
-      }
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
     },
     {
       "name": "AVERAGEIF",
@@ -923,7 +933,9 @@
       "status": {
         "python": "conformance-tested",
         "rust": "conformance-tested"
-      }
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
     },
     {
       "name": "AVERAGEIFS",
@@ -937,7 +949,9 @@
       "status": {
         "python": "conformance-tested",
         "rust": "conformance-tested"
-      }
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
     },
     {
       "name": "COMBIN",
@@ -951,7 +965,9 @@
       "status": {
         "python": "conformance-tested",
         "rust": "conformance-tested"
-      }
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
     },
     {
       "name": "COMBINA",
@@ -965,7 +981,9 @@
       "status": {
         "python": "conformance-tested",
         "rust": "conformance-tested"
-      }
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
     },
     {
       "name": "CONCAT",
@@ -979,7 +997,9 @@
       "status": {
         "python": "conformance-tested",
         "rust": "conformance-tested"
-      }
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
     },
     {
       "name": "COUNT",
@@ -993,7 +1013,9 @@
       "status": {
         "python": "conformance-tested",
         "rust": "conformance-tested"
-      }
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
     },
     {
       "name": "COUNTA",
@@ -1007,7 +1029,9 @@
       "status": {
         "python": "conformance-tested",
         "rust": "conformance-tested"
-      }
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
     },
     {
       "name": "COUNTBLANK",
@@ -1021,7 +1045,9 @@
       "status": {
         "python": "conformance-tested",
         "rust": "conformance-tested"
-      }
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
     },
     {
       "name": "COUNTIF",
@@ -1035,7 +1061,9 @@
       "status": {
         "python": "conformance-tested",
         "rust": "conformance-tested"
-      }
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
     },
     {
       "name": "COUNTIFS",
@@ -1049,7 +1077,9 @@
       "status": {
         "python": "conformance-tested",
         "rust": "conformance-tested"
-      }
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
     },
     {
       "name": "COUPDAYBS",
@@ -1063,7 +1093,9 @@
       "status": {
         "python": "conformance-tested",
         "rust": "conformance-tested"
-      }
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
     },
     {
       "name": "COUPDAYS",
@@ -1077,7 +1109,9 @@
       "status": {
         "python": "conformance-tested",
         "rust": "conformance-tested"
-      }
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
     },
     {
       "name": "COUPDAYSNC",
@@ -1091,7 +1125,9 @@
       "status": {
         "python": "conformance-tested",
         "rust": "conformance-tested"
-      }
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
     },
     {
       "name": "COUPNCD",
@@ -1105,7 +1141,9 @@
       "status": {
         "python": "conformance-tested",
         "rust": "conformance-tested"
-      }
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
     },
     {
       "name": "COUPNUM",
@@ -1119,7 +1157,9 @@
       "status": {
         "python": "conformance-tested",
         "rust": "conformance-tested"
-      }
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
     },
     {
       "name": "COUPPCD",
@@ -1133,7 +1173,9 @@
       "status": {
         "python": "conformance-tested",
         "rust": "conformance-tested"
-      }
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
     },
     {
       "name": "CUMIPMT",
@@ -1147,7 +1189,9 @@
       "status": {
         "python": "conformance-tested",
         "rust": "conformance-tested"
-      }
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
     },
     {
       "name": "CUMPRINC",
@@ -1161,7 +1205,9 @@
       "status": {
         "python": "conformance-tested",
         "rust": "conformance-tested"
-      }
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
     },
     {
       "name": "DATE",
@@ -1175,7 +1221,9 @@
       "status": {
         "python": "conformance-tested",
         "rust": "conformance-tested"
-      }
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
     },
     {
       "name": "DAY",
@@ -1189,7 +1237,9 @@
       "status": {
         "python": "conformance-tested",
         "rust": "conformance-tested"
-      }
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
     },
     {
       "name": "DAYS",
@@ -1203,7 +1253,9 @@
       "status": {
         "python": "conformance-tested",
         "rust": "conformance-tested"
-      }
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
     },
     {
       "name": "DAYS360",
@@ -1217,7 +1269,9 @@
       "status": {
         "python": "conformance-tested",
         "rust": "conformance-tested"
-      }
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
     },
     {
       "name": "DB",
@@ -1231,7 +1285,9 @@
       "status": {
         "python": "conformance-tested",
         "rust": "conformance-tested"
-      }
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
     },
     {
       "name": "DDB",
@@ -1245,7 +1301,9 @@
       "status": {
         "python": "conformance-tested",
         "rust": "conformance-tested"
-      }
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
     },
     {
       "name": "EDATE",
@@ -1259,7 +1317,9 @@
       "status": {
         "python": "conformance-tested",
         "rust": "conformance-tested"
-      }
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
     },
     {
       "name": "EOMONTH",
@@ -1273,7 +1333,9 @@
       "status": {
         "python": "conformance-tested",
         "rust": "conformance-tested"
-      }
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
     },
     {
       "name": "EVEN",
@@ -1287,7 +1349,9 @@
       "status": {
         "python": "conformance-tested",
         "rust": "conformance-tested"
-      }
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
     },
     {
       "name": "FACT",
@@ -1301,7 +1365,9 @@
       "status": {
         "python": "conformance-tested",
         "rust": "conformance-tested"
-      }
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
     },
     {
       "name": "FACTDOUBLE",
@@ -1315,7 +1381,9 @@
       "status": {
         "python": "conformance-tested",
         "rust": "conformance-tested"
-      }
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
     },
     {
       "name": "FILTER",
@@ -1329,7 +1397,9 @@
       "status": {
         "python": "conformance-tested",
         "rust": "conformance-tested"
-      }
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
     },
     {
       "name": "FIND",
@@ -1343,7 +1413,9 @@
       "status": {
         "python": "conformance-tested",
         "rust": "conformance-tested"
-      }
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
     },
     {
       "name": "FV",
@@ -1357,7 +1429,9 @@
       "status": {
         "python": "conformance-tested",
         "rust": "conformance-tested"
-      }
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
     },
     {
       "name": "GCD",
@@ -1371,7 +1445,9 @@
       "status": {
         "python": "conformance-tested",
         "rust": "conformance-tested"
-      }
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
     },
     {
       "name": "HOUR",
@@ -1385,7 +1461,9 @@
       "status": {
         "python": "conformance-tested",
         "rust": "conformance-tested"
-      }
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
     },
     {
       "name": "IF",
@@ -1399,7 +1477,9 @@
       "status": {
         "python": "conformance-tested",
         "rust": "conformance-tested"
-      }
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
     },
     {
       "name": "IFERROR",
@@ -1413,7 +1493,9 @@
       "status": {
         "python": "conformance-tested",
         "rust": "conformance-tested"
-      }
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
     },
     {
       "name": "IFNA",
@@ -1427,7 +1509,9 @@
       "status": {
         "python": "conformance-tested",
         "rust": "conformance-tested"
-      }
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
     },
     {
       "name": "IFS",
@@ -1441,7 +1525,9 @@
       "status": {
         "python": "conformance-tested",
         "rust": "conformance-tested"
-      }
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
     },
     {
       "name": "INDEX",
@@ -1455,7 +1541,9 @@
       "status": {
         "python": "conformance-tested",
         "rust": "conformance-tested"
-      }
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
     },
     {
       "name": "INT",
@@ -1469,7 +1557,9 @@
       "status": {
         "python": "conformance-tested",
         "rust": "conformance-tested"
-      }
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
     },
     {
       "name": "IPMT",
@@ -1483,7 +1573,9 @@
       "status": {
         "python": "conformance-tested",
         "rust": "conformance-tested"
-      }
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
     },
     {
       "name": "ISBLANK",
@@ -1497,7 +1589,9 @@
       "status": {
         "python": "conformance-tested",
         "rust": "conformance-tested"
-      }
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
     },
     {
       "name": "ISERR",
@@ -1511,7 +1605,9 @@
       "status": {
         "python": "conformance-tested",
         "rust": "conformance-tested"
-      }
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
     },
     {
       "name": "ISERROR",
@@ -1525,7 +1621,9 @@
       "status": {
         "python": "conformance-tested",
         "rust": "conformance-tested"
-      }
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
     },
     {
       "name": "ISEVEN",
@@ -1539,7 +1637,9 @@
       "status": {
         "python": "conformance-tested",
         "rust": "conformance-tested"
-      }
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
     },
     {
       "name": "ISLOGICAL",
@@ -1553,7 +1653,9 @@
       "status": {
         "python": "conformance-tested",
         "rust": "conformance-tested"
-      }
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
     },
     {
       "name": "ISNA",
@@ -1567,7 +1669,9 @@
       "status": {
         "python": "conformance-tested",
         "rust": "conformance-tested"
-      }
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
     },
     {
       "name": "ISNUMBER",
@@ -1581,7 +1685,9 @@
       "status": {
         "python": "conformance-tested",
         "rust": "conformance-tested"
-      }
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
     },
     {
       "name": "ISODD",
@@ -1595,7 +1701,9 @@
       "status": {
         "python": "conformance-tested",
         "rust": "conformance-tested"
-      }
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
     },
     {
       "name": "ISOWEEKNUM",
@@ -1609,7 +1717,9 @@
       "status": {
         "python": "conformance-tested",
         "rust": "conformance-tested"
-      }
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
     },
     {
       "name": "ISTEXT",
@@ -1623,7 +1733,9 @@
       "status": {
         "python": "conformance-tested",
         "rust": "conformance-tested"
-      }
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
     },
     {
       "name": "LCM",
@@ -1637,7 +1749,9 @@
       "status": {
         "python": "conformance-tested",
         "rust": "conformance-tested"
-      }
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
     },
     {
       "name": "LEFT",
@@ -1651,7 +1765,9 @@
       "status": {
         "python": "conformance-tested",
         "rust": "conformance-tested"
-      }
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
     },
     {
       "name": "LEN",
@@ -1665,7 +1781,9 @@
       "status": {
         "python": "conformance-tested",
         "rust": "conformance-tested"
-      }
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
     },
     {
       "name": "LOWER",
@@ -1679,7 +1797,9 @@
       "status": {
         "python": "conformance-tested",
         "rust": "conformance-tested"
-      }
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
     },
     {
       "name": "MATCH",
@@ -1693,7 +1813,9 @@
       "status": {
         "python": "conformance-tested",
         "rust": "conformance-tested"
-      }
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
     },
     {
       "name": "MAX",
@@ -1707,7 +1829,9 @@
       "status": {
         "python": "conformance-tested",
         "rust": "conformance-tested"
-      }
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
     },
     {
       "name": "MAXIFS",
@@ -1721,7 +1845,9 @@
       "status": {
         "python": "conformance-tested",
         "rust": "conformance-tested"
-      }
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
     },
     {
       "name": "MID",
@@ -1735,7 +1861,9 @@
       "status": {
         "python": "conformance-tested",
         "rust": "conformance-tested"
-      }
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
     },
     {
       "name": "MIN",
@@ -1749,7 +1877,9 @@
       "status": {
         "python": "conformance-tested",
         "rust": "conformance-tested"
-      }
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
     },
     {
       "name": "MINIFS",
@@ -1763,7 +1893,9 @@
       "status": {
         "python": "conformance-tested",
         "rust": "conformance-tested"
-      }
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
     },
     {
       "name": "MINUTE",
@@ -1777,7 +1909,9 @@
       "status": {
         "python": "conformance-tested",
         "rust": "conformance-tested"
-      }
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
     },
     {
       "name": "MOD",
@@ -1791,7 +1925,9 @@
       "status": {
         "python": "conformance-tested",
         "rust": "conformance-tested"
-      }
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
     },
     {
       "name": "MONTH",
@@ -1805,7 +1941,9 @@
       "status": {
         "python": "conformance-tested",
         "rust": "conformance-tested"
-      }
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
     },
     {
       "name": "NA",
@@ -1819,7 +1957,9 @@
       "status": {
         "python": "conformance-tested",
         "rust": "conformance-tested"
-      }
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
     },
     {
       "name": "NETWORKDAYS",
@@ -1833,7 +1973,9 @@
       "status": {
         "python": "conformance-tested",
         "rust": "conformance-tested"
-      }
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
     },
     {
       "name": "NETWORKDAYS.INTL",
@@ -1847,7 +1989,9 @@
       "status": {
         "python": "conformance-tested",
         "rust": "conformance-tested"
-      }
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
     },
     {
       "name": "NOT",
@@ -1861,7 +2005,9 @@
       "status": {
         "python": "conformance-tested",
         "rust": "conformance-tested"
-      }
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
     },
     {
       "name": "NPER",
@@ -1875,7 +2021,9 @@
       "status": {
         "python": "conformance-tested",
         "rust": "conformance-tested"
-      }
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
     },
     {
       "name": "ODD",
@@ -1889,7 +2037,9 @@
       "status": {
         "python": "conformance-tested",
         "rust": "conformance-tested"
-      }
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
     },
     {
       "name": "OR",
@@ -1903,7 +2053,9 @@
       "status": {
         "python": "conformance-tested",
         "rust": "conformance-tested"
-      }
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
     },
     {
       "name": "PERMUT",
@@ -1917,7 +2069,9 @@
       "status": {
         "python": "conformance-tested",
         "rust": "conformance-tested"
-      }
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
     },
     {
       "name": "PERMUTATIONA",
@@ -1931,7 +2085,9 @@
       "status": {
         "python": "conformance-tested",
         "rust": "conformance-tested"
-      }
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
     },
     {
       "name": "PMT",
@@ -1945,7 +2101,9 @@
       "status": {
         "python": "conformance-tested",
         "rust": "conformance-tested"
-      }
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
     },
     {
       "name": "PPMT",
@@ -1959,7 +2117,9 @@
       "status": {
         "python": "conformance-tested",
         "rust": "conformance-tested"
-      }
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
     },
     {
       "name": "PV",
@@ -1973,7 +2133,9 @@
       "status": {
         "python": "conformance-tested",
         "rust": "conformance-tested"
-      }
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
     },
     {
       "name": "QUOTIENT",
@@ -1987,7 +2149,9 @@
       "status": {
         "python": "conformance-tested",
         "rust": "conformance-tested"
-      }
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
     },
     {
       "name": "RIGHT",
@@ -2001,7 +2165,9 @@
       "status": {
         "python": "conformance-tested",
         "rust": "conformance-tested"
-      }
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
     },
     {
       "name": "ROUND",
@@ -2015,7 +2181,9 @@
       "status": {
         "python": "conformance-tested",
         "rust": "conformance-tested"
-      }
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
     },
     {
       "name": "ROUNDDOWN",
@@ -2029,7 +2197,9 @@
       "status": {
         "python": "conformance-tested",
         "rust": "conformance-tested"
-      }
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
     },
     {
       "name": "ROUNDUP",
@@ -2043,7 +2213,9 @@
       "status": {
         "python": "conformance-tested",
         "rust": "conformance-tested"
-      }
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
     },
     {
       "name": "SEARCH",
@@ -2057,7 +2229,9 @@
       "status": {
         "python": "conformance-tested",
         "rust": "conformance-tested"
-      }
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
     },
     {
       "name": "SECOND",
@@ -2071,7 +2245,9 @@
       "status": {
         "python": "conformance-tested",
         "rust": "conformance-tested"
-      }
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
     },
     {
       "name": "SEQUENCE",
@@ -2085,7 +2261,9 @@
       "status": {
         "python": "conformance-tested",
         "rust": "conformance-tested"
-      }
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
     },
     {
       "name": "SLN",
@@ -2099,7 +2277,9 @@
       "status": {
         "python": "conformance-tested",
         "rust": "conformance-tested"
-      }
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
     },
     {
       "name": "SORT",
@@ -2113,7 +2293,9 @@
       "status": {
         "python": "conformance-tested",
         "rust": "conformance-tested"
-      }
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
     },
     {
       "name": "SUBSTITUTE",
@@ -2127,7 +2309,9 @@
       "status": {
         "python": "conformance-tested",
         "rust": "conformance-tested"
-      }
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
     },
     {
       "name": "SUM",
@@ -2141,7 +2325,9 @@
       "status": {
         "python": "conformance-tested",
         "rust": "conformance-tested"
-      }
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
     },
     {
       "name": "SUMIF",
@@ -2155,7 +2341,9 @@
       "status": {
         "python": "conformance-tested",
         "rust": "conformance-tested"
-      }
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
     },
     {
       "name": "SUMIFS",
@@ -2169,7 +2357,9 @@
       "status": {
         "python": "conformance-tested",
         "rust": "conformance-tested"
-      }
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
     },
     {
       "name": "SWITCH",
@@ -2183,7 +2373,9 @@
       "status": {
         "python": "conformance-tested",
         "rust": "conformance-tested"
-      }
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
     },
     {
       "name": "SYD",
@@ -2197,7 +2389,9 @@
       "status": {
         "python": "conformance-tested",
         "rust": "conformance-tested"
-      }
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
     },
     {
       "name": "TEXTAFTER",
@@ -2211,7 +2405,9 @@
       "status": {
         "python": "conformance-tested",
         "rust": "conformance-tested"
-      }
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
     },
     {
       "name": "TEXTBEFORE",
@@ -2225,7 +2421,9 @@
       "status": {
         "python": "conformance-tested",
         "rust": "conformance-tested"
-      }
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
     },
     {
       "name": "TEXTJOIN",
@@ -2239,7 +2437,9 @@
       "status": {
         "python": "conformance-tested",
         "rust": "conformance-tested"
-      }
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
     },
     {
       "name": "TIME",
@@ -2253,7 +2453,9 @@
       "status": {
         "python": "conformance-tested",
         "rust": "conformance-tested"
-      }
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
     },
     {
       "name": "TRIM",
@@ -2267,7 +2469,9 @@
       "status": {
         "python": "conformance-tested",
         "rust": "conformance-tested"
-      }
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
     },
     {
       "name": "TRUNC",
@@ -2281,7 +2485,9 @@
       "status": {
         "python": "conformance-tested",
         "rust": "conformance-tested"
-      }
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
     },
     {
       "name": "UNIQUE",
@@ -2295,7 +2501,9 @@
       "status": {
         "python": "conformance-tested",
         "rust": "conformance-tested"
-      }
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
     },
     {
       "name": "UPPER",
@@ -2309,7 +2517,9 @@
       "status": {
         "python": "conformance-tested",
         "rust": "conformance-tested"
-      }
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
     },
     {
       "name": "VDB",
@@ -2323,7 +2533,9 @@
       "status": {
         "python": "conformance-tested",
         "rust": "conformance-tested"
-      }
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
     },
     {
       "name": "VLOOKUP",
@@ -2337,7 +2549,9 @@
       "status": {
         "python": "conformance-tested",
         "rust": "conformance-tested"
-      }
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
     },
     {
       "name": "WEEKDAY",
@@ -2351,7 +2565,9 @@
       "status": {
         "python": "conformance-tested",
         "rust": "conformance-tested"
-      }
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
     },
     {
       "name": "WEEKNUM",
@@ -2365,7 +2581,9 @@
       "status": {
         "python": "conformance-tested",
         "rust": "conformance-tested"
-      }
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
     },
     {
       "name": "WORKDAY",
@@ -2379,7 +2597,9 @@
       "status": {
         "python": "conformance-tested",
         "rust": "conformance-tested"
-      }
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
     },
     {
       "name": "WORKDAY.INTL",
@@ -2393,7 +2613,9 @@
       "status": {
         "python": "conformance-tested",
         "rust": "conformance-tested"
-      }
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
     },
     {
       "name": "XLOOKUP",
@@ -2407,7 +2629,9 @@
       "status": {
         "python": "conformance-tested",
         "rust": "conformance-tested"
-      }
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
     },
     {
       "name": "XMATCH",
@@ -2421,7 +2645,9 @@
       "status": {
         "python": "conformance-tested",
         "rust": "conformance-tested"
-      }
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
     },
     {
       "name": "YEAR",
@@ -2435,7 +2661,9 @@
       "status": {
         "python": "conformance-tested",
         "rust": "conformance-tested"
-      }
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
     },
     {
       "name": "YEARFRAC",
@@ -2449,7 +2677,9 @@
       "status": {
         "python": "conformance-tested",
         "rust": "conformance-tested"
-      }
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
     }
   ],
   "coverage": {

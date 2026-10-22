@@ -89,7 +89,8 @@
           "aliases",
           "arity",
           "availability",
-          "status"
+          "status",
+          "evidence_grade"
         ],
         "properties": {
           "name": {
@@ -131,9 +132,59 @@
           },
           "status": {
             "$ref": "#/$defs/status"
+          },
+          "evidence_grade": {
+            "$ref": "#/$defs/evidenceGrade"
+          },
+          "profile_class": {
+            "enum": [
+              "cosmetic",
+              "semantic",
+              "unclassified"
+            ],
+            "default": "unclassified",
+            "description": "Whether a Workbook Forge profile rule for this function can change a calculated value (semantic) or not (cosmetic). Defaults to unclassified until reviewed; the strict export gate treats unclassified like semantic."
+          },
+          "excel_observation": {
+            "$ref": "#/$defs/excelObservation"
+          },
+          "excel_compatible": {
+            "type": "boolean",
+            "description": "Optional explicit claim. true is allowed only with evidence_grade excel_observed; dual-engine agreement never marks a function Excel-compatible."
           }
         },
-        "additionalProperties": true
+        "additionalProperties": true,
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "evidence_grade": {
+                  "const": "excel_observed"
+                }
+              },
+              "required": [
+                "evidence_grade"
+              ]
+            },
+            "then": {
+              "required": [
+                "excel_observation"
+              ]
+            },
+            "else": {
+              "not": {
+                "required": [
+                  "excel_observation"
+                ]
+              },
+              "properties": {
+                "excel_compatible": {
+                  "const": false
+                }
+              }
+            }
+          }
+        ]
       }
     },
     "semantic_specs": {
@@ -286,6 +337,57 @@
         }
       },
       "additionalProperties": true
+    },
+    "evidenceGrade": {
+      "enum": [
+        "profile",
+        "dual_engine",
+        "expected_value",
+        "excel_observed"
+      ],
+      "description": "profile: declared by a Workbook Forge rule. dual_engine: Python and Rust agree on shared fixtures (not evidence against Excel). expected_value: matches a Microsoft example or independent arithmetic. excel_observed: Excel Desktop produced it, with a receipt."
+    },
+    "excelObservation": {
+      "type": "object",
+      "required": [
+        "receipt",
+        "receipt_sha256",
+        "workbook",
+        "workbook_sha256",
+        "excel_version",
+        "event_time"
+      ],
+      "properties": {
+        "receipt": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Repository-relative path of the tools/excel_oracle.py receipt.json."
+        },
+        "receipt_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "workbook": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Repository-relative path of the .xlsx Excel saved."
+        },
+        "workbook_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$",
+          "description": "Hash of the observed workbook; a different hash on disk makes the observation stale."
+        },
+        "excel_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "event_time": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When Excel ran, not when the receipt was read."
+        }
+      },
+      "additionalProperties": false
     }
   },
   "additionalProperties": true
