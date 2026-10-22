@@ -178,7 +178,7 @@ def test_excel_observed_requires_a_well_formed_receipt(tmp_path):
     _, observation = _observed_repo(tmp_path)
     for field, bad in (
         ("receipt_sha256", "not-a-hash"),
-        ("workbook", "/Users/someone/private/roundtrip.xlsx"),
+        ("workbook", "/srv/forge/receipts/roundtrip.xlsx"),
         ("receipt", "../outside/receipt.json"),
         ("event_time", "2026-10-14 18:00"),
         ("excel_version", ""),

@@ -357,7 +357,7 @@ mod tests {
         );
         for (field, bad) in [
             ("receipt_sha256", "short"),
-            ("workbook", "/Users/someone/roundtrip.xlsx"),
+            ("workbook", "/srv/forge/roundtrip.xlsx"),
             ("receipt", "../receipt.json"),
             ("event_time", "2026-10-14 18:00"),
             ("excel_version", " "),
