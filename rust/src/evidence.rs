@@ -275,7 +275,12 @@ pub fn validate_catalog_evidence(
 ) -> Result<Vec<FunctionEvidence>, EvidenceError> {
     catalog["functions"]
         .as_array()
-        .ok_or_else(|| error("invalid_catalog", "formulas.json must list functions".into()))?
+        .ok_or_else(|| {
+            error(
+                "invalid_catalog",
+                "formulas.json must list functions".into(),
+            )
+        })?
         .iter()
         .map(validate_function_evidence)
         .collect()
