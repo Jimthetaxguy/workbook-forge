@@ -165,8 +165,9 @@ def build_canonical_receipt(
     _delete_receipt_directory(spill_root, created=created)
     coverage = {item["class"]: item["status"] for item in spill.get("fixture_coverage", [])}
     spill_blocked = spill.get("status") == "blocked" and spill.get("blocker_kind") == "unsupported_capability"
-    excel_pending = scenario.get("status") in {"prepared", "blocked"} and scenario.get("status") != "observed"
-    spec2_passed = scenario.get("status") == "observed" and not spill_blocked
+    scenario_status = scenario.get("status")
+    excel_pending = scenario_status in {"prepared", "blocked"}
+    spec2_passed = scenario_status == "observed" and not spill_blocked
     receipt = {
         "schema_version": 1,
         "kind": "canonical-excel-receipt",
@@ -189,7 +190,7 @@ def build_canonical_receipt(
             "receipt": _display(stable_scenario),
             "formula_diffs": scenario.get("formula_diffs", []),
             "mismatches": scenario.get("mismatches", []),
-            "excel_desktop": "observed" if scenario.get("status") == "observed" else "pending",
+            "excel_desktop": scenario_status if scenario_status in {"observed", "mismatch"} else "pending",
         },
         "array_spill": {
             "status": "blocked",
@@ -233,7 +234,7 @@ def build_canonical_receipt(
                 "Excel formula rewrites, when Desktop runs, are scenario_roundtrip.formula_diffs."
             ),
         },
-        "excel_desktop_pending": excel_pending or scenario.get("status") != "observed",
+        "excel_desktop_pending": excel_pending or scenario_status not in {"observed", "mismatch"},
         "desktop_command": DESKTOP_COMMAND,
         "agent_headless": {
             "status": "not_started",
@@ -364,13 +365,21 @@ def _markdown(receipt: dict[str, Any]) -> str:
         "Excel formula rewrites recorded by the harness on this run:",
         "",
     ]
-    if scenario.get("excel_desktop") != "observed":
-        lines.append("- None. Excel was not run.")
-    elif scenario["formula_diffs"]:
-        for item in scenario["formula_diffs"]:
+    status = scenario.get("status")
+    formula_diffs = scenario.get("formula_diffs", [])
+    if formula_diffs:
+        for item in formula_diffs:
             lines.append(f"- `{json.dumps(item, ensure_ascii=False)}`")
-    else:
+        if status == "mismatch":
+            lines.append("- Excel ran; comparison status was `mismatch`.")
+    elif status == "prepared":
+        lines.append("- None. Excel was not run.")
+    elif status == "mismatch":
+        lines.append("- No formula rewrites were reported; Excel ran and the comparison status was `mismatch`.")
+    elif status == "observed":
         lines.append("- None. Excel has not rewritten this package.")
+    else:
+        lines.append(f"- No completed Excel comparison is available (status `{status or 'unknown'}`).")
     structural = receipt["structural_reimport"]
     lines.append("")
     lines.append(

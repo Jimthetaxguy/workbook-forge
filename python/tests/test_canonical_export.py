@@ -6,6 +6,7 @@ import zipfile
 
 import pytest
 
+import workbook_forge.canonical_roundtrip as canonical_roundtrip
 from workbook_forge.canonical_roundtrip import CanonicalReceiptError, build_canonical_receipt
 from workbook_forge.canonical_xlsx import (
     CanonicalPackageError,
@@ -219,6 +220,54 @@ def test_receipt_records_pending_excel_and_refused_spill(tmp_path):
     assert "Excel was not run." in text
     assert "Excel has not rewritten this package." not in text
     assert "not_passed" in text
+
+
+def test_receipt_preserves_formula_diffs_when_excel_comparison_mismatches(tmp_path, monkeypatch):
+    formula_diff = {
+        "cell": "Forecast!F2",
+        "exported": "=SUM(C2:C4)",
+        "reimported": "=SUM(C2:C4)+0",
+        "allowlisted": False,
+    }
+
+    class FakeOracle:
+        def load_roundtrip_contract(self, _path):
+            return {}
+
+        def run_roundtrip(self, _input_path, _contract, output_root, *, run_excel, timeout):
+            run_dir = output_root / "generated"
+            run_dir.mkdir(parents=True)
+            if output_root.name == "scenario":
+                result = {
+                    "status": "mismatch",
+                    "stage": "reimport",
+                    "reason": "formula comparison mismatch",
+                    "formula_diffs": [formula_diff],
+                    "mismatches": ["Forecast!F2 formula changed outside the allowlist"],
+                    "fixture_coverage": [],
+                }
+            else:
+                result = {
+                    "status": "blocked",
+                    "blocker_kind": "unsupported_capability",
+                    "preflight_skipped": True,
+                    "fixture_coverage": [{"class": "array_spill", "status": "blocked"}],
+                }
+            receipt_path = run_dir / "receipt.json"
+            receipt_path.write_text(json.dumps(result) + "\n", encoding="utf-8")
+            return receipt_path, result
+
+    monkeypatch.setattr(canonical_roundtrip, "_oracle", FakeOracle)
+    receipt = build_canonical_receipt(FIXTURE, tmp_path / "receipt", rust=False)
+
+    scenario = receipt["scenario_roundtrip"]
+    assert scenario["status"] == "mismatch"
+    assert scenario["excel_desktop"] == "mismatch"
+    assert receipt["excel_desktop_pending"] is False
+    text = (tmp_path / "receipt" / "receipt.md").read_text(encoding="utf-8")
+    assert json.dumps(formula_diff, ensure_ascii=False) in text
+    assert "Excel ran; comparison status was `mismatch`." in text
+    assert "Excel was not run." not in text
 
 
 def test_a_receipt_made_without_rust_does_not_say_the_engines_agree(tmp_path):
