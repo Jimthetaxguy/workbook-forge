@@ -2,7 +2,7 @@
 
 **North Star:** [docs/vision.md](docs/vision.md). Compiler stages and shared-model contract: [docs/specs/compiler-pipeline.md](docs/specs/compiler-pipeline.md). Red-flag specs: [docs/specs/red-flags.md](docs/specs/red-flags.md).
 
-Current state: the versioned workbook model, the operating-scenario calculation binding, Python/Rust calculation, canonical export, and Python intake are in place. Both engines write the same calculation report (`schemas/calculation-report.v1.schema.json`). Python intake can also print a summary, a Markdown scan, a cell map, or those two views together. Serialized models, those views, and the report name a file by a `sha256` fingerprint and by package-part names. They do not copy the path you passed. Excel Desktop behavior is still open. Next: record the scalar Excel open/edit/full-recalc/save/reimport observation, then close the full Spec 2 gate (including spill placement, volatile, iterative and quirk cases). The receipt harness is `tools/excel_oracle.py`, driven by `tools/canonical_excel_receipt.py`. The joined headless workflow waits until that gate is closed. See the [compiler pipeline spec](docs/specs/compiler-pipeline.md) and [model versioning](docs/specs/model-versioning.md).
+Current state: the versioned workbook model, the operating-scenario calculation binding, Python/Rust calculation, canonical export, and Python intake are in place. Both engines write the same calculation report (`schemas/calculation-report.v1.schema.json`). Python intake can also print a summary, a Markdown scan, a cell map, or those two views together. Serialized models, those views, and the report name a file by a `sha256` fingerprint and by package-part names. They do not copy the path you passed. Excel Desktop behavior is still open. The SDK export round trip of 12 of 12 cell checks has no receipt in this tree. Next: record the scalar Excel open/edit/full-recalc/save/reimport observation, then close the full Spec 2 gate (including spill placement, volatile, iterative and quirk cases). The receipt harness is `tools/excel_oracle.py`, driven by `tools/canonical_excel_receipt.py`. The joined headless workflow waits until that gate is closed. See the [compiler pipeline spec](docs/specs/compiler-pipeline.md) and [model versioning](docs/specs/model-versioning.md).
 
 **Workbook Forge is an SDK for Excel in formats agents can use.** Its goal is to
 make supported workbook data, formulas, dependencies, presentation, and business
@@ -203,7 +203,11 @@ cases compare their behavior. Application input names bind to cells and are
 distinct from Excel defined-name formulas.
 
 Install the pure Python package with `pip install .`; no Rust toolchain or native
-extension is required. Run the same model through Python or the command line:
+extension is required. The Python example below is the older toolkit form:
+`operating_scenario()` generates the workbook, and `export_xlsx` and
+`import_xlsx` apply a preservation-aware patch. The canonical path is
+`workbook-forge intake` and `workbook-forge calculate`, in the command
+examples that follow.
 
 ```python
 from workbook_forge.toolkit import operating_scenario
@@ -232,7 +236,16 @@ cargo run --manifest-path rust/Cargo.toml --example xlsx_scenario -- generate ru
 cargo run --manifest-path rust/Cargo.toml --example xlsx_scenario -- edit rust-scenario.xlsx rust-updated.xlsx 25
 ```
 
-`intake` prints the canonical model. `--summary`, `--markdown`, `--map`, and `--paired` are views of that same model. `calculate` prints the shared report for a canonical JSON file or an `.xlsx` file. `--model` and `--xlsx` write new files and do not replace the input. A failure on stderr is one JSON object with `error` and, when the failure has a stable name, `code`. Duplicate keys in a canonical document or in an agent request are refused. A document nested deeper than 128 containers is refused with `resource_limit`.
+`workbook-forge intake` and `workbook-forge calculate` are the canonical path. The
+`scenario`, `inspect`, and `capabilities` commands, and the Rust examples in
+the block above, are the older toolkit form (generate and preservation-aware
+patch). `intake` prints the canonical model. `--summary`, `--markdown`, `--map`,
+and `--paired` are views of that same model. `calculate` prints the shared
+report for a canonical JSON file or an `.xlsx` file. `--model` and `--xlsx`
+write new files and do not replace the input. A failure on stderr is one JSON
+object with `error` and, when the failure has a stable name, `code`. Duplicate
+keys in a canonical document or in an agent request are refused. A document
+nested deeper than 128 containers is refused with `resource_limit`.
 
 Python typed expressions expose separate copy anchors and use the Python parser:
 
@@ -259,14 +272,17 @@ Select it with `operating_scenario(backend="rust")`,
 Selecting an unavailable Rust bridge raises an explicit error; Python never
 silently substitutes Rust for its own implementation.
 
-Rust's `workbook_forge::xlsx` module provides its own import/export workflow and
-uses only low-level ZIP/XML libraries. The Rust examples run without Python.
-Fresh generation supports sparse authored models in either language. Rust's
-preservation-aware imported editing currently requires existing cells; inserting
-new cells into imported packages is explicitly rejected.
+Rust's `workbook_forge::xlsx` module is the same older toolkit form: it generates
+a workbook and applies a preservation-aware patch. It provides its own
+import/export workflow and uses only low-level ZIP/XML libraries. The Rust
+examples run without Python. Fresh generation supports sparse authored models
+in either language. Rust's preservation-aware imported editing currently
+requires existing cells; inserting new cells into imported packages is
+explicitly rejected.
 
-Imported packages retain an immutable baseline. Supported edits and results
-are patched into a private reconstruction, preserving untouched part payloads.
+In this older toolkit form, imported packages retain an immutable baseline.
+Supported edits and results are patched into a private reconstruction,
+preserving untouched part payloads.
 Unsupported formulas outside the selected output closure remain preserved;
 dependencies on unsupported content fail explicitly. Export refuses array spill
 placement, stale results, and unsupported changes to imported structure/styles.
@@ -306,7 +322,7 @@ The Microsoft function index currently contributes 521 named entries across its 
 - `.autoresearch/` — loop configuration (`config.json`) and the accepted-run ledger (`state.json`).
 - `docs/specs/` — the red-flag specs, model versioning rules and the model changelog; `schemas/` holds the canonical workbook schema.
 - `docs/history/` — superseded briefs, notes and Jev advisory receipts, kept for the record.
-- `receipts/` — committed Excel round-trip receipts.
+- `receipts/` — preflight packages for the Excel round-trip harness.
 
 Catalogs under `catalog/` are the maintained sources. Rust embeds the agent-operation,
 extraction and primitive catalogs, along with the primitive expression schema,
@@ -332,7 +348,7 @@ toolkit adds model and adapter capabilities without expanding the function count
 | XML extraction patterns | 10 |
 | Detailed semantic specs | 85 |
 | Formula and compatibility source records | 110 |
-| Direct Excel Desktop observations | one SDK export round trip, 12 of 12 cell checks matched (2026-09-28); the canonical-fixture receipt is outstanding |
+| Direct Excel Desktop observations | the SDK export round trip of 12 of 12 cell checks (2026-09-28) has no receipt in this tree; the canonical-fixture receipt is outstanding |
 
 The Python and Rust evaluators currently cover 115 functions, including scalar arithmetic, references, text and logical functions, the periodic financial functions FV, PV, PMT, NPER, IPMT, PPMT, CUMIPMT, CUMPRINC, SLN, SYD, DB, DDB, VDB, AMORLINC, and AMORDEGRC (deprecated legacy), dates, lookups, `TEXTBEFORE`/`TEXTAFTER`, error predicates (`ISNA`, `ISERR`, `ISERROR`), `NA`, `COUNTBLANK`, six conditional aggregations (`COUNTIF(S)`, `SUMIF(S)`, `AVERAGEIF(S)`), conditional extrema (`MINIFS`, `MAXIFS`), date/time functions (`HOUR`, `MINUTE`, `SECOND`, `TIME`, `WEEKDAY`, `WEEKNUM`, `ISOWEEKNUM`, `DAYS360`, `YEARFRAC`, `WORKDAY`, `NETWORKDAYS`, `WORKDAY.INTL`, `NETWORKDAYS.INTL`, `COUPDAYBS`, `COUPDAYS`, `COUPDAYSNC`, `COUPNCD`, `COUPNUM`, `COUPPCD`), and scalar rounding/remainder functions (`EVEN`, `ODD`, `INT`, `TRUNC`, `ROUND`, `ROUNDUP`, `ROUNDDOWN`, `MOD`, and `QUOTIENT`), plus parity predicates (`ISEVEN` and `ISODD`), plus factorial and combinatorics (`FACT`, `FACTDOUBLE`, `COMBIN`, `COMBINA`, `PERMUT`, and `PERMUTATIONA`), plus integer math (`GCD` and `LCM`), and bounded array generation with `SEQUENCE`, row/column ordering with `SORT`, and stable distinct-row/column selection with `UNIQUE`.
 
