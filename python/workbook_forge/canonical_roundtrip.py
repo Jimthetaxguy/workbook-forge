@@ -16,7 +16,7 @@ import shutil
 from typing import Any
 
 from workbook_forge.canonical_xlsx import compare_structure, export_canonical, import_canonical
-from workbook_forge.model import calculate, hydrate, with_input
+from workbook_forge.model import calculate, content_fingerprint, hydrate, with_input
 
 ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_FIXTURE = ROOT / "fixtures" / "operating-scenario.workbook.json"
@@ -28,6 +28,87 @@ DESKTOP_COMMAND = (
     "--output-dir receipts/canonical-operating-scenario-excel "
     "--excel"
 )
+
+# Names left by a finished or interrupted run of this builder.
+_RECEIPT_ENTRIES = frozenset({
+    "receipt.json",
+    "receipt.md",
+    "operating-scenario.exported.xlsx",
+    "scenario-roundtrip.json",
+    "red-flag-roundtrip.json",
+    "scenario",
+    "red-flags",
+})
+
+
+class CanonicalReceiptError(ValueError):
+    """The receipt directory is not one this builder may replace."""
+
+
+def _is_repository_root_or_parent(path: Path) -> bool:
+    root = ROOT.resolve()
+    return path == root or root.is_relative_to(path)
+
+
+def _only_receipt_entries(path: Path) -> bool:
+    if not path.is_dir() or path.is_symlink():
+        return False
+    entries = list(path.iterdir())
+    if not entries:
+        return False
+    return all(entry.name in _RECEIPT_ENTRIES and not entry.is_symlink() for entry in entries)
+
+
+def _refusal_detail(path: Path) -> str:
+    if not path.exists():
+        return "refusing to delete a path that does not exist"
+    if not path.is_dir():
+        return "refusing to delete a path that is not a canonical receipt directory"
+    unexpected = sorted(
+        entry.name
+        for entry in path.iterdir()
+        if entry.name not in _RECEIPT_ENTRIES or entry.is_symlink()
+    )
+    if unexpected:
+        listed = ", ".join(unexpected)
+        return (
+            "refusing to delete a directory that is not a canonical receipt; "
+            f"it contains {listed}"
+        )
+    return "refusing to delete an empty directory that is not a canonical receipt"
+
+
+def _delete_receipt_directory(path: Path, *, created: set[Path]) -> None:
+    """Delete a directory this call created, or one that holds only a previous receipt.
+
+    Refuses the repository root, any parent of it, symbolic links, and any
+    directory that contains anything other than receipt files.
+    """
+    if path.is_symlink():
+        raise CanonicalReceiptError(f"refusing to delete a symbolic link ({path})")
+    resolved = path.resolve()
+    if _is_repository_root_or_parent(resolved):
+        raise CanonicalReceiptError(
+            f"refusing to delete the repository root or a parent of it ({resolved})"
+        )
+    if resolved in created or _only_receipt_entries(resolved):
+        shutil.rmtree(resolved)
+        created.discard(resolved)
+        return
+    raise CanonicalReceiptError(f"{_refusal_detail(resolved)} ({resolved})")
+
+
+def _mark_created(path: Path, *, root: Path, created: set[Path]) -> None:
+    if path.is_symlink():
+        raise CanonicalReceiptError(f"refusing to delete a symbolic link ({path})")
+    resolved = path.resolve()
+    inside = resolved.is_relative_to(root) and resolved != root
+    if not inside or _is_repository_root_or_parent(resolved):
+        raise CanonicalReceiptError(
+            "refusing to delete a directory this call did not create inside the receipt directory "
+            f"({resolved})"
+        )
+    created.add(resolved)
 
 
 def build_canonical_receipt(
@@ -41,9 +122,13 @@ def build_canonical_receipt(
     """Export the canonical fixture and run the existing round-trip harness."""
     oracle = _oracle()
     fixture_path = Path(fixture).resolve()
-    directory = Path(output_dir).resolve()
+    requested = Path(output_dir)
+    if requested.is_symlink():
+        raise CanonicalReceiptError(f"refusing to delete a symbolic link ({requested})")
+    directory = requested.resolve()
+    created: set[Path] = set()
     if directory.exists():
-        shutil.rmtree(directory)
+        _delete_receipt_directory(directory, created=created)
     directory.mkdir(parents=True)
     raw = fixture_path.read_bytes()
     original = hydrate(raw)
@@ -62,22 +147,27 @@ def build_canonical_receipt(
     structure = compare_structure(original, import_canonical(exported))
     scenario_contract = oracle.load_roundtrip_contract(SCENARIO_CONTRACT)
     red_flag_contract = oracle.load_roundtrip_contract(RED_FLAG_CONTRACT)
+    scenario_root = directory / "scenario"
+    spill_root = directory / "red-flags"
     scenario_receipt_path, scenario = oracle.run_roundtrip(
-        exported, scenario_contract, directory / "scenario", run_excel=run_excel, timeout=timeout
+        exported, scenario_contract, scenario_root, run_excel=run_excel, timeout=timeout
     )
     spill_receipt_path, spill = oracle.run_roundtrip(
-        exported, red_flag_contract, directory / "red-flags", run_excel=False, timeout=timeout
+        exported, red_flag_contract, spill_root, run_excel=False, timeout=timeout
     )
+    _mark_created(scenario_root, root=directory, created=created)
+    _mark_created(spill_root, root=directory, created=created)
     stable_scenario = directory / "scenario-roundtrip.json"
     stable_spill = directory / "red-flag-roundtrip.json"
     shutil.copyfile(scenario_receipt_path, stable_scenario)
     shutil.copyfile(spill_receipt_path, stable_spill)
-    shutil.rmtree(directory / "scenario")
-    shutil.rmtree(directory / "red-flags")
+    _delete_receipt_directory(scenario_root, created=created)
+    _delete_receipt_directory(spill_root, created=created)
     coverage = {item["class"]: item["status"] for item in spill.get("fixture_coverage", [])}
     spill_blocked = spill.get("status") == "blocked" and spill.get("blocker_kind") == "unsupported_capability"
-    excel_pending = scenario.get("status") in {"prepared", "blocked"} and scenario.get("status") != "observed"
-    spec2_passed = scenario.get("status") == "observed" and not spill_blocked
+    scenario_status = scenario.get("status")
+    excel_pending = scenario_status in {"prepared", "blocked"}
+    spec2_passed = scenario_status == "observed" and not spill_blocked
     receipt = {
         "schema_version": 1,
         "kind": "canonical-excel-receipt",
@@ -100,7 +190,7 @@ def build_canonical_receipt(
             "receipt": _display(stable_scenario),
             "formula_diffs": scenario.get("formula_diffs", []),
             "mismatches": scenario.get("mismatches", []),
-            "excel_desktop": "observed" if scenario.get("status") == "observed" else "pending",
+            "excel_desktop": scenario_status if scenario_status in {"observed", "mismatch"} else "pending",
         },
         "array_spill": {
             "status": "blocked",
@@ -144,7 +234,7 @@ def build_canonical_receipt(
                 "Excel formula rewrites, when Desktop runs, are scenario_roundtrip.formula_diffs."
             ),
         },
-        "excel_desktop_pending": excel_pending or scenario.get("status") != "observed",
+        "excel_desktop_pending": excel_pending or scenario_status not in {"observed", "mismatch"},
         "desktop_command": DESKTOP_COMMAND,
         "agent_headless": {
             "status": "not_started",
@@ -239,11 +329,12 @@ def _bound_outputs(workbook) -> dict[str, Any]:
 
 
 def _display(path: Path) -> str:
+    """Repo-relative path, or a content fingerprint when the file is outside the checkout."""
     resolved = path.resolve()
     try:
         return str(resolved.relative_to(ROOT))
     except ValueError:
-        return str(resolved)
+        return content_fingerprint(resolved.read_bytes())
 
 
 def _markdown(receipt: dict[str, Any]) -> str:
@@ -274,11 +365,21 @@ def _markdown(receipt: dict[str, Any]) -> str:
         "Excel formula rewrites recorded by the harness on this run:",
         "",
     ]
-    if scenario["formula_diffs"]:
-        for item in scenario["formula_diffs"]:
+    status = scenario.get("status")
+    formula_diffs = scenario.get("formula_diffs", [])
+    if formula_diffs:
+        for item in formula_diffs:
             lines.append(f"- `{json.dumps(item, ensure_ascii=False)}`")
-    else:
+        if status == "mismatch":
+            lines.append("- Excel ran; comparison status was `mismatch`.")
+    elif status == "prepared":
+        lines.append("- None. Excel was not run.")
+    elif status == "mismatch":
+        lines.append("- No formula rewrites were reported; Excel ran and the comparison status was `mismatch`.")
+    elif status == "observed":
         lines.append("- None. Excel has not rewritten this package.")
+    else:
+        lines.append(f"- No completed Excel comparison is available (status `{status or 'unknown'}`).")
     structural = receipt["structural_reimport"]
     lines.append("")
     lines.append(
