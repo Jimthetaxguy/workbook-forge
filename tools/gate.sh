@@ -111,7 +111,7 @@ build_examples() {
 build_examples .verification/agent-contract-target agent_workbook
 build_examples .verification/primitives-contract-target primitive_contract
 build_examples .verification/xml-contract-target extract_xlsx agent_workbook
-rust_examples=(xlsx_scenario)
+rust_examples=(xlsx_scenario compiler_roundtrip)
 if [ -f rust/examples/canonical_calc.rs ]; then
   rust_examples+=(canonical_calc)
 fi

@@ -4,7 +4,7 @@
   "namespace": "http://schemas.openxmlformats.org/spreadsheetml/2006/main",
   "source_catalogs": {
     "inventory_version": "1.0.0",
-    "support_version": "0.23.0"
+    "support_version": "0.23.1"
   },
   "limits": {
     "max_xml_bytes": 33554432,

@@ -1,0 +1,146 @@
+{
+  "fixture_version": 4,
+  "primary_sources": [
+    "https://support.microsoft.com/en-us/excel/calculation-operators-and-precedence-in-excel",
+    "https://support.microsoft.com/en-us/excel/functions/match-function"
+  ],
+  "expectation_basis": "Numeric operators/precedence from Microsoft; type ordering/blank adaptation are explicit Excel-targeted profiles inferred from typed order, not fresh Excel observations; ASCII case-insensitive and UTF-8 ordinal text profile.",
+  "sheets": [
+    {
+      "name": "Calc",
+      "values": {
+        "A1": 99
+      },
+      "formulas": {
+        "B1": "IF('2026 O''Brien'!$A1>=5,'2026 O''Brien'!$A1*2,0)",
+        "B2": "SUM('2026 O''Brien'!$A$1:A2)",
+        "B3": "IF('2026 O''Brien'!A1=9,11,1/0)",
+        "B4": "IF('2026 O''Brien'!A1<10,12,1/0)",
+        "B5": "IFERROR('2026 O''Brien'!A1>#N/A,13)",
+        "B6": "'2026 O''Brien'!A6='2026 O''Brien'!A1",
+        "B7": "'2026 O''Brien'!A6>'2026 O''Brien'!A1",
+        "B8": "'2026 O''Brien'!A7>'2026 O''Brien'!A1",
+        "B9": "'2026 O''Brien'!A3=0",
+        "B10": "'2026 O''Brien'!A3=\"\"",
+        "B11": "'2026 O''Brien'!A3=FALSE",
+        "B12": "'2026 O''Brien'!A8=0",
+        "B13": "FALSE=0",
+        "B14": "TRUE=1",
+        "B15": "\"AbC\"=\"aBc\"",
+        "B16": "\"B\">\"A\"",
+        "B17": "1+2*3=7",
+        "B18": "(1<2)=TRUE",
+        "B19": "1<2<3",
+        "B20": "'Rate=Plan!'!$A$1>=10",
+        "B21": "#REF!<#N/A",
+        "B22": "1/0<0",
+        "B23": "IF(FALSE,#REF!<1,TRUE)",
+        "B24": "'2026 O''Brien'!A3",
+        "B25": "B24=\"\"",
+        "B26": "FALSE<TRUE",
+        "B27": "\"a\"<FALSE",
+        "B28": "9=9.0",
+        "B29": "\"9\"=9",
+        "B30": "$A$1=99",
+        "B31": "'2026 O''Brien'!A1<=9",
+        "B32": "'2026 O''Brien'!A1<>8",
+        "B33": "IF(1+2*3>6,21,1/0)",
+        "B34": "IF((1+2)*3>8,22,1/0)",
+        "B35": "IFERROR(#NULL!=0,23)",
+        "B36": "IFERROR(2>1,1/0)"
+      }
+    },
+    {
+      "name": "2026 O'Brien",
+      "values": {
+        "A1": 2,
+        "A2": 3,
+        "A3": null,
+        "A4": {
+          "error": "#NULL!"
+        },
+        "A5": {
+          "error": "#SPILL!"
+        },
+        "A6": "9",
+        "A7": false,
+        "A8": ""
+      },
+      "formulas": {
+        "B1": "Calc!$B$1+1"
+      }
+    },
+    {
+      "name": "Rate=Plan!",
+      "values": {
+        "A1": 10
+      },
+      "formulas": {}
+    },
+    {
+      "name": "Unused",
+      "values": {},
+      "formulas": {}
+    }
+  ],
+  "overrides": {
+    "'2026 O''Brien'!A1": 9
+  },
+  "expected_after_edits": {
+    "'Calc'!A1": 99,
+    "'2026 O''Brien'!A1": 9,
+    "'2026 O''Brien'!A2": 6,
+    "'2026 O''Brien'!A3": null,
+    "'2026 O''Brien'!A4": {
+      "error": "#NULL!"
+    },
+    "'2026 O''Brien'!A5": {
+      "error": "#SPILL!"
+    },
+    "'2026 O''Brien'!A6": "9",
+    "'2026 O''Brien'!A7": false,
+    "'2026 O''Brien'!A8": "",
+    "'Rate=Plan!'!A1": 10,
+    "'Calc'!B1": 45,
+    "'Calc'!B2": 15,
+    "'Calc'!B3": 11,
+    "'Calc'!B4": 12,
+    "'Calc'!B5": 13,
+    "'Calc'!B6": false,
+    "'Calc'!B7": true,
+    "'Calc'!B8": true,
+    "'Calc'!B9": true,
+    "'Calc'!B10": true,
+    "'Calc'!B11": true,
+    "'Calc'!B12": false,
+    "'Calc'!B13": false,
+    "'Calc'!B14": false,
+    "'Calc'!B15": true,
+    "'Calc'!B16": true,
+    "'Calc'!B17": true,
+    "'Calc'!B18": true,
+    "'Calc'!B19": false,
+    "'Calc'!B20": true,
+    "'Calc'!B21": {
+      "error": "#REF!"
+    },
+    "'Calc'!B22": {
+      "error": "#DIV/0!"
+    },
+    "'Calc'!B23": true,
+    "'Calc'!B24": 0,
+    "'Calc'!B25": false,
+    "'Calc'!B26": true,
+    "'Calc'!B27": true,
+    "'Calc'!B28": true,
+    "'Calc'!B29": false,
+    "'Calc'!B30": true,
+    "'Calc'!B31": true,
+    "'Calc'!B32": true,
+    "'Calc'!B33": 21,
+    "'Calc'!B34": 22,
+    "'Calc'!B35": 23,
+    "'Calc'!B36": true,
+    "'2026 O''Brien'!B1": 46
+  }
+}

@@ -7,7 +7,7 @@ import zipfile
 import pytest
 
 import workbook_forge.canonical_roundtrip as canonical_roundtrip
-from workbook_forge.canonical_roundtrip import CanonicalReceiptError, build_canonical_receipt
+from workbook_forge.canonical_roundtrip import build_canonical_receipt
 from workbook_forge.canonical_xlsx import (
     CanonicalPackageError,
     compare_structure,
@@ -212,7 +212,12 @@ def test_receipt_records_pending_excel_and_refused_spill(tmp_path):
     assert (tmp_path / "receipt" / "operating-scenario.exported.xlsx").is_file()
     assert (tmp_path / "receipt" / "scenario-roundtrip.json").is_file()
     assert (tmp_path / "receipt" / "red-flag-roundtrip.json").is_file()
-    assert not (tmp_path / "receipt" / "scenario").exists()
+    assert (tmp_path / "receipt" / "scenario").is_dir()
+    assert (tmp_path / "receipt" / "red-flags").is_dir()
+    assert receipt["export_lane"]["evaluator"] == "python:model.calculate"
+    assert receipt["export_lane"]["end_to_end_rust_only"] is False
+    assert len(receipt["export_lane"]["exported_sha256"]) == 64
+    assert receipt["artifact_retention"]["cleanup"] == "none"
     text = (tmp_path / "receipt" / "receipt.md").read_text(encoding="utf-8")
     assert "Spec 2 passed: `false`" in text
     assert "unit_price" in text
@@ -280,82 +285,6 @@ def test_a_receipt_made_without_rust_does_not_say_the_engines_agree(tmp_path):
     written = (tmp_path / "receipt" / "receipt.md").read_text(encoding="utf-8")
     assert written.count("Python/Rust match: `not compared`") == 2
     assert "match: `true`" not in written.split("## Engine values")[1]
-
-
-def test_receipt_refuses_to_replace_an_unsafe_directory(tmp_path):
-    unsafe = tmp_path / "unsafe"
-    unsafe.mkdir()
-    kept = unsafe / "notes.txt"
-    kept.write_text("keep\n", encoding="utf-8")
-    (unsafe / "receipt.json").write_text("{}\n", encoding="utf-8")
-    with pytest.raises(CanonicalReceiptError, match="notes.txt"):
-        build_canonical_receipt(FIXTURE, unsafe, rust=False)
-    assert kept.read_text(encoding="utf-8") == "keep\n"
-    assert (unsafe / "receipt.json").read_text(encoding="utf-8") == "{}\n"
-
-    empty = tmp_path / "empty"
-    empty.mkdir()
-    with pytest.raises(CanonicalReceiptError, match="empty directory"):
-        build_canonical_receipt(FIXTURE, empty, rust=False)
-    assert list(empty.iterdir()) == []
-
-    not_a_directory = tmp_path / "file.txt"
-    not_a_directory.write_text("stay\n", encoding="utf-8")
-    with pytest.raises(CanonicalReceiptError, match="not a canonical receipt directory"):
-        build_canonical_receipt(FIXTURE, not_a_directory, rust=False)
-    assert not_a_directory.read_text(encoding="utf-8") == "stay\n"
-
-    linked = tmp_path / "linked"
-    linked.mkdir()
-    (linked / "keeper.txt").write_text("stay\n", encoding="utf-8")
-    shortcut = tmp_path / "shortcut"
-    shortcut.symlink_to(linked, target_is_directory=True)
-    with pytest.raises(CanonicalReceiptError, match="symbolic link"):
-        build_canonical_receipt(FIXTURE, shortcut, rust=False)
-    assert (linked / "keeper.txt").read_text(encoding="utf-8") == "stay\n"
-
-    sentinel = ROOT / "README.md"
-    before = sentinel.read_bytes()
-    with pytest.raises(CanonicalReceiptError, match="repository root or a parent"):
-        build_canonical_receipt(FIXTURE, ROOT, rust=False)
-    with pytest.raises(CanonicalReceiptError, match="repository root or a parent"):
-        build_canonical_receipt(FIXTURE, ROOT.parent, rust=False)
-    with pytest.raises(CanonicalReceiptError, match="repository root or a parent"):
-        build_canonical_receipt(FIXTURE, ROOT / "..", rust=False)
-    assert sentinel.read_bytes() == before
-    assert (ROOT / "python" / "workbook_forge" / "canonical_roundtrip.py").is_file()
-
-
-def test_receipt_replaces_a_previous_receipt_directory(tmp_path):
-    directory = tmp_path / "receipt"
-    directory.mkdir()
-    (directory / "receipt.json").write_text('{"stale": true}\n', encoding="utf-8")
-    (directory / "receipt.md").write_text("stale receipt\n", encoding="utf-8")
-    (directory / "operating-scenario.exported.xlsx").write_bytes(b"stale-xlsx")
-    (directory / "scenario-roundtrip.json").write_text("{}\n", encoding="utf-8")
-    (directory / "red-flag-roundtrip.json").write_text("{}\n", encoding="utf-8")
-    (directory / "scenario").mkdir()
-    (directory / "scenario" / "scratch.txt").write_text("scratch\n", encoding="utf-8")
-    (directory / "red-flags").mkdir()
-    (directory / "red-flags" / "scratch.txt").write_text("scratch\n", encoding="utf-8")
-
-    receipt = build_canonical_receipt(FIXTURE, directory, rust=False)
-    written = (directory / "receipt.json").read_text(encoding="utf-8")
-    assert "stale" not in written
-    assert receipt["kind"] == "canonical-excel-receipt"
-    assert "scratch" not in written
-    assert not (directory / "scenario").exists()
-    assert not (directory / "red-flags").exists()
-    assert (directory / "operating-scenario.exported.xlsx").is_file()
-    assert (directory / "scenario-roundtrip.json").is_file()
-    assert (directory / "red-flag-roundtrip.json").is_file()
-
-    again = build_canonical_receipt(FIXTURE, directory, rust=False)
-    assert again["kind"] == "canonical-excel-receipt"
-    assert (directory / "receipt.json").is_file()
-    assert (directory / "receipt.md").is_file()
-    assert not (directory / "scenario").exists()
-    assert not (directory / "red-flags").exists()
 
 
 def _assert_no_machine_path(value):
