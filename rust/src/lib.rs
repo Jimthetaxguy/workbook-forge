@@ -5,6 +5,7 @@
 //! is reported rather than guessed.
 
 pub mod agent;
+pub mod evidence;
 pub mod extraction;
 pub mod model;
 pub mod primitives;

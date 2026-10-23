@@ -9,6 +9,8 @@ from pathlib import Path
 import sysconfig
 from typing import Any
 
+from workbook_forge.evidence import EvidenceError, FunctionEvidence, validate_function_evidence
+
 _ROOT = Path(__file__).resolve().parents[2]
 
 # Permissive SPDX licenses with no copyleft terms. The same list appears in the
@@ -77,6 +79,10 @@ def _load() -> tuple[dict[str, Any], dict[str, dict[str, Any]]]:
         status = item.get("status", {})
         if any(value not in {"catalogued", "parsed", "evaluated", "conformance-tested"} for value in status.values()):
             raise CatalogError(f"function {key} has an unknown support status")
+        try:
+            validate_function_evidence(item)
+        except EvidenceError as exc:
+            raise CatalogError(str(exc)) from exc
         supported[key] = item
 
     semantic_specs = support.get("semantic_specs", {})
@@ -184,6 +190,47 @@ def function_status(name: str, language: str) -> str:
     if implementation is None:
         return "catalogued"
     return implementation["status"].get(language, "catalogued")
+
+
+def evidence_root() -> Path:
+    """Directory that repository-relative Excel observation paths resolve against."""
+    return _ROOT
+
+
+def function_evidence(name: str) -> FunctionEvidence | None:
+    """Return the evidence grade, profile class and any Excel observation for a function.
+
+    ``None`` means the function has no implementation entry in ``formulas.json``.
+    """
+    entry = lookup_function(name)
+    if entry is None:
+        raise KeyError(name)
+    implementation = entry["implementation"]
+    if implementation is None:
+        return None
+    return validate_function_evidence(implementation)
+
+
+def evidence_by_function() -> dict[str, FunctionEvidence]:
+    """Evidence for every implemented function, keyed by upper-case name."""
+    _, functions = _load()
+    return {
+        name: validate_function_evidence(item["implementation"])
+        for name, item in functions.items()
+        if item["implementation"] is not None
+    }
+
+
+def is_excel_compatible(name: str) -> bool:
+    """True only when the function is ``excel_observed`` and its receipt is current.
+
+    Profile declarations, dual-engine agreement and expected-value fixtures never
+    make this true.
+    """
+    from workbook_forge.evidence import is_excel_compatible as _current
+
+    evidence = function_evidence(name)
+    return evidence is not None and _current(evidence, evidence_root())
 
 
 def implementation_patterns() -> dict[str, Any]:

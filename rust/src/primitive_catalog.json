@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "profile": "spreadsheet-primitives-v1",
-  "source_catalog_version": "0.22.4",
+  "source_catalog_version": "0.23.1",
   "purpose": "Discover and compose spreadsheet operations without a workbook, cell addresses, formula parsing, or another language runtime.",
   "functions": [
     {

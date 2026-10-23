@@ -4,7 +4,7 @@ import pytest
 from workbook_forge import canonical_roundtrip as receipt
 
 
-@pytest.mark.parametrize("kind", ["empty", "populated", "file", "symlink", "dangling_symlink"])
+@pytest.mark.parametrize("kind", ["empty", "populated", "previous_receipt", "file", "symlink", "dangling_symlink"])
 def test_existing_output_is_refused_without_deletion_or_oracle(tmp_path, monkeypatch, kind):
     def forbidden(*_args, **_kwargs):
         raise AssertionError("existing outputs must be refused before deletion or oracle access")
@@ -23,12 +23,16 @@ def test_existing_output_is_refused_without_deletion_or_oracle(tmp_path, monkeyp
         output.mkdir()
         if kind == "populated":
             (output / "sentinel").write_text("keep directory")
+        elif kind == "previous_receipt":
+            (output / "receipt.json").write_text('{"prior": true}')
     with pytest.raises(FileExistsError, match="must be new"):
         receipt.build_canonical_receipt(tmp_path/"not-read.json", output, run_excel=True)
     if kind == "file":
         assert output.read_text() == "keep file"
     elif kind == "populated":
         assert (output/"sentinel").read_text() == "keep directory"
+    elif kind == "previous_receipt":
+        assert (output / "receipt.json").read_text() == '{"prior": true}'
     elif kind == "symlink":
         assert output.is_symlink() and (target/"sentinel").read_text() == "keep target"
     elif kind == "dangling_symlink":

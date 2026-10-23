@@ -22,7 +22,7 @@ next_steps:
 remaining:
   - Worksheet spill projection, volatile/iteration/quirk round-trip classes, cross-backend bound export, and broad Excel 365 coverage are not complete.
   - From impl/v1-intake and impl/v1-calc-binding, intake is ported. Duplicate JSON keys are refused. Typed binding constraints and the calculation session with revisions are not. The joined headless workflow has not started.
-  - No pull request so far has had checks run on it or a review; mergeability alone is not acceptance evidence. tools/gate.sh is the check to run.
+  - PRs #13 and #17 merged on 2026-10-23 after local full-gate validation; GitHub returned no hosted CI statuses. PR #19 remains a draft and has passed the full local gate and TypeScript client checks after integrating those merges. Mergeability alone is not acceptance evidence.
   - Of the 33 confirmed review findings that were open on 2026-09-29, ten were fixed on 2026-09-30 (counting and criteria functions, text functions over errors, arithmetic overflow, EDATE before serial 1, expression depth, `_xHHHH_` escapes, missing and unchecked versions, blank references). On 2026-10-05 four more of the six named findings were resolved: the SUM accumulation rule and typed reason on unsupported-function results were already fixed in prior commits; serial 0 as a date was fixed (MONTH(0)=1, DAY(0)=0, YEAR(0)=1900 to match Excel's display of 1900-01-00); and a formula using a defined name is now reported as `unsupported_formula` instead of `parse_error`. The calculation report now exists. An output origin of `calculated` means `Formula.result` was produced by the engine; cell provenance is left unchanged so an imported cache is not promoted. The per-cell memory bound remains deferred. The remaining 17 unnamed findings from the `.verification/` ledger could not be individually assessed (gitignored, not on disk). The 2026-09-30 fixes carry Workbook Forge profiles that have not been checked in Excel.
   - "GitHub reports Jimthetaxguy/workbook-forge as public, verified 2026-09-28; historical private-release preparation notes in docs/run-history.md describe their original checkpoints."
 open_questions: []
@@ -58,6 +58,8 @@ Build an **SDK for Excel in agent-ready formats**: expose supported workbook dat
 - **Preservation baseline:** immutable imported package content used to patch supported changes without rereading or rewriting the original file.
 - **Python engine:** the hand-written Python expression, validation, graph-calculation and session implementation; default for Python APIs, with no native execution dependency.
 - **Native backend:** optional Python interoperability bridge selecting the separately implemented Rust engine through PyO3. It is not the Python implementation.
+- **Evidence grade:** per function (and optionally per fixture case), one of `profile` (declared by a Workbook Forge rule), `dual_engine` (Python and Rust agree; not evidence against Excel), `expected_value` (matches a Microsoft example or independent arithmetic) or `excel_observed` (Excel Desktop produced it; cites a receipt with the saved workbook sha256, Excel version and `event_time`). An observation whose workbook hash changed is stale and does not count. See `docs/evidence-grades.md`.
+- **Profile class:** `semantic` when a function's profile rule can change a calculated value, `cosmetic` when it cannot, `unclassified` (every function today) until reviewed. Opt-in strict export (`export_canonical(..., strict_evidence=True)`) refuses with `evidence_insufficient` any cell calling a semantic, unclassified or uncatalogued function without a current Excel observation.
 - **Catalogued:** a formula feature or function has an entry with provenance and compatibility metadata.
 - **Parsed:** the engine recognizes the construct and produces a typed representation.
 - **Evaluated:** the engine calculates the construct for its documented input domain.
@@ -108,6 +110,7 @@ The Excel round-trip harness is `tools/excel_oracle.py`, with `tools/canonical_e
 - `docs/extraction-patterns.md`: independent XML parsing/extraction contract, limits, formula mappings and source provenance.
 - `docs/agent-protocol.md`: the versioned operation, pagination, error, provenance and JSON-lines transport contract; catalog/agent-operations.json owns its discoverable schemas.
 - `docs/excel-observations.md`: observation meanings, harness usage and actual Excel evidence.
+- `docs/evidence-grades.md`: evidence grades per function/case, Excel observations pinned to receipts, stale-receipt checks and the opt-in strict export gate. `python/workbook_forge/evidence.py` and `rust/src/evidence.rs` implement the record rules.
 - `docs/run-history.md`: dated project activity, superseded checkpoint decisions, Runs 1–24 and the pre-loop baseline. Historical counts and repository visibility describe their original checkpoints.
 - `docs/behavior-profiles.md`: current behavior and profile notes by function family, plus workbook adapter details.
 - `python/workbook_forge/intake.py`: reads an `.xlsx` file into the canonical model; `workbook-forge intake` is its command.
