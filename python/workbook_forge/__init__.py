@@ -488,11 +488,11 @@ def _binary_array_parts(value: object) -> tuple[tuple[int, int], tuple[object, .
     return None
 
 
-def _apply_binary_values(op: str, left: object, right: object) -> object:
+def _apply_binary_values(op: str, left: object, right: object, *, worksheet: bool = False) -> object:
     left_array = _binary_array_parts(left)
     right_array = _binary_array_parts(right)
     if left_array is None and right_array is None:
-        return _apply_binary_scalar(op, left, right)
+        return _apply_binary_scalar(op, left, right, worksheet=worksheet)
 
     if left_array is not None and right_array is not None and left_array[0] != right_array[0]:
         return ErrorValue("#VALUE!", "array operator operands must have identical shapes")
@@ -503,7 +503,7 @@ def _apply_binary_values(op: str, left: object, right: object) -> object:
     left_values = left_array[1] if left_array is not None else (left,) * size
     right_values = right_array[1] if right_array is not None else (right,) * size
     results = tuple(
-        _apply_binary_scalar(op, left_item, right_item)
+        _apply_binary_scalar(op, left_item, right_item, worksheet=worksheet)
         for left_item, right_item in zip(left_values, right_values, strict=True)
     )
     return ArrayValue(
@@ -514,9 +514,11 @@ def _apply_binary_values(op: str, left: object, right: object) -> object:
     )
 
 
-def _apply_binary_scalar(op: str, left: object, right: object) -> Scalar | ErrorValue:
+def _apply_binary_scalar(op: str, left: object, right: object, *, worksheet: bool = False) -> Scalar | ErrorValue:
     if isinstance(left, ErrorValue):
         return left
+    if worksheet and op in ("=", "<>", "<", "<=", ">", ">="):
+        return _worksheet_comparison(op,left,right)
     if op in ("=", "<>", "<", "<=", ">", ">="):
         left_number = _comparison_number(left)
         if isinstance(left_number, ErrorValue):
@@ -628,6 +630,44 @@ def _number(value: object) -> float | int | ErrorValue:
             return ErrorValue("#VALUE!", f"{value!r} is not numeric")
         return int(parsed) if parsed.is_integer() else parsed
     return ErrorValue("#VALUE!", "value cannot be converted to a number")
+
+
+def _worksheet_comparison(op, left, right):
+    """Explicit typed worksheet profile; never Python bool/number equality."""
+    def typed(value):
+        if isinstance(value,ErrorValue):
+            return value
+        if value is None:
+            return ("blank",None)
+        if type(value) is bool:
+            return ("boolean",value)
+        if isinstance(value,str):
+            return ("text",value)
+        number=_comparison_number(value)
+        return number if isinstance(number,ErrorValue) else ("number",number)
+    a,b=typed(left),typed(right)
+    if isinstance(a,ErrorValue):
+        return a
+    if isinstance(b,ErrorValue):
+        return b
+    def empty(other):
+        return ("text","") if other[0]=="text" else ("boolean",False) if other[0]=="boolean" else ("number",0.0)
+    if a[0]=="blank":
+        a=empty(b)
+    if b[0]=="blank":
+        b=empty(a)
+    ranks={"number":0,"text":1,"boolean":2}
+    if a[0]!=b[0]:
+        order=-1 if ranks[a[0]]<ranks[b[0]] else 1
+    else:
+        x,y=a[1],b[1]
+        if a[0]=="text":
+            if x.isascii() and y.isascii():
+                x,y=x.lower(),y.lower()
+            # Locale collation is not claimed: explicit UTF-8 ordinal profile.
+            x,y=x.encode("utf-8"),y.encode("utf-8")
+        order=-1 if x<y else 1 if x>y else 0
+    return {"=":order==0,"<>":order!=0,"<":order<0,"<=":order<=0,">":order>0,">=":order>=0}[op]
 
 
 def _comparison_number(value: object) -> float | ErrorValue | None:
@@ -1933,7 +1973,7 @@ def _wildcard_matches(
 
 # Error codes both engines can hold in a cell; criterion text spelling one of
 # them selects cells holding that error.
-_CRITERION_ERROR_CODES = frozenset({"#VALUE!", "#DIV/0!", "#REF!", "#NAME?", "#NUM!", "#N/A", "#CALC!"})
+_CRITERION_ERROR_CODES = frozenset({"#VALUE!", "#DIV/0!", "#REF!", "#NAME?", "#NUM!", "#N/A", "#CALC!", "#NULL!", "#SPILL!"})
 
 
 def _parse_criterion(value: object) -> _Criterion | ErrorValue:
@@ -2167,7 +2207,9 @@ def _eval(
             if kind == "postfix":
                 value = number / 100
             else:
-                value = number if operator == "+" else -number
+                # Stored integral zero must obey the same signed-zero unary
+                # contract as the independent binary64 runtimes/Rust SDK.
+                value = number if operator == "+" else (-0.0 if type(number) is int and number == 0 else -number)
         return value
     if node.kind == "binary":
         chain: list[tuple[str, _Node]] = []
@@ -2186,7 +2228,7 @@ def _eval(
                 right_error = _nonfinite_literal_error(right_node)
                 if right_error is not None:
                     right = right_error
-            left = _apply_binary_values(operator, left, right)
+            left = _apply_binary_values(operator, left, right, worksheet=cells is not None)
         return left
     if node.kind == "call":
         name = _canonical_function_name(str(node.value))
@@ -2218,7 +2260,8 @@ def _eval(
             if len(node.children) != 2:
                 return _arity(name, "2", len(node.children))
             value = _eval(node.children[0], cells, sheet_name, budget)
-            return _eval(node.children[1], cells, sheet_name, budget) if isinstance(value, ErrorValue) else value
+            result = _eval(node.children[1], cells, sheet_name, budget) if isinstance(value, ErrorValue) else value
+            return "" if result is None and cells is not None else result
         if name == "IFNA":
             if len(node.children) != 2:
                 return _arity(name, "2", len(node.children))
@@ -2320,6 +2363,14 @@ def _eval(
             else _eval(child, cells, sheet_name, budget)
             for index, child in enumerate(node.children)
         )
+        if name in {"SUM","AVERAGE"}:
+            # A cell reference retains reference coercion even though the
+            # expression evaluator normally returns its scalar value.
+            # The separate native primitive API retains its documented legacy
+            # aggregate profile. Its cells=None sentinel never enters formula APIs.
+            args = tuple(_Range((value,), 1, 1) if (child.kind == "cell" or cells is None)
+                         and not isinstance(value, (_Range, ArrayValue)) else value
+                         for child, value in zip(node.children, args))
         return _function(name, args, budget)
     return ErrorValue("#VALUE!", f"unsupported syntax node {node.kind!r}")
 
@@ -2867,6 +2918,35 @@ def _function(
             "MINIFS", "MAXIFS"
     }:
         return ErrorValue("#VALUE!", f"{name} does not accept a range argument in this evaluator")
+    if name in {"SUM","AVERAGE"}:
+        if not 1 <= len(args) <= 255:
+            return _arity(name, "1 through 255", len(args))
+        numbers = []
+        for argument in args:
+            referenced = isinstance(argument, (_Range, ArrayValue))
+            for value in _flatten((argument,)):
+                if isinstance(value, ErrorValue):
+                    return value
+                if referenced and (not isinstance(value, (int, float)) or isinstance(value, bool)):
+                    continue
+                if name == "AVERAGE" and isinstance(value,str):
+                    value=value.strip(" \t\r\n")
+                    if not re.fullmatch(r"[+-]?(?:[0-9]+\.?[0-9]*|\.[0-9]+)(?:[eE][+-]?[0-9]+)?",value):
+                        return ErrorValue("#VALUE!", "AVERAGE direct text is not decimal numeric text")
+                number = _number(value)
+                if isinstance(number, ErrorValue):
+                    return number
+                numbers.append(number)
+        # Explicit binary64 left fold matches the independent Rust profile;
+        # Python's built-in sum may use compensation or exact integer addition.
+        total = 0.0
+        for number in numbers:
+            total += float(number)
+        if name == "SUM":
+            return total
+        if not numbers:
+            return ErrorValue("#DIV/0!", "AVERAGE has no numeric values")
+        return total/len(numbers) if math.isfinite(total) else ErrorValue("#NUM!", "AVERAGE accumulation overflow")
     flat = _flatten(args)
     if name == "COUNT":
         # Microsoft: arguments that are error values are not counted.
@@ -2888,14 +2968,10 @@ def _function(
         return _cumulative_payment_call(name, args)
     if name in {"FV", "PV", "PMT"}:
         return _tvm_call(name, args)
-    if name in {"SUM", "AVERAGE", "MIN", "MAX"}:
+    if name in {"MIN", "MAX"}:
         numbers = _numeric_values(flat)
         if isinstance(numbers, ErrorValue):
             return numbers
-        if name == "SUM":
-            return sum(numbers)
-        if name == "AVERAGE":
-            return ErrorValue("#DIV/0!", "AVERAGE has no numeric values") if not numbers else sum(numbers) / len(numbers)
         if not numbers:
             return 0
         return min(numbers) if name == "MIN" else max(numbers)

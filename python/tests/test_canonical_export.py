@@ -212,7 +212,12 @@ def test_receipt_records_pending_excel_and_refused_spill(tmp_path):
     assert (tmp_path / "receipt" / "operating-scenario.exported.xlsx").is_file()
     assert (tmp_path / "receipt" / "scenario-roundtrip.json").is_file()
     assert (tmp_path / "receipt" / "red-flag-roundtrip.json").is_file()
-    assert not (tmp_path / "receipt" / "scenario").exists()
+    assert (tmp_path / "receipt" / "scenario").is_dir()
+    assert (tmp_path / "receipt" / "red-flags").is_dir()
+    assert receipt["export_lane"]["evaluator"] == "python:model.calculate"
+    assert receipt["export_lane"]["end_to_end_rust_only"] is False
+    assert len(receipt["export_lane"]["exported_sha256"]) == 64
+    assert receipt["artifact_retention"]["cleanup"] == "none"
     text = (tmp_path / "receipt" / "receipt.md").read_text(encoding="utf-8")
     assert "Spec 2 passed: `false`" in text
     assert "unit_price" in text

@@ -1,0 +1,102 @@
+{
+  "fixture_version": 3,
+  "expectation_basis": "Independent arithmetic and explicit local scalar/lazy selection profile; not an Excel observation. Modern typed errors do not implement spill placement.",
+  "sheets": [
+    {
+      "name": "Calc",
+      "values": {
+        "A1": 99
+      },
+      "formulas": {
+        "B1": "IF(TRUE,'2026 O''Brien'!$A1*2,1/0)",
+        "B2": "SUM('2026 O''Brien'!$A$1:A2)",
+        "B3": "IFERROR(B1/0,B2+1)",
+        "B4": "IF(FALSE,1/0,B1+B2)",
+        "B5": "IFERROR(8,1/0)",
+        "B6": "IFERROR(#NULL!,42)",
+        "B7": "IFERROR(#SPILL!,43)",
+        "B8": "IFERROR(1/0,#N/A)",
+        "B9": "IF(#REF!,2,3)",
+        "B10": "IF(FALSE,2)",
+        "B11": "'Rate=Plan!'!$A$1+'2026 O''Brien'!A$1",
+        "B12": "IFERROR('2026 O''Brien'!A3,9)",
+        "B13": "SUM('2026 O''Brien'!A2:$A$1)",
+        "B14": "'Unused'!A1+1",
+        "B15": "IFERROR('2026 O''Brien'!A4,44)",
+        "B16": "IFERROR('2026 O''Brien'!A5,45)",
+        "B17": "IFERROR(IF(TRUE,#VALUE!,1/0),46)"
+      }
+    },
+    {
+      "name": "2026 O'Brien",
+      "values": {
+        "A1": 2,
+        "A2": 3,
+        "A3": null,
+        "A4": {
+          "error": "#NULL!"
+        },
+        "A5": {
+          "error": "#SPILL!"
+        }
+      },
+      "formulas": {
+        "B1": "Calc!$B$1+1"
+      }
+    },
+    {
+      "name": "Rate=Plan!",
+      "values": {
+        "A1": 10
+      },
+      "formulas": {}
+    },
+    {
+      "name": "Unused",
+      "values": {},
+      "formulas": {}
+    }
+  ],
+  "overrides": {
+    "'2026 O''Brien'!A1": 7
+  },
+  "expected_after_edits": {
+    "'Calc'!A1": 99,
+    "'2026 O''Brien'!A1": 7,
+    "'2026 O''Brien'!A2": 6,
+    "'2026 O''Brien'!A3": null,
+    "'2026 O''Brien'!A4": {
+      "error": "#NULL!"
+    },
+    "'2026 O''Brien'!A5": {
+      "error": "#SPILL!"
+    },
+    "'Rate=Plan!'!A1": 10,
+    "'Calc'!B1": 35,
+    "'Calc'!B2": 13,
+    "'Calc'!B3": 14,
+    "'Calc'!B4": 48,
+    "'Calc'!B5": 8,
+    "'Calc'!B6": 42,
+    "'Calc'!B7": 43,
+    "'Calc'!B8": {
+      "error": "#N/A"
+    },
+    "'Calc'!B9": {
+      "error": "#REF!"
+    },
+    "'Calc'!B10": false,
+    "'Calc'!B11": 17,
+    "'Calc'!B12": "",
+    "'Calc'!B13": 13,
+    "'Calc'!B14": 1,
+    "'Calc'!B15": 44,
+    "'Calc'!B16": 45,
+    "'Calc'!B17": 46,
+    "'2026 O''Brien'!B1": 36
+  },
+  "primary_sources": [
+    "https://support.microsoft.com/en-us/excel/functions/if-function",
+    "https://support.microsoft.com/en-us/excel/functions/iferror-function"
+  ]
+}

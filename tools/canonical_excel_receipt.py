@@ -26,7 +26,7 @@ from workbook_forge.canonical_roundtrip import DEFAULT_FIXTURE, build_canonical_
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--fixture", type=Path, default=DEFAULT_FIXTURE)
-    parser.add_argument("--output-dir", type=Path, required=True)
+    parser.add_argument("--output-dir", type=Path, required=True, help="new directory; existing paths are never replaced")
     parser.add_argument(
         "--set",
         dest="assignment",

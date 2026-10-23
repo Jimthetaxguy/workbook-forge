@@ -199,6 +199,8 @@ impl CellValue {
                 "#NUM!" => FormulaError::Num,
                 "#N/A" | "#N/A!" => FormulaError::NA,
                 "#CALC!" => FormulaError::Calc,
+                "#NULL!" => FormulaError::Null,
+                "#SPILL!" => FormulaError::Spill,
                 _ => FormulaError::Value,
             }),
         }
@@ -1161,15 +1163,6 @@ impl Graph {
                     graph.errors.insert(
                         current.clone(),
                         ToolkitError::new("unsupported_cell", reason),
-                    );
-                } else if matches!(&cell.value,CellValue::Error{error,..} if matches!(error.as_str(),"#NULL!"|"#SPILL!"))
-                {
-                    graph.errors.insert(
-                        current.clone(),
-                        ToolkitError::new(
-                            "unsupported_error_value",
-                            "this preserved Excel error has no evaluator semantics",
-                        ),
                     );
                 } else if let Some(formula) = &cell.formula {
                     let parsed = Expression::parse(formula).and_then(|expression| {
@@ -2198,13 +2191,14 @@ mod tests {
             .outputs
             .insert("unsupported".into(), CellAddress::new("Data", "B1"));
         let report = calculate(&workbook, 1);
-        assert!(
-            report
-                .diagnostics
-                .iter()
-                .any(|d| d.code == "unsupported_error_value")
+        assert!(report.diagnostics.is_empty());
+        assert_eq!(
+            report.outputs["unsupported"],
+            CalculatedValue::Scalar(CellValue::Error {
+                error: "#SPILL!".into(),
+                message: None
+            })
         );
-        assert!(!report.outputs.contains_key("unsupported"));
     }
     #[test]
     fn preserved_only_nonformula_cells_block_dependents_and_edits() {
