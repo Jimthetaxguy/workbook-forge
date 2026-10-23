@@ -13,7 +13,10 @@ provenance_note: Original creator and creation time were not recorded; these not
 This page explains the supported evaluator behavior and workbook boundaries.
 The [formula catalog](../catalog/formulas.json) (`semantic_specs`) is the maintained
 per-function record. A *profile* declares Workbook Forge's rules; it does not by
-itself establish Excel compatibility. The [native primitive guide](primitives.md)
+itself establish Excel compatibility. Each function's `evidence_grade` (`profile`,
+`dual_engine`, `expected_value`, `excel_observed`) and `profile_class` (`semantic`,
+`cosmetic`, `unclassified`) are recorded in the catalog; see
+[evidence grades](evidence-grades.md). The [native primitive guide](primitives.md)
 describes the smaller direct-call and named-input interface over these evaluators.
 
 ## General

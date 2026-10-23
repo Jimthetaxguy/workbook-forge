@@ -420,6 +420,48 @@ def _hash(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def excel_observation_block(
+    workbook_name: str, workbook_sha256: str, excel_version: str | None, event_time: datetime,
+) -> dict[str, Any]:
+    """Pin an observed receipt to the workbook bytes Excel saved.
+
+    ``event_time`` is when the Excel automation finished, which is distinct from
+    ``recorded_at_utc`` (when the harness started writing the receipt).
+    """
+    from workbook_forge.evidence import receipt_observation_block
+
+    return receipt_observation_block(
+        workbook_name=workbook_name, workbook_sha256=workbook_sha256,
+        excel_version=excel_version, event_time=event_time,
+    )
+
+
+def receipt_freshness(receipt_path: Path) -> dict[str, Any]:
+    """Report whether an observed receipt still matches the workbook beside it.
+
+    ``current``: the saved workbook still hashes to the recorded value.
+    ``stale``: the workbook changed after Excel observed it, so the receipt no
+    longer evidences these bytes. ``missing``: the workbook is gone.
+    ``not_an_observation``: the receipt never recorded an Excel observation
+    (prepared, blocked, mismatch or failed).
+    """
+    receipt_path = Path(receipt_path)
+    receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+    block = receipt.get("excel_observation")
+    if receipt.get("status") != "observed" or not isinstance(block, dict):
+        return {"state": "not_an_observation", "status": receipt.get("status"), "reasons": []}
+    workbook = receipt_path.parent / str(block.get("workbook", ""))
+    if not workbook.is_file():
+        return {"state": "missing", "status": receipt["status"], "reasons": [f"{block.get('workbook')} is not present"]}
+    actual = _hash(workbook)
+    if actual != block.get("workbook_sha256"):
+        return {
+            "state": "stale", "status": receipt["status"],
+            "reasons": [f"{block.get('workbook')} hash changed from {str(block.get('workbook_sha256'))[:12]} to {actual[:12]}"],
+        }
+    return {"state": "current", "status": receipt["status"], "reasons": []}
+
+
 def run_observations(data: dict[str, Any], output_root: Path, *, run_excel: bool = False, timeout: float = 60) -> tuple[Path, dict[str, Any]]:
     """Create a unique run; only explicit opt-in sends Apple events to Excel."""
     output_root.mkdir(parents=True, exist_ok=True)
@@ -435,6 +477,7 @@ def run_observations(data: dict[str, Any], output_root: Path, *, run_excel: bool
         else:
             try:
                 completed = subprocess.run(["/usr/bin/osascript", str(script), str(path), path.name], capture_output=True, text=True, timeout=timeout, check=False)
+                excel_finished_at = datetime.now(timezone.utc)
                 if completed.returncode:
                     # Preserve a public-safe reason, never AppleScript's potentially
                     # private process diagnostics or a list of open workbook names.
@@ -459,6 +502,8 @@ def run_observations(data: dict[str, Any], output_root: Path, *, run_excel: bool
                     receipt["observations"] = observe_saved_workbook(path, data)
                     receipt["saved_workbook_sha256"] = _hash(path)
                     receipt["status"] = "observed" if all(item["matches_expectation"] for item in receipt["observations"]) else "mismatch"
+                    if receipt["status"] == "observed":
+                        receipt["excel_observation"] = excel_observation_block(path.name, receipt["saved_workbook_sha256"], receipt["excel"].get("excel_version"), excel_finished_at)
             except subprocess.TimeoutExpired:
                 receipt.update(status="blocked", reason="Excel automation timed out; no cleanup commands were sent", owned_workbook_may_remain_open=True)
             except (OSError, ValueError, zipfile.BadZipFile, ET.ParseError) as exc:
@@ -1435,6 +1480,7 @@ def run_roundtrip(
                 ["/usr/bin/osascript", str(script_path), str(working_copy), working_copy.name],
                 capture_output=True, text=True, timeout=timeout, check=False,
             )
+            excel_finished_at = datetime.now(timezone.utc)
             if completed.returncode:
                 receipt.update(_classify_excel_automation_error(completed.stderr or ""))
             else:
@@ -1484,6 +1530,11 @@ def run_roundtrip(
                     )
                 else:
                     receipt.update(status="mismatch" if mismatches else "observed", stage="reimport", mismatches=mismatches)
+                    if receipt["status"] == "observed":
+                        receipt["excel_observation"] = excel_observation_block(
+                            working_copy.name, receipt["saved_workbook_sha256"],
+                            metadata.get("excel_version"), excel_finished_at,
+                        )
         receipt["source_unchanged"] = source.exists() and _hash(source) == receipt.get("source_workbook_sha256")
     except subprocess.TimeoutExpired:
         receipt.update(status="blocked", stage="automation", reason="Excel automation timed out; the owned scratch workbook may remain open", owned_workbook_may_remain_open=True)
@@ -1509,7 +1560,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--roundtrip", type=Path, help="Open an SDK-generated .xlsx copy in Excel, full-rebuild, save, and reimport it")
     parser.add_argument("--contract", type=Path, help="Version 1 JSON contract for --roundtrip cell edits and behavior checks")
     parser.add_argument("--timeout", type=float, default=180)
+    parser.add_argument("--check-receipt", type=Path, help="Report whether an observed receipt still matches its saved workbook (current, stale, missing or not_an_observation)")
     args = parser.parse_args(argv)
+    if args.check_receipt is not None:
+        freshness = receipt_freshness(args.check_receipt)
+        print(json.dumps(freshness))
+        return 0 if freshness["state"] == "current" else 2
     if not math.isfinite(args.timeout) or args.timeout <= 0:
         parser.error("--timeout must be positive and finite")
     if args.roundtrip is not None:

@@ -15,9 +15,10 @@ import re
 import tempfile
 import zipfile
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterable, Mapping
 
 from workbook_forge import ErrorValue, analyze_formula
+from workbook_forge.evidence import EvidenceRefusal, FunctionEvidence, gate_refusals
 from workbook_forge.model import (
     SCHEMA_VERSION,
     MODEL_VERSION,
@@ -47,14 +48,52 @@ class CanonicalPackageError(Exception):
         super().__init__(f"{code}: {message}")
 
 
-def export_canonical(workbook: Workbook, output: str | Path) -> Path:
+class EvidenceGateRefused(CanonicalPackageError):
+    """Strict export refused cells whose functions lack current Excel evidence.
+
+    ``code`` is ``evidence_insufficient``. ``refusals`` lists one
+    :class:`workbook_forge.evidence.EvidenceRefusal` per cell and function.
+    """
+
+    def __init__(self, refusals: Iterable[EvidenceRefusal]):
+        self.refusals = tuple(refusals)
+        cells = sorted({f"{item.sheet}!{item.address}" for item in self.refusals})
+        functions = sorted({item.function for item in self.refusals})
+        listed = ", ".join(cells[:10]) + (" ..." if len(cells) > 10 else "")
+        super().__init__(
+            "evidence_insufficient",
+            f"strict export refuses {len(cells)} cell(s) that depend on semantic, unclassified or "
+            f"uncatalogued profile rules without a current Excel observation ({', '.join(functions)}): {listed}",
+        )
+
+
+def export_canonical(
+    workbook: Workbook,
+    output: str | Path,
+    *,
+    strict_evidence: bool = False,
+    evidence: Mapping[str, FunctionEvidence] | None = None,
+    evidence_root: str | Path | None = None,
+) -> Path:
     """Write ``workbook`` to a new ``.xlsx`` file.
 
     Calculated scalar results are stored as Excel caches. Diagnostics stay
     formula text without a cache. An array result refuses the whole package
     before any file is published.
+
+    ``strict_evidence=True`` opts in to the evidence gate: a formula cell that
+    calls a function whose ``profile_class`` is ``semantic`` or
+    ``unclassified`` (or that has no catalog entry) and that has no current
+    ``excel_observed`` receipt is refused with :class:`EvidenceGateRefused`
+    (``evidence_insufficient``) before any file is written. Every catalog
+    function is ``unclassified`` today, so strict export refuses any formula
+    that calls a function. The default (``False``) keeps the existing
+    behaviour. ``evidence`` and ``evidence_root`` override the checked-in
+    catalog and repository root.
     """
     workbook.require_supported_versions()
+    if strict_evidence:
+        _require_excel_evidence(workbook, evidence, evidence_root)
     calculated = calculate(workbook)
     spills = _spill_sites(calculated)
     if spills:
@@ -294,6 +333,46 @@ def compare_structure(source: Workbook, imported: Workbook) -> dict[str, Any]:
         "mismatches": mismatches,
         "formula_rewrites": rewrites,
     }
+
+
+_COMPATIBILITY_PREFIXES = ("_XLFN._XLWS.", "_XLFN.", "_XLWS.", "_XLUDF.")
+
+
+def _function_name(name: str) -> str:
+    upper = name.upper()
+    for prefix in _COMPATIBILITY_PREFIXES:
+        if upper.startswith(prefix):
+            return upper[len(prefix):]
+    return upper
+
+
+def _require_excel_evidence(
+    workbook: Workbook,
+    evidence: Mapping[str, FunctionEvidence] | None,
+    evidence_root: str | Path | None,
+) -> None:
+    from workbook_forge import catalog
+
+    graded = catalog.evidence_by_function() if evidence is None else {
+        name.upper(): item for name, item in evidence.items()
+    }
+    root = Path(evidence_root) if evidence_root is not None else catalog.evidence_root()
+    formula_cells: list[tuple[str, str, tuple[str, ...]]] = []
+    for sheet in workbook.sheets:
+        for address, cell in sheet.cells.items():
+            if cell.formula is None:
+                continue
+            try:
+                names = analyze_formula(cell.formula.expression).functions
+            except (TypeError, ValueError, RecursionError):
+                # Forge cannot parse it, so it calculates nothing and the
+                # export writes the formula text without a cache: no Forge
+                # profile rule stands behind any value in that cell.
+                continue
+            formula_cells.append((sheet.name, address, tuple(_function_name(name) for name in names)))
+    refusals = gate_refusals(formula_cells, graded, root)
+    if refusals:
+        raise EvidenceGateRefused(refusals)
 
 
 def _spill_sites(workbook: Workbook) -> list[str]:
