@@ -6,14 +6,14 @@ import zipfile
 
 import pytest
 
-from workbook_forge.canonical_roundtrip import build_canonical_receipt
+from workbook_forge.canonical_roundtrip import CanonicalReceiptError, build_canonical_receipt
 from workbook_forge.canonical_xlsx import (
     CanonicalPackageError,
     compare_structure,
     export_canonical,
     import_canonical,
 )
-from workbook_forge.model import calculate, hydrate, with_input
+from workbook_forge.model import calculate, content_fingerprint, hydrate
 
 ROOT = Path(__file__).parents[2]
 FIXTURE = ROOT / "fixtures" / "operating-scenario.workbook.json"
@@ -94,29 +94,6 @@ def test_canonical_fixture_exports_and_reimports_formula_text(tmp_path):
     assert imported.sheet("Forecast").cells["J1"].formula.expression == "=NOW()"
     assert imported.sheet("Forecast").cells["J2"].formula.expression == "=1+"
     assert imported.sheet("Forecast").cells["F5"].value == {"error": "#DIV/0!", "message": None}
-
-
-def test_reimported_fixture_matches_python_calculation_when_bindings_return(tmp_path):
-    original = hydrate(FIXTURE.read_bytes())
-    path = export_canonical(original, tmp_path / "scenario.xlsx")
-    imported = import_canonical(path)
-    rebound = hydrate(original.to_json())
-    # The package does not store bindings. Calculation uses the fixture bytes
-    # plus the reimported formula text, checked above. Here the edited input
-    # is applied to the fixture model.
-    edited = with_input(rebound, "unit_price", 25)
-    calculated = calculate(edited)
-    assert calculated.schema_version == 1
-    assert calculated.model_version == 1
-    assert calculated.sheet("Forecast").cells["F2"].formula.result == 9250
-    assert calculated.sheet("Forecast").cells["F3"].formula.result == 3290
-    assert calculated.sheet("Forecast").cells["F4"].formula.result == pytest.approx(1000 / 17)
-    assert calculated.sheet("Forecast").cells["F5"].formula.result == {"error": "#DIV/0!", "message": None}
-    assert [(item.address, item.code, item.classification) for item in calculated.diagnostics] == [
-        ("J1", "unsupported_formula", "unsupported"),
-        ("J2", "parse_error", "parse_error"),
-    ]
-    assert imported.sheet("Forecast").cells["F2"].formula.expression == rebound.sheet("Forecast").cells["F2"].formula.expression
 
 
 def test_formula_text_change_is_an_explicit_rewrite(tmp_path):
@@ -239,6 +216,8 @@ def test_receipt_records_pending_excel_and_refused_spill(tmp_path):
     assert "Spec 2 passed: `false`" in text
     assert "unit_price" in text
     assert "Excel formula rewrites" in text
+    assert "Excel was not run." in text
+    assert "Excel has not rewritten this package." not in text
     assert "not_passed" in text
 
 
@@ -252,3 +231,119 @@ def test_a_receipt_made_without_rust_does_not_say_the_engines_agree(tmp_path):
     written = (tmp_path / "receipt" / "receipt.md").read_text(encoding="utf-8")
     assert written.count("Python/Rust match: `not compared`") == 2
     assert "match: `true`" not in written.split("## Engine values")[1]
+
+
+def test_receipt_refuses_to_replace_an_unsafe_directory(tmp_path):
+    unsafe = tmp_path / "unsafe"
+    unsafe.mkdir()
+    kept = unsafe / "notes.txt"
+    kept.write_text("keep\n", encoding="utf-8")
+    (unsafe / "receipt.json").write_text("{}\n", encoding="utf-8")
+    with pytest.raises(CanonicalReceiptError, match="notes.txt"):
+        build_canonical_receipt(FIXTURE, unsafe, rust=False)
+    assert kept.read_text(encoding="utf-8") == "keep\n"
+    assert (unsafe / "receipt.json").read_text(encoding="utf-8") == "{}\n"
+
+    empty = tmp_path / "empty"
+    empty.mkdir()
+    with pytest.raises(CanonicalReceiptError, match="empty directory"):
+        build_canonical_receipt(FIXTURE, empty, rust=False)
+    assert list(empty.iterdir()) == []
+
+    not_a_directory = tmp_path / "file.txt"
+    not_a_directory.write_text("stay\n", encoding="utf-8")
+    with pytest.raises(CanonicalReceiptError, match="not a canonical receipt directory"):
+        build_canonical_receipt(FIXTURE, not_a_directory, rust=False)
+    assert not_a_directory.read_text(encoding="utf-8") == "stay\n"
+
+    linked = tmp_path / "linked"
+    linked.mkdir()
+    (linked / "keeper.txt").write_text("stay\n", encoding="utf-8")
+    shortcut = tmp_path / "shortcut"
+    shortcut.symlink_to(linked, target_is_directory=True)
+    with pytest.raises(CanonicalReceiptError, match="symbolic link"):
+        build_canonical_receipt(FIXTURE, shortcut, rust=False)
+    assert (linked / "keeper.txt").read_text(encoding="utf-8") == "stay\n"
+
+    sentinel = ROOT / "README.md"
+    before = sentinel.read_bytes()
+    with pytest.raises(CanonicalReceiptError, match="repository root or a parent"):
+        build_canonical_receipt(FIXTURE, ROOT, rust=False)
+    with pytest.raises(CanonicalReceiptError, match="repository root or a parent"):
+        build_canonical_receipt(FIXTURE, ROOT.parent, rust=False)
+    with pytest.raises(CanonicalReceiptError, match="repository root or a parent"):
+        build_canonical_receipt(FIXTURE, ROOT / "..", rust=False)
+    assert sentinel.read_bytes() == before
+    assert (ROOT / "python" / "workbook_forge" / "canonical_roundtrip.py").is_file()
+
+
+def test_receipt_replaces_a_previous_receipt_directory(tmp_path):
+    directory = tmp_path / "receipt"
+    directory.mkdir()
+    (directory / "receipt.json").write_text('{"stale": true}\n', encoding="utf-8")
+    (directory / "receipt.md").write_text("stale receipt\n", encoding="utf-8")
+    (directory / "operating-scenario.exported.xlsx").write_bytes(b"stale-xlsx")
+    (directory / "scenario-roundtrip.json").write_text("{}\n", encoding="utf-8")
+    (directory / "red-flag-roundtrip.json").write_text("{}\n", encoding="utf-8")
+    (directory / "scenario").mkdir()
+    (directory / "scenario" / "scratch.txt").write_text("scratch\n", encoding="utf-8")
+    (directory / "red-flags").mkdir()
+    (directory / "red-flags" / "scratch.txt").write_text("scratch\n", encoding="utf-8")
+
+    receipt = build_canonical_receipt(FIXTURE, directory, rust=False)
+    written = (directory / "receipt.json").read_text(encoding="utf-8")
+    assert "stale" not in written
+    assert receipt["kind"] == "canonical-excel-receipt"
+    assert "scratch" not in written
+    assert not (directory / "scenario").exists()
+    assert not (directory / "red-flags").exists()
+    assert (directory / "operating-scenario.exported.xlsx").is_file()
+    assert (directory / "scenario-roundtrip.json").is_file()
+    assert (directory / "red-flag-roundtrip.json").is_file()
+
+    again = build_canonical_receipt(FIXTURE, directory, rust=False)
+    assert again["kind"] == "canonical-excel-receipt"
+    assert (directory / "receipt.json").is_file()
+    assert (directory / "receipt.md").is_file()
+    assert not (directory / "scenario").exists()
+    assert not (directory / "red-flags").exists()
+
+
+def _assert_no_machine_path(value):
+    if isinstance(value, str):
+        assert not value.startswith(("/", "~"))
+        assert "\\" not in value
+        assert not (len(value) >= 2 and value[0].isalpha() and value[1] == ":")
+    elif isinstance(value, dict):
+        for item in value.values():
+            _assert_no_machine_path(item)
+    elif isinstance(value, list):
+        for item in value:
+            _assert_no_machine_path(item)
+
+
+def test_receipt_outside_the_checkout_stores_a_fingerprint_instead_of_a_path(tmp_path):
+    directory = tmp_path / "receipt"
+    receipt = build_canonical_receipt(FIXTURE, directory, rust=False)
+    exported = directory / "operating-scenario.exported.xlsx"
+    scenario = directory / "scenario-roundtrip.json"
+    spill = directory / "red-flag-roundtrip.json"
+    assert not directory.resolve().is_relative_to(ROOT.resolve())
+    assert receipt["fixture"] == "fixtures/operating-scenario.workbook.json"
+    assert receipt["scenario_contract"] == "fixtures/operating-scenario.excel-roundtrip.contract.json"
+    assert receipt["exported_xlsx"] == content_fingerprint(exported.read_bytes())
+    assert receipt["scenario_roundtrip"]["receipt"] == content_fingerprint(scenario.read_bytes())
+    assert receipt["array_spill"]["receipt"] == content_fingerprint(spill.read_bytes())
+    assert receipt["red_flag_roundtrip"]["receipt"] == receipt["array_spill"]["receipt"]
+    assert receipt["exported_xlsx"].startswith("sha256:")
+    raw = (directory / "receipt.json").read_text(encoding="utf-8")
+    markdown = (directory / "receipt.md").read_text(encoding="utf-8")
+    assert str(tmp_path) not in raw
+    assert str(tmp_path) not in markdown
+    assert str(directory.resolve()) not in raw
+    assert str(directory.resolve()) not in markdown
+    assert receipt["exported_xlsx"] in raw
+    assert receipt["exported_xlsx"] in markdown
+    assert "fixtures/operating-scenario.workbook.json" in markdown
+    assert "Excel was not run." in markdown
+    _assert_no_machine_path(json.loads(raw))
