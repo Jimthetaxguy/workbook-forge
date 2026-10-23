@@ -244,20 +244,7 @@ pub fn calculate(workbook: &Workbook) -> Result<Workbook, ModelError> {
                 .collect(),
         );
     }
-    let mut ready: BTreeSet<String> = pending
-        .iter()
-        .filter(|(_, deps)| deps.is_empty())
-        .map(|(key, _)| key.clone())
-        .collect();
-    let mut order = Vec::new();
-    while let Some(current) = ready.pop_first() {
-        order.push(current.clone());
-        for (key, deps) in &mut pending {
-            if deps.remove(&current) && deps.is_empty() {
-                ready.insert(key.clone());
-            }
-        }
-    }
+    let order = calculation_order(&pending);
 
     let mut diagnostics: BTreeMap<String, Diagnostic> = BTreeMap::new();
     for (key, (_, diagnostic)) in &analyzed {
@@ -329,6 +316,39 @@ pub fn calculate(workbook: &Workbook) -> Result<Workbook, ModelError> {
     }
 
     Ok(with_calculation(workbook, &analyzed, &results, diagnostics))
+}
+
+// Only formula-to-formula edges enter this graph. Visit each outgoing edge
+// once instead of scanning every pending formula after each completed cell.
+// The ordered ready set retains the existing lexical tie-breaking, including
+// when a newly ready formula sorts before a formula already in the queue.
+fn calculation_order(pending: &BTreeMap<String, BTreeSet<String>>) -> Vec<String> {
+    let mut remaining: BTreeMap<&str, usize> = BTreeMap::new();
+    let mut reverse: BTreeMap<&str, Vec<&str>> = BTreeMap::new();
+    let mut ready = BTreeSet::new();
+    for (key, deps) in pending {
+        remaining.insert(key.as_str(), deps.len());
+        if deps.is_empty() {
+            ready.insert(key.as_str());
+        }
+        for dep in deps {
+            reverse.entry(dep.as_str()).or_default().push(key.as_str());
+        }
+    }
+    let mut order = Vec::with_capacity(pending.len());
+    while let Some(current) = ready.pop_first() {
+        order.push(current.to_string());
+        if let Some(dependents) = reverse.get(current) {
+            for dependent in dependents {
+                let count = remaining.get_mut(dependent).expect("formula graph member");
+                *count -= 1;
+                if *count == 0 {
+                    ready.insert(*dependent);
+                }
+            }
+        }
+    }
+    order
 }
 
 fn with_calculation(
@@ -654,6 +674,8 @@ fn engine_value(value: &Scalar) -> Value {
             "#NUM!" => FormulaError::Num,
             "#N/A" => FormulaError::NA,
             "#CALC!" => FormulaError::Calc,
+            "#NULL!" => FormulaError::Null,
+            "#SPILL!" => FormulaError::Spill,
             other => FormulaError::Unsupported(other.to_string()),
         }),
     }
@@ -1809,6 +1831,152 @@ fn write_canonical_into(out: &mut String, value: &JsonValue) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // Reference scheduler from the pre-optimization calculator.
+    fn scan_order(mut pending: BTreeMap<String, BTreeSet<String>>) -> Vec<String> {
+        let mut ready: BTreeSet<String> = pending
+            .iter()
+            .filter(|(_, deps)| deps.is_empty())
+            .map(|(key, _)| key.clone())
+            .collect();
+        let mut order = Vec::new();
+        while let Some(current) = ready.pop_first() {
+            order.push(current.clone());
+            for (key, deps) in &mut pending {
+                if deps.remove(&current) && deps.is_empty() {
+                    ready.insert(key.clone());
+                }
+            }
+        }
+        order
+    }
+
+    #[test]
+    fn scheduling_preserves_order_for_every_three_node_graph() {
+        // All 512 directed graphs, including self-loops, cycles and nodes
+        // downstream of cycles. Equality includes lexical tie-breaking.
+        for mask in 0..512 {
+            let mut graph = BTreeMap::new();
+            for node in 0..3 {
+                let deps = (0..3)
+                    .filter(|dep| mask & (1 << (node * 3 + dep)) != 0)
+                    .map(|dep| format!("S!A{dep}"))
+                    .collect();
+                graph.insert(format!("S!A{node}"), deps);
+            }
+            assert_eq!(calculation_order(&graph), scan_order(graph), "mask {mask}");
+        }
+        assert!(calculation_order(&BTreeMap::new()).is_empty());
+    }
+
+    #[test]
+    fn scheduling_promotes_newly_ready_cells_in_lexical_order() {
+        let graph = BTreeMap::from([
+            ("S!A1".into(), BTreeSet::from(["S!B1".into()])),
+            ("S!B1".into(), BTreeSet::new()),
+            ("S!C1".into(), BTreeSet::new()),
+        ]);
+        assert_eq!(calculation_order(&graph), ["S!B1", "S!A1", "S!C1"]);
+    }
+
+    #[test]
+    fn scheduling_keeps_cycles_and_blocked_diagnostics_separate() {
+        let mut cells = Map::new();
+        for (address, expression) in [
+            ("A1", "=A1"),
+            ("A2", "=A1+1"),
+            ("B1", "=NO_SUCH_FUNCTION(1)"),
+            ("B2", "=B1+1"),
+            ("C1", "=1"),
+            ("C2", "=C1+C1"),
+        ] {
+            cells.insert(
+                address.into(),
+                json!({
+                    "address": address, "value": 999, "data_type": "number",
+                    "formula": {"expression": expression, "dependencies": [], "result": 999}
+                }),
+            );
+        }
+        let workbook = hydrate(
+            &serde_json::to_vec(&json!({
+                "schema_version": 1, "model_version": 1, "metadata": {},
+                "bindings": {"inputs": {}, "outputs": {}}, "diagnostics": [],
+                "sheets": [{"name": "S", "cells": cells}]
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+        let calculated = calculate(&workbook).unwrap();
+        assert_eq!(result_number(&calculated, "S", "C2"), 2.0);
+        let diagnostics: Vec<_> = calculated
+            .diagnostics
+            .iter()
+            .map(|d| (d.address.as_deref().unwrap(), d.code.as_str()))
+            .collect();
+        assert_eq!(
+            diagnostics,
+            [
+                ("A1", "cycle"),
+                ("A2", "cycle"),
+                ("B1", "unsupported_formula"),
+                ("B2", "blocked_dependency"),
+            ]
+        );
+        for address in ["A1", "A2", "B1", "B2"] {
+            assert_eq!(
+                calculated.sheet("S").unwrap().cells[address]
+                    .formula
+                    .as_ref()
+                    .unwrap()
+                    .result,
+                Scalar::Blank
+            );
+        }
+        assert_eq!(result_number(&workbook, "S", "C2"), 999.0);
+        assert_eq!(calculate(&calculated).unwrap(), calculated);
+    }
+
+    #[test]
+    #[ignore = "release benchmark: cargo test --release scheduler_benchmark -- --ignored --nocapture"]
+    fn scheduler_benchmark() {
+        use std::hint::black_box;
+        use std::time::Instant;
+        for shape in ["chain", "fanout", "independent"] {
+            for size in [1000, 5000, 10000] {
+                let graph: BTreeMap<String, BTreeSet<String>> = (0..size)
+                    .map(|node| {
+                        let deps = match shape {
+                            "chain" if node > 0 => BTreeSet::from([format!("S!A{}", node - 1)]),
+                            "fanout" if node > 0 => BTreeSet::from(["S!A0".into()]),
+                            _ => BTreeSet::new(),
+                        };
+                        (format!("S!A{node}"), deps)
+                    })
+                    .collect();
+                let expected = scan_order(graph.clone());
+                assert_eq!(calculation_order(&graph), expected);
+                let mut old = Vec::new();
+                let mut new = Vec::new();
+                for _ in 0..5 {
+                    // Both inputs are prepared outside the timed region.
+                    let old_graph = graph.clone();
+                    let start = Instant::now();
+                    black_box(scan_order(black_box(old_graph)));
+                    old.push(start.elapsed().as_secs_f64() * 1000.0);
+                    let start = Instant::now();
+                    black_box(calculation_order(black_box(&graph)));
+                    new.push(start.elapsed().as_secs_f64() * 1000.0);
+                }
+                old.sort_by(f64::total_cmp);
+                new.sort_by(f64::total_cmp);
+                println!(
+                    "{shape},{size},scan_ms={:.3},reverse_ms={:.3}",
+                    old[2], new[2]
+                );
+            }
+        }
+    }
 
     fn fixture() -> Vec<u8> {
         std::fs::read(

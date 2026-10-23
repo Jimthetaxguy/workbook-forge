@@ -1,5 +1,5 @@
 {
-  "catalog_version": "0.22.0",
+  "catalog_version": "0.22.4",
   "catalog_schema": "formula-support.schema.json",
   "profile": "excel-microsoft-365-desktop",
   "sources": [
@@ -537,6 +537,12 @@
       "retrieved": "2026-09-24"
     },
     {
+      "id": "ms-sum-coercion",
+      "url": "https://support.microsoft.com/en-us/excel/use-the-sum-function-to-sum-numbers-in-a-range",
+      "kind": "function-semantics",
+      "retrieved": "2026-10-23"
+    },
+    {
       "id": "ms-sumif",
       "url": "https://support.microsoft.com/en-us/excel/functions/sumif-function",
       "kind": "function-semantics",
@@ -671,6 +677,36 @@
       "url": "https://support.microsoft.com/en-us/excel/how-to-correct-a-value-error-in-the-concatenate-function",
       "kind": "legacy-function-compatibility",
       "retrieved": "2026-09-24"
+    },
+    {
+      "id": "ms-iferror-scalar-empty",
+      "url": "https://support.microsoft.com/en-us/excel/functions/iferror-function",
+      "kind": "documented-behavior",
+      "retrieved": "2026-10-23"
+    },
+    {
+      "id": "ms-comparison-precedence",
+      "url": "https://support.microsoft.com/en-us/excel/calculation-operators-and-precedence-in-excel",
+      "kind": "documented-behavior",
+      "retrieved": "2026-10-23"
+    },
+    {
+      "id": "ms-match-type-order",
+      "url": "https://support.microsoft.com/en-us/excel/functions/match-function",
+      "kind": "documented-behavior",
+      "retrieved": "2026-10-23"
+    },
+    {
+      "id": "ms-average",
+      "url": "https://support.microsoft.com/en-us/excel/functions/average-function",
+      "kind": "documented-behavior",
+      "retrieved": "2026-10-23"
+    },
+    {
+      "id": "ms-average-worksheetfunction",
+      "url": "https://learn.microsoft.com/en-us/office/vba/api/excel.worksheetfunction.average",
+      "kind": "documented-behavior",
+      "retrieved": "2026-10-23"
     }
   ],
   "categories": [
@@ -781,7 +817,9 @@
       "status": {
         "python": "evaluated",
         "rust": "evaluated"
-      }
+      },
+      "definition": "Six scalar comparison operators with explicit number < text < Boolean ranking, counterpart-typed blank adaptation, left error propagation and finite binary64 numeric comparisons. ASCII text is case-insensitive; non-ASCII uses an explicit exact UTF-8 ordinal local profile.",
+      "boundary": "Excel-targeted type/blank cases remain unobserved; primary operator/precedence documentation and compatible MATCH ordering do not establish every coercion/collation case. Native primitives retain their separate legacy comparison contract."
     },
     {
       "id": "operator.concatenation",
@@ -1413,6 +1451,9 @@
       "status": {
         "python": "conformance-tested",
         "rust": "conformance-tested"
+      },
+      "semantics": {
+        "stage3_scalar_profile": "Classic scalar Excel errors and transported #CALC!/#SPILL! values trigger lazy fallback; blank selected inputs/fallbacks become empty text. Implementation diagnostics and Rust Unsupported/Parse failures are not Excel errors. Modern error interception is a local unobserved profile; no spill placement implied."
       }
     },
     {
@@ -5167,7 +5208,7 @@
         "worksheet_boundary": "ArrayValue is a computed result, not a spill projection. Workbook Forge does not place spill cells, detect blocked/merged/table destinations, model A1# or @ implicit intersection, or calculate dependency invalidation for spill regions.",
         "compatibility_limit": "Shared fixtures establish Python/Rust parity for this bounded evaluator profile; no direct Excel spot-checks have been performed.",
         "error_precedence_profile": "Arguments are evaluated left to right; the first encountered formula error or evaluation failure stops later arguments. Ordinary scalar coercion follows expression evaluation, so a later formula error can precede coercion of an earlier nonnumeric text value. A non-finite numeric literal fails when encountered. These mixed-error ordering choices are Workbook Forge profiles, not Microsoft claims.",
-        "array_operator_boundary_profile": "Workbook Forge lifts binary arithmetic (+, -, *, /, ^), comparisons, and concatenation elementwise over bounded ranges and arrays. Two array operands must have exactly equal shapes; scalar operands broadcast on either side. Shape mismatches return #VALUE!, and cell-level formula errors remain in their result cells. For binary comparisons, numeric-like operands are checked before type dispatch; finite values use binary64 precision, and nonfinite/out-of-range values return #NUM!; ASCII text is case-insensitive, while text comparison is exact if either operand contains non-ASCII characters; blank, Boolean, and numeric values compare after numeric coercion; text-to-number equality is false, inequality is true, and text-to-number ordering returns #VALUE!. Binary operand errors propagate left to right: a left formula error precedes a non-finite right operand, while a non-finite left numeric operand returns #NUM! before a right formula error. This error precedence is a local Workbook Forge profile. These comparison precision, collation, and coercion rules are local Workbook Forge profiles; values beyond Excel's documented 15-digit precision are not Excel oracles. Unary operators, array constants, general broadcasting, and worksheet spill projection are not modeled. Microsoft documents elementwise array operators; this narrower shape and error profile is not a claim of complete Excel semantics."
+        "array_operator_boundary_profile": "Workbook Forge lifts binary arithmetic (+, -, *, /, ^), comparisons, and concatenation elementwise over bounded ranges and arrays. Two array operands must have exactly equal shapes; scalar operands broadcast on either side. Shape mismatches return #VALUE!, and cell-level formula errors remain in their result cells. For binary comparisons, numeric-like operands are checked before type dispatch; finite values use binary64 precision, and nonfinite/out-of-range values return #NUM!; ASCII text is case-insensitive, while text comparison is exact if either operand contains non-ASCII characters; worksheet numbers, text and Booleans have distinct ranks in that order; blank adapts to the other operand type (zero, empty text or FALSE). Numeric text is not parsed for comparison, and no Boolean-to-number equality coercion occurs. Type ranking and blank rules remain an Excel-targeted unobserved profile; native primitives retain their separate legacy comparison contract. Binary operand errors propagate left to right: a left formula error precedes a non-finite right operand, while a non-finite left numeric operand returns #NUM! before a right formula error. This error precedence is a local Workbook Forge profile. These comparison precision, collation, and coercion rules are local Workbook Forge profiles; values beyond Excel's documented 15-digit precision are not Excel oracles. Unary operators, array constants, general broadcasting, and worksheet spill projection are not modeled. Microsoft documents elementwise array operators; this narrower shape and error profile is not a claim of complete Excel semantics."
       },
       "source_refs": [
         "ms-sequence",
@@ -6272,6 +6313,39 @@
         "ms-combine-text-numbers",
         "ms-concat-error-compat",
         "ms-excel-precision-limits"
+      ]
+    },
+    "AVERAGE": {
+      "arguments": [
+        {
+          "name": "number1",
+          "kind": "scalar-reference-or-range",
+          "required": true
+        },
+        {
+          "name": "number2",
+          "kind": "scalar-reference-or-range",
+          "required": false,
+          "repeatable": true
+        }
+      ],
+      "returns": {
+        "kind": "number",
+        "shape": "scalar"
+      },
+      "semantics": {
+        "definition": "Arithmetic mean, with origin-sensitive numeric counts; one through 255 arguments.",
+        "reference_rule": "Both Microsoft sources say references/arrays ignore text, logical values and blanks, while counting numeric zero. Referenced errors propagate in the implemented scalar profile.",
+        "direct_policy_conflict": "Microsoft worksheet support currently says direct logical/numeric text arguments are not counted; WorksheetFunction.Average says they are counted. This implementation provisionally counts direct booleans as 1/0 and decimal numeric text, pending worksheet Excel observation. The conflict is unresolved, not a verified Excel rule.",
+        "text_profile": "Direct numeric text uses ASCII decimal/exponent syntax with ASCII space/tab/CR/LF trimming. Empty/non-numeric text returns #VALUE!; locale/currency/thousands and wider Unicode whitespace conversion are not claimed.",
+        "empty_error_profile": "No counted numbers returns #DIV/0!. Error codes/order, computed scalar origins and overflow details are unobserved profiles.",
+        "numeric_profile": "Finite binary64, explicit left-fold sum divided by count. Accumulation overflow returns #NUM! even if a mathematically stable algorithm could avoid overflow. Excel precision/rounding is unobserved.",
+        "native_primitive_boundary": "The existing native primitive value API retains its legacy reference-style filtering of Boolean/text scalar arguments; worksheet/direct source arguments use the provisional policy above.",
+        "compatibility_limit": "No Excel Desktop observation. Shared expected cases and independent Rust/Python agreement do not resolve the conflicting direct-argument documentation."
+      },
+      "source_refs": [
+        "ms-average",
+        "ms-average-worksheetfunction"
       ]
     }
   }

@@ -1,0 +1,4985 @@
+{
+  "evidence_version": 1,
+  "matrix_sha256": "55398fadb414ddd0b2fd16a66acb58cc6bc53a19c6932773fbc2f80481910537",
+  "expectation_count": 486,
+  "counts": {
+    "inferred_from_primary_match_order": 168,
+    "local_profile_without_independent_excel_evidence": 246,
+    "primary_operator_rule_plus_arithmetic": 72
+  },
+  "definitions": {
+    "primary_operator_rule_plus_arithmetic": "Microsoft defines numerical operator meanings; expected values follow independent elementary arithmetic, not an observed Excel run.",
+    "inferred_from_primary_match_order": "MATCH documents a compatible sort order. Applying it to operators is inference, not direct operator coercion evidence.",
+    "local_profile_without_independent_excel_evidence": "Independently authored expectation with SDK/runtime agreement. Blank adaptation, collation, signed-zero/error edge cases lack independent Excel evidence."
+  },
+  "primary_sources": [
+    {
+      "url": "https://support.microsoft.com/en-us/excel/calculation-operators-and-precedence-in-excel",
+      "retrieved": "2026-10-23"
+    },
+    {
+      "url": "https://support.microsoft.com/en-us/excel/functions/match-function",
+      "retrieved": "2026-10-23"
+    }
+  ],
+  "excel_observed_count": 0,
+  "agreement_is_not_oracle": true,
+  "expectations": [
+    {
+      "id": "numbers:reference-reference:=",
+      "pair": "numbers",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": "=",
+      "expected": false,
+      "evidence": "primary_operator_rule_plus_arithmetic",
+      "excel_observed": false
+    },
+    {
+      "id": "numbers:reference-reference:<>",
+      "pair": "numbers",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": "<>",
+      "expected": true,
+      "evidence": "primary_operator_rule_plus_arithmetic",
+      "excel_observed": false
+    },
+    {
+      "id": "numbers:reference-reference:<",
+      "pair": "numbers",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": "<",
+      "expected": true,
+      "evidence": "primary_operator_rule_plus_arithmetic",
+      "excel_observed": false
+    },
+    {
+      "id": "numbers:reference-reference:<=",
+      "pair": "numbers",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": "<=",
+      "expected": true,
+      "evidence": "primary_operator_rule_plus_arithmetic",
+      "excel_observed": false
+    },
+    {
+      "id": "numbers:reference-reference:>",
+      "pair": "numbers",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": ">",
+      "expected": false,
+      "evidence": "primary_operator_rule_plus_arithmetic",
+      "excel_observed": false
+    },
+    {
+      "id": "numbers:reference-reference:>=",
+      "pair": "numbers",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": ">=",
+      "expected": false,
+      "evidence": "primary_operator_rule_plus_arithmetic",
+      "excel_observed": false
+    },
+    {
+      "id": "numbers:literal-literal:=",
+      "pair": "numbers",
+      "left_form": "literal",
+      "right_form": "literal",
+      "operator": "=",
+      "expected": false,
+      "evidence": "primary_operator_rule_plus_arithmetic",
+      "excel_observed": false
+    },
+    {
+      "id": "numbers:literal-literal:<>",
+      "pair": "numbers",
+      "left_form": "literal",
+      "right_form": "literal",
+      "operator": "<>",
+      "expected": true,
+      "evidence": "primary_operator_rule_plus_arithmetic",
+      "excel_observed": false
+    },
+    {
+      "id": "numbers:literal-literal:<",
+      "pair": "numbers",
+      "left_form": "literal",
+      "right_form": "literal",
+      "operator": "<",
+      "expected": true,
+      "evidence": "primary_operator_rule_plus_arithmetic",
+      "excel_observed": false
+    },
+    {
+      "id": "numbers:literal-literal:<=",
+      "pair": "numbers",
+      "left_form": "literal",
+      "right_form": "literal",
+      "operator": "<=",
+      "expected": true,
+      "evidence": "primary_operator_rule_plus_arithmetic",
+      "excel_observed": false
+    },
+    {
+      "id": "numbers:literal-literal:>",
+      "pair": "numbers",
+      "left_form": "literal",
+      "right_form": "literal",
+      "operator": ">",
+      "expected": false,
+      "evidence": "primary_operator_rule_plus_arithmetic",
+      "excel_observed": false
+    },
+    {
+      "id": "numbers:literal-literal:>=",
+      "pair": "numbers",
+      "left_form": "literal",
+      "right_form": "literal",
+      "operator": ">=",
+      "expected": false,
+      "evidence": "primary_operator_rule_plus_arithmetic",
+      "excel_observed": false
+    },
+    {
+      "id": "numbers:reference-literal:=",
+      "pair": "numbers",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": "=",
+      "expected": false,
+      "evidence": "primary_operator_rule_plus_arithmetic",
+      "excel_observed": false
+    },
+    {
+      "id": "numbers:reference-literal:<>",
+      "pair": "numbers",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": "<>",
+      "expected": true,
+      "evidence": "primary_operator_rule_plus_arithmetic",
+      "excel_observed": false
+    },
+    {
+      "id": "numbers:reference-literal:<",
+      "pair": "numbers",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": "<",
+      "expected": true,
+      "evidence": "primary_operator_rule_plus_arithmetic",
+      "excel_observed": false
+    },
+    {
+      "id": "numbers:reference-literal:<=",
+      "pair": "numbers",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": "<=",
+      "expected": true,
+      "evidence": "primary_operator_rule_plus_arithmetic",
+      "excel_observed": false
+    },
+    {
+      "id": "numbers:reference-literal:>",
+      "pair": "numbers",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": ">",
+      "expected": false,
+      "evidence": "primary_operator_rule_plus_arithmetic",
+      "excel_observed": false
+    },
+    {
+      "id": "numbers:reference-literal:>=",
+      "pair": "numbers",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": ">=",
+      "expected": false,
+      "evidence": "primary_operator_rule_plus_arithmetic",
+      "excel_observed": false
+    },
+    {
+      "id": "numbers:literal-reference:=",
+      "pair": "numbers",
+      "left_form": "literal",
+      "right_form": "reference",
+      "operator": "=",
+      "expected": false,
+      "evidence": "primary_operator_rule_plus_arithmetic",
+      "excel_observed": false
+    },
+    {
+      "id": "numbers:literal-reference:<>",
+      "pair": "numbers",
+      "left_form": "literal",
+      "right_form": "reference",
+      "operator": "<>",
+      "expected": true,
+      "evidence": "primary_operator_rule_plus_arithmetic",
+      "excel_observed": false
+    },
+    {
+      "id": "numbers:literal-reference:<",
+      "pair": "numbers",
+      "left_form": "literal",
+      "right_form": "reference",
+      "operator": "<",
+      "expected": true,
+      "evidence": "primary_operator_rule_plus_arithmetic",
+      "excel_observed": false
+    },
+    {
+      "id": "numbers:literal-reference:<=",
+      "pair": "numbers",
+      "left_form": "literal",
+      "right_form": "reference",
+      "operator": "<=",
+      "expected": true,
+      "evidence": "primary_operator_rule_plus_arithmetic",
+      "excel_observed": false
+    },
+    {
+      "id": "numbers:literal-reference:>",
+      "pair": "numbers",
+      "left_form": "literal",
+      "right_form": "reference",
+      "operator": ">",
+      "expected": false,
+      "evidence": "primary_operator_rule_plus_arithmetic",
+      "excel_observed": false
+    },
+    {
+      "id": "numbers:literal-reference:>=",
+      "pair": "numbers",
+      "left_form": "literal",
+      "right_form": "reference",
+      "operator": ">=",
+      "expected": false,
+      "evidence": "primary_operator_rule_plus_arithmetic",
+      "excel_observed": false
+    },
+    {
+      "id": "equal-numbers:reference-reference:=",
+      "pair": "equal-numbers",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": "=",
+      "expected": true,
+      "evidence": "primary_operator_rule_plus_arithmetic",
+      "excel_observed": false
+    },
+    {
+      "id": "equal-numbers:reference-reference:<>",
+      "pair": "equal-numbers",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": "<>",
+      "expected": false,
+      "evidence": "primary_operator_rule_plus_arithmetic",
+      "excel_observed": false
+    },
+    {
+      "id": "equal-numbers:reference-reference:<",
+      "pair": "equal-numbers",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": "<",
+      "expected": false,
+      "evidence": "primary_operator_rule_plus_arithmetic",
+      "excel_observed": false
+    },
+    {
+      "id": "equal-numbers:reference-reference:<=",
+      "pair": "equal-numbers",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": "<=",
+      "expected": true,
+      "evidence": "primary_operator_rule_plus_arithmetic",
+      "excel_observed": false
+    },
+    {
+      "id": "equal-numbers:reference-reference:>",
+      "pair": "equal-numbers",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": ">",
+      "expected": false,
+      "evidence": "primary_operator_rule_plus_arithmetic",
+      "excel_observed": false
+    },
+    {
+      "id": "equal-numbers:reference-reference:>=",
+      "pair": "equal-numbers",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": ">=",
+      "expected": true,
+      "evidence": "primary_operator_rule_plus_arithmetic",
+      "excel_observed": false
+    },
+    {
+      "id": "equal-numbers:literal-literal:=",
+      "pair": "equal-numbers",
+      "left_form": "literal",
+      "right_form": "literal",
+      "operator": "=",
+      "expected": true,
+      "evidence": "primary_operator_rule_plus_arithmetic",
+      "excel_observed": false
+    },
+    {
+      "id": "equal-numbers:literal-literal:<>",
+      "pair": "equal-numbers",
+      "left_form": "literal",
+      "right_form": "literal",
+      "operator": "<>",
+      "expected": false,
+      "evidence": "primary_operator_rule_plus_arithmetic",
+      "excel_observed": false
+    },
+    {
+      "id": "equal-numbers:literal-literal:<",
+      "pair": "equal-numbers",
+      "left_form": "literal",
+      "right_form": "literal",
+      "operator": "<",
+      "expected": false,
+      "evidence": "primary_operator_rule_plus_arithmetic",
+      "excel_observed": false
+    },
+    {
+      "id": "equal-numbers:literal-literal:<=",
+      "pair": "equal-numbers",
+      "left_form": "literal",
+      "right_form": "literal",
+      "operator": "<=",
+      "expected": true,
+      "evidence": "primary_operator_rule_plus_arithmetic",
+      "excel_observed": false
+    },
+    {
+      "id": "equal-numbers:literal-literal:>",
+      "pair": "equal-numbers",
+      "left_form": "literal",
+      "right_form": "literal",
+      "operator": ">",
+      "expected": false,
+      "evidence": "primary_operator_rule_plus_arithmetic",
+      "excel_observed": false
+    },
+    {
+      "id": "equal-numbers:literal-literal:>=",
+      "pair": "equal-numbers",
+      "left_form": "literal",
+      "right_form": "literal",
+      "operator": ">=",
+      "expected": true,
+      "evidence": "primary_operator_rule_plus_arithmetic",
+      "excel_observed": false
+    },
+    {
+      "id": "equal-numbers:reference-literal:=",
+      "pair": "equal-numbers",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": "=",
+      "expected": true,
+      "evidence": "primary_operator_rule_plus_arithmetic",
+      "excel_observed": false
+    },
+    {
+      "id": "equal-numbers:reference-literal:<>",
+      "pair": "equal-numbers",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": "<>",
+      "expected": false,
+      "evidence": "primary_operator_rule_plus_arithmetic",
+      "excel_observed": false
+    },
+    {
+      "id": "equal-numbers:reference-literal:<",
+      "pair": "equal-numbers",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": "<",
+      "expected": false,
+      "evidence": "primary_operator_rule_plus_arithmetic",
+      "excel_observed": false
+    },
+    {
+      "id": "equal-numbers:reference-literal:<=",
+      "pair": "equal-numbers",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": "<=",
+      "expected": true,
+      "evidence": "primary_operator_rule_plus_arithmetic",
+      "excel_observed": false
+    },
+    {
+      "id": "equal-numbers:reference-literal:>",
+      "pair": "equal-numbers",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": ">",
+      "expected": false,
+      "evidence": "primary_operator_rule_plus_arithmetic",
+      "excel_observed": false
+    },
+    {
+      "id": "equal-numbers:reference-literal:>=",
+      "pair": "equal-numbers",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": ">=",
+      "expected": true,
+      "evidence": "primary_operator_rule_plus_arithmetic",
+      "excel_observed": false
+    },
+    {
+      "id": "equal-numbers:literal-reference:=",
+      "pair": "equal-numbers",
+      "left_form": "literal",
+      "right_form": "reference",
+      "operator": "=",
+      "expected": true,
+      "evidence": "primary_operator_rule_plus_arithmetic",
+      "excel_observed": false
+    },
+    {
+      "id": "equal-numbers:literal-reference:<>",
+      "pair": "equal-numbers",
+      "left_form": "literal",
+      "right_form": "reference",
+      "operator": "<>",
+      "expected": false,
+      "evidence": "primary_operator_rule_plus_arithmetic",
+      "excel_observed": false
+    },
+    {
+      "id": "equal-numbers:literal-reference:<",
+      "pair": "equal-numbers",
+      "left_form": "literal",
+      "right_form": "reference",
+      "operator": "<",
+      "expected": false,
+      "evidence": "primary_operator_rule_plus_arithmetic",
+      "excel_observed": false
+    },
+    {
+      "id": "equal-numbers:literal-reference:<=",
+      "pair": "equal-numbers",
+      "left_form": "literal",
+      "right_form": "reference",
+      "operator": "<=",
+      "expected": true,
+      "evidence": "primary_operator_rule_plus_arithmetic",
+      "excel_observed": false
+    },
+    {
+      "id": "equal-numbers:literal-reference:>",
+      "pair": "equal-numbers",
+      "left_form": "literal",
+      "right_form": "reference",
+      "operator": ">",
+      "expected": false,
+      "evidence": "primary_operator_rule_plus_arithmetic",
+      "excel_observed": false
+    },
+    {
+      "id": "equal-numbers:literal-reference:>=",
+      "pair": "equal-numbers",
+      "left_form": "literal",
+      "right_form": "reference",
+      "operator": ">=",
+      "expected": true,
+      "evidence": "primary_operator_rule_plus_arithmetic",
+      "excel_observed": false
+    },
+    {
+      "id": "negative-number-zero:reference-reference:=",
+      "pair": "negative-number-zero",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": "=",
+      "expected": false,
+      "evidence": "primary_operator_rule_plus_arithmetic",
+      "excel_observed": false
+    },
+    {
+      "id": "negative-number-zero:reference-reference:<>",
+      "pair": "negative-number-zero",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": "<>",
+      "expected": true,
+      "evidence": "primary_operator_rule_plus_arithmetic",
+      "excel_observed": false
+    },
+    {
+      "id": "negative-number-zero:reference-reference:<",
+      "pair": "negative-number-zero",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": "<",
+      "expected": true,
+      "evidence": "primary_operator_rule_plus_arithmetic",
+      "excel_observed": false
+    },
+    {
+      "id": "negative-number-zero:reference-reference:<=",
+      "pair": "negative-number-zero",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": "<=",
+      "expected": true,
+      "evidence": "primary_operator_rule_plus_arithmetic",
+      "excel_observed": false
+    },
+    {
+      "id": "negative-number-zero:reference-reference:>",
+      "pair": "negative-number-zero",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": ">",
+      "expected": false,
+      "evidence": "primary_operator_rule_plus_arithmetic",
+      "excel_observed": false
+    },
+    {
+      "id": "negative-number-zero:reference-reference:>=",
+      "pair": "negative-number-zero",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": ">=",
+      "expected": false,
+      "evidence": "primary_operator_rule_plus_arithmetic",
+      "excel_observed": false
+    },
+    {
+      "id": "negative-number-zero:literal-literal:=",
+      "pair": "negative-number-zero",
+      "left_form": "literal",
+      "right_form": "literal",
+      "operator": "=",
+      "expected": false,
+      "evidence": "primary_operator_rule_plus_arithmetic",
+      "excel_observed": false
+    },
+    {
+      "id": "negative-number-zero:literal-literal:<>",
+      "pair": "negative-number-zero",
+      "left_form": "literal",
+      "right_form": "literal",
+      "operator": "<>",
+      "expected": true,
+      "evidence": "primary_operator_rule_plus_arithmetic",
+      "excel_observed": false
+    },
+    {
+      "id": "negative-number-zero:literal-literal:<",
+      "pair": "negative-number-zero",
+      "left_form": "literal",
+      "right_form": "literal",
+      "operator": "<",
+      "expected": true,
+      "evidence": "primary_operator_rule_plus_arithmetic",
+      "excel_observed": false
+    },
+    {
+      "id": "negative-number-zero:literal-literal:<=",
+      "pair": "negative-number-zero",
+      "left_form": "literal",
+      "right_form": "literal",
+      "operator": "<=",
+      "expected": true,
+      "evidence": "primary_operator_rule_plus_arithmetic",
+      "excel_observed": false
+    },
+    {
+      "id": "negative-number-zero:literal-literal:>",
+      "pair": "negative-number-zero",
+      "left_form": "literal",
+      "right_form": "literal",
+      "operator": ">",
+      "expected": false,
+      "evidence": "primary_operator_rule_plus_arithmetic",
+      "excel_observed": false
+    },
+    {
+      "id": "negative-number-zero:literal-literal:>=",
+      "pair": "negative-number-zero",
+      "left_form": "literal",
+      "right_form": "literal",
+      "operator": ">=",
+      "expected": false,
+      "evidence": "primary_operator_rule_plus_arithmetic",
+      "excel_observed": false
+    },
+    {
+      "id": "negative-number-zero:reference-literal:=",
+      "pair": "negative-number-zero",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": "=",
+      "expected": false,
+      "evidence": "primary_operator_rule_plus_arithmetic",
+      "excel_observed": false
+    },
+    {
+      "id": "negative-number-zero:reference-literal:<>",
+      "pair": "negative-number-zero",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": "<>",
+      "expected": true,
+      "evidence": "primary_operator_rule_plus_arithmetic",
+      "excel_observed": false
+    },
+    {
+      "id": "negative-number-zero:reference-literal:<",
+      "pair": "negative-number-zero",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": "<",
+      "expected": true,
+      "evidence": "primary_operator_rule_plus_arithmetic",
+      "excel_observed": false
+    },
+    {
+      "id": "negative-number-zero:reference-literal:<=",
+      "pair": "negative-number-zero",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": "<=",
+      "expected": true,
+      "evidence": "primary_operator_rule_plus_arithmetic",
+      "excel_observed": false
+    },
+    {
+      "id": "negative-number-zero:reference-literal:>",
+      "pair": "negative-number-zero",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": ">",
+      "expected": false,
+      "evidence": "primary_operator_rule_plus_arithmetic",
+      "excel_observed": false
+    },
+    {
+      "id": "negative-number-zero:reference-literal:>=",
+      "pair": "negative-number-zero",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": ">=",
+      "expected": false,
+      "evidence": "primary_operator_rule_plus_arithmetic",
+      "excel_observed": false
+    },
+    {
+      "id": "negative-number-zero:literal-reference:=",
+      "pair": "negative-number-zero",
+      "left_form": "literal",
+      "right_form": "reference",
+      "operator": "=",
+      "expected": false,
+      "evidence": "primary_operator_rule_plus_arithmetic",
+      "excel_observed": false
+    },
+    {
+      "id": "negative-number-zero:literal-reference:<>",
+      "pair": "negative-number-zero",
+      "left_form": "literal",
+      "right_form": "reference",
+      "operator": "<>",
+      "expected": true,
+      "evidence": "primary_operator_rule_plus_arithmetic",
+      "excel_observed": false
+    },
+    {
+      "id": "negative-number-zero:literal-reference:<",
+      "pair": "negative-number-zero",
+      "left_form": "literal",
+      "right_form": "reference",
+      "operator": "<",
+      "expected": true,
+      "evidence": "primary_operator_rule_plus_arithmetic",
+      "excel_observed": false
+    },
+    {
+      "id": "negative-number-zero:literal-reference:<=",
+      "pair": "negative-number-zero",
+      "left_form": "literal",
+      "right_form": "reference",
+      "operator": "<=",
+      "expected": true,
+      "evidence": "primary_operator_rule_plus_arithmetic",
+      "excel_observed": false
+    },
+    {
+      "id": "negative-number-zero:literal-reference:>",
+      "pair": "negative-number-zero",
+      "left_form": "literal",
+      "right_form": "reference",
+      "operator": ">",
+      "expected": false,
+      "evidence": "primary_operator_rule_plus_arithmetic",
+      "excel_observed": false
+    },
+    {
+      "id": "negative-number-zero:literal-reference:>=",
+      "pair": "negative-number-zero",
+      "left_form": "literal",
+      "right_form": "reference",
+      "operator": ">=",
+      "expected": false,
+      "evidence": "primary_operator_rule_plus_arithmetic",
+      "excel_observed": false
+    },
+    {
+      "id": "number-bool:reference-reference:=",
+      "pair": "number-bool",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": "=",
+      "expected": false,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "number-bool:reference-reference:<>",
+      "pair": "number-bool",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": "<>",
+      "expected": true,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "number-bool:reference-reference:<",
+      "pair": "number-bool",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": "<",
+      "expected": true,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "number-bool:reference-reference:<=",
+      "pair": "number-bool",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": "<=",
+      "expected": true,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "number-bool:reference-reference:>",
+      "pair": "number-bool",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": ">",
+      "expected": false,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "number-bool:reference-reference:>=",
+      "pair": "number-bool",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": ">=",
+      "expected": false,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "number-bool:literal-literal:=",
+      "pair": "number-bool",
+      "left_form": "literal",
+      "right_form": "literal",
+      "operator": "=",
+      "expected": false,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "number-bool:literal-literal:<>",
+      "pair": "number-bool",
+      "left_form": "literal",
+      "right_form": "literal",
+      "operator": "<>",
+      "expected": true,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "number-bool:literal-literal:<",
+      "pair": "number-bool",
+      "left_form": "literal",
+      "right_form": "literal",
+      "operator": "<",
+      "expected": true,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "number-bool:literal-literal:<=",
+      "pair": "number-bool",
+      "left_form": "literal",
+      "right_form": "literal",
+      "operator": "<=",
+      "expected": true,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "number-bool:literal-literal:>",
+      "pair": "number-bool",
+      "left_form": "literal",
+      "right_form": "literal",
+      "operator": ">",
+      "expected": false,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "number-bool:literal-literal:>=",
+      "pair": "number-bool",
+      "left_form": "literal",
+      "right_form": "literal",
+      "operator": ">=",
+      "expected": false,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "number-bool:reference-literal:=",
+      "pair": "number-bool",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": "=",
+      "expected": false,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "number-bool:reference-literal:<>",
+      "pair": "number-bool",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": "<>",
+      "expected": true,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "number-bool:reference-literal:<",
+      "pair": "number-bool",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": "<",
+      "expected": true,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "number-bool:reference-literal:<=",
+      "pair": "number-bool",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": "<=",
+      "expected": true,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "number-bool:reference-literal:>",
+      "pair": "number-bool",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": ">",
+      "expected": false,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "number-bool:reference-literal:>=",
+      "pair": "number-bool",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": ">=",
+      "expected": false,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "number-bool:literal-reference:=",
+      "pair": "number-bool",
+      "left_form": "literal",
+      "right_form": "reference",
+      "operator": "=",
+      "expected": false,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "number-bool:literal-reference:<>",
+      "pair": "number-bool",
+      "left_form": "literal",
+      "right_form": "reference",
+      "operator": "<>",
+      "expected": true,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "number-bool:literal-reference:<",
+      "pair": "number-bool",
+      "left_form": "literal",
+      "right_form": "reference",
+      "operator": "<",
+      "expected": true,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "number-bool:literal-reference:<=",
+      "pair": "number-bool",
+      "left_form": "literal",
+      "right_form": "reference",
+      "operator": "<=",
+      "expected": true,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "number-bool:literal-reference:>",
+      "pair": "number-bool",
+      "left_form": "literal",
+      "right_form": "reference",
+      "operator": ">",
+      "expected": false,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "number-bool:literal-reference:>=",
+      "pair": "number-bool",
+      "left_form": "literal",
+      "right_form": "reference",
+      "operator": ">=",
+      "expected": false,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "false-zero:reference-reference:=",
+      "pair": "false-zero",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": "=",
+      "expected": false,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "false-zero:reference-reference:<>",
+      "pair": "false-zero",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": "<>",
+      "expected": true,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "false-zero:reference-reference:<",
+      "pair": "false-zero",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": "<",
+      "expected": false,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "false-zero:reference-reference:<=",
+      "pair": "false-zero",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": "<=",
+      "expected": false,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "false-zero:reference-reference:>",
+      "pair": "false-zero",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": ">",
+      "expected": true,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "false-zero:reference-reference:>=",
+      "pair": "false-zero",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": ">=",
+      "expected": true,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "false-zero:literal-literal:=",
+      "pair": "false-zero",
+      "left_form": "literal",
+      "right_form": "literal",
+      "operator": "=",
+      "expected": false,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "false-zero:literal-literal:<>",
+      "pair": "false-zero",
+      "left_form": "literal",
+      "right_form": "literal",
+      "operator": "<>",
+      "expected": true,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "false-zero:literal-literal:<",
+      "pair": "false-zero",
+      "left_form": "literal",
+      "right_form": "literal",
+      "operator": "<",
+      "expected": false,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "false-zero:literal-literal:<=",
+      "pair": "false-zero",
+      "left_form": "literal",
+      "right_form": "literal",
+      "operator": "<=",
+      "expected": false,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "false-zero:literal-literal:>",
+      "pair": "false-zero",
+      "left_form": "literal",
+      "right_form": "literal",
+      "operator": ">",
+      "expected": true,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "false-zero:literal-literal:>=",
+      "pair": "false-zero",
+      "left_form": "literal",
+      "right_form": "literal",
+      "operator": ">=",
+      "expected": true,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "false-zero:reference-literal:=",
+      "pair": "false-zero",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": "=",
+      "expected": false,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "false-zero:reference-literal:<>",
+      "pair": "false-zero",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": "<>",
+      "expected": true,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "false-zero:reference-literal:<",
+      "pair": "false-zero",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": "<",
+      "expected": false,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "false-zero:reference-literal:<=",
+      "pair": "false-zero",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": "<=",
+      "expected": false,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "false-zero:reference-literal:>",
+      "pair": "false-zero",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": ">",
+      "expected": true,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "false-zero:reference-literal:>=",
+      "pair": "false-zero",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": ">=",
+      "expected": true,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "false-zero:literal-reference:=",
+      "pair": "false-zero",
+      "left_form": "literal",
+      "right_form": "reference",
+      "operator": "=",
+      "expected": false,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "false-zero:literal-reference:<>",
+      "pair": "false-zero",
+      "left_form": "literal",
+      "right_form": "reference",
+      "operator": "<>",
+      "expected": true,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "false-zero:literal-reference:<",
+      "pair": "false-zero",
+      "left_form": "literal",
+      "right_form": "reference",
+      "operator": "<",
+      "expected": false,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "false-zero:literal-reference:<=",
+      "pair": "false-zero",
+      "left_form": "literal",
+      "right_form": "reference",
+      "operator": "<=",
+      "expected": false,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "false-zero:literal-reference:>",
+      "pair": "false-zero",
+      "left_form": "literal",
+      "right_form": "reference",
+      "operator": ">",
+      "expected": true,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "false-zero:literal-reference:>=",
+      "pair": "false-zero",
+      "left_form": "literal",
+      "right_form": "reference",
+      "operator": ">=",
+      "expected": true,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "false-true:reference-reference:=",
+      "pair": "false-true",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": "=",
+      "expected": false,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "false-true:reference-reference:<>",
+      "pair": "false-true",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": "<>",
+      "expected": true,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "false-true:reference-reference:<",
+      "pair": "false-true",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": "<",
+      "expected": true,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "false-true:reference-reference:<=",
+      "pair": "false-true",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": "<=",
+      "expected": true,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "false-true:reference-reference:>",
+      "pair": "false-true",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": ">",
+      "expected": false,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "false-true:reference-reference:>=",
+      "pair": "false-true",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": ">=",
+      "expected": false,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "false-true:literal-literal:=",
+      "pair": "false-true",
+      "left_form": "literal",
+      "right_form": "literal",
+      "operator": "=",
+      "expected": false,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "false-true:literal-literal:<>",
+      "pair": "false-true",
+      "left_form": "literal",
+      "right_form": "literal",
+      "operator": "<>",
+      "expected": true,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "false-true:literal-literal:<",
+      "pair": "false-true",
+      "left_form": "literal",
+      "right_form": "literal",
+      "operator": "<",
+      "expected": true,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "false-true:literal-literal:<=",
+      "pair": "false-true",
+      "left_form": "literal",
+      "right_form": "literal",
+      "operator": "<=",
+      "expected": true,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "false-true:literal-literal:>",
+      "pair": "false-true",
+      "left_form": "literal",
+      "right_form": "literal",
+      "operator": ">",
+      "expected": false,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "false-true:literal-literal:>=",
+      "pair": "false-true",
+      "left_form": "literal",
+      "right_form": "literal",
+      "operator": ">=",
+      "expected": false,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "false-true:reference-literal:=",
+      "pair": "false-true",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": "=",
+      "expected": false,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "false-true:reference-literal:<>",
+      "pair": "false-true",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": "<>",
+      "expected": true,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "false-true:reference-literal:<",
+      "pair": "false-true",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": "<",
+      "expected": true,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "false-true:reference-literal:<=",
+      "pair": "false-true",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": "<=",
+      "expected": true,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "false-true:reference-literal:>",
+      "pair": "false-true",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": ">",
+      "expected": false,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "false-true:reference-literal:>=",
+      "pair": "false-true",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": ">=",
+      "expected": false,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "false-true:literal-reference:=",
+      "pair": "false-true",
+      "left_form": "literal",
+      "right_form": "reference",
+      "operator": "=",
+      "expected": false,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "false-true:literal-reference:<>",
+      "pair": "false-true",
+      "left_form": "literal",
+      "right_form": "reference",
+      "operator": "<>",
+      "expected": true,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "false-true:literal-reference:<",
+      "pair": "false-true",
+      "left_form": "literal",
+      "right_form": "reference",
+      "operator": "<",
+      "expected": true,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "false-true:literal-reference:<=",
+      "pair": "false-true",
+      "left_form": "literal",
+      "right_form": "reference",
+      "operator": "<=",
+      "expected": true,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "false-true:literal-reference:>",
+      "pair": "false-true",
+      "left_form": "literal",
+      "right_form": "reference",
+      "operator": ">",
+      "expected": false,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "false-true:literal-reference:>=",
+      "pair": "false-true",
+      "left_form": "literal",
+      "right_form": "reference",
+      "operator": ">=",
+      "expected": false,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "text-number:reference-reference:=",
+      "pair": "text-number",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": "=",
+      "expected": false,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "text-number:reference-reference:<>",
+      "pair": "text-number",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": "<>",
+      "expected": true,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "text-number:reference-reference:<",
+      "pair": "text-number",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": "<",
+      "expected": false,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "text-number:reference-reference:<=",
+      "pair": "text-number",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": "<=",
+      "expected": false,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "text-number:reference-reference:>",
+      "pair": "text-number",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": ">",
+      "expected": true,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "text-number:reference-reference:>=",
+      "pair": "text-number",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": ">=",
+      "expected": true,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "text-number:literal-literal:=",
+      "pair": "text-number",
+      "left_form": "literal",
+      "right_form": "literal",
+      "operator": "=",
+      "expected": false,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "text-number:literal-literal:<>",
+      "pair": "text-number",
+      "left_form": "literal",
+      "right_form": "literal",
+      "operator": "<>",
+      "expected": true,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "text-number:literal-literal:<",
+      "pair": "text-number",
+      "left_form": "literal",
+      "right_form": "literal",
+      "operator": "<",
+      "expected": false,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "text-number:literal-literal:<=",
+      "pair": "text-number",
+      "left_form": "literal",
+      "right_form": "literal",
+      "operator": "<=",
+      "expected": false,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "text-number:literal-literal:>",
+      "pair": "text-number",
+      "left_form": "literal",
+      "right_form": "literal",
+      "operator": ">",
+      "expected": true,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "text-number:literal-literal:>=",
+      "pair": "text-number",
+      "left_form": "literal",
+      "right_form": "literal",
+      "operator": ">=",
+      "expected": true,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "text-number:reference-literal:=",
+      "pair": "text-number",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": "=",
+      "expected": false,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "text-number:reference-literal:<>",
+      "pair": "text-number",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": "<>",
+      "expected": true,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "text-number:reference-literal:<",
+      "pair": "text-number",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": "<",
+      "expected": false,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "text-number:reference-literal:<=",
+      "pair": "text-number",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": "<=",
+      "expected": false,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "text-number:reference-literal:>",
+      "pair": "text-number",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": ">",
+      "expected": true,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "text-number:reference-literal:>=",
+      "pair": "text-number",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": ">=",
+      "expected": true,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "text-number:literal-reference:=",
+      "pair": "text-number",
+      "left_form": "literal",
+      "right_form": "reference",
+      "operator": "=",
+      "expected": false,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "text-number:literal-reference:<>",
+      "pair": "text-number",
+      "left_form": "literal",
+      "right_form": "reference",
+      "operator": "<>",
+      "expected": true,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "text-number:literal-reference:<",
+      "pair": "text-number",
+      "left_form": "literal",
+      "right_form": "reference",
+      "operator": "<",
+      "expected": false,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "text-number:literal-reference:<=",
+      "pair": "text-number",
+      "left_form": "literal",
+      "right_form": "reference",
+      "operator": "<=",
+      "expected": false,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "text-number:literal-reference:>",
+      "pair": "text-number",
+      "left_form": "literal",
+      "right_form": "reference",
+      "operator": ">",
+      "expected": true,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "text-number:literal-reference:>=",
+      "pair": "text-number",
+      "left_form": "literal",
+      "right_form": "reference",
+      "operator": ">=",
+      "expected": true,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "number-text:reference-reference:=",
+      "pair": "number-text",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": "=",
+      "expected": false,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "number-text:reference-reference:<>",
+      "pair": "number-text",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": "<>",
+      "expected": true,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "number-text:reference-reference:<",
+      "pair": "number-text",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": "<",
+      "expected": true,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "number-text:reference-reference:<=",
+      "pair": "number-text",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": "<=",
+      "expected": true,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "number-text:reference-reference:>",
+      "pair": "number-text",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": ">",
+      "expected": false,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "number-text:reference-reference:>=",
+      "pair": "number-text",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": ">=",
+      "expected": false,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "number-text:literal-literal:=",
+      "pair": "number-text",
+      "left_form": "literal",
+      "right_form": "literal",
+      "operator": "=",
+      "expected": false,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "number-text:literal-literal:<>",
+      "pair": "number-text",
+      "left_form": "literal",
+      "right_form": "literal",
+      "operator": "<>",
+      "expected": true,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "number-text:literal-literal:<",
+      "pair": "number-text",
+      "left_form": "literal",
+      "right_form": "literal",
+      "operator": "<",
+      "expected": true,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "number-text:literal-literal:<=",
+      "pair": "number-text",
+      "left_form": "literal",
+      "right_form": "literal",
+      "operator": "<=",
+      "expected": true,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "number-text:literal-literal:>",
+      "pair": "number-text",
+      "left_form": "literal",
+      "right_form": "literal",
+      "operator": ">",
+      "expected": false,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "number-text:literal-literal:>=",
+      "pair": "number-text",
+      "left_form": "literal",
+      "right_form": "literal",
+      "operator": ">=",
+      "expected": false,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "number-text:reference-literal:=",
+      "pair": "number-text",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": "=",
+      "expected": false,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "number-text:reference-literal:<>",
+      "pair": "number-text",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": "<>",
+      "expected": true,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "number-text:reference-literal:<",
+      "pair": "number-text",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": "<",
+      "expected": true,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "number-text:reference-literal:<=",
+      "pair": "number-text",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": "<=",
+      "expected": true,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "number-text:reference-literal:>",
+      "pair": "number-text",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": ">",
+      "expected": false,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "number-text:reference-literal:>=",
+      "pair": "number-text",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": ">=",
+      "expected": false,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "number-text:literal-reference:=",
+      "pair": "number-text",
+      "left_form": "literal",
+      "right_form": "reference",
+      "operator": "=",
+      "expected": false,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "number-text:literal-reference:<>",
+      "pair": "number-text",
+      "left_form": "literal",
+      "right_form": "reference",
+      "operator": "<>",
+      "expected": true,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "number-text:literal-reference:<",
+      "pair": "number-text",
+      "left_form": "literal",
+      "right_form": "reference",
+      "operator": "<",
+      "expected": true,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "number-text:literal-reference:<=",
+      "pair": "number-text",
+      "left_form": "literal",
+      "right_form": "reference",
+      "operator": "<=",
+      "expected": true,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "number-text:literal-reference:>",
+      "pair": "number-text",
+      "left_form": "literal",
+      "right_form": "reference",
+      "operator": ">",
+      "expected": false,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "number-text:literal-reference:>=",
+      "pair": "number-text",
+      "left_form": "literal",
+      "right_form": "reference",
+      "operator": ">=",
+      "expected": false,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "empty-text-zero:reference-reference:=",
+      "pair": "empty-text-zero",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": "=",
+      "expected": false,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "empty-text-zero:reference-reference:<>",
+      "pair": "empty-text-zero",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": "<>",
+      "expected": true,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "empty-text-zero:reference-reference:<",
+      "pair": "empty-text-zero",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": "<",
+      "expected": false,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "empty-text-zero:reference-reference:<=",
+      "pair": "empty-text-zero",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": "<=",
+      "expected": false,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "empty-text-zero:reference-reference:>",
+      "pair": "empty-text-zero",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": ">",
+      "expected": true,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "empty-text-zero:reference-reference:>=",
+      "pair": "empty-text-zero",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": ">=",
+      "expected": true,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "empty-text-zero:literal-literal:=",
+      "pair": "empty-text-zero",
+      "left_form": "literal",
+      "right_form": "literal",
+      "operator": "=",
+      "expected": false,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "empty-text-zero:literal-literal:<>",
+      "pair": "empty-text-zero",
+      "left_form": "literal",
+      "right_form": "literal",
+      "operator": "<>",
+      "expected": true,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "empty-text-zero:literal-literal:<",
+      "pair": "empty-text-zero",
+      "left_form": "literal",
+      "right_form": "literal",
+      "operator": "<",
+      "expected": false,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "empty-text-zero:literal-literal:<=",
+      "pair": "empty-text-zero",
+      "left_form": "literal",
+      "right_form": "literal",
+      "operator": "<=",
+      "expected": false,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "empty-text-zero:literal-literal:>",
+      "pair": "empty-text-zero",
+      "left_form": "literal",
+      "right_form": "literal",
+      "operator": ">",
+      "expected": true,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "empty-text-zero:literal-literal:>=",
+      "pair": "empty-text-zero",
+      "left_form": "literal",
+      "right_form": "literal",
+      "operator": ">=",
+      "expected": true,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "empty-text-zero:reference-literal:=",
+      "pair": "empty-text-zero",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": "=",
+      "expected": false,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "empty-text-zero:reference-literal:<>",
+      "pair": "empty-text-zero",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": "<>",
+      "expected": true,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "empty-text-zero:reference-literal:<",
+      "pair": "empty-text-zero",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": "<",
+      "expected": false,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "empty-text-zero:reference-literal:<=",
+      "pair": "empty-text-zero",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": "<=",
+      "expected": false,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "empty-text-zero:reference-literal:>",
+      "pair": "empty-text-zero",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": ">",
+      "expected": true,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "empty-text-zero:reference-literal:>=",
+      "pair": "empty-text-zero",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": ">=",
+      "expected": true,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "empty-text-zero:literal-reference:=",
+      "pair": "empty-text-zero",
+      "left_form": "literal",
+      "right_form": "reference",
+      "operator": "=",
+      "expected": false,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "empty-text-zero:literal-reference:<>",
+      "pair": "empty-text-zero",
+      "left_form": "literal",
+      "right_form": "reference",
+      "operator": "<>",
+      "expected": true,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "empty-text-zero:literal-reference:<",
+      "pair": "empty-text-zero",
+      "left_form": "literal",
+      "right_form": "reference",
+      "operator": "<",
+      "expected": false,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "empty-text-zero:literal-reference:<=",
+      "pair": "empty-text-zero",
+      "left_form": "literal",
+      "right_form": "reference",
+      "operator": "<=",
+      "expected": false,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "empty-text-zero:literal-reference:>",
+      "pair": "empty-text-zero",
+      "left_form": "literal",
+      "right_form": "reference",
+      "operator": ">",
+      "expected": true,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "empty-text-zero:literal-reference:>=",
+      "pair": "empty-text-zero",
+      "left_form": "literal",
+      "right_form": "reference",
+      "operator": ">=",
+      "expected": true,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "text-bool:reference-reference:=",
+      "pair": "text-bool",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": "=",
+      "expected": false,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "text-bool:reference-reference:<>",
+      "pair": "text-bool",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": "<>",
+      "expected": true,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "text-bool:reference-reference:<",
+      "pair": "text-bool",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": "<",
+      "expected": true,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "text-bool:reference-reference:<=",
+      "pair": "text-bool",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": "<=",
+      "expected": true,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "text-bool:reference-reference:>",
+      "pair": "text-bool",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": ">",
+      "expected": false,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "text-bool:reference-reference:>=",
+      "pair": "text-bool",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": ">=",
+      "expected": false,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "text-bool:literal-literal:=",
+      "pair": "text-bool",
+      "left_form": "literal",
+      "right_form": "literal",
+      "operator": "=",
+      "expected": false,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "text-bool:literal-literal:<>",
+      "pair": "text-bool",
+      "left_form": "literal",
+      "right_form": "literal",
+      "operator": "<>",
+      "expected": true,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "text-bool:literal-literal:<",
+      "pair": "text-bool",
+      "left_form": "literal",
+      "right_form": "literal",
+      "operator": "<",
+      "expected": true,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "text-bool:literal-literal:<=",
+      "pair": "text-bool",
+      "left_form": "literal",
+      "right_form": "literal",
+      "operator": "<=",
+      "expected": true,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "text-bool:literal-literal:>",
+      "pair": "text-bool",
+      "left_form": "literal",
+      "right_form": "literal",
+      "operator": ">",
+      "expected": false,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "text-bool:literal-literal:>=",
+      "pair": "text-bool",
+      "left_form": "literal",
+      "right_form": "literal",
+      "operator": ">=",
+      "expected": false,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "text-bool:reference-literal:=",
+      "pair": "text-bool",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": "=",
+      "expected": false,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "text-bool:reference-literal:<>",
+      "pair": "text-bool",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": "<>",
+      "expected": true,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "text-bool:reference-literal:<",
+      "pair": "text-bool",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": "<",
+      "expected": true,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "text-bool:reference-literal:<=",
+      "pair": "text-bool",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": "<=",
+      "expected": true,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "text-bool:reference-literal:>",
+      "pair": "text-bool",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": ">",
+      "expected": false,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "text-bool:reference-literal:>=",
+      "pair": "text-bool",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": ">=",
+      "expected": false,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "text-bool:literal-reference:=",
+      "pair": "text-bool",
+      "left_form": "literal",
+      "right_form": "reference",
+      "operator": "=",
+      "expected": false,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "text-bool:literal-reference:<>",
+      "pair": "text-bool",
+      "left_form": "literal",
+      "right_form": "reference",
+      "operator": "<>",
+      "expected": true,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "text-bool:literal-reference:<",
+      "pair": "text-bool",
+      "left_form": "literal",
+      "right_form": "reference",
+      "operator": "<",
+      "expected": true,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "text-bool:literal-reference:<=",
+      "pair": "text-bool",
+      "left_form": "literal",
+      "right_form": "reference",
+      "operator": "<=",
+      "expected": true,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "text-bool:literal-reference:>",
+      "pair": "text-bool",
+      "left_form": "literal",
+      "right_form": "reference",
+      "operator": ">",
+      "expected": false,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "text-bool:literal-reference:>=",
+      "pair": "text-bool",
+      "left_form": "literal",
+      "right_form": "reference",
+      "operator": ">=",
+      "expected": false,
+      "evidence": "inferred_from_primary_match_order",
+      "excel_observed": false
+    },
+    {
+      "id": "ascii-case:reference-reference:=",
+      "pair": "ascii-case",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": "=",
+      "expected": true,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "ascii-case:reference-reference:<>",
+      "pair": "ascii-case",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": "<>",
+      "expected": false,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "ascii-case:reference-reference:<",
+      "pair": "ascii-case",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": "<",
+      "expected": false,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "ascii-case:reference-reference:<=",
+      "pair": "ascii-case",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": "<=",
+      "expected": true,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "ascii-case:reference-reference:>",
+      "pair": "ascii-case",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": ">",
+      "expected": false,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "ascii-case:reference-reference:>=",
+      "pair": "ascii-case",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": ">=",
+      "expected": true,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "ascii-case:literal-literal:=",
+      "pair": "ascii-case",
+      "left_form": "literal",
+      "right_form": "literal",
+      "operator": "=",
+      "expected": true,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "ascii-case:literal-literal:<>",
+      "pair": "ascii-case",
+      "left_form": "literal",
+      "right_form": "literal",
+      "operator": "<>",
+      "expected": false,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "ascii-case:literal-literal:<",
+      "pair": "ascii-case",
+      "left_form": "literal",
+      "right_form": "literal",
+      "operator": "<",
+      "expected": false,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "ascii-case:literal-literal:<=",
+      "pair": "ascii-case",
+      "left_form": "literal",
+      "right_form": "literal",
+      "operator": "<=",
+      "expected": true,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "ascii-case:literal-literal:>",
+      "pair": "ascii-case",
+      "left_form": "literal",
+      "right_form": "literal",
+      "operator": ">",
+      "expected": false,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "ascii-case:literal-literal:>=",
+      "pair": "ascii-case",
+      "left_form": "literal",
+      "right_form": "literal",
+      "operator": ">=",
+      "expected": true,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "ascii-case:reference-literal:=",
+      "pair": "ascii-case",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": "=",
+      "expected": true,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "ascii-case:reference-literal:<>",
+      "pair": "ascii-case",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": "<>",
+      "expected": false,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "ascii-case:reference-literal:<",
+      "pair": "ascii-case",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": "<",
+      "expected": false,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "ascii-case:reference-literal:<=",
+      "pair": "ascii-case",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": "<=",
+      "expected": true,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "ascii-case:reference-literal:>",
+      "pair": "ascii-case",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": ">",
+      "expected": false,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "ascii-case:reference-literal:>=",
+      "pair": "ascii-case",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": ">=",
+      "expected": true,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "ascii-case:literal-reference:=",
+      "pair": "ascii-case",
+      "left_form": "literal",
+      "right_form": "reference",
+      "operator": "=",
+      "expected": true,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "ascii-case:literal-reference:<>",
+      "pair": "ascii-case",
+      "left_form": "literal",
+      "right_form": "reference",
+      "operator": "<>",
+      "expected": false,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "ascii-case:literal-reference:<",
+      "pair": "ascii-case",
+      "left_form": "literal",
+      "right_form": "reference",
+      "operator": "<",
+      "expected": false,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "ascii-case:literal-reference:<=",
+      "pair": "ascii-case",
+      "left_form": "literal",
+      "right_form": "reference",
+      "operator": "<=",
+      "expected": true,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "ascii-case:literal-reference:>",
+      "pair": "ascii-case",
+      "left_form": "literal",
+      "right_form": "reference",
+      "operator": ">",
+      "expected": false,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "ascii-case:literal-reference:>=",
+      "pair": "ascii-case",
+      "left_form": "literal",
+      "right_form": "reference",
+      "operator": ">=",
+      "expected": true,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "ascii-lexical:reference-reference:=",
+      "pair": "ascii-lexical",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": "=",
+      "expected": false,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "ascii-lexical:reference-reference:<>",
+      "pair": "ascii-lexical",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": "<>",
+      "expected": true,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "ascii-lexical:reference-reference:<",
+      "pair": "ascii-lexical",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": "<",
+      "expected": false,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "ascii-lexical:reference-reference:<=",
+      "pair": "ascii-lexical",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": "<=",
+      "expected": false,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "ascii-lexical:reference-reference:>",
+      "pair": "ascii-lexical",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": ">",
+      "expected": true,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "ascii-lexical:reference-reference:>=",
+      "pair": "ascii-lexical",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": ">=",
+      "expected": true,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "ascii-lexical:literal-literal:=",
+      "pair": "ascii-lexical",
+      "left_form": "literal",
+      "right_form": "literal",
+      "operator": "=",
+      "expected": false,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "ascii-lexical:literal-literal:<>",
+      "pair": "ascii-lexical",
+      "left_form": "literal",
+      "right_form": "literal",
+      "operator": "<>",
+      "expected": true,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "ascii-lexical:literal-literal:<",
+      "pair": "ascii-lexical",
+      "left_form": "literal",
+      "right_form": "literal",
+      "operator": "<",
+      "expected": false,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "ascii-lexical:literal-literal:<=",
+      "pair": "ascii-lexical",
+      "left_form": "literal",
+      "right_form": "literal",
+      "operator": "<=",
+      "expected": false,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "ascii-lexical:literal-literal:>",
+      "pair": "ascii-lexical",
+      "left_form": "literal",
+      "right_form": "literal",
+      "operator": ">",
+      "expected": true,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "ascii-lexical:literal-literal:>=",
+      "pair": "ascii-lexical",
+      "left_form": "literal",
+      "right_form": "literal",
+      "operator": ">=",
+      "expected": true,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "ascii-lexical:reference-literal:=",
+      "pair": "ascii-lexical",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": "=",
+      "expected": false,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "ascii-lexical:reference-literal:<>",
+      "pair": "ascii-lexical",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": "<>",
+      "expected": true,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "ascii-lexical:reference-literal:<",
+      "pair": "ascii-lexical",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": "<",
+      "expected": false,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "ascii-lexical:reference-literal:<=",
+      "pair": "ascii-lexical",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": "<=",
+      "expected": false,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "ascii-lexical:reference-literal:>",
+      "pair": "ascii-lexical",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": ">",
+      "expected": true,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "ascii-lexical:reference-literal:>=",
+      "pair": "ascii-lexical",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": ">=",
+      "expected": true,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "ascii-lexical:literal-reference:=",
+      "pair": "ascii-lexical",
+      "left_form": "literal",
+      "right_form": "reference",
+      "operator": "=",
+      "expected": false,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "ascii-lexical:literal-reference:<>",
+      "pair": "ascii-lexical",
+      "left_form": "literal",
+      "right_form": "reference",
+      "operator": "<>",
+      "expected": true,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "ascii-lexical:literal-reference:<",
+      "pair": "ascii-lexical",
+      "left_form": "literal",
+      "right_form": "reference",
+      "operator": "<",
+      "expected": false,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "ascii-lexical:literal-reference:<=",
+      "pair": "ascii-lexical",
+      "left_form": "literal",
+      "right_form": "reference",
+      "operator": "<=",
+      "expected": false,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "ascii-lexical:literal-reference:>",
+      "pair": "ascii-lexical",
+      "left_form": "literal",
+      "right_form": "reference",
+      "operator": ">",
+      "expected": true,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "ascii-lexical:literal-reference:>=",
+      "pair": "ascii-lexical",
+      "left_form": "literal",
+      "right_form": "reference",
+      "operator": ">=",
+      "expected": true,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "blank-zero:reference-reference:=",
+      "pair": "blank-zero",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": "=",
+      "expected": true,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "blank-zero:reference-reference:<>",
+      "pair": "blank-zero",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": "<>",
+      "expected": false,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "blank-zero:reference-reference:<",
+      "pair": "blank-zero",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": "<",
+      "expected": false,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "blank-zero:reference-reference:<=",
+      "pair": "blank-zero",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": "<=",
+      "expected": true,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "blank-zero:reference-reference:>",
+      "pair": "blank-zero",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": ">",
+      "expected": false,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "blank-zero:reference-reference:>=",
+      "pair": "blank-zero",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": ">=",
+      "expected": true,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "blank-zero:reference-literal:=",
+      "pair": "blank-zero",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": "=",
+      "expected": true,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "blank-zero:reference-literal:<>",
+      "pair": "blank-zero",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": "<>",
+      "expected": false,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "blank-zero:reference-literal:<",
+      "pair": "blank-zero",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": "<",
+      "expected": false,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "blank-zero:reference-literal:<=",
+      "pair": "blank-zero",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": "<=",
+      "expected": true,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "blank-zero:reference-literal:>",
+      "pair": "blank-zero",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": ">",
+      "expected": false,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "blank-zero:reference-literal:>=",
+      "pair": "blank-zero",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": ">=",
+      "expected": true,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "blank-false:reference-reference:=",
+      "pair": "blank-false",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": "=",
+      "expected": true,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "blank-false:reference-reference:<>",
+      "pair": "blank-false",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": "<>",
+      "expected": false,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "blank-false:reference-reference:<",
+      "pair": "blank-false",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": "<",
+      "expected": false,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "blank-false:reference-reference:<=",
+      "pair": "blank-false",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": "<=",
+      "expected": true,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "blank-false:reference-reference:>",
+      "pair": "blank-false",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": ">",
+      "expected": false,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "blank-false:reference-reference:>=",
+      "pair": "blank-false",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": ">=",
+      "expected": true,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "blank-false:reference-literal:=",
+      "pair": "blank-false",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": "=",
+      "expected": true,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "blank-false:reference-literal:<>",
+      "pair": "blank-false",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": "<>",
+      "expected": false,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "blank-false:reference-literal:<",
+      "pair": "blank-false",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": "<",
+      "expected": false,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "blank-false:reference-literal:<=",
+      "pair": "blank-false",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": "<=",
+      "expected": true,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "blank-false:reference-literal:>",
+      "pair": "blank-false",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": ">",
+      "expected": false,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "blank-false:reference-literal:>=",
+      "pair": "blank-false",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": ">=",
+      "expected": true,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "blank-empty-text:reference-reference:=",
+      "pair": "blank-empty-text",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": "=",
+      "expected": true,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "blank-empty-text:reference-reference:<>",
+      "pair": "blank-empty-text",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": "<>",
+      "expected": false,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "blank-empty-text:reference-reference:<",
+      "pair": "blank-empty-text",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": "<",
+      "expected": false,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "blank-empty-text:reference-reference:<=",
+      "pair": "blank-empty-text",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": "<=",
+      "expected": true,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "blank-empty-text:reference-reference:>",
+      "pair": "blank-empty-text",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": ">",
+      "expected": false,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "blank-empty-text:reference-reference:>=",
+      "pair": "blank-empty-text",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": ">=",
+      "expected": true,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "blank-empty-text:reference-literal:=",
+      "pair": "blank-empty-text",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": "=",
+      "expected": true,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "blank-empty-text:reference-literal:<>",
+      "pair": "blank-empty-text",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": "<>",
+      "expected": false,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "blank-empty-text:reference-literal:<",
+      "pair": "blank-empty-text",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": "<",
+      "expected": false,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "blank-empty-text:reference-literal:<=",
+      "pair": "blank-empty-text",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": "<=",
+      "expected": true,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "blank-empty-text:reference-literal:>",
+      "pair": "blank-empty-text",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": ">",
+      "expected": false,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "blank-empty-text:reference-literal:>=",
+      "pair": "blank-empty-text",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": ">=",
+      "expected": true,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "blank-text:reference-reference:=",
+      "pair": "blank-text",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": "=",
+      "expected": false,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "blank-text:reference-reference:<>",
+      "pair": "blank-text",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": "<>",
+      "expected": true,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "blank-text:reference-reference:<",
+      "pair": "blank-text",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": "<",
+      "expected": true,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "blank-text:reference-reference:<=",
+      "pair": "blank-text",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": "<=",
+      "expected": true,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "blank-text:reference-reference:>",
+      "pair": "blank-text",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": ">",
+      "expected": false,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "blank-text:reference-reference:>=",
+      "pair": "blank-text",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": ">=",
+      "expected": false,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "blank-text:reference-literal:=",
+      "pair": "blank-text",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": "=",
+      "expected": false,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "blank-text:reference-literal:<>",
+      "pair": "blank-text",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": "<>",
+      "expected": true,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "blank-text:reference-literal:<",
+      "pair": "blank-text",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": "<",
+      "expected": true,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "blank-text:reference-literal:<=",
+      "pair": "blank-text",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": "<=",
+      "expected": true,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "blank-text:reference-literal:>",
+      "pair": "blank-text",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": ">",
+      "expected": false,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "blank-text:reference-literal:>=",
+      "pair": "blank-text",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": ">=",
+      "expected": false,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "blank-true:reference-reference:=",
+      "pair": "blank-true",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": "=",
+      "expected": false,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "blank-true:reference-reference:<>",
+      "pair": "blank-true",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": "<>",
+      "expected": true,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "blank-true:reference-reference:<",
+      "pair": "blank-true",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": "<",
+      "expected": true,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "blank-true:reference-reference:<=",
+      "pair": "blank-true",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": "<=",
+      "expected": true,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "blank-true:reference-reference:>",
+      "pair": "blank-true",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": ">",
+      "expected": false,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "blank-true:reference-reference:>=",
+      "pair": "blank-true",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": ">=",
+      "expected": false,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "blank-true:reference-literal:=",
+      "pair": "blank-true",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": "=",
+      "expected": false,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "blank-true:reference-literal:<>",
+      "pair": "blank-true",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": "<>",
+      "expected": true,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "blank-true:reference-literal:<",
+      "pair": "blank-true",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": "<",
+      "expected": true,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "blank-true:reference-literal:<=",
+      "pair": "blank-true",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": "<=",
+      "expected": true,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "blank-true:reference-literal:>",
+      "pair": "blank-true",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": ">",
+      "expected": false,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "blank-true:reference-literal:>=",
+      "pair": "blank-true",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": ">=",
+      "expected": false,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "two-blanks:reference-reference:=",
+      "pair": "two-blanks",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": "=",
+      "expected": true,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "two-blanks:reference-reference:<>",
+      "pair": "two-blanks",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": "<>",
+      "expected": false,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "two-blanks:reference-reference:<",
+      "pair": "two-blanks",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": "<",
+      "expected": false,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "two-blanks:reference-reference:<=",
+      "pair": "two-blanks",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": "<=",
+      "expected": true,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "two-blanks:reference-reference:>",
+      "pair": "two-blanks",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": ">",
+      "expected": false,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "two-blanks:reference-reference:>=",
+      "pair": "two-blanks",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": ">=",
+      "expected": true,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "blank-negative:reference-reference:=",
+      "pair": "blank-negative",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": "=",
+      "expected": false,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "blank-negative:reference-reference:<>",
+      "pair": "blank-negative",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": "<>",
+      "expected": true,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "blank-negative:reference-reference:<",
+      "pair": "blank-negative",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": "<",
+      "expected": false,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "blank-negative:reference-reference:<=",
+      "pair": "blank-negative",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": "<=",
+      "expected": false,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "blank-negative:reference-reference:>",
+      "pair": "blank-negative",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": ">",
+      "expected": true,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "blank-negative:reference-reference:>=",
+      "pair": "blank-negative",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": ">=",
+      "expected": true,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "blank-negative:reference-literal:=",
+      "pair": "blank-negative",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": "=",
+      "expected": false,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "blank-negative:reference-literal:<>",
+      "pair": "blank-negative",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": "<>",
+      "expected": true,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "blank-negative:reference-literal:<",
+      "pair": "blank-negative",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": "<",
+      "expected": false,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "blank-negative:reference-literal:<=",
+      "pair": "blank-negative",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": "<=",
+      "expected": false,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "blank-negative:reference-literal:>",
+      "pair": "blank-negative",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": ">",
+      "expected": true,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "blank-negative:reference-literal:>=",
+      "pair": "blank-negative",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": ">=",
+      "expected": true,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "text-empty:reference-reference:=",
+      "pair": "text-empty",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": "=",
+      "expected": false,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "text-empty:reference-reference:<>",
+      "pair": "text-empty",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": "<>",
+      "expected": true,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "text-empty:reference-reference:<",
+      "pair": "text-empty",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": "<",
+      "expected": false,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "text-empty:reference-reference:<=",
+      "pair": "text-empty",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": "<=",
+      "expected": false,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "text-empty:reference-reference:>",
+      "pair": "text-empty",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": ">",
+      "expected": true,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "text-empty:reference-reference:>=",
+      "pair": "text-empty",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": ">=",
+      "expected": true,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "text-empty:literal-literal:=",
+      "pair": "text-empty",
+      "left_form": "literal",
+      "right_form": "literal",
+      "operator": "=",
+      "expected": false,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "text-empty:literal-literal:<>",
+      "pair": "text-empty",
+      "left_form": "literal",
+      "right_form": "literal",
+      "operator": "<>",
+      "expected": true,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "text-empty:literal-literal:<",
+      "pair": "text-empty",
+      "left_form": "literal",
+      "right_form": "literal",
+      "operator": "<",
+      "expected": false,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "text-empty:literal-literal:<=",
+      "pair": "text-empty",
+      "left_form": "literal",
+      "right_form": "literal",
+      "operator": "<=",
+      "expected": false,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "text-empty:literal-literal:>",
+      "pair": "text-empty",
+      "left_form": "literal",
+      "right_form": "literal",
+      "operator": ">",
+      "expected": true,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "text-empty:literal-literal:>=",
+      "pair": "text-empty",
+      "left_form": "literal",
+      "right_form": "literal",
+      "operator": ">=",
+      "expected": true,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "text-empty:reference-literal:=",
+      "pair": "text-empty",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": "=",
+      "expected": false,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "text-empty:reference-literal:<>",
+      "pair": "text-empty",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": "<>",
+      "expected": true,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "text-empty:reference-literal:<",
+      "pair": "text-empty",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": "<",
+      "expected": false,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "text-empty:reference-literal:<=",
+      "pair": "text-empty",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": "<=",
+      "expected": false,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "text-empty:reference-literal:>",
+      "pair": "text-empty",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": ">",
+      "expected": true,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "text-empty:reference-literal:>=",
+      "pair": "text-empty",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": ">=",
+      "expected": true,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "text-empty:literal-reference:=",
+      "pair": "text-empty",
+      "left_form": "literal",
+      "right_form": "reference",
+      "operator": "=",
+      "expected": false,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "text-empty:literal-reference:<>",
+      "pair": "text-empty",
+      "left_form": "literal",
+      "right_form": "reference",
+      "operator": "<>",
+      "expected": true,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "text-empty:literal-reference:<",
+      "pair": "text-empty",
+      "left_form": "literal",
+      "right_form": "reference",
+      "operator": "<",
+      "expected": false,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "text-empty:literal-reference:<=",
+      "pair": "text-empty",
+      "left_form": "literal",
+      "right_form": "reference",
+      "operator": "<=",
+      "expected": false,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "text-empty:literal-reference:>",
+      "pair": "text-empty",
+      "left_form": "literal",
+      "right_form": "reference",
+      "operator": ">",
+      "expected": true,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "text-empty:literal-reference:>=",
+      "pair": "text-empty",
+      "left_form": "literal",
+      "right_form": "reference",
+      "operator": ">=",
+      "expected": true,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "unicode-local-ordinal:reference-reference:=",
+      "pair": "unicode-local-ordinal",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": "=",
+      "expected": false,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "unicode-local-ordinal:reference-reference:<>",
+      "pair": "unicode-local-ordinal",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": "<>",
+      "expected": true,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "unicode-local-ordinal:reference-reference:<",
+      "pair": "unicode-local-ordinal",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": "<",
+      "expected": true,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "unicode-local-ordinal:reference-reference:<=",
+      "pair": "unicode-local-ordinal",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": "<=",
+      "expected": true,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "unicode-local-ordinal:reference-reference:>",
+      "pair": "unicode-local-ordinal",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": ">",
+      "expected": false,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "unicode-local-ordinal:reference-reference:>=",
+      "pair": "unicode-local-ordinal",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": ">=",
+      "expected": false,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "unicode-local-ordinal:literal-literal:=",
+      "pair": "unicode-local-ordinal",
+      "left_form": "literal",
+      "right_form": "literal",
+      "operator": "=",
+      "expected": false,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "unicode-local-ordinal:literal-literal:<>",
+      "pair": "unicode-local-ordinal",
+      "left_form": "literal",
+      "right_form": "literal",
+      "operator": "<>",
+      "expected": true,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "unicode-local-ordinal:literal-literal:<",
+      "pair": "unicode-local-ordinal",
+      "left_form": "literal",
+      "right_form": "literal",
+      "operator": "<",
+      "expected": true,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "unicode-local-ordinal:literal-literal:<=",
+      "pair": "unicode-local-ordinal",
+      "left_form": "literal",
+      "right_form": "literal",
+      "operator": "<=",
+      "expected": true,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "unicode-local-ordinal:literal-literal:>",
+      "pair": "unicode-local-ordinal",
+      "left_form": "literal",
+      "right_form": "literal",
+      "operator": ">",
+      "expected": false,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "unicode-local-ordinal:literal-literal:>=",
+      "pair": "unicode-local-ordinal",
+      "left_form": "literal",
+      "right_form": "literal",
+      "operator": ">=",
+      "expected": false,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "unicode-local-ordinal:reference-literal:=",
+      "pair": "unicode-local-ordinal",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": "=",
+      "expected": false,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "unicode-local-ordinal:reference-literal:<>",
+      "pair": "unicode-local-ordinal",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": "<>",
+      "expected": true,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "unicode-local-ordinal:reference-literal:<",
+      "pair": "unicode-local-ordinal",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": "<",
+      "expected": true,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "unicode-local-ordinal:reference-literal:<=",
+      "pair": "unicode-local-ordinal",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": "<=",
+      "expected": true,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "unicode-local-ordinal:reference-literal:>",
+      "pair": "unicode-local-ordinal",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": ">",
+      "expected": false,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "unicode-local-ordinal:reference-literal:>=",
+      "pair": "unicode-local-ordinal",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": ">=",
+      "expected": false,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "unicode-local-ordinal:literal-reference:=",
+      "pair": "unicode-local-ordinal",
+      "left_form": "literal",
+      "right_form": "reference",
+      "operator": "=",
+      "expected": false,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "unicode-local-ordinal:literal-reference:<>",
+      "pair": "unicode-local-ordinal",
+      "left_form": "literal",
+      "right_form": "reference",
+      "operator": "<>",
+      "expected": true,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "unicode-local-ordinal:literal-reference:<",
+      "pair": "unicode-local-ordinal",
+      "left_form": "literal",
+      "right_form": "reference",
+      "operator": "<",
+      "expected": true,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "unicode-local-ordinal:literal-reference:<=",
+      "pair": "unicode-local-ordinal",
+      "left_form": "literal",
+      "right_form": "reference",
+      "operator": "<=",
+      "expected": true,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "unicode-local-ordinal:literal-reference:>",
+      "pair": "unicode-local-ordinal",
+      "left_form": "literal",
+      "right_form": "reference",
+      "operator": ">",
+      "expected": false,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "unicode-local-ordinal:literal-reference:>=",
+      "pair": "unicode-local-ordinal",
+      "left_form": "literal",
+      "right_form": "reference",
+      "operator": ">=",
+      "expected": false,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "left-error:reference-reference:=",
+      "pair": "left-error",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": "=",
+      "expected": {
+        "error": "#REF!"
+      },
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "left-error:reference-reference:<>",
+      "pair": "left-error",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": "<>",
+      "expected": {
+        "error": "#REF!"
+      },
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "left-error:reference-reference:<",
+      "pair": "left-error",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": "<",
+      "expected": {
+        "error": "#REF!"
+      },
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "left-error:reference-reference:<=",
+      "pair": "left-error",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": "<=",
+      "expected": {
+        "error": "#REF!"
+      },
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "left-error:reference-reference:>",
+      "pair": "left-error",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": ">",
+      "expected": {
+        "error": "#REF!"
+      },
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "left-error:reference-reference:>=",
+      "pair": "left-error",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": ">=",
+      "expected": {
+        "error": "#REF!"
+      },
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "left-error:literal-literal:=",
+      "pair": "left-error",
+      "left_form": "literal",
+      "right_form": "literal",
+      "operator": "=",
+      "expected": {
+        "error": "#REF!"
+      },
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "left-error:literal-literal:<>",
+      "pair": "left-error",
+      "left_form": "literal",
+      "right_form": "literal",
+      "operator": "<>",
+      "expected": {
+        "error": "#REF!"
+      },
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "left-error:literal-literal:<",
+      "pair": "left-error",
+      "left_form": "literal",
+      "right_form": "literal",
+      "operator": "<",
+      "expected": {
+        "error": "#REF!"
+      },
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "left-error:literal-literal:<=",
+      "pair": "left-error",
+      "left_form": "literal",
+      "right_form": "literal",
+      "operator": "<=",
+      "expected": {
+        "error": "#REF!"
+      },
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "left-error:literal-literal:>",
+      "pair": "left-error",
+      "left_form": "literal",
+      "right_form": "literal",
+      "operator": ">",
+      "expected": {
+        "error": "#REF!"
+      },
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "left-error:literal-literal:>=",
+      "pair": "left-error",
+      "left_form": "literal",
+      "right_form": "literal",
+      "operator": ">=",
+      "expected": {
+        "error": "#REF!"
+      },
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "left-error:reference-literal:=",
+      "pair": "left-error",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": "=",
+      "expected": {
+        "error": "#REF!"
+      },
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "left-error:reference-literal:<>",
+      "pair": "left-error",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": "<>",
+      "expected": {
+        "error": "#REF!"
+      },
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "left-error:reference-literal:<",
+      "pair": "left-error",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": "<",
+      "expected": {
+        "error": "#REF!"
+      },
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "left-error:reference-literal:<=",
+      "pair": "left-error",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": "<=",
+      "expected": {
+        "error": "#REF!"
+      },
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "left-error:reference-literal:>",
+      "pair": "left-error",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": ">",
+      "expected": {
+        "error": "#REF!"
+      },
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "left-error:reference-literal:>=",
+      "pair": "left-error",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": ">=",
+      "expected": {
+        "error": "#REF!"
+      },
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "left-error:literal-reference:=",
+      "pair": "left-error",
+      "left_form": "literal",
+      "right_form": "reference",
+      "operator": "=",
+      "expected": {
+        "error": "#REF!"
+      },
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "left-error:literal-reference:<>",
+      "pair": "left-error",
+      "left_form": "literal",
+      "right_form": "reference",
+      "operator": "<>",
+      "expected": {
+        "error": "#REF!"
+      },
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "left-error:literal-reference:<",
+      "pair": "left-error",
+      "left_form": "literal",
+      "right_form": "reference",
+      "operator": "<",
+      "expected": {
+        "error": "#REF!"
+      },
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "left-error:literal-reference:<=",
+      "pair": "left-error",
+      "left_form": "literal",
+      "right_form": "reference",
+      "operator": "<=",
+      "expected": {
+        "error": "#REF!"
+      },
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "left-error:literal-reference:>",
+      "pair": "left-error",
+      "left_form": "literal",
+      "right_form": "reference",
+      "operator": ">",
+      "expected": {
+        "error": "#REF!"
+      },
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "left-error:literal-reference:>=",
+      "pair": "left-error",
+      "left_form": "literal",
+      "right_form": "reference",
+      "operator": ">=",
+      "expected": {
+        "error": "#REF!"
+      },
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "right-error:reference-reference:=",
+      "pair": "right-error",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": "=",
+      "expected": {
+        "error": "#SPILL!"
+      },
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "right-error:reference-reference:<>",
+      "pair": "right-error",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": "<>",
+      "expected": {
+        "error": "#SPILL!"
+      },
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "right-error:reference-reference:<",
+      "pair": "right-error",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": "<",
+      "expected": {
+        "error": "#SPILL!"
+      },
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "right-error:reference-reference:<=",
+      "pair": "right-error",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": "<=",
+      "expected": {
+        "error": "#SPILL!"
+      },
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "right-error:reference-reference:>",
+      "pair": "right-error",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": ">",
+      "expected": {
+        "error": "#SPILL!"
+      },
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "right-error:reference-reference:>=",
+      "pair": "right-error",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": ">=",
+      "expected": {
+        "error": "#SPILL!"
+      },
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "right-error:literal-literal:=",
+      "pair": "right-error",
+      "left_form": "literal",
+      "right_form": "literal",
+      "operator": "=",
+      "expected": {
+        "error": "#SPILL!"
+      },
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "right-error:literal-literal:<>",
+      "pair": "right-error",
+      "left_form": "literal",
+      "right_form": "literal",
+      "operator": "<>",
+      "expected": {
+        "error": "#SPILL!"
+      },
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "right-error:literal-literal:<",
+      "pair": "right-error",
+      "left_form": "literal",
+      "right_form": "literal",
+      "operator": "<",
+      "expected": {
+        "error": "#SPILL!"
+      },
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "right-error:literal-literal:<=",
+      "pair": "right-error",
+      "left_form": "literal",
+      "right_form": "literal",
+      "operator": "<=",
+      "expected": {
+        "error": "#SPILL!"
+      },
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "right-error:literal-literal:>",
+      "pair": "right-error",
+      "left_form": "literal",
+      "right_form": "literal",
+      "operator": ">",
+      "expected": {
+        "error": "#SPILL!"
+      },
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "right-error:literal-literal:>=",
+      "pair": "right-error",
+      "left_form": "literal",
+      "right_form": "literal",
+      "operator": ">=",
+      "expected": {
+        "error": "#SPILL!"
+      },
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "right-error:reference-literal:=",
+      "pair": "right-error",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": "=",
+      "expected": {
+        "error": "#SPILL!"
+      },
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "right-error:reference-literal:<>",
+      "pair": "right-error",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": "<>",
+      "expected": {
+        "error": "#SPILL!"
+      },
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "right-error:reference-literal:<",
+      "pair": "right-error",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": "<",
+      "expected": {
+        "error": "#SPILL!"
+      },
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "right-error:reference-literal:<=",
+      "pair": "right-error",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": "<=",
+      "expected": {
+        "error": "#SPILL!"
+      },
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "right-error:reference-literal:>",
+      "pair": "right-error",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": ">",
+      "expected": {
+        "error": "#SPILL!"
+      },
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "right-error:reference-literal:>=",
+      "pair": "right-error",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": ">=",
+      "expected": {
+        "error": "#SPILL!"
+      },
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "right-error:literal-reference:=",
+      "pair": "right-error",
+      "left_form": "literal",
+      "right_form": "reference",
+      "operator": "=",
+      "expected": {
+        "error": "#SPILL!"
+      },
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "right-error:literal-reference:<>",
+      "pair": "right-error",
+      "left_form": "literal",
+      "right_form": "reference",
+      "operator": "<>",
+      "expected": {
+        "error": "#SPILL!"
+      },
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "right-error:literal-reference:<",
+      "pair": "right-error",
+      "left_form": "literal",
+      "right_form": "reference",
+      "operator": "<",
+      "expected": {
+        "error": "#SPILL!"
+      },
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "right-error:literal-reference:<=",
+      "pair": "right-error",
+      "left_form": "literal",
+      "right_form": "reference",
+      "operator": "<=",
+      "expected": {
+        "error": "#SPILL!"
+      },
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "right-error:literal-reference:>",
+      "pair": "right-error",
+      "left_form": "literal",
+      "right_form": "reference",
+      "operator": ">",
+      "expected": {
+        "error": "#SPILL!"
+      },
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "right-error:literal-reference:>=",
+      "pair": "right-error",
+      "left_form": "literal",
+      "right_form": "reference",
+      "operator": ">=",
+      "expected": {
+        "error": "#SPILL!"
+      },
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "signed-zero:reference-reference:=",
+      "pair": "signed-zero",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": "=",
+      "expected": true,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "signed-zero:reference-reference:<>",
+      "pair": "signed-zero",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": "<>",
+      "expected": false,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "signed-zero:reference-reference:<",
+      "pair": "signed-zero",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": "<",
+      "expected": false,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "signed-zero:reference-reference:<=",
+      "pair": "signed-zero",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": "<=",
+      "expected": true,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "signed-zero:reference-reference:>",
+      "pair": "signed-zero",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": ">",
+      "expected": false,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "signed-zero:reference-reference:>=",
+      "pair": "signed-zero",
+      "left_form": "reference",
+      "right_form": "reference",
+      "operator": ">=",
+      "expected": true,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "signed-zero:literal-literal:=",
+      "pair": "signed-zero",
+      "left_form": "literal",
+      "right_form": "literal",
+      "operator": "=",
+      "expected": true,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "signed-zero:literal-literal:<>",
+      "pair": "signed-zero",
+      "left_form": "literal",
+      "right_form": "literal",
+      "operator": "<>",
+      "expected": false,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "signed-zero:literal-literal:<",
+      "pair": "signed-zero",
+      "left_form": "literal",
+      "right_form": "literal",
+      "operator": "<",
+      "expected": false,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "signed-zero:literal-literal:<=",
+      "pair": "signed-zero",
+      "left_form": "literal",
+      "right_form": "literal",
+      "operator": "<=",
+      "expected": true,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "signed-zero:literal-literal:>",
+      "pair": "signed-zero",
+      "left_form": "literal",
+      "right_form": "literal",
+      "operator": ">",
+      "expected": false,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "signed-zero:literal-literal:>=",
+      "pair": "signed-zero",
+      "left_form": "literal",
+      "right_form": "literal",
+      "operator": ">=",
+      "expected": true,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "signed-zero:reference-literal:=",
+      "pair": "signed-zero",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": "=",
+      "expected": true,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "signed-zero:reference-literal:<>",
+      "pair": "signed-zero",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": "<>",
+      "expected": false,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "signed-zero:reference-literal:<",
+      "pair": "signed-zero",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": "<",
+      "expected": false,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "signed-zero:reference-literal:<=",
+      "pair": "signed-zero",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": "<=",
+      "expected": true,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "signed-zero:reference-literal:>",
+      "pair": "signed-zero",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": ">",
+      "expected": false,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "signed-zero:reference-literal:>=",
+      "pair": "signed-zero",
+      "left_form": "reference",
+      "right_form": "literal",
+      "operator": ">=",
+      "expected": true,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "signed-zero:literal-reference:=",
+      "pair": "signed-zero",
+      "left_form": "literal",
+      "right_form": "reference",
+      "operator": "=",
+      "expected": true,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "signed-zero:literal-reference:<>",
+      "pair": "signed-zero",
+      "left_form": "literal",
+      "right_form": "reference",
+      "operator": "<>",
+      "expected": false,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "signed-zero:literal-reference:<",
+      "pair": "signed-zero",
+      "left_form": "literal",
+      "right_form": "reference",
+      "operator": "<",
+      "expected": false,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "signed-zero:literal-reference:<=",
+      "pair": "signed-zero",
+      "left_form": "literal",
+      "right_form": "reference",
+      "operator": "<=",
+      "expected": true,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "signed-zero:literal-reference:>",
+      "pair": "signed-zero",
+      "left_form": "literal",
+      "right_form": "reference",
+      "operator": ">",
+      "expected": false,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    },
+    {
+      "id": "signed-zero:literal-reference:>=",
+      "pair": "signed-zero",
+      "left_form": "literal",
+      "right_form": "reference",
+      "operator": ">=",
+      "expected": true,
+      "evidence": "local_profile_without_independent_excel_evidence",
+      "excel_observed": false
+    }
+  ]
+}

@@ -259,11 +259,11 @@ def test_unrelated_unsupported_error_values_and_caches_are_preserved(tmp_path):
         assert workbook.get("Sheet1", "C1").value.code == "#SPILL!"
         assert workbook.get("Sheet1", "D1").value.code == "#NULL!"
     connected = import_xlsx(path, outputs={"dependent": {"sheet": "Sheet1", "address": "E1"}})
-    assert connected.calculate()["diagnostics"]
-    rejected = tmp_path / "unsupported-error-dependency.xlsx"
-    with pytest.raises(UnsupportedWorkbook):
-        export_xlsx(connected, rejected)
-    assert not rejected.exists()
+    assert not connected.calculate()["diagnostics"]
+    assert connected.calculate()["outputs"]["dependent"] == {"error":"#SPILL!"}
+    exported = tmp_path / "typed-error-dependency.xlsx"
+    export_xlsx(connected, exported)
+    assert import_xlsx(exported).to_dict()["sheets"][0]["cells"]["E1"]["cached_value"]["error"] == "#SPILL!"
 
 
 def test_imported_1904_policy_blocks_new_and_replacement_formulas_atomically(tmp_path):

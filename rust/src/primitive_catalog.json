@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "profile": "spreadsheet-primitives-v1",
-  "source_catalog_version": "0.22.0",
+  "source_catalog_version": "0.22.4",
   "purpose": "Discover and compose spreadsheet operations without a workbook, cell addresses, formula parsing, or another language runtime.",
   "functions": [
     {
@@ -69,7 +69,41 @@
       "limitations": [
         "Behavior inherits the existing independent evaluator profile; function identity does not claim complete Excel equivalence.",
         "The current Forge aggregate profile ignores Boolean and text values in scalar arguments as well as ranges. Direct scalar Excel coercion is not established by this mapping."
-      ]
+      ],
+      "reference_semantic_spec": {
+        "arguments": [
+          {
+            "name": "number1",
+            "kind": "scalar-reference-or-range",
+            "required": true
+          },
+          {
+            "name": "number2",
+            "kind": "scalar-reference-or-range",
+            "required": false,
+            "repeatable": true
+          }
+        ],
+        "returns": {
+          "kind": "number",
+          "shape": "scalar"
+        },
+        "semantics": {
+          "definition": "Arithmetic mean, with origin-sensitive numeric counts; one through 255 arguments.",
+          "reference_rule": "Both Microsoft sources say references/arrays ignore text, logical values and blanks, while counting numeric zero. Referenced errors propagate in the implemented scalar profile.",
+          "direct_policy_conflict": "Microsoft worksheet support currently says direct logical/numeric text arguments are not counted; WorksheetFunction.Average says they are counted. This implementation provisionally counts direct booleans as 1/0 and decimal numeric text, pending worksheet Excel observation. The conflict is unresolved, not a verified Excel rule.",
+          "text_profile": "Direct numeric text uses ASCII decimal/exponent syntax with ASCII space/tab/CR/LF trimming. Empty/non-numeric text returns #VALUE!; locale/currency/thousands and wider Unicode whitespace conversion are not claimed.",
+          "empty_error_profile": "No counted numbers returns #DIV/0!. Error codes/order, computed scalar origins and overflow details are unobserved profiles.",
+          "numeric_profile": "Finite binary64, explicit left-fold sum divided by count. Accumulation overflow returns #NUM! even if a mathematically stable algorithm could avoid overflow. Excel precision/rounding is unobserved.",
+          "native_primitive_boundary": "The existing native primitive value API retains its legacy reference-style filtering of Boolean/text scalar arguments; worksheet/direct source arguments use the provisional policy above.",
+          "compatibility_limit": "No Excel Desktop observation. Shared expected cases and independent Rust/Python agreement do not resolve the conflicting direct-argument documentation."
+        },
+        "source_refs": [
+          "ms-average",
+          "ms-average-worksheetfunction"
+        ]
+      },
+      "reference_scope": "Inherited formula documentation; native input/error/resource restrictions in this descriptor take precedence."
     },
     {
       "id": "excel.MIN",

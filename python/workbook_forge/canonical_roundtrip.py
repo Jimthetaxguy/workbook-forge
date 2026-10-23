@@ -9,6 +9,7 @@ not mark Spec 2 passed, and it does not mark array-spill placement passed.
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import hashlib
 import importlib.util
 import json
 from pathlib import Path
@@ -25,7 +26,7 @@ RED_FLAG_CONTRACT = ROOT / "fixtures" / "excel-roundtrip-red-flags.contract.json
 DESKTOP_COMMAND = (
     "python3 tools/canonical_excel_receipt.py "
     "--fixture fixtures/operating-scenario.workbook.json "
-    "--output-dir receipts/canonical-operating-scenario-excel "
+    "--output-dir receipts/canonical-operating-scenario-excel-new-run "
     "--excel"
 )
 
@@ -38,15 +39,17 @@ def build_canonical_receipt(
     rust: bool = True,
     timeout: float = 180,
 ) -> dict[str, Any]:
-    """Export the canonical fixture and run the existing round-trip harness."""
-    oracle = _oracle()
+    """Export into a new directory, retaining all harness evidence."""
+    requested = Path(output_dir)
+    if requested.exists() or requested.is_symlink():
+        raise FileExistsError("receipt output directory must be new; existing contents are never replaced")
     fixture_path = Path(fixture).resolve()
-    directory = Path(output_dir).resolve()
-    if directory.exists():
-        shutil.rmtree(directory)
-    directory.mkdir(parents=True)
     raw = fixture_path.read_bytes()
     original = hydrate(raw)
+    directory = requested.resolve()
+    # Exclusive creation also refuses a concurrent creator; no recursive cleanup.
+    directory.mkdir(parents=True, exist_ok=False)
+    oracle = _oracle()
     python_before = calculate(original)
     changed = with_input(original, "unit_price", 25)
     python_after = calculate(changed)
@@ -72,8 +75,6 @@ def build_canonical_receipt(
     stable_spill = directory / "red-flag-roundtrip.json"
     shutil.copyfile(scenario_receipt_path, stable_scenario)
     shutil.copyfile(spill_receipt_path, stable_spill)
-    shutil.rmtree(directory / "scenario")
-    shutil.rmtree(directory / "red-flags")
     coverage = {item["class"]: item["status"] for item in spill.get("fixture_coverage", [])}
     spill_blocked = spill.get("status") == "blocked" and spill.get("blocker_kind") == "unsupported_capability"
     excel_pending = scenario.get("status") in {"prepared", "blocked"} and scenario.get("status") != "observed"
@@ -82,6 +83,16 @@ def build_canonical_receipt(
         "schema_version": 1,
         "kind": "canonical-excel-receipt",
         "harness": "excel_export_roundtrip_v1",
+        "export_lane": {
+            "reader": "python:model.hydrate",
+            "evaluator": "python:model.calculate",
+            "writer": "python:canonical_xlsx.export_canonical",
+            "rust_role": "independent calculation comparison only" if rust else "not used",
+            "end_to_end_rust_only": False,
+            "fixture_sha256": hashlib.sha256(raw).hexdigest(),
+            "exported_sha256": hashlib.sha256(exported.read_bytes()).hexdigest(),
+        },
+        "artifact_retention": {"scenario": "scenario", "red_flags": "red-flags", "cleanup": "none"},
         "recorded_at_utc": datetime.now(timezone.utc).isoformat(),
         "spec2_passed": spec2_passed,
         "spec2_note": (
