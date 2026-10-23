@@ -33,11 +33,13 @@ from workbook_forge.evidence import (
     ExcelObservation,
     FunctionEvidence,
     check_observation,
+    gate_refusals,
     is_excel_compatible,
     observation_from_receipt,
     validate_case_evidence,
     validate_function_evidence,
 )
+import workbook_forge.evidence as evidence_module
 from workbook_forge.model import hydrate
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -223,6 +225,88 @@ def test_edited_receipt_is_stale(tmp_path):
     receipt = root / observation.receipt
     receipt.write_text(receipt.read_text(encoding="utf-8").replace("16.113.4", "16.200.0"), encoding="utf-8")
     assert check_observation(observation, root).state == "stale"
+
+
+def test_prepared_receipt_with_a_matching_hash_is_not_excel_evidence(tmp_path):
+    root, observation = _observed_repo(tmp_path)
+    receipt = root / observation.receipt
+    receipt.write_text('{"status":"prepared"}\n', encoding="utf-8")
+    record = observation.to_record()
+    record["receipt_sha256"] = _sha(receipt)
+    forged_observation = ExcelObservation.from_record(record)
+
+    check = check_observation(forged_observation, root)
+    assert check.state == "stale"
+    assert any("does not record a successful Excel observation" in reason for reason in check.reasons)
+    evidence = FunctionEvidence("SUM", "excel_observed", "semantic", forged_observation)
+    assert is_excel_compatible(evidence, root) is False
+
+
+@pytest.mark.parametrize(
+    ("path", "value"),
+    [
+        (("status",), "prepared"),
+        (("saved_workbook_sha256",), "0" * 64),
+        (("excel", "excel_version"), "16.113.5"),
+        (("excel_observation", "kind"), "prepared"),
+        (("excel_observation", "workbook"), "other.xlsx"),
+        (("excel_observation", "workbook_sha256"), "0" * 64),
+        (("excel_observation", "excel_version"), "16.113.5"),
+        (("excel_observation", "event_time"), "2026-10-14T18:00:04Z"),
+    ],
+)
+def test_receipt_observation_fields_must_match_catalog_claim(tmp_path, path, value):
+    root, observation = _observed_repo(tmp_path)
+    receipt = root / observation.receipt
+    record = json.loads(receipt.read_text(encoding="utf-8"))
+    target = record
+    for field in path[:-1]:
+        target = target[field]
+    target[path[-1]] = value
+    receipt.write_text(json.dumps(record) + "\n", encoding="utf-8")
+
+    catalog_record = observation.to_record()
+    catalog_record["receipt_sha256"] = _sha(receipt)
+    forged_observation = ExcelObservation.from_record(catalog_record)
+    check = check_observation(forged_observation, root)
+    assert check.state == "stale"
+    assert check.reasons
+
+
+def test_invalid_receipt_bytes_are_stale(tmp_path):
+    root, observation = _observed_repo(tmp_path)
+    receipt = root / observation.receipt
+    receipt.write_bytes(b"\xff")
+    record = observation.to_record()
+    record["receipt_sha256"] = _sha(receipt)
+    forged_observation = ExcelObservation.from_record(record)
+
+    check = check_observation(forged_observation, root)
+    assert check.state == "stale"
+    assert any("not readable JSON" in reason for reason in check.reasons)
+
+
+def test_gate_rechecks_each_distinct_observation_once_per_export(tmp_path, monkeypatch):
+    root, observation = _observed_repo(tmp_path)
+    evidence = {"SUM": FunctionEvidence("SUM", "excel_observed", "semantic", observation)}
+    cells = [("Sheet1", f"A{index}", ("SUM",)) for index in range(1, 1001)]
+    calls: list[str] = []
+    original_hash = evidence_module.file_sha256
+
+    def count_hashes(path):
+        calls.append(Path(path).name)
+        return original_hash(path)
+
+    monkeypatch.setattr(evidence_module, "file_sha256", count_hashes)
+    assert gate_refusals(cells, evidence, root) == []
+    assert calls == ["receipt.json", "roundtrip.xlsx"]
+
+    (root / observation.workbook).write_bytes(b"changed after this export")
+    calls.clear()
+    refusals = gate_refusals(cells, evidence, root)
+    assert len(refusals) == len(cells)
+    assert {item.reason for item in refusals} == {"excel_observation_stale"}
+    assert calls == ["receipt.json", "roundtrip.xlsx"]
 
 
 def test_current_receipt_reports_current(tmp_path):

@@ -1,5 +1,5 @@
 {
-  "catalog_version": "0.22.0",
+  "catalog_version": "0.23.0",
   "catalog_schema": "formula-support.schema.json",
   "profile": "excel-microsoft-365-desktop",
   "sources": [

@@ -142,21 +142,75 @@ def check_observation(observation: ExcelObservation, root: Path) -> ObservationC
     ``stale`` means a file exists but its hash changed since Excel observed it;
     ``missing`` means a file the observation names is not present.
     """
-    root = Path(root)
+    root = Path(root).resolve()
     reasons: list[str] = []
     missing = False
+    paths: dict[str, Path] = {}
+    paths_inside_root: dict[str, bool] = {}
     for label, relative, expected in (
         ("receipt", observation.receipt, observation.receipt_sha256),
         ("workbook", observation.workbook, observation.workbook_sha256),
     ):
         path = root / relative
+        paths[label] = path
+        paths_inside_root[label] = False
         if not path.is_file():
             missing = True
             reasons.append(f"{label} {relative} is not present")
             continue
-        actual = file_sha256(path)
+        try:
+            path.resolve().relative_to(root)
+            actual = file_sha256(path)
+        except (OSError, ValueError):
+            reasons.append(f"{label} {relative} cannot be read inside the repository root")
+            continue
+        paths_inside_root[label] = True
         if actual != expected:
             reasons.append(f"{label} {relative} hash changed from {expected[:12]} to {actual[:12]}")
+
+    receipt_path = paths["receipt"]
+    if paths_inside_root["receipt"] and receipt_path.is_file():
+        try:
+            receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+            reasons.append(f"receipt {observation.receipt} is not readable JSON")
+        else:
+            if not isinstance(receipt, Mapping):
+                reasons.append(f"receipt {observation.receipt} is not a JSON object")
+            else:
+                status = receipt.get("status")
+                if not isinstance(status, str) or status not in OBSERVED_RECEIPT_STATUSES:
+                    reasons.append(f"receipt {observation.receipt} does not record a successful Excel observation")
+                if receipt.get("saved_workbook_sha256") != observation.workbook_sha256:
+                    reasons.append(f"receipt {observation.receipt} saved workbook hash does not match its observation")
+                excel_metadata = receipt.get("excel")
+                if not isinstance(excel_metadata, Mapping) or excel_metadata.get("excel_version") != observation.excel_version:
+                    reasons.append(f"receipt {observation.receipt} Excel version does not match its observation")
+                block = receipt.get("excel_observation")
+                if not isinstance(block, Mapping):
+                    reasons.append(f"receipt {observation.receipt} has no Excel observation block")
+                else:
+                    if block.get("kind") != "excel_observed":
+                        reasons.append(f"receipt {observation.receipt} has no Excel-observed record")
+                    block_workbook = block.get("workbook")
+                    if not isinstance(block_workbook, str) or not _relative_path(block_workbook):
+                        reasons.append(f"receipt {observation.receipt} has an invalid workbook path")
+                    else:
+                        try:
+                            observed_workbook = (receipt_path.parent / block_workbook).resolve()
+                            observed_workbook.relative_to(root)
+                        except (OSError, ValueError):
+                            reasons.append(f"receipt {observation.receipt} names a workbook outside the repository root")
+                        else:
+                            if observed_workbook != paths["workbook"].resolve():
+                                reasons.append(f"receipt {observation.receipt} names a different workbook")
+                    for field, expected in (
+                        ("workbook_sha256", observation.workbook_sha256),
+                        ("excel_version", observation.excel_version),
+                        ("event_time", observation.event_time),
+                    ):
+                        if block.get(field) != expected:
+                            reasons.append(f"receipt {observation.receipt} {field} does not match its catalog observation")
     if missing:
         return ObservationCheck("missing", tuple(reasons))
     if reasons:
@@ -315,6 +369,7 @@ def gate_refusals(
     no catalog entry is refused as ``uncatalogued``.
     """
     refusals: list[EvidenceRefusal] = []
+    observation_checks: dict[ExcelObservation, ObservationCheck] = {}
     for sheet, address, functions in formula_cells:
         for function in sorted({name.upper() for name in functions}):
             evidence = evidence_by_function.get(function)
@@ -328,7 +383,10 @@ def gate_refusals(
                     sheet, address, function, evidence.evidence_grade, evidence.profile_class, "no_excel_observation",
                 ))
                 continue
-            check = check_observation(evidence.excel_observation, root)
+            observation = evidence.excel_observation
+            if observation not in observation_checks:
+                observation_checks[observation] = check_observation(observation, root)
+            check = observation_checks[observation]
             if not check.current:
                 refusals.append(EvidenceRefusal(
                     sheet, address, function, evidence.evidence_grade, evidence.profile_class,
