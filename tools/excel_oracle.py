@@ -34,6 +34,9 @@ CONTENT = "http://schemas.openxmlformats.org/package/2006/content-types"
 ADDRESS = re.compile(r"[A-Z]{1,3}[1-9][0-9]{0,6}\Z")
 # Sign, parentheses, percent, and exponent spelling do not turn a number into a formula.
 _NUMBER_TOKEN = re.compile(r"(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?")
+# A number as OOXML writes one. Same grammar as canonical_xlsx._STORED_NUMBER.
+# float() also reads underscores and surrounding space, which are not stored numbers.
+_STORED_NUMBER = re.compile(r"[+-]?([0-9]+\.?[0-9]*|\.[0-9]+)([eE][+-]?[0-9]+)?")
 EXPECTED_KINDS = {"independently_derived", "documented", "forge_profile"}
 SAFE_FUNCTIONS = {"SUM", "IF", "ISBLANK"}
 ROUNDTRIP_CLASSES = {"scenario", "volatile", "iteration", "array", "array_spill", "excel_quirk"}
@@ -901,19 +904,46 @@ def omit_formulas_excel_will_not_open(path: Path, *, protected: set[str] | None 
     return omitted
 
 
+def _cells_with_loose_stored_numbers(path: Path) -> set[str]:
+    """Cells whose untyped ``<v>`` is not an OOXML number.
+
+    Toolkit import reads that text with ``float()``. A cache Excel did not
+    write can still parse, so the oracle keeps only the strict spelling.
+    """
+    from workbook_forge.workbook import Workbook
+
+    loose: set[str] = set()
+    with Workbook.open(path) as workbook:
+        for sheet, sheet_cells in workbook._cells.items():
+            for address, element in sheet_cells.items():
+                if element.attrib.get("t") not in (None, "n"):
+                    continue
+                stored = element.find(_q("v"))
+                text = None if stored is None else stored.text
+                if text is None or _STORED_NUMBER.fullmatch(text) is not None:
+                    continue
+                loose.add(f"{sheet}!{address}")
+    return loose
+
+
 def _model_view(path: Path) -> tuple[dict[str, dict[str, Any]], dict[str, Any]]:
     from workbook_forge.xlsx import import_xlsx
 
     model = import_xlsx(path, backend="python")
     document = model.to_dict()
+    loose_numbers = _cells_with_loose_stored_numbers(path)
     cells: dict[str, dict[str, Any]] = {}
     for sheet in document["sheets"]:
         for address, data in sheet["cells"].items():
-            cells[f"{sheet['name']}!{address}"] = {
+            key = f"{sheet['name']}!{address}"
+            result = roundtrip_cell_value(data)
+            if key in loose_numbers:
+                result = {"type": "unsupported", "python_type": "stored_number"}
+            cells[key] = {
                 "sheet": sheet["name"],
                 "address": address,
                 "formula": _formula_text(data.get("formula")),
-                "result": roundtrip_cell_value(data),
+                "result": result,
                 "blocked_reason": data.get("blocked_reason"),
             }
     return cells, document
@@ -1364,7 +1394,9 @@ def _compare_roundtrip(
         # recalculated, including predicates, text, and booleans, unless Excel's
         # saved calc chain names the cell. A planter that only writes a cached
         # value does not write that chain. A value already stored before Excel
-        # remains a value match. An unchanged file hash still cannot be observed.
+        # remains a value match, and an allowlisted rewrite can match too. Neither
+        # is status observed unless the calc chain names every matched formula
+        # cell. An unchanged file hash still cannot be observed.
         planted_expected_cache = (
             before_formula == after_formula
             and value_matches
@@ -1412,6 +1444,28 @@ def _compare_roundtrip(
         if not item["allowlisted"] and not item.get("excel_unopenable"):
             mismatches.append(f"{item['cell']}: formula changed outside the exact allowlist")
     return outcomes, formula_diffs, mismatches
+
+
+def _matched_formula_cells_outside_calc_chain(
+    outcomes: list[dict[str, Any]], calculated_cells: set[str],
+) -> list[str]:
+    """Matched formula cells the saved calc chain does not name.
+
+    A match is an accepted formula and a cache that agrees with the contract.
+    That includes a cache already stored before Excel and an allowlisted
+    formula rewrite. Neither is an Excel observation unless ``xl/calcChain.xml``
+    names the cell.
+    """
+    missing: list[str] = []
+    for outcome in outcomes:
+        after = outcome["after_recalc_and_reimport"]
+        if after["formula"] is None:
+            continue
+        if not outcome["formula_matches"] or not outcome["result_matches"]:
+            continue
+        if outcome["cell"] not in calculated_cells:
+            missing.append(outcome["cell"])
+    return missing
 
 
 def run_roundtrip(
@@ -1529,7 +1583,31 @@ def run_roundtrip(
                         mismatches=mismatches,
                     )
                 else:
-                    receipt.update(status="mismatch" if mismatches else "observed", stage="reimport", mismatches=mismatches)
+                    missing_chain = _matched_formula_cells_outside_calc_chain(
+                        outcomes, calculated_cells,
+                    )
+                    if missing_chain:
+                        mismatches.extend(
+                            f"{cell}: matched formula cell is not named by the saved calc chain"
+                            for cell in missing_chain
+                        )
+                        absent = set(missing_chain)
+                        for item in receipt["fixture_coverage"]:
+                            if item["status"] != "observed":
+                                continue
+                            covered = {
+                                outcome_by_id[check_id]["cell"] for check_id in item["check_ids"]
+                            }
+                            if covered & absent:
+                                item["status"] = "not_observed"
+                        receipt["reason"] = (
+                            "A matched formula cell is not named by the saved calc chain"
+                        )
+                    receipt.update(
+                        status="mismatch" if mismatches else "observed",
+                        stage="reimport",
+                        mismatches=mismatches,
+                    )
                     if receipt["status"] == "observed":
                         receipt["excel_observation"] = excel_observation_block(
                             working_copy.name, receipt["saved_workbook_sha256"],
