@@ -23,8 +23,8 @@ from workbook_forge import ArrayValue, ErrorValue, evaluate, evaluate_result
         ("=COUNTA(A1:A3)", 3),
         ("=MIN(A1:A3)", 10),
         ("=MAX(A1:A3)", 20),
-        ("=IF(A1>2,\"yes\",1/0)", "yes"),
-        ("=IFERROR(1/0,\"safe\")", "safe"),
+        ('=IF(A1>2,"yes",1/0)', "yes"),
+        ('=IFERROR(1/0,"safe")', "safe"),
         ("=AND(TRUE,1)", True),
         ("=OR(FALSE,TRUE)", True),
         ("=NOT(FALSE)", True),
@@ -64,17 +64,16 @@ def _fixture_value(value):
 
 _GOLDEN_CASES = [
     json.loads(line)
-    for line in (Path(__file__).parents[2] / "fixtures" / "formula-cases.jsonl").read_text().splitlines()
+    for line in (Path(__file__).parents[2] / "fixtures" / "formula-cases.jsonl")
+    .read_text()
+    .splitlines()
 ]
 
 
 # One test per case, so that one wrong case does not hide the others.
 @pytest.mark.parametrize("case", _GOLDEN_CASES, ids=[case["id"] for case in _GOLDEN_CASES])
 def test_shared_golden_fixture(case):
-    cells = {
-        address: _fixture_value(value)
-        for address, value in case.get("cells", {}).items()
-    }
+    cells = {address: _fixture_value(value) for address, value in case.get("cells", {}).items()}
     expected = case["expected"]
     value = (
         evaluate_result(case["formula"], cells)
@@ -98,16 +97,19 @@ def test_shared_golden_fixture(case):
                             abs_tol=1e-12,
                         )
                     ), case["id"]
-                elif isinstance(expected_cell, dict) and isinstance(expected_cell.get("error"), str):
-                    assert isinstance(actual_cell, ErrorValue) and actual_cell.code == expected_cell["error"], case["id"]
+                elif isinstance(expected_cell, dict) and isinstance(
+                    expected_cell.get("error"), str
+                ):
+                    assert (
+                        isinstance(actual_cell, ErrorValue)
+                        and actual_cell.code == expected_cell["error"]
+                    ), case["id"]
                 else:
                     assert actual_cell == expected_cell, case["id"]
     elif "exact_number" in expected:
         target = int(expected["exact_number"])
         assert (
-            isinstance(value, (int, float))
-            and not isinstance(value, bool)
-            and value == target
+            isinstance(value, (int, float)) and not isinstance(value, bool) and value == target
         ), case["id"]
     elif "number" in expected:
         assert (
@@ -216,7 +218,7 @@ def test_non_aggregate_functions_reject_ranges_explicitly():
 
 
 def test_ifna_is_lazy_and_catches_only_na_errors():
-    assert evaluate('=IFNA(42,1/0)') == 42
+    assert evaluate("=IFNA(42,1/0)") == 42
     assert evaluate('=IFNA(#N/A,"fallback")') == "fallback"
     value = evaluate('=IFNA(1/0,"fallback")')
     assert isinstance(value, ErrorValue) and value.code == "#DIV/0!"
@@ -268,7 +270,7 @@ def test_text_and_search_functions(formula, expected):
     ("formula", "code"),
     [
         ('=IFNA("x")', "#VALUE!"),
-        ('=UPPER(A1:A2)', "#VALUE!"),
+        ("=UPPER(A1:A2)", "#VALUE!"),
         ('=SUBSTITUTE("abc","a","x",0)', "#VALUE!"),
         ('=SUBSTITUTE("abc","","x")', "#VALUE!"),
         ('=FIND("z","abc")', "#VALUE!"),
@@ -295,8 +297,8 @@ def test_textjoin_limit_and_error_propagation():
 def test_string_builders_check_utf16_limit_before_join_or_replace(monkeypatch):
     monkeypatch.setattr("workbook_forge.MAX_TEXT_LENGTH_UNITS", 8)
     cases = [
-        ('=A1&A1', {"A1": "12345"}),
-        ('=CONCAT(A1:A2)', {"A1": "12345", "A2": "67890"}),
+        ("=A1&A1", {"A1": "12345"}),
+        ("=CONCAT(A1:A2)", {"A1": "12345", "A2": "67890"}),
         ('=TEXTJOIN(",",FALSE,A1:A2)', {"A1": "12345", "A2": "67890"}),
         ('=SUBSTITUTE(A1,"a",B1)', {"A1": "aaaa", "B1": "123"}),
     ]
@@ -306,29 +308,56 @@ def test_string_builders_check_utf16_limit_before_join_or_replace(monkeypatch):
 
 
 def test_formula_text_limit_counts_utf16_code_units():
-    formula = '=\"' + "😀" * 16_384 + '\"'
+    formula = '="' + "😀" * 16_384 + '"'
     value = evaluate(formula)
     assert isinstance(value, ErrorValue) and value.code == "#VALUE!"
 
 
 def test_xlookup_exact_forward_reverse_and_lazy_fallback():
     cells = {"A1": 7, "A2": 4, "A3": 7, "B1": "first", "B2": "middle", "B3": "last"}
-    assert evaluate('=XLOOKUP(7,A1:A3,B1:B3)', cells) == "first"
+    assert evaluate("=XLOOKUP(7,A1:A3,B1:B3)", cells) == "first"
     assert evaluate('=XLOOKUP(7,A1:A3,B1:B3,"missing",0,-1)', cells) == "last"
-    assert evaluate('=XLOOKUP("ALPHA",C1:C2,D1:D2)', {"C1": "alpha", "C2": "beta", "D1": 1, "D2": 2}) == 1
-    assert evaluate('=XLOOKUP(7,A1:A3,B1:B3,1/0)', cells) == "first"
-    value = evaluate('=XLOOKUP(99,A1:A3,B1:B3,1/0)', cells)
+    assert (
+        evaluate('=XLOOKUP("ALPHA",C1:C2,D1:D2)', {"C1": "alpha", "C2": "beta", "D1": 1, "D2": 2})
+        == 1
+    )
+    assert evaluate("=XLOOKUP(7,A1:A3,B1:B3,1/0)", cells) == "first"
+    value = evaluate("=XLOOKUP(99,A1:A3,B1:B3,1/0)", cells)
     assert isinstance(value, ErrorValue) and value.code == "#DIV/0!"
     value = evaluate("=XLOOKUP(99,A1:A3,B1:B3)", cells)
     assert isinstance(value, ErrorValue) and value.code == "#N/A"
+
+
+def test_xlookup_optional_argument_positions_and_blank_lookup_value():
+    cells = {
+        "A1": "alpha",
+        "A2": "pear",
+        "A3": "pear",
+        "B1": 10,
+        "B2": 20,
+        "B3": 30,
+        "C1": "not blank",
+        "C2": None,
+        "D1": "text key",
+        "D2": "blank key",
+        "E1": 1,
+        "F1": 2,
+        "E2": 10,
+        "F2": 20,
+    }
+    assert evaluate("=XLOOKUP(,C1:C2,D1:D2)", cells) == "blank key"
+    assert evaluate('=XLOOKUP("pear",A1:A3,B1:B3,,,-1)', cells) == 30
+    missing = evaluate('=XLOOKUP("plum",A1:A3,B1:B3,,,-1)', cells)
+    assert isinstance(missing, ErrorValue) and missing.code == "#N/A"
+    assert evaluate("=XLOOKUP(2,E1:F1,E2:F2)", cells) == 20
 
 
 def test_xlookup_and_xmatch_validate_vectors_and_exact_modes():
     cases = [
         ("=XLOOKUP(1,A1:B2,C1:C4)", "#VALUE!"),
         ("=XLOOKUP(1,A1:A2,B1:B3)", "#VALUE!"),
-        ("=XLOOKUP(1,A1:A2,B1:B2,\"missing\",1)", "#VALUE!"),
-        ("=XLOOKUP(1,A1:A2,B1:B2,\"missing\",0,2)", "#VALUE!"),
+        ('=XLOOKUP(1,A1:A2,B1:B2,"missing",1)', "#VALUE!"),
+        ('=XLOOKUP(1,A1:A2,B1:B2,"missing",0,2)', "#VALUE!"),
         ("=XLOOKUP(A1:A2,A1:A2,B1:B2)", "#VALUE!"),
         ("=XLOOKUP(99,A1:A2,B1:B2,C1:C2)", "#VALUE!"),
         ("=XLOOKUP(1,A1:A2,B1:B2)", "#N/A"),
@@ -412,9 +441,19 @@ def test_excel_1900_date_serial_compatibility():
 
 def test_countif_supports_operators_wildcards_and_blanks():
     cells = {
-        "A1": "alpha", "A2": "beta", "A3": "alphabet", "A4": "",
-        "A6": "a*", "A7": "a?", "B1": 10, "B2": 20, "B3": 30,
-        "B4": 40, "B5": "skip", "B6": 60, "B7": False,
+        "A1": "alpha",
+        "A2": "beta",
+        "A3": "alphabet",
+        "A4": "",
+        "A6": "a*",
+        "A7": "a?",
+        "B1": 10,
+        "B2": 20,
+        "B3": 30,
+        "B4": 40,
+        "B5": "skip",
+        "B6": 60,
+        "B7": False,
     }
     assert evaluate('=COUNTIF(B1:B7,">=30")', cells) == 3
     assert evaluate('=COUNTIF(A1:A7,"a*")', cells) == 4
@@ -428,9 +467,20 @@ def test_countif_supports_operators_wildcards_and_blanks():
 
 def test_sumif_and_averageif_defaults_and_optional_ranges():
     cells = {
-        "A1": "east", "A2": "west", "A3": "east", "A4": "east",
-        "A5": "west", "A6": "east", "A7": "west",
-        "B1": 10, "B2": 20, "B3": 30, "B4": 40, "B5": "skip", "B6": 60, "B7": False,
+        "A1": "east",
+        "A2": "west",
+        "A3": "east",
+        "A4": "east",
+        "A5": "west",
+        "A6": "east",
+        "A7": "west",
+        "B1": 10,
+        "B2": 20,
+        "B3": 30,
+        "B4": 40,
+        "B5": "skip",
+        "B6": 60,
+        "B7": False,
     }
     assert evaluate('=SUMIF(A1:A7,"east",B1:B7)', cells) == 140
     assert evaluate('=SUMIF(B1:B7,">=30")', cells) == 130
@@ -442,9 +492,20 @@ def test_sumif_and_averageif_defaults_and_optional_ranges():
 
 def test_countifs_sumifs_and_averageifs_share_multi_criteria():
     cells = {
-        "A1": "east", "A2": "west", "A3": "east", "A4": "east",
-        "A5": "west", "A6": "east", "A7": "west",
-        "B1": 10, "B2": 20, "B3": 30, "B4": 40, "B5": "skip", "B6": 60, "B7": False,
+        "A1": "east",
+        "A2": "west",
+        "A3": "east",
+        "A4": "east",
+        "A5": "west",
+        "A6": "east",
+        "A7": "west",
+        "B1": 10,
+        "B2": 20,
+        "B3": 30,
+        "B4": 40,
+        "B5": "skip",
+        "B6": 60,
+        "B7": False,
     }
     assert evaluate('=COUNTIFS(A1:A7,"east",B1:B7,">=30")', cells) == 3
     assert evaluate('=SUMIFS(B1:B7,A1:A7,"east",B1:B7,">20")', cells) == 130
@@ -483,15 +544,21 @@ def test_count_and_counta_ignore_error_cells_but_other_aggregates_propagate():
 
 def test_criteria_functions_skip_error_cells_unless_the_criterion_is_that_error():
     cells = {
-        "A1": "x", "A2": ErrorValue("#N/A"), "A3": "x", "A4": 1,
-        "B1": 1, "B2": 2, "B3": 3, "B4": 4,
+        "A1": "x",
+        "A2": ErrorValue("#N/A"),
+        "A3": "x",
+        "A4": 1,
+        "B1": 1,
+        "B2": 2,
+        "B3": 3,
+        "B4": 4,
     }
     assert evaluate('=COUNTIF(A1:A4,"x")', cells) == 2
     assert evaluate('=COUNTIF(A1:A4,">0")', cells) == 1
     assert evaluate('=COUNTIF(A1:A4,"<>x")', cells) == 2
     assert evaluate('=COUNTIF(A1:A4,"#N/A")', cells) == 1
     assert evaluate('=COUNTIF(A1:A4,"#n/a")', cells) == 1
-    assert evaluate('=COUNTIF(A1:A4,NA())', cells) == 1
+    assert evaluate("=COUNTIF(A1:A4,NA())", cells) == 1
     assert evaluate('=COUNTIF(A1:A4,"<>#N/A")', cells) == 3
     assert evaluate('=COUNTIF(A1:A4,"#DIV/0!")', cells) == 0
     assert evaluate('=COUNTIF(A1:A4,">#N/A")', cells) == 0
@@ -526,14 +593,14 @@ def test_criteria_operands_compare_within_one_type_only():
     ("formula", "code"),
     [
         ('=COUNTIF(A1:A2,">>5")', "#VALUE!"),
-        ('=COUNTIF(A1:A2,A1:A2)', "#VALUE!"),
+        ("=COUNTIF(A1:A2,A1:A2)", "#VALUE!"),
         ('=SUMIF(A1:A2,"*",B1:B3)', "#VALUE!"),
         ('=AVERAGEIF(A1:A2,"*",B1:B3)', "#VALUE!"),
         ('=COUNTIFS(A1:A2,"*",B1:B3,">0")', "#VALUE!"),
         ('=SUMIFS(B1:B3,A1:A2,"*")', "#VALUE!"),
         ('=AVERAGEIFS(B1:B3,A1:A2,"*")', "#VALUE!"),
         ('=COUNTIFS(A1:A2,"x",B1:B2)', "#VALUE!"),
-        ('=SUMIFS(B1:B2,A1:A2)', "#VALUE!"),
+        ("=SUMIFS(B1:B2,A1:A2)", "#VALUE!"),
     ],
 )
 def test_criteria_functions_reject_malformed_criteria_and_ranges(formula, code):
@@ -554,8 +621,12 @@ def test_postfix_percent_operator_precedence_and_errors():
 
 def test_match_and_exact_vlookup_are_case_insensitive_and_support_wildcards():
     cells = {
-        "A1": "Alpha", "A2": "beta", "A3": "literal*",
-        "B1": 11, "B2": 22, "B3": 33,
+        "A1": "Alpha",
+        "A2": "beta",
+        "A3": "literal*",
+        "B1": 11,
+        "B2": 22,
+        "B3": 33,
     }
     assert evaluate('=MATCH("ALPHA",A1:A3,0)', cells) == 1
     assert evaluate('=MATCH("b?ta",A1:A3,0)', cells) == 2
@@ -587,15 +658,11 @@ def test_index_area_num_is_explicit_for_single_area_references():
 
 
 def test_sort_key_errors_follow_source_order_for_direct_nonfinite_inputs():
-    mixed_before_nonfinite = evaluate_result(
-        "=SORT(A1:A3)", {"A1": 1, "A2": "x", "A3": math.inf}
-    )
+    mixed_before_nonfinite = evaluate_result("=SORT(A1:A3)", {"A1": 1, "A2": "x", "A3": math.inf})
     assert isinstance(mixed_before_nonfinite, ErrorValue)
     assert mixed_before_nonfinite.code == "#VALUE!"
 
-    nonfinite_before_mixed = evaluate_result(
-        "=SORT(A1:A3)", {"A1": math.inf, "A2": "x", "A3": 1}
-    )
+    nonfinite_before_mixed = evaluate_result("=SORT(A1:A3)", {"A1": math.inf, "A2": "x", "A3": 1})
     assert isinstance(nonfinite_before_mixed, ErrorValue)
     assert nonfinite_before_mixed.code == "#NUM!"
 

@@ -1,4 +1,5 @@
 """Focused regressions for three concrete PR boundary findings."""
+
 from __future__ import annotations
 
 import os
@@ -20,6 +21,10 @@ PREFIXED = {
     "C1": "_xlfn.XLOOKUP(2,A1:A2,B1:B2)",
     "C2": "SUM(_xlfn._xlws.FILTER(B1:B2,A1:A2>1))",
 }
+MODEL_FORMULAS = {
+    "C1": "XLOOKUP(2,A1:A2,B1:B2)",
+    "C2": PREFIXED["C2"],
+}
 
 
 def _source(path):
@@ -36,22 +41,50 @@ def test_supported_excel_prefixes_calculate_and_preserve_original_xml(agent_fact
     source = tmp_path / "prefixes.xlsx"
     _source(source)
     original = source.read_bytes()
-    client = agent_factory(source=source, bindings={"outputs": {
-        "lookup": {"sheet": "Data", "address": "C1"},
-        "filtered_sum": {"sheet": "Data", "address": "C2"},
-    }})
+    client = agent_factory(
+        source=source,
+        bindings={
+            "outputs": {
+                "lookup": {"sheet": "Data", "address": "C1"},
+                "filtered_sum": {"sheet": "Data", "address": "C2"},
+            }
+        },
+    )
     calculation = _ok(client, "calculate")
     assert calculation["outputs"] == {"lookup": 20, "filtered_sum": 20}
     assert calculation["diagnostics"] == []
     observed = _ok(client, "read", {"sheet": "Data", "range": "C1:C2"})
-    assert {cell["address"]: cell["content"]["formula"] for cell in observed["cells"]} == PREFIXED
+    assert {
+        cell["address"]: cell["content"]["formula"] for cell in observed["cells"]
+    } == MODEL_FORMULAS
     _ok(client, "export", {"filename": "preserved.xlsx", "expected_revision": 0})
     with zipfile.ZipFile(client.output_dir / "preserved.xlsx") as package:
         sheet = ET.fromstring(package.read("xl/worksheets/sheet1.xml"))
-        formulas = {cell.attrib["r"]: cell.find(f"{{{MAIN}}}f").text
-                    for cell in sheet.findall(f"{{{MAIN}}}sheetData/{{{MAIN}}}row/{{{MAIN}}}c")
-                    if cell.find(f"{{{MAIN}}}f") is not None}
+        formulas = {
+            cell.attrib["r"]: cell.find(f"{{{MAIN}}}f").text
+            for cell in sheet.findall(f"{{{MAIN}}}sheetData/{{{MAIN}}}row/{{{MAIN}}}c")
+            if cell.find(f"{{{MAIN}}}f") is not None
+        }
     assert formulas == PREFIXED
+    assert source.read_bytes() == original
+
+    _ok(
+        client,
+        "edit",
+        {
+            "edits": [{"sheet": "Data", "address": "C1", "formula": "=XLOOKUP(1,A1:A2,B1:B2)"}],
+            "expected_revision": 0,
+        },
+    )
+    _ok(client, "export", {"filename": "edited.xlsx", "expected_revision": 1})
+    with zipfile.ZipFile(client.output_dir / "edited.xlsx") as package:
+        sheet = ET.fromstring(package.read("xl/worksheets/sheet1.xml"))
+        formulas = {
+            cell.attrib["r"]: cell.find(f"{{{MAIN}}}f").text
+            for cell in sheet.findall(f"{{{MAIN}}}sheetData/{{{MAIN}}}row/{{{MAIN}}}c")
+            if cell.find(f"{{{MAIN}}}f") is not None
+        }
+    assert formulas["C1"] == "_xlfn.XLOOKUP(1,A1:A2,B1:B2)"
     assert source.read_bytes() == original
 
 
@@ -66,31 +99,50 @@ def test_supported_excel_prefixes_map_to_canonical_functions_in_extraction(extra
         assert record["text"] == PREFIXED[address]
         assert record["data"]["effective_formula"] == PREFIXED[address]
         assert [function["name"] for function in record["data"]["analysis"]["functions"]] == names
-        assert all(function["known"] and function["python"] == "conformance-tested" and function["rust"] == "conformance-tested"
-                   for function in record["data"]["analysis"]["functions"])
+        assert all(
+            function["known"]
+            and function["python"] == "conformance-tested"
+            and function["rust"] == "conformance-tested"
+            for function in record["data"]["analysis"]["functions"]
+        )
 
 
 @pytest.mark.parametrize("field", ["formula", "style"])
 def test_discovery_does_not_advertise_null_only_edits(agent_factory, field):
     client = agent_factory()
     catalog = _ok(client, "discover")
-    schema = next(operation["input_schema"] for operation in catalog["operations"] if operation["name"] == "edit")
-    arguments = {"edits": [{"sheet": "Assumptions", "address": "B1", field: None}], "expected_revision": 0}
+    schema = next(
+        operation["input_schema"]
+        for operation in catalog["operations"]
+        if operation["name"] == "edit"
+    )
+    arguments = {
+        "edits": [{"sheet": "Assumptions", "address": "B1", field: None}],
+        "expected_revision": 0,
+    }
     with pytest.raises(jsonschema.ValidationError):
         jsonschema.validate(arguments, schema)
     result = _call(client, "edit", arguments)
     assert result["ok"] is False
     assert _revision(client) == 0
-    clear = {"edits": [{"sheet": "Forecast", "address": "A1", "value": None}], "expected_revision": 0}
+    clear = {
+        "edits": [{"sheet": "Forecast", "address": "A1", "value": None}],
+        "expected_revision": 0,
+    }
     jsonschema.validate(clear, schema)
     assert _call(client, "edit", clear)["ok"] is True
     assert _revision(client) == 1
 
 
-@pytest.mark.parametrize("payload", ["<is><t>conflict</t></is><v>2</v>", "<is><t>conflict</t></is><f>1+2</f>"])
+@pytest.mark.parametrize(
+    "payload", ["<is><t>conflict</t></is><v>2</v>", "<is><t>conflict</t></is><f>1+2</f>"]
+)
 def test_inline_string_cannot_coexist_with_scalar_or_formula_payload(extractor, tmp_path, payload):
     source = tmp_path / "mixed-payload.xlsx"
-    _fixture(source, sheet_xml=f'<worksheet xmlns="{MAIN}"><sheetData><row r="1"><c r="A1" t="inlineStr">{payload}</c></row></sheetData></worksheet>')
+    _fixture(
+        source,
+        sheet_xml=f'<worksheet xmlns="{MAIN}"><sheetData><row r="1"><c r="A1" t="inlineStr">{payload}</c></row></sheetData></worksheet>',
+    )
     before = source.read_bytes()
     for options in ({}, {"patterns": ["shared_string"], "sheet": "Odd Sheet"}):
         with pytest.raises((ValueError, WorkbookError)):
@@ -99,8 +151,14 @@ def test_inline_string_cannot_coexist_with_scalar_or_formula_payload(extractor, 
         with pytest.raises((ValueError, WorkbookError)):
             import_xlsx(source)
     else:
-        executable = extractor.rust_binary.with_name("agent_workbook.exe" if os.name == "nt" else "agent_workbook")
-        result = subprocess.run([str(executable), str(source), "--output-dir", str(tmp_path / "exports")],
-                                input=b"", capture_output=True, timeout=30)
+        executable = extractor.rust_binary.with_name(
+            "agent_workbook.exe" if os.name == "nt" else "agent_workbook"
+        )
+        result = subprocess.run(
+            [str(executable), str(source), "--output-dir", str(tmp_path / "exports")],
+            input=b"",
+            capture_output=True,
+            timeout=30,
+        )
         assert result.returncode != 0, "Rust import accepted conflicting cell representations"
     assert source.read_bytes() == before

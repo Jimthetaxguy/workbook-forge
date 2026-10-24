@@ -3,11 +3,11 @@
 // relative to this module (new URL(..., import.meta.url)), so bundlers and
 // plain ES-module hosts both work. No network calls beyond loading that file.
 
-import init, { openXlsx } from '../pkg/workbook_forge.js';
+import init, { createBlankWorkbook, openXlsx } from '../pkg/workbook_forge.js';
 import { ForgeEngine } from './engine';
 import type { RequestMessage } from './protocol';
 
-const ready = init().then(() => new ForgeEngine({ openXlsx }));
+const ready = init().then(() => new ForgeEngine({ openXlsx, createBlankWorkbook }));
 let queue: Promise<unknown> = Promise.resolve();
 
 self.addEventListener('message', (event: MessageEvent<RequestMessage>) => {

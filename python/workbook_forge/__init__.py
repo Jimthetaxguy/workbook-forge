@@ -138,14 +138,14 @@ _ASCII_LOWER_TABLE = str.maketrans("ABCDEFGHIJKLMNOPQRSTUVWXYZ", "abcdefghijklmn
 _CELL_RE = re.compile(r"\$?([A-Za-z]{1,3})\$?([1-9][0-9]*)\Z")
 _MAX_EXCEL_DATE_SERIAL = 2_958_465
 _LEX_RE = re.compile(
-    r'(?P<SPACE>\s+)'
+    r"(?P<SPACE>\s+)"
     r'|(?P<STRING>"(?:[^"]|"")*")'
     r"|(?P<SHEET>'(?:[^']|'')*')"
-    r'|(?P<ERROR>\#(?:NULL!|DIV/0!|VALUE!|REF!|NAME\?|NUM!|N/A|N/A!|SPILL!|CALC!))'
-    r'|(?P<NUMBER>(?:\d+(?:\.\d*)?|\.\d+)(?:[Ee][+-]?\d+)?)'
-    r'|(?P<CELL>\$?[A-Za-z]{1,3}\$?[1-9][0-9]*)'
-    r'|(?P<IDENT>[A-Za-z_][A-Za-z0-9_.]*)'
-    r'|(?P<OP><=|>=|<>|[+\-*/^%&=<>(),:!])'
+    r"|(?P<ERROR>\#(?:NULL!|DIV/0!|VALUE!|REF!|NAME\?|NUM!|N/A|N/A!|SPILL!|CALC!))"
+    r"|(?P<NUMBER>(?:\d+(?:\.\d*)?|\.\d+)(?:[Ee][+-]?\d+)?)"
+    r"|(?P<CELL>\$?[A-Za-z]{1,3}\$?[1-9][0-9]*)"
+    r"|(?P<IDENT>[A-Za-z_][A-Za-z0-9_.]*)"
+    r"|(?P<OP><=|>=|<>|[+\-*/^%&=<>(),:!])"
 )
 
 
@@ -173,7 +173,7 @@ def _canonical_function_name(name: str) -> str:
         if upper.startswith(prefix):
             from .catalog import lookup_function
 
-            candidate = upper[len(prefix):]
+            candidate = upper[len(prefix) :]
             return candidate if lookup_function(candidate) is not None else upper
     return upper
 
@@ -243,7 +243,9 @@ class _Parser:
     def parse(self) -> _Node:
         node = self.parse_comparison()
         if self.current.kind != "EOF":
-            raise _FormulaSyntaxError(f"unexpected {self.current.value!r} at offset {self.current.position}")
+            raise _FormulaSyntaxError(
+                f"unexpected {self.current.value!r} at offset {self.current.position}"
+            )
         return node
 
     def parse_comparison(self) -> _Node:
@@ -321,7 +323,9 @@ class _Parser:
                 sheet = self.consume().value
                 self.consume("!")
                 if self.current.kind != "CELL":
-                    raise _FormulaSyntaxError("sheet qualifier must be followed by a cell reference")
+                    raise _FormulaSyntaxError(
+                        "sheet qualifier must be followed by a cell reference"
+                    )
                 address = self.consume().value
                 if self.current.value == ":":
                     self.consume(":")
@@ -437,7 +441,9 @@ def _column_name(column: int) -> str:
     return result
 
 
-def _cell_value(address: str, cells: Mapping[str, Scalar], sheet: str | None, current_sheet: str) -> Scalar:
+def _cell_value(
+    address: str, cells: Mapping[str, Scalar], sheet: str | None, current_sheet: str
+) -> Scalar:
     match = _CELL_RE.fullmatch(address)
     assert match is not None
     key = f"{match.group(1).upper()}{match.group(2)}"
@@ -447,7 +453,9 @@ def _cell_value(address: str, cells: Mapping[str, Scalar], sheet: str | None, cu
     return cells.get(qualified_key, cells.get(key))
 
 
-def _range_value(start: str, end: str, cells: Mapping[str, Scalar], sheet: str | None, current_sheet: str) -> _Range | ErrorValue:
+def _range_value(
+    start: str, end: str, cells: Mapping[str, Scalar], sheet: str | None, current_sheet: str
+) -> _Range | ErrorValue:
     try:
         start_row, start_col = _coordinate(start)
         end_row, end_col = _coordinate(end)
@@ -458,10 +466,16 @@ def _range_value(start: str, end: str, cells: Mapping[str, Scalar], sheet: str |
     if (end_row - start_row + 1) * (end_col - start_col + 1) > 100_000:
         return ErrorValue("#NUM!", "range exceeds the 100000-cell evaluation limit")
     values = tuple(
-        _cell_value(f"{_column_name(column)}{row}", cells, sheet, current_sheet) if (
-            (f"{sheet.casefold()}!{_column_name(column)}{row}" in cells) if sheet is not None else
-            (f"{current_sheet.casefold()}!{_column_name(column)}{row}" in cells or f"{_column_name(column)}{row}" in cells)
-        ) else None
+        _cell_value(f"{_column_name(column)}{row}", cells, sheet, current_sheet)
+        if (
+            (f"{sheet.casefold()}!{_column_name(column)}{row}" in cells)
+            if sheet is not None
+            else (
+                f"{current_sheet.casefold()}!{_column_name(column)}{row}" in cells
+                or f"{_column_name(column)}{row}" in cells
+            )
+        )
+        else None
         for row in range(start_row, end_row + 1)
         for column in range(start_col, end_col + 1)
     )
@@ -488,7 +502,9 @@ def _binary_array_parts(value: object) -> tuple[tuple[int, int], tuple[object, .
     return None
 
 
-def _apply_binary_values(op: str, left: object, right: object, *, worksheet: bool = False) -> object:
+def _apply_binary_values(
+    op: str, left: object, right: object, *, worksheet: bool = False
+) -> object:
     left_array = _binary_array_parts(left)
     right_array = _binary_array_parts(right)
     if left_array is None and right_array is None:
@@ -507,18 +523,17 @@ def _apply_binary_values(op: str, left: object, right: object, *, worksheet: boo
         for left_item, right_item in zip(left_values, right_values, strict=True)
     )
     return ArrayValue(
-        tuple(
-            tuple(results[offset : offset + columns])
-            for offset in range(0, size, columns)
-        )
+        tuple(tuple(results[offset : offset + columns]) for offset in range(0, size, columns))
     )
 
 
-def _apply_binary_scalar(op: str, left: object, right: object, *, worksheet: bool = False) -> Scalar | ErrorValue:
+def _apply_binary_scalar(
+    op: str, left: object, right: object, *, worksheet: bool = False
+) -> Scalar | ErrorValue:
     if isinstance(left, ErrorValue):
         return left
     if worksheet and op in ("=", "<>", "<", "<=", ">", ">="):
-        return _worksheet_comparison(op,left,right)
+        return _worksheet_comparison(op, left, right)
     if op in ("=", "<>", "<", "<=", ">", ">="):
         left_number = _comparison_number(left)
         if isinstance(left_number, ErrorValue):
@@ -572,7 +587,9 @@ def _apply_binary_scalar(op: str, left: object, right: object, *, worksheet: boo
             else:
                 result = a * b
             if isinstance(result, int) and result.bit_length() > _MAX_EXACT_EXPRESSION_BITS:
-                return ErrorValue("#NUM!", "integer expression exceeds the supported precision bound")
+                return ErrorValue(
+                    "#NUM!", "integer expression exceeds the supported precision bound"
+                )
             # Every arithmetic operator returns #NUM! when its binary64 result
             # is not finite, the rule ^ already followed.
             if isinstance(result, float) and not math.isfinite(result):
@@ -589,11 +606,15 @@ def _apply_binary_scalar(op: str, left: object, right: object, *, worksheet: boo
             if isinstance(a, int) and isinstance(b, int) and b >= 0 and abs(a) > 1:
                 minimum_result_bits = (abs(a).bit_length() - 1) * b + 1
                 if minimum_result_bits > _MAX_EXACT_EXPRESSION_BITS:
-                    return ErrorValue("#NUM!", "integer power exceeds the supported precision bound")
+                    return ErrorValue(
+                        "#NUM!", "integer power exceeds the supported precision bound"
+                    )
             result = a**b
             if isinstance(result, int) and result.bit_length() > _MAX_EXACT_EXPRESSION_BITS:
                 return ErrorValue("#NUM!", "integer power exceeds the supported precision bound")
-            if isinstance(result, complex) or (isinstance(result, float) and not math.isfinite(result)):
+            if isinstance(result, complex) or (
+                isinstance(result, float) and not math.isfinite(result)
+            ):
                 return ErrorValue("#NUM!", "power result is outside the numeric domain")
             return result
     except ZeroDivisionError:
@@ -634,40 +655,57 @@ def _number(value: object) -> float | int | ErrorValue:
 
 def _worksheet_comparison(op, left, right):
     """Explicit typed worksheet profile; never Python bool/number equality."""
+
     def typed(value):
-        if isinstance(value,ErrorValue):
+        if isinstance(value, ErrorValue):
             return value
         if value is None:
-            return ("blank",None)
+            return ("blank", None)
         if type(value) is bool:
-            return ("boolean",value)
-        if isinstance(value,str):
-            return ("text",value)
-        number=_comparison_number(value)
-        return number if isinstance(number,ErrorValue) else ("number",number)
-    a,b=typed(left),typed(right)
-    if isinstance(a,ErrorValue):
+            return ("boolean", value)
+        if isinstance(value, str):
+            return ("text", value)
+        number = _comparison_number(value)
+        return number if isinstance(number, ErrorValue) else ("number", number)
+
+    a, b = typed(left), typed(right)
+    if isinstance(a, ErrorValue):
         return a
-    if isinstance(b,ErrorValue):
+    if isinstance(b, ErrorValue):
         return b
+
     def empty(other):
-        return ("text","") if other[0]=="text" else ("boolean",False) if other[0]=="boolean" else ("number",0.0)
-    if a[0]=="blank":
-        a=empty(b)
-    if b[0]=="blank":
-        b=empty(a)
-    ranks={"number":0,"text":1,"boolean":2}
-    if a[0]!=b[0]:
-        order=-1 if ranks[a[0]]<ranks[b[0]] else 1
+        return (
+            ("text", "")
+            if other[0] == "text"
+            else ("boolean", False)
+            if other[0] == "boolean"
+            else ("number", 0.0)
+        )
+
+    if a[0] == "blank":
+        a = empty(b)
+    if b[0] == "blank":
+        b = empty(a)
+    ranks = {"number": 0, "text": 1, "boolean": 2}
+    if a[0] != b[0]:
+        order = -1 if ranks[a[0]] < ranks[b[0]] else 1
     else:
-        x,y=a[1],b[1]
-        if a[0]=="text":
+        x, y = a[1], b[1]
+        if a[0] == "text":
             if x.isascii() and y.isascii():
-                x,y=x.lower(),y.lower()
+                x, y = x.lower(), y.lower()
             # Locale collation is not claimed: explicit UTF-8 ordinal profile.
-            x,y=x.encode("utf-8"),y.encode("utf-8")
-        order=-1 if x<y else 1 if x>y else 0
-    return {"=":order==0,"<>":order!=0,"<":order<0,"<=":order<=0,">":order>0,">=":order>=0}[op]
+            x, y = x.encode("utf-8"), y.encode("utf-8")
+        order = -1 if x < y else 1 if x > y else 0
+    return {
+        "=": order == 0,
+        "<>": order != 0,
+        "<": order < 0,
+        "<=": order <= 0,
+        ">": order > 0,
+        ">=": order >= 0,
+    }[op]
 
 
 def _comparison_number(value: object) -> float | ErrorValue | None:
@@ -689,11 +727,7 @@ def _nonfinite_literal_error(node: _Node) -> ErrorValue | None:
     """Return the evaluation error for an overflowing literal operand."""
     while node.kind in {"unary", "postfix"} and node.children:
         node = node.children[0]
-    if (
-        node.kind == "literal"
-        and isinstance(node.value, float)
-        and not math.isfinite(node.value)
-    ):
+    if node.kind == "literal" and isinstance(node.value, float) and not math.isfinite(node.value):
         return ErrorValue("#NUM!", "numeric literal exceeds the finite binary64 range")
     return None
 
@@ -754,7 +788,11 @@ def _sequence_call(
     columns_truncated = math.trunc(columns_number)
     if rows_truncated <= 0 or columns_truncated <= 0:
         return ErrorValue("#NUM!", "SEQUENCE dimensions must be positive in this evaluator profile")
-    if rows_truncated > 100_000 or columns_truncated > 100_000 or rows_truncated * columns_truncated > 100_000:
+    if (
+        rows_truncated > 100_000
+        or columns_truncated > 100_000
+        or rows_truncated * columns_truncated > 100_000
+    ):
         return ErrorValue("#NUM!", "SEQUENCE exceeds the 100000-cell evaluation limit")
 
     result_rows: list[tuple[Scalar, ...]] = []
@@ -1046,10 +1084,7 @@ def _filter_call(
     if axis == "rows":
         result = tuple(source_rows[index] for index in selected_indices)
     else:
-        result = tuple(
-            tuple(row[index] for index in selected_indices)
-            for row in source_rows
-        )
+        result = tuple(tuple(row[index] for index in selected_indices) for row in source_rows)
     try:
         return ArrayValue(result)
     except ValueError as error:
@@ -1067,8 +1102,10 @@ def _switch_equal(left: object, right: object) -> bool | ErrorValue:
     if isinstance(left, bool) and isinstance(right, bool):
         return left is right
     if (
-        isinstance(left, (int, float)) and not isinstance(left, bool)
-        and isinstance(right, (int, float)) and not isinstance(right, bool)
+        isinstance(left, (int, float))
+        and not isinstance(left, bool)
+        and isinstance(right, (int, float))
+        and not isinstance(right, bool)
     ):
         return left == right
     if isinstance(left, str) and isinstance(right, str):
@@ -1352,7 +1389,9 @@ def _truth(value: object) -> bool | ErrorValue:
     return ErrorValue("#VALUE!", "value is not logical")
 
 
-def _numeric_values(values: list[object], *, include_text: bool = False) -> list[float | int] | ErrorValue:
+def _numeric_values(
+    values: list[object], *, include_text: bool = False
+) -> list[float | int] | ErrorValue:
     result: list[float | int] = []
     for value in values:
         if isinstance(value, ErrorValue):
@@ -1613,7 +1652,9 @@ def _workday_date_serial(value: object, *, out_of_range_code: str = "#VALUE!") -
     return serial_day
 
 
-def _workday_holidays(value: object, *, out_of_range_code: str = "#VALUE!") -> set[int] | ErrorValue:
+def _workday_holidays(
+    value: object, *, out_of_range_code: str = "#VALUE!"
+) -> set[int] | ErrorValue:
     if isinstance(value, ErrorValue):
         return value
     is_range = isinstance(value, _Range)
@@ -1656,7 +1697,9 @@ def _weekend_mask(value: object) -> tuple[bool, ...] | ErrorValue:
     code = int(number)
     if 1 <= code <= 7:
         first_weekend_day = (code - 3) % 7
-        return tuple(index in {first_weekend_day, (first_weekend_day + 1) % 7} for index in range(7))
+        return tuple(
+            index in {first_weekend_day, (first_weekend_day + 1) % 7} for index in range(7)
+        )
     if 11 <= code <= 17:
         weekend_day = (code - 12) % 7
         return tuple(index == weekend_day for index in range(7))
@@ -1683,7 +1726,9 @@ def _business_days_in_range(
     return count - (after_last_holiday - first_holiday)
 
 
-def _weekday_holidays(holidays: set[int], weekend: tuple[bool, ...] = _STANDARD_WEEKEND) -> list[int]:
+def _weekday_holidays(
+    holidays: set[int], weekend: tuple[bool, ...] = _STANDARD_WEEKEND
+) -> list[int]:
     return sorted(holiday for holiday in holidays if not _is_nonworking_day(holiday, weekend))
 
 
@@ -1695,7 +1740,9 @@ def _networkdays_count(
 ) -> int:
     direction = 1 if start_day <= end_day else -1
     first_day, last_day = sorted((start_day, end_day))
-    return direction * _business_days_in_range(first_day, last_day, _weekday_holidays(holidays, weekend), weekend)
+    return direction * _business_days_in_range(
+        first_day, last_day, _weekday_holidays(holidays, weekend), weekend
+    )
 
 
 def _workday_result(
@@ -1714,7 +1761,9 @@ def _workday_result(
 
     def count_at_distance(distance: int) -> int:
         if direction > 0:
-            return _business_days_in_range(start_day + 1, start_day + distance, holiday_days, weekend)
+            return _business_days_in_range(
+                start_day + 1, start_day + distance, holiday_days, weekend
+            )
         return _business_days_in_range(start_day - distance, start_day - 1, holiday_days, weekend)
 
     target = abs(offset)
@@ -1907,18 +1956,14 @@ def _wildcard_pattern(pattern: str) -> _WildcardPattern | ErrorValue | None:
                 literal = pattern[index]
             else:
                 literal = "~"
-            tokens.append(
-                _WildcardToken("literal", literal.lower())
-            )
+            tokens.append(_WildcardToken("literal", literal.lower()))
         elif character == "*":
             if not tokens or tokens[-1].kind != "many":
                 tokens.append(_WildcardToken("many"))
         elif character == "?":
             tokens.append(_WildcardToken("one"))
         else:
-            tokens.append(
-                _WildcardToken("literal", character.lower())
-            )
+            tokens.append(_WildcardToken("literal", character.lower()))
         index += 1
     return _WildcardPattern(tuple(tokens))
 
@@ -1963,17 +2008,16 @@ def _wildcard_matches(
         else:
             assert token.literal is not None
             for offset in range(1, width + 1):
-                current[offset] = (
-                    previous[offset - 1]
-                    and token.literal == text[offset - 1].lower()
-                )
+                current[offset] = previous[offset - 1] and token.literal == text[offset - 1].lower()
         previous = current
     return previous[width]
 
 
 # Error codes both engines can hold in a cell; criterion text spelling one of
 # them selects cells holding that error.
-_CRITERION_ERROR_CODES = frozenset({"#VALUE!", "#DIV/0!", "#REF!", "#NAME?", "#NUM!", "#N/A", "#CALC!", "#NULL!", "#SPILL!"})
+_CRITERION_ERROR_CODES = frozenset(
+    {"#VALUE!", "#DIV/0!", "#REF!", "#NAME?", "#NUM!", "#N/A", "#CALC!", "#NULL!", "#SPILL!"}
+)
 
 
 def _parse_criterion(value: object) -> _Criterion | ErrorValue:
@@ -2123,9 +2167,17 @@ def _criteria_aggregate(
             criterion = _parse_criterion(pairs[index + 1])
             if isinstance(criterion, ErrorValue):
                 return criterion
-            if ranges and (criterion_range.rows, criterion_range.columns) != (ranges[0].rows, ranges[0].columns):
-                return ErrorValue("#VALUE!", f"{name} criteria ranges must have matching dimensions")
-            if value_range is not None and (criterion_range.rows, criterion_range.columns) != (value_range.rows, value_range.columns):
+            if ranges and (criterion_range.rows, criterion_range.columns) != (
+                ranges[0].rows,
+                ranges[0].columns,
+            ):
+                return ErrorValue(
+                    "#VALUE!", f"{name} criteria ranges must have matching dimensions"
+                )
+            if value_range is not None and (criterion_range.rows, criterion_range.columns) != (
+                value_range.rows,
+                value_range.columns,
+            ):
                 return ErrorValue("#VALUE!", f"{name} ranges must have matching dimensions")
             ranges.append(criterion_range)
             criteria.append(criterion)
@@ -2159,8 +2211,7 @@ def _criteria_aggregate(
     numbers: list[int | float] = [
         1 if value is True else 0 if value is False else value
         for value in matched_values
-        if isinstance(value, (int, float))
-        and (not isinstance(value, bool) or name == "AVERAGEIFS")
+        if isinstance(value, (int, float)) and (not isinstance(value, bool) or name == "AVERAGEIFS")
     ]
     if name in {"AVERAGEIF", "AVERAGEIFS"}:
         return (
@@ -2209,7 +2260,11 @@ def _eval(
             else:
                 # Stored integral zero must obey the same signed-zero unary
                 # contract as the independent binary64 runtimes/Rust SDK.
-                value = number if operator == "+" else (-0.0 if type(number) is int and number == 0 else -number)
+                value = (
+                    number
+                    if operator == "+"
+                    else (-0.0 if type(number) is int and number == 0 else -number)
+                )
         return value
     if node.kind == "binary":
         chain: list[tuple[str, _Node]] = []
@@ -2254,13 +2309,21 @@ def _eval(
             condition = _truth(_eval(node.children[0], cells, sheet_name, budget))
             if isinstance(condition, ErrorValue):
                 return condition
-            branch = node.children[1] if condition else (node.children[2] if len(node.children) == 3 else _Node("literal", False))
+            branch = (
+                node.children[1]
+                if condition
+                else (node.children[2] if len(node.children) == 3 else _Node("literal", False))
+            )
             return _eval(branch, cells, sheet_name, budget)
         if name == "IFERROR":
             if len(node.children) != 2:
                 return _arity(name, "2", len(node.children))
             value = _eval(node.children[0], cells, sheet_name, budget)
-            result = _eval(node.children[1], cells, sheet_name, budget) if isinstance(value, ErrorValue) else value
+            result = (
+                _eval(node.children[1], cells, sheet_name, budget)
+                if isinstance(value, ErrorValue)
+                else value
+            )
             return "" if result is None and cells is not None else result
         if name == "IFNA":
             if len(node.children) != 2:
@@ -2280,7 +2343,9 @@ def _eval(
                     return ErrorValue("#VALUE!", "IFS logical tests must evaluate to TRUE or FALSE")
                 if condition:
                     result = node.children[index + 1]
-                    return 0 if result.kind == "missing" else _eval(result, cells, sheet_name, budget)
+                    return (
+                        0 if result.kind == "missing" else _eval(result, cells, sheet_name, budget)
+                    )
             return ErrorValue("#N/A", "IFS found no TRUE logical test")
         if name == "SWITCH":
             if not 3 <= len(node.children) <= 254:
@@ -2300,7 +2365,9 @@ def _eval(
                     return equal
                 if equal:
                     result = node.children[2 + offset]
-                    return 0 if result.kind == "missing" else _eval(result, cells, sheet_name, budget)
+                    return (
+                        0 if result.kind == "missing" else _eval(result, cells, sheet_name, budget)
+                    )
             if has_default:
                 default = node.children[-1]
                 return 0 if default.kind == "missing" else _eval(default, cells, sheet_name, budget)
@@ -2308,11 +2375,23 @@ def _eval(
         if name == "XLOOKUP":
             if not 3 <= len(node.children) <= 6:
                 return _arity(name, "3 through 6", len(node.children))
-            lookup_value = _eval(node.children[0], cells, sheet_name, budget)
+            lookup_value = (
+                None
+                if node.children[0].kind == "missing"
+                else _eval(node.children[0], cells, sheet_name, budget)
+            )
             lookup_array = _eval(node.children[1], cells, sheet_name, budget)
             return_array = _eval(node.children[2], cells, sheet_name, budget)
-            match_mode = 0 if len(node.children) < 5 else _eval(node.children[4], cells, sheet_name, budget)
-            search_mode = 1 if len(node.children) < 6 else _eval(node.children[5], cells, sheet_name, budget)
+            match_mode = (
+                0
+                if len(node.children) < 5 or node.children[4].kind == "missing"
+                else _eval(node.children[4], cells, sheet_name, budget)
+            )
+            search_mode = (
+                1
+                if len(node.children) < 6 or node.children[5].kind == "missing"
+                else _eval(node.children[5], cells, sheet_name, budget)
+            )
             for value in (lookup_value, lookup_array, return_array, match_mode, search_mode):
                 if isinstance(value, ErrorValue):
                     return value
@@ -2323,37 +2402,32 @@ def _eval(
                 return result
             if found:
                 return result
-            if len(node.children) >= 4:
+            if len(node.children) >= 4 and node.children[3].kind != "missing":
                 fallback = _eval(node.children[3], cells, sheet_name, budget)
                 if isinstance(fallback, (_Range, ArrayValue)):
-                    return ErrorValue("#VALUE!", "XLOOKUP if_not_found must be scalar in this evaluator")
+                    return ErrorValue(
+                        "#VALUE!", "XLOOKUP if_not_found must be scalar in this evaluator"
+                    )
                 return fallback
             return ErrorValue("#N/A", "XLOOKUP value not found")
         args = tuple(
             _OPTIONAL_OMITTED
             if name == "VDB" and index in {5, 6} and child.kind == "missing"
-            else ErrorValue("#VALUE!", "an optional depreciation argument cannot be explicitly omitted")
+            else ErrorValue(
+                "#VALUE!", "an optional depreciation argument cannot be explicitly omitted"
+            )
             if name in {"DB", "DDB"} and index == 4 and child.kind == "missing"
             else None
-            if (
-                name in {"DAYS360", "YEARFRAC"} and index == 2 and child.kind == "missing"
-            ) or (
-                name in {"AMORLINC", "AMORDEGRC"}
-                and index == 6
-                and child.kind == "missing"
-            ) or (
+            if (name in {"DAYS360", "YEARFRAC"} and index == 2 and child.kind == "missing")
+            or (name in {"AMORLINC", "AMORDEGRC"} and index == 6 and child.kind == "missing")
+            or (
                 name in {"COUPDAYBS", "COUPDAYS", "COUPDAYSNC", "COUPNCD", "COUPNUM", "COUPPCD"}
                 and index == 3
                 and child.kind == "missing"
-            ) or (
-                name in {"FV", "PV", "PMT", "NPER"}
-                and index in {3, 4}
-                and child.kind == "missing"
-            ) or (
-                name in {"IPMT", "PPMT"}
-                and index in {4, 5}
-                and child.kind == "missing"
-            ) or (
+            )
+            or (name in {"FV", "PV", "PMT", "NPER"} and index in {3, 4} and child.kind == "missing")
+            or (name in {"IPMT", "PPMT"} and index in {4, 5} and child.kind == "missing")
+            or (
                 name in {"FV", "PV"}
                 and index == 2
                 and len(node.children) >= 4
@@ -2363,14 +2437,18 @@ def _eval(
             else _eval(child, cells, sheet_name, budget)
             for index, child in enumerate(node.children)
         )
-        if name in {"SUM","AVERAGE"}:
+        if name in {"SUM", "AVERAGE"}:
             # A cell reference retains reference coercion even though the
             # expression evaluator normally returns its scalar value.
             # The separate native primitive API retains its documented legacy
             # aggregate profile. Its cells=None sentinel never enters formula APIs.
-            args = tuple(_Range((value,), 1, 1) if (child.kind == "cell" or cells is None)
-                         and not isinstance(value, (_Range, ArrayValue)) else value
-                         for child, value in zip(node.children, args))
+            args = tuple(
+                _Range((value,), 1, 1)
+                if (child.kind == "cell" or cells is None)
+                and not isinstance(value, (_Range, ArrayValue))
+                else value
+                for child, value in zip(node.children, args)
+            )
         return _function(name, args, budget)
     return ErrorValue("#VALUE!", f"unsupported syntax node {node.kind!r}")
 
@@ -2494,7 +2572,9 @@ def _text_extract_fallback(
     return fallback
 
 
-def _text_delimiter_matches(text: str, delimiter: str, case_insensitive: bool) -> list[tuple[int, int]]:
+def _text_delimiter_matches(
+    text: str, delimiter: str, case_insensitive: bool
+) -> list[tuple[int, int]]:
     if not case_insensitive:
         matches: list[tuple[int, int]] = []
         cursor = 0
@@ -2517,7 +2597,9 @@ def _text_delimiter_matches(text: str, delimiter: str, case_insensitive: bool) -
     cursor = 0
     while (found := folded_text.find(folded_delimiter, cursor)) >= 0:
         end_offset = found + len(folded_delimiter)
-        begins_at_character_boundary = found == 0 or source_starts[found] != source_starts[found - 1]
+        begins_at_character_boundary = (
+            found == 0 or source_starts[found] != source_starts[found - 1]
+        )
         ends_at_character_boundary = (
             end_offset == len(source_starts)
             or source_starts[end_offset - 1] != source_starts[end_offset]
@@ -2617,7 +2699,9 @@ def _exact_lookup(
     if lookup_array.rows != 1 and lookup_array.columns != 1:
         return False, ErrorValue("#VALUE!", f"{function_name} lookup_array must be one-dimensional")
     if len(lookup_array.values) != len(return_array.values):
-        return False, ErrorValue("#VALUE!", f"{function_name} lookup and return arrays must have equal size")
+        return False, ErrorValue(
+            "#VALUE!", f"{function_name} lookup and return arrays must have equal size"
+        )
     position = _exact_match(lookup_value, lookup_array, match_mode, search_mode, function_name)
     if isinstance(position, ErrorValue):
         if position.code == "#N/A":
@@ -2680,7 +2764,9 @@ def _double_factorial_float(number: int) -> float | ErrorValue:
     while factor >= 2:
         result *= factor
         if result.bit_length() > _MAX_FINITE_BINARY64_INTEGER_BITS:
-            return ErrorValue("#NUM!", "double factorial result exceeds the supported numeric range")
+            return ErrorValue(
+                "#NUM!", "double factorial result exceeds the supported numeric range"
+            )
         factor -= 2
     return _bounded_exact_integer_float(result, "double factorial result")
 
@@ -2812,47 +2898,128 @@ def _function(
     budget: _WildcardBudget,
 ) -> object:
     fixed = {
-        "ABS": (1, 1), "EVEN": (1, 1), "ODD": (1, 1), "ISEVEN": (1, 1), "ISODD": (1, 1),
-        "GCD": (1, 255), "LCM": (1, 255),
-        "FACT": (1, 1), "FACTDOUBLE": (1, 1), "COMBIN": (2, 2), "COMBINA": (2, 2),
-        "PERMUT": (2, 2), "PERMUTATIONA": (2, 2),
-        "ROUND": (2, 2), "INT": (1, 1), "TRUNC": (1, 2),
-        "ROUNDUP": (2, 2), "ROUNDDOWN": (2, 2), "MOD": (2, 2), "QUOTIENT": (2, 2),
-        "LEFT": (1, 2), "RIGHT": (1, 2),
-        "MID": (3, 3), "LEN": (1, 1), "DATE": (3, 3), "HOUR": (1, 1),
-        "MINUTE": (1, 1), "SECOND": (1, 1), "TIME": (3, 3), "MONTH": (1, 1),
-        "DAY": (1, 1), "YEAR": (1, 1), "WEEKDAY": (1, 2), "WEEKNUM": (1, 2),
-        "ISOWEEKNUM": (1, 1), "DAYS": (2, 2), "DAYS360": (2, 3),
-        "YEARFRAC": (2, 3), "EDATE": (2, 2),
-        "FV": (3, 5), "PV": (3, 5), "PMT": (3, 5), "NPER": (3, 5),
-        "IPMT": (4, 6), "PPMT": (4, 6),
-        "CUMIPMT": (6, 6), "CUMPRINC": (6, 6),
-        "SLN": (3, 3), "SYD": (4, 4), "DB": (4, 5), "DDB": (4, 5), "VDB": (5, 7),
-        "AMORLINC": (6, 7), "AMORDEGRC": (6, 7),
-        "COUPDAYBS": (3, 4), "COUPDAYS": (3, 4), "COUPDAYSNC": (3, 4),
-        "COUPNCD": (3, 4), "COUPNUM": (3, 4), "COUPPCD": (3, 4),
-        "EOMONTH": (2, 2), "WORKDAY": (2, 3), "NETWORKDAYS": (2, 3),
-        "WORKDAY.INTL": (2, 4), "NETWORKDAYS.INTL": (2, 4),
-        "NOT": (1, 1), "VLOOKUP": (3, 4), "MATCH": (2, 3),
-        "INDEX": (2, 4), "XMATCH": (2, 4), "ISBLANK": (1, 1), "ISNUMBER": (1, 1),
-        "ISTEXT": (1, 1), "ISLOGICAL": (1, 1), "UPPER": (1, 1),
-        "LOWER": (1, 1), "TRIM": (1, 1), "FIND": (2, 3), "SEARCH": (2, 3),
-        "SUBSTITUTE": (3, 4), "COUNTIF": (2, 2), "SUMIF": (2, 3),
-        "AVERAGEIF": (2, 3), "COUNTBLANK": (1, 1),
-        "TEXTBEFORE": (2, 6), "TEXTAFTER": (2, 6),
-        "ISERR": (1, 1), "ISERROR": (1, 1), "ISNA": (1, 1), "NA": (0, 0),
+        "ABS": (1, 1),
+        "EVEN": (1, 1),
+        "ODD": (1, 1),
+        "ISEVEN": (1, 1),
+        "ISODD": (1, 1),
+        "GCD": (1, 255),
+        "LCM": (1, 255),
+        "FACT": (1, 1),
+        "FACTDOUBLE": (1, 1),
+        "COMBIN": (2, 2),
+        "COMBINA": (2, 2),
+        "PERMUT": (2, 2),
+        "PERMUTATIONA": (2, 2),
+        "ROUND": (2, 2),
+        "INT": (1, 1),
+        "TRUNC": (1, 2),
+        "ROUNDUP": (2, 2),
+        "ROUNDDOWN": (2, 2),
+        "MOD": (2, 2),
+        "QUOTIENT": (2, 2),
+        "LEFT": (1, 2),
+        "RIGHT": (1, 2),
+        "MID": (3, 3),
+        "LEN": (1, 1),
+        "DATE": (3, 3),
+        "HOUR": (1, 1),
+        "MINUTE": (1, 1),
+        "SECOND": (1, 1),
+        "TIME": (3, 3),
+        "MONTH": (1, 1),
+        "DAY": (1, 1),
+        "YEAR": (1, 1),
+        "WEEKDAY": (1, 2),
+        "WEEKNUM": (1, 2),
+        "ISOWEEKNUM": (1, 1),
+        "DAYS": (2, 2),
+        "DAYS360": (2, 3),
+        "YEARFRAC": (2, 3),
+        "EDATE": (2, 2),
+        "FV": (3, 5),
+        "PV": (3, 5),
+        "PMT": (3, 5),
+        "NPER": (3, 5),
+        "IPMT": (4, 6),
+        "PPMT": (4, 6),
+        "CUMIPMT": (6, 6),
+        "CUMPRINC": (6, 6),
+        "SLN": (3, 3),
+        "SYD": (4, 4),
+        "DB": (4, 5),
+        "DDB": (4, 5),
+        "VDB": (5, 7),
+        "AMORLINC": (6, 7),
+        "AMORDEGRC": (6, 7),
+        "COUPDAYBS": (3, 4),
+        "COUPDAYS": (3, 4),
+        "COUPDAYSNC": (3, 4),
+        "COUPNCD": (3, 4),
+        "COUPNUM": (3, 4),
+        "COUPPCD": (3, 4),
+        "EOMONTH": (2, 2),
+        "WORKDAY": (2, 3),
+        "NETWORKDAYS": (2, 3),
+        "WORKDAY.INTL": (2, 4),
+        "NETWORKDAYS.INTL": (2, 4),
+        "NOT": (1, 1),
+        "VLOOKUP": (3, 4),
+        "MATCH": (2, 3),
+        "INDEX": (2, 4),
+        "XMATCH": (2, 4),
+        "ISBLANK": (1, 1),
+        "ISNUMBER": (1, 1),
+        "ISTEXT": (1, 1),
+        "ISLOGICAL": (1, 1),
+        "UPPER": (1, 1),
+        "LOWER": (1, 1),
+        "TRIM": (1, 1),
+        "FIND": (2, 3),
+        "SEARCH": (2, 3),
+        "SUBSTITUTE": (3, 4),
+        "COUNTIF": (2, 2),
+        "SUMIF": (2, 3),
+        "AVERAGEIF": (2, 3),
+        "COUNTBLANK": (1, 1),
+        "TEXTBEFORE": (2, 6),
+        "TEXTAFTER": (2, 6),
+        "ISERR": (1, 1),
+        "ISERROR": (1, 1),
+        "ISNA": (1, 1),
+        "NA": (0, 0),
     }
     if name not in {
-        "SUM", "AVERAGE", "COUNT", "COUNTA", "MIN", "MAX", "IF", "IFERROR", "IFNA", "XLOOKUP",
-        "AND", "OR", "CONCAT", "TEXTJOIN", "COUNTIFS", "SUMIFS", "AVERAGEIFS",
-        "MINIFS", "MAXIFS", *fixed,
+        "SUM",
+        "AVERAGE",
+        "COUNT",
+        "COUNTA",
+        "MIN",
+        "MAX",
+        "IF",
+        "IFERROR",
+        "IFNA",
+        "XLOOKUP",
+        "AND",
+        "OR",
+        "CONCAT",
+        "TEXTJOIN",
+        "COUNTIFS",
+        "SUMIFS",
+        "AVERAGEIFS",
+        "MINIFS",
+        "MAXIFS",
+        *fixed,
     }:
         return ErrorValue("#NAME?", f"unsupported function {name}")
     if name in fixed and not fixed[name][0] <= len(args) <= fixed[name][1]:
         low, high = fixed[name]
         expected = str(low) if low == high else f"{low} through {high}"
         return _arity(name, expected, len(args))
-    if name in {"SUM", "AVERAGE", "COUNT", "COUNTA", "MIN", "MAX", "AND", "OR", "CONCAT"} and not args:
+    if (
+        name in {"SUM", "AVERAGE", "COUNT", "COUNTA", "MIN", "MAX", "AND", "OR", "CONCAT"}
+        and not args
+    ):
         return _arity(name, "at least 1", 0)
     if name == "CONCAT" and len(args) > 253:
         return _arity(name, "1 through 253", len(args))
@@ -2872,13 +3039,17 @@ def _function(
     # propagating a scalar error. Ranges remain outside this evaluator slice.
     if name in {"ISBLANK", "ISNUMBER", "ISTEXT", "ISLOGICAL", "ISERR", "ISERROR", "ISNA"}:
         if isinstance(args[0], (_Range, ArrayValue)):
-            return ErrorValue("#VALUE!", f"{name} does not accept a range argument in this evaluator")
+            return ErrorValue(
+                "#VALUE!", f"{name} does not accept a range argument in this evaluator"
+            )
         value = args[0]
         if name in {"ISERR", "ISERROR", "ISNA"}:
             if not isinstance(value, ErrorValue):
                 return False
             is_na = value.code in {"#N/A", "#N/A!"}
-            return name == "ISERROR" or (name == "ISNA" and is_na) or (name == "ISERR" and not is_na)
+            return (
+                name == "ISERROR" or (name == "ISNA" and is_na) or (name == "ISERR" and not is_na)
+            )
         if name == "ISBLANK":
             return value is None
         if name == "ISNUMBER":
@@ -2888,7 +3059,9 @@ def _function(
         return isinstance(value, bool)
     if name in {"ISEVEN", "ISODD"}:
         if isinstance(args[0], (_Range, ArrayValue)):
-            return ErrorValue("#VALUE!", f"{name} does not accept a range argument in this evaluator")
+            return ErrorValue(
+                "#VALUE!", f"{name} does not accept a range argument in this evaluator"
+            )
         return _test_integer_parity(args[0], odd=name == "ISODD")
     if name == "NA":
         return ErrorValue("#N/A", "NA returns the #N/A error value")
@@ -2905,20 +3078,58 @@ def _function(
         )
         return sum(item is None or item == "" for item in values)
     if any(isinstance(argument, ArrayValue) for argument in args) and name not in {
-        "SUM", "AVERAGE", "COUNT", "COUNTA", "MIN", "MAX", "AND", "OR", "CONCAT", "TEXTJOIN"
+        "SUM",
+        "AVERAGE",
+        "COUNT",
+        "COUNTA",
+        "MIN",
+        "MAX",
+        "AND",
+        "OR",
+        "CONCAT",
+        "TEXTJOIN",
     }:
-        return ErrorValue("#VALUE!", f"{name} does not accept a computed array argument in this evaluator")
+        return ErrorValue(
+            "#VALUE!", f"{name} does not accept a computed array argument in this evaluator"
+        )
     if name in {
-        "COUNTIF", "COUNTIFS", "SUMIF", "SUMIFS", "AVERAGEIF", "AVERAGEIFS", "MINIFS", "MAXIFS"
+        "COUNTIF",
+        "COUNTIFS",
+        "SUMIF",
+        "SUMIFS",
+        "AVERAGEIF",
+        "AVERAGEIFS",
+        "MINIFS",
+        "MAXIFS",
     }:
         return _criteria_aggregate(name, args, budget)
     if any(isinstance(argument, (_Range, ArrayValue)) for argument in args) and name not in {
-            "SUM", "AVERAGE", "COUNT", "COUNTA", "MIN", "MAX", "AND", "OR", "CONCAT", "TEXTJOIN", "MATCH", "XMATCH", "INDEX", "VLOOKUP",
-            "COUNTBLANK", "COUNTIF", "COUNTIFS", "SUMIF", "SUMIFS", "AVERAGEIF", "AVERAGEIFS",
-            "MINIFS", "MAXIFS"
+        "SUM",
+        "AVERAGE",
+        "COUNT",
+        "COUNTA",
+        "MIN",
+        "MAX",
+        "AND",
+        "OR",
+        "CONCAT",
+        "TEXTJOIN",
+        "MATCH",
+        "XMATCH",
+        "INDEX",
+        "VLOOKUP",
+        "COUNTBLANK",
+        "COUNTIF",
+        "COUNTIFS",
+        "SUMIF",
+        "SUMIFS",
+        "AVERAGEIF",
+        "AVERAGEIFS",
+        "MINIFS",
+        "MAXIFS",
     }:
         return ErrorValue("#VALUE!", f"{name} does not accept a range argument in this evaluator")
-    if name in {"SUM","AVERAGE"}:
+    if name in {"SUM", "AVERAGE"}:
         if not 1 <= len(args) <= 255:
             return _arity(name, "1 through 255", len(args))
         numbers = []
@@ -2929,10 +3140,14 @@ def _function(
                     return value
                 if referenced and (not isinstance(value, (int, float)) or isinstance(value, bool)):
                     continue
-                if name == "AVERAGE" and isinstance(value,str):
-                    value=value.strip(" \t\r\n")
-                    if not re.fullmatch(r"[+-]?(?:[0-9]+\.?[0-9]*|\.[0-9]+)(?:[eE][+-]?[0-9]+)?",value):
-                        return ErrorValue("#VALUE!", "AVERAGE direct text is not decimal numeric text")
+                if name == "AVERAGE" and isinstance(value, str):
+                    value = value.strip(" \t\r\n")
+                    if not re.fullmatch(
+                        r"[+-]?(?:[0-9]+\.?[0-9]*|\.[0-9]+)(?:[eE][+-]?[0-9]+)?", value
+                    ):
+                        return ErrorValue(
+                            "#VALUE!", "AVERAGE direct text is not decimal numeric text"
+                        )
                 number = _number(value)
                 if isinstance(number, ErrorValue):
                     return number
@@ -2946,11 +3161,17 @@ def _function(
             return total
         if not numbers:
             return ErrorValue("#DIV/0!", "AVERAGE has no numeric values")
-        return total/len(numbers) if math.isfinite(total) else ErrorValue("#NUM!", "AVERAGE accumulation overflow")
+        return (
+            total / len(numbers)
+            if math.isfinite(total)
+            else ErrorValue("#NUM!", "AVERAGE accumulation overflow")
+        )
     flat = _flatten(args)
     if name == "COUNT":
         # Microsoft: arguments that are error values are not counted.
-        return sum(isinstance(value, (int, float)) and not isinstance(value, bool) for value in flat)
+        return sum(
+            isinstance(value, (int, float)) and not isinstance(value, bool) for value in flat
+        )
     if name == "COUNTA":
         # Microsoft: COUNTA counts any type of information, including error values.
         return sum(value is not None for value in flat)
@@ -3292,7 +3513,9 @@ def _function(
         if isinstance(start, ErrorValue):
             return start
         if not isinstance(start, int) or start < 1 or start > len(haystack) + 1:
-            return ErrorValue("#VALUE!", f"{name} start_num must be from 1 through text length plus 1")
+            return ErrorValue(
+                "#VALUE!", f"{name} start_num must be from 1 through text length plus 1"
+            )
         if name == "SEARCH":
             # Wildcards are deliberately treated as ordinary characters here.
             needle, haystack = needle.casefold(), haystack.casefold()
@@ -3449,7 +3672,9 @@ def _function(
         if not isinstance(area, int) or area < 1:
             return ErrorValue("#VALUE!", "INDEX area_num must be a positive integer")
         if area != 1:
-            return ErrorValue("#REF!", "INDEX supports only area_num=1 for a single rectangular reference")
+            return ErrorValue(
+                "#REF!", "INDEX supports only area_num=1 for a single rectangular reference"
+            )
         if not isinstance(row, int) or not isinstance(column, int) or row < 1 or column < 1:
             return ErrorValue("#VALUE!", "INDEX row and column numbers must be positive integers")
         if row > array.rows or column > array.columns:
@@ -3491,7 +3716,9 @@ def _nper_call(args: tuple[object, ...]) -> object:
     if rate == 0.0:
         total_value = scaled_present + scaled_future
         if payment == 0.0:
-            return ErrorValue("#NUM!", "NPER has no unique finite solution when rate and payment are zero")
+            return ErrorValue(
+                "#NUM!", "NPER has no unique finite solution when rate and payment are zero"
+            )
         if total_value == 0.0:
             return 0.0
         if scaled_payment == 0.0:
@@ -3545,16 +3772,16 @@ def _db_rate(cost: float, salvage: float, life: int) -> float:
         return 1.0
     ratio = salvage / cost
     log_ratio = (
-        math.log1p((salvage - cost) / cost)
-        if ratio > 0.5
-        else math.log(salvage) - math.log(cost)
+        math.log1p((salvage - cost) / cost) if ratio > 0.5 else math.log(salvage) - math.log(cost)
     )
     raw_rate = -math.expm1(log_ratio / life)
     rounded = _round_to_precision(raw_rate, 3, "nearest")
     return rounded if isinstance(rounded, float) else raw_rate
 
 
-def _db_depreciation(cost: float, salvage: float, life: float, period: float, month: float) -> float | ErrorValue:
+def _db_depreciation(
+    cost: float, salvage: float, life: float, period: float, month: float
+) -> float | ErrorValue:
     if cost <= 0.0 or salvage < 0.0 or salvage > cost:
         return ErrorValue("#NUM!", "DB profile requires cost>0 and 0<=salvage<=cost")
     integer_life = _depreciation_period(life, "life")
@@ -3567,7 +3794,9 @@ def _db_depreciation(cost: float, salvage: float, life: float, period: float, mo
     if isinstance(integer_month, ErrorValue):
         return integer_month
     if integer_life < 1 or integer_period < 1 or integer_period > integer_life + 1:
-        return ErrorValue("#NUM!", "DB life and period must fit the positive life-plus-final-period profile")
+        return ErrorValue(
+            "#NUM!", "DB life and period must fit the positive life-plus-final-period profile"
+        )
     if not 1 <= integer_month <= 12:
         return ErrorValue("#NUM!", "DB month must truncate to an integer from 1 through 12")
 
@@ -3585,7 +3814,9 @@ def _db_depreciation(cost: float, salvage: float, life: float, period: float, mo
     return result if math.isfinite(result) else ErrorValue("#NUM!", "DB result must be finite")
 
 
-def _ddb_depreciation(cost: float, salvage: float, life: float, period: float, factor: float) -> float | ErrorValue:
+def _ddb_depreciation(
+    cost: float, salvage: float, life: float, period: float, factor: float
+) -> float | ErrorValue:
     if cost < 0.0 or salvage < 0.0 or salvage > cost or factor <= 0.0:
         return ErrorValue("#NUM!", "DDB profile requires cost>=salvage>=0 and factor>0")
     integer_life = _depreciation_period(life, "life")
@@ -3655,7 +3886,9 @@ def _vdb_switches_at(
     return log_ddb < log_sln
 
 
-def _vdb_switch_period(cost: float, salvage: float, life: float, factor: float, rate: float, log_q: float) -> int | None:
+def _vdb_switch_period(
+    cost: float, salvage: float, life: float, factor: float, rate: float, log_q: float
+) -> int | None:
     """Find the first DDB period where SLN wins, in logarithmic time."""
     if cost <= salvage:
         return None
@@ -3674,7 +3907,9 @@ def _vdb_switch_period(cost: float, salvage: float, life: float, factor: float, 
     return low
 
 
-def _vdb_cap_period(cost: float, salvage: float, life: float, rate: float, log_q: float) -> int | None:
+def _vdb_cap_period(
+    cost: float, salvage: float, life: float, rate: float, log_q: float
+) -> int | None:
     """Find the final capped DDB period without traversing the schedule."""
     if salvage <= 0.0 or cost <= salvage or rate == 0.0:
         return None
@@ -3794,7 +4029,9 @@ def _vdb_declining_interval(
         cost, salvage, basis, factor, life, rate, log_q, cap_period, interior_start, interior_count
     )
     if end > last_period:
-        last_amount = _vdb_period_amount(cost, salvage, basis, factor, life, rate, log_q, last_period)
+        last_amount = _vdb_period_amount(
+            cost, salvage, basis, factor, life, rate, log_q, last_period
+        )
         total += last_amount * (end - last_period)
     return min(max(total, 0.0), basis)
 
@@ -3809,7 +4046,9 @@ def _vdb_depreciation(
     no_switch: bool,
 ) -> float | ErrorValue:
     if cost <= 0.0 or salvage < 0.0 or salvage > cost or life <= 0.0 or factor <= 0.0:
-        return ErrorValue("#NUM!", "VDB profile requires cost>0, 0<=salvage<=cost, life>0, and factor>0")
+        return ErrorValue(
+            "#NUM!", "VDB profile requires cost>0, 0<=salvage<=cost, life>0, and factor>0"
+        )
     if life > _MAX_EXACT_DEPRECIATION_PERIOD:
         return ErrorValue("#NUM!", "VDB life exceeds the supported exact-period range")
     if start < 0.0 or end < start or end > life:
@@ -3822,7 +4061,9 @@ def _vdb_depreciation(
     rate = 1.0 if factor >= life else factor / life
     log_q = math.log1p(-rate) if rate < 1.0 else 0.0
     cap_period = _vdb_cap_period(cost, salvage, life, rate, log_q)
-    switch_period = None if no_switch else _vdb_switch_period(cost, salvage, life, factor, rate, log_q)
+    switch_period = (
+        None if no_switch else _vdb_switch_period(cost, salvage, life, factor, rate, log_q)
+    )
     if switch_period is None or end <= switch_period:
         result = _vdb_declining_interval(
             start, end, cost, salvage, basis, factor, life, rate, log_q, cap_period
@@ -3831,7 +4072,16 @@ def _vdb_depreciation(
         result = 0.0
         if start < switch_period:
             result += _vdb_declining_interval(
-                start, float(switch_period), cost, salvage, basis, factor, life, rate, log_q, cap_period
+                start,
+                float(switch_period),
+                cost,
+                salvage,
+                basis,
+                factor,
+                life,
+                rate,
+                log_q,
+                cap_period,
             )
         straight_start = max(start, float(switch_period))
         log_book = math.log(cost) + switch_period * log_q if rate < 1.0 else math.log(cost)
@@ -3890,7 +4140,9 @@ def _depreciation_call(name: str, args: tuple[object, ...]) -> object:
         try:
             numeric = float(number)
         except (OverflowError, TypeError, ValueError):
-            return ErrorValue("#NUM!", "depreciation argument is outside the supported numeric range")
+            return ErrorValue(
+                "#NUM!", "depreciation argument is outside the supported numeric range"
+            )
         if not math.isfinite(numeric):
             return ErrorValue("#NUM!", "depreciation arguments must be finite")
         values.append(numeric)
@@ -4031,9 +4283,7 @@ def _amor_depreciation_call(name: str, args: tuple[object, ...]) -> float | Erro
     if not math.isfinite(raw_life) or raw_life > _MAX_EXACT_DEPRECIATION_PERIOD:
         return ErrorValue("#NUM!", "depreciation life exceeds the supported exact-period range")
     effective_life = math.ceil(raw_life)
-    if name == "AMORDEGRC" and (
-        raw_life <= 3.0 or 4.0 <= raw_life <= 5.0
-    ):
+    if name == "AMORDEGRC" and (raw_life <= 3.0 or 4.0 <= raw_life <= 5.0):
         return ErrorValue("#NUM!", "raw life is outside the AMORDEGRC supported profile")
 
     if name == "AMORDEGRC":
@@ -4069,9 +4319,7 @@ def _amor_depreciation_call(name: str, args: tuple[object, ...]) -> float | Erro
         if period == 0:
             return stub
         first_period_basis = max(depreciable_basis - stub, 0.0)
-        amount_per_period = _capped_positive_product(
-            depreciable_basis, (cost, rate, 1.0)
-        )
+        amount_per_period = _capped_positive_product(depreciable_basis, (cost, rate, 1.0))
         prior_amount = _capped_positive_product(
             first_period_basis, (amount_per_period, float(period - 1), 1.0)
         )
@@ -4080,9 +4328,7 @@ def _amor_depreciation_call(name: str, args: tuple[object, ...]) -> float | Erro
 
     stub_product = prorated_stub_product
     if stub_product == 0.0:
-        stub_product = _capped_positive_product(
-            depreciable_basis, (cost, effective_rate, 1.0)
-        )
+        stub_product = _capped_positive_product(depreciable_basis, (cost, effective_rate, 1.0))
     stub = (
         depreciable_basis
         if stub_product >= depreciable_basis
@@ -4201,9 +4447,7 @@ def _payment_component_call(name: str, args: tuple[object, ...]) -> object:
     if period < 1.0 or period > nper:
         return ErrorValue("#NUM!", "period must be within 1 through nper in this evaluator")
 
-    payment_due = _tvm_call(
-        "PMT", (rate, nper, present_value, future_value, payment_type)
-    )
+    payment_due = _tvm_call("PMT", (rate, nper, present_value, future_value, payment_type))
     if isinstance(payment_due, ErrorValue):
         return payment_due
     if rate == 0.0:
@@ -4211,9 +4455,7 @@ def _payment_component_call(name: str, args: tuple[object, ...]) -> object:
 
     payment_end = payment_due
     if payment_type == 1.0:
-        payment_end = _tvm_call(
-            "PMT", (rate, nper, present_value, future_value, 0.0)
-        )
+        payment_end = _tvm_call("PMT", (rate, nper, present_value, future_value, 0.0))
         if isinstance(payment_end, ErrorValue):
             return payment_end
 
@@ -4226,10 +4468,7 @@ def _payment_component_call(name: str, args: tuple[object, ...]) -> object:
     except OverflowError:
         return ErrorValue("#NUM!", "period growth exceeds the supported numeric range")
 
-    interest_end = -(
-        present_value * rate * previous_growth
-        + payment_end * previous_growth_delta
-    )
+    interest_end = -(present_value * rate * previous_growth + payment_end * previous_growth_delta)
     if payment_type == 1.0:
         interest = 0.0 if period == 1.0 else interest_end / (1.0 + rate)
     else:
@@ -4287,9 +4526,7 @@ def _cumulative_payment_call(name: str, args: tuple[object, ...]) -> object:
             # The exact closed form approaches a simple average balance as the
             # whole loan's rate tends to zero. This branch avoids subtracting
             # log terms whose true sum can be smaller than one ULP.
-            midpoint_before_payment = (
-                (interest_first - 1.0) + (interest_count - 1.0) / 2.0
-            )
+            midpoint_before_payment = (interest_first - 1.0) + (interest_count - 1.0) / 2.0
             remaining_fraction = (nper - midpoint_before_payment) / nper
             interest_factor = interest_count * remaining_fraction
             cumulative_interest = -present_value * rate * interest_factor
@@ -4297,17 +4534,11 @@ def _cumulative_payment_call(name: str, args: tuple[object, ...]) -> object:
             first_exponent = (interest_first - 1.0 - nper) * log_growth
             range_log = interest_count * log_growth
             denominator_log = -math.expm1(-nper * log_growth)
-            log_average = (
-                first_exponent
-                + _log_exprel(range_log)
-                + _log_log1p_over_rate(rate)
-            )
+            log_average = first_exponent + _log_exprel(range_log) + _log_log1p_over_rate(rate)
             # Each selected period contributes 1 - q**(period-1-nper).
             # Computing the complement through expm1 preserves small values.
             interest_weight = -interest_count * math.expm1(log_average)
-            cumulative_interest = (
-                -present_value * rate * interest_weight / denominator_log
-            )
+            cumulative_interest = -present_value * rate * interest_weight / denominator_log
         if payment_type == 1.0:
             cumulative_interest /= 1.0 + rate
         if not math.isfinite(cumulative_interest):
@@ -4332,7 +4563,9 @@ def _cumulative_payment_call(name: str, args: tuple[object, ...]) -> object:
             try:
                 cumulative_principal = -math.exp(log_principal_magnitude)
             except OverflowError:
-                return ErrorValue("#NUM!", "cumulative principal exceeds the supported numeric range")
+                return ErrorValue(
+                    "#NUM!", "cumulative principal exceeds the supported numeric range"
+                )
             if payment_type == 1.0:
                 cumulative_principal /= 1.0 + rate
         if payment_type == 1.0 and first_period <= 1.0 <= last_period:
@@ -4408,7 +4641,11 @@ def evaluate_result(
             return ErrorValue("#REF!", f"invalid cell address {address!r}")
         if "!" in address:
             sheet, cell = address.rsplit("!", 1)
-            if not sheet or _CELL_RE.fullmatch(cell) is None or any(character in sheet for character in "[]"):
+            if (
+                not sheet
+                or _CELL_RE.fullmatch(cell) is None
+                or any(character in sheet for character in "[]")
+            ):
                 return ErrorValue("#REF!", f"invalid qualified cell address {address!r}")
             key = f"{sheet.casefold()}!{cell.replace('$', '').upper()}"
         elif _CELL_RE.fullmatch(address) is not None:
@@ -4429,12 +4666,14 @@ def evaluate_result(
         if isinstance(value, ArrayValue):
             return _check_text_result(value)
         if isinstance(value, _Range):
-            return _check_text_result(ArrayValue(
-                tuple(
-                    value.values[offset : offset + value.columns]
-                    for offset in range(0, value.rows * value.columns, value.columns)
+            return _check_text_result(
+                ArrayValue(
+                    tuple(
+                        value.values[offset : offset + value.columns]
+                        for offset in range(0, value.rows * value.columns, value.columns)
+                    )
                 )
-            ))
+            )
         return _check_text_result(value)
     except _FormulaSyntaxError as error:
         return ErrorValue("#VALUE!", str(error))
@@ -4452,7 +4691,9 @@ def evaluate(
     """Evaluate a scalar formula; use :func:`evaluate_result` for arrays."""
     result = evaluate_result(formula, cells, sheet_name)
     if isinstance(result, ArrayValue):
-        return ErrorValue("#VALUE!", "formula result is an array; use evaluate_result to preserve shape")
+        return ErrorValue(
+            "#VALUE!", "formula result is an array; use evaluate_result to preserve shape"
+        )
     return result
 
 

@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { initSync, openXlsx } from '../pkg/workbook_forge.js';
+import { createBlankWorkbook, initSync, openXlsx } from '../pkg/workbook_forge.js';
 import { ForgeEngine } from '../src/engine.ts';
 
 initSync({ module: readFileSync(new URL('../pkg/workbook_forge_bg.wasm', import.meta.url)) });
@@ -11,7 +11,7 @@ let id = 0;
 const call = (engine, command, args = {}) => engine.handle({ id: ++id, command, args }).result;
 
 test('open, edit, calculate, conflict, export, reopen', () => {
-  const engine = new ForgeEngine({ openXlsx });
+  const engine = new ForgeEngine({ openXlsx, createBlankWorkbook });
   assert.equal(call(engine, 'snapshot').error.code, 'no_workbook');
   const opened = call(engine, 'open', { bytes: new Uint8Array(fixture) });
   assert.deepEqual(opened, { ok: true, value: { revision: '0', sheets: ['Sheet1'] } });
@@ -30,10 +30,43 @@ test('open, edit, calculate, conflict, export, reopen', () => {
   assert.equal(calc.revision, '2');
   assert.equal(calc.values['Sheet1!F1'], 1000); // 20+40+140+420+380
   const bytes = call(engine, 'export').value.bytes;
-  const reopened = new ForgeEngine({ openXlsx });
+  const reopened = new ForgeEngine({ openXlsx, createBlankWorkbook });
   call(reopened, 'open', { bytes });
   assert.equal(call(reopened, 'snapshot').value.sheets[0].cells.C1.formula, 'B1+100');
   assert.equal(call(reopened, 'calculate').value.values['Sheet1!F1'], 1000);
+});
+
+test('create blank, author new cells, calculate Excel formulas, export and reopen', () => {
+  const engine = new ForgeEngine({ openXlsx, createBlankWorkbook });
+  const created = call(engine, 'newWorkbook', { sheetName: 'Formula Lab' });
+  assert.deepEqual(created, { ok: true, value: { revision: '0', sheets: ['Formula Lab'] } });
+
+  const applied = call(engine, 'applyEdits', {
+    edits: [
+      { sheet: 'Formula Lab', address: 'A1', value: 2 },
+      { sheet: 'Formula Lab', address: 'A2', value: 3 },
+      { sheet: 'Formula Lab', address: 'A3', formula: 'SUM(A1:A2)' },
+      { sheet: 'Formula Lab', address: 'B1', formula: 'IF(A3=5,"pass","fail")' },
+    ],
+    expectedRevision: '0',
+  });
+  assert.deepEqual(applied, { ok: true, value: { revision: '1' } });
+  const stale = call(engine, 'applyEdits', {
+    edits: [{ sheet: 'Formula Lab', address: 'A1', value: 4 }],
+    expectedRevision: '0',
+  });
+  assert.equal(stale.error.code, 'revision_conflict');
+  assert.equal(stale.error.expected_revision, '0');
+  assert.equal(stale.error.current_revision, '1');
+  const calc = call(engine, 'calculate');
+  assert.equal(calc.value.values['Formula Lab!A3'], 5);
+  assert.equal(calc.value.values['Formula Lab!B1'], 'pass');
+
+  const bytes = call(engine, 'export').value.bytes;
+  const reopened = new ForgeEngine({ openXlsx, createBlankWorkbook });
+  call(reopened, 'open', { bytes });
+  assert.equal(call(reopened, 'calculate').value.values['Formula Lab!A3'], 5);
+  assert.equal(call(reopened, 'calculate').value.values['Formula Lab!B1'], 'pass');
 });
 
 test('the headless package imports no UI framework', async () => {

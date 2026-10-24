@@ -5188,7 +5188,13 @@ fn xlookup_family(name: &str, args: &[Expr], env: &Environment<'_>) -> Result<Va
     let (min, max) = if name == "XLOOKUP" { (3, 6) } else { (2, 4) };
     arity(name, args, min, max)?;
 
-    let lookup = eval_scalar(&args[0], env)?;
+    // Microsoft documents lookup_value as optionally omittable: an empty
+    // first argument searches for a blank cell in lookup_array.
+    let lookup = if matches!(args.first(), Some(Expr::Missing)) {
+        Value::Blank
+    } else {
+        eval_scalar(&args[0], env)?
+    };
     propagate_value_error(&lookup)?;
     let lookup_values = as_vector(eval(&args[1], env)?)?;
 
@@ -5203,20 +5209,18 @@ fn xlookup_family(name: &str, args: &[Expr], env: &Environment<'_>) -> Result<Va
     };
 
     let (match_index, search_index) = if name == "XLOOKUP" { (4, 5) } else { (2, 3) };
-    let match_mode = if args.len() > match_index {
-        mode_argument(name, "match_mode", &args[match_index], env)?
-    } else {
-        0
+    let match_mode = match args.get(match_index) {
+        None | Some(Expr::Missing) => 0,
+        Some(expression) => mode_argument(name, "match_mode", expression, env)?,
     };
     if match_mode != 0 {
         return Err(FormulaError::Unsupported(
             "XLOOKUP/XMATCH currently support exact match_mode=0 only".into(),
         ));
     }
-    let search_mode = if args.len() > search_index {
-        mode_argument(name, "search_mode", &args[search_index], env)?
-    } else {
-        1
+    let search_mode = match args.get(search_index) {
+        None | Some(Expr::Missing) => 1,
+        Some(expression) => mode_argument(name, "search_mode", expression, env)?,
     };
     if !matches!(search_mode, 1 | -1) {
         return Err(FormulaError::Unsupported(
@@ -5235,7 +5239,12 @@ fn xlookup_family(name: &str, args: &[Expr], env: &Environment<'_>) -> Result<Va
         if let Value::Error(error) = candidate {
             return Err(error.clone());
         }
-        if compare(candidate, &lookup)? == 0 {
+        let matches = match (&lookup, candidate) {
+            (Value::Blank, Value::Blank) => true,
+            (Value::Blank, _) | (_, Value::Blank) => false,
+            _ => compare(candidate, &lookup)? == 0,
+        };
+        if matches {
             found = Some(index);
             break;
         }
@@ -5250,8 +5259,11 @@ fn xlookup_family(name: &str, args: &[Expr], env: &Environment<'_>) -> Result<Va
         };
     }
 
-    if name == "XLOOKUP" && args.len() >= 4 {
-        let value = eval_scalar(&args[3], env)?;
+    if name == "XLOOKUP"
+        && let Some(argument) = args.get(3)
+        && !matches!(argument, Expr::Missing)
+    {
+        let value = eval_scalar(argument, env)?;
         propagate_value_error(&value)?;
         return Ok(value);
     }
@@ -7407,6 +7419,14 @@ mod tests {
             Ok(Value::Text("last two".into()))
         );
         assert_eq!(
+            evaluate("=XLOOKUP(2,A1:A3,B1:B3,,0,-1)", &c, "S"),
+            Ok(Value::Text("last two".into()))
+        );
+        assert_eq!(
+            evaluate("=XLOOKUP(2,A1:A3,B1:B3,,,-1)", &c, "S"),
+            Ok(Value::Text("last two".into()))
+        );
+        assert_eq!(
             evaluate("=XMATCH(2,A1:A3)", &c, "S"),
             Ok(Value::Number(2.0))
         );
@@ -7428,6 +7448,14 @@ mod tests {
             ("D1", Value::Text("top-right".into())),
             ("D2", Value::Text("bottom-right".into())),
             ("E1", Value::Error(FormulaError::NA)),
+            ("F1", Value::Number(1.0)),
+            ("G1", Value::Number(2.0)),
+            ("F2", Value::Number(10.0)),
+            ("G2", Value::Number(20.0)),
+            ("H1", Value::Text("not blank".into())),
+            ("H2", Value::Blank),
+            ("I1", Value::Text("text key".into())),
+            ("I2", Value::Text("blank key".into())),
         ]);
         assert_eq!(
             evaluate("=XLOOKUP(9,A1:A2,B1:B2)", &c, "S"),
@@ -7436,6 +7464,26 @@ mod tests {
         assert_eq!(
             evaluate("=XLOOKUP(9,A1:A2,B1:B2,\"missing\")", &c, "S"),
             Ok(Value::Text("missing".into()))
+        );
+        assert_eq!(
+            evaluate("=XLOOKUP(9,A1:A2,B1:B2,,0,-1)", &c, "S"),
+            Err(FormulaError::NA)
+        );
+        assert_eq!(
+            evaluate("=XLOOKUP(9,A1:A2,B1:B2,,,-1)", &c, "S"),
+            Err(FormulaError::NA)
+        );
+        assert_eq!(
+            evaluate("=XLOOKUP(,H1:H2,I1:I2)", &c, "S"),
+            Ok(Value::Text("blank key".into()))
+        );
+        assert_eq!(
+            evaluate("=XLOOKUP(2,F1:G1,F2:G2)", &c, "S"),
+            Ok(Value::Number(20.0))
+        );
+        assert_eq!(
+            evaluate("=XLOOKUP(1,A1:A2,C1:D2)", &c, "S"),
+            Err(FormulaError::Value)
         );
         assert_eq!(
             evaluate("=XLOOKUP(9,A1:A2,B1:B2,1/0)", &c, "S"),
@@ -7457,6 +7505,26 @@ mod tests {
             evaluate("=XMATCH(1,A1:A2,0,2)", &c, "S"),
             Err(FormulaError::Unsupported(_))
         ));
+        for mode in [-1, 1, 2] {
+            assert!(matches!(
+                evaluate(
+                    &format!("=XLOOKUP(1,A1:A2,B1:B2,\"missing\",{mode})"),
+                    &c,
+                    "S"
+                ),
+                Err(FormulaError::Unsupported(_))
+            ));
+        }
+        for mode in [2, -2] {
+            assert!(matches!(
+                evaluate(
+                    &format!("=XLOOKUP(1,A1:A2,B1:B2,\"missing\",0,{mode})"),
+                    &c,
+                    "S"
+                ),
+                Err(FormulaError::Unsupported(_))
+            ));
+        }
         assert_eq!(
             evaluate("=XLOOKUP(E1,A1:A2,B1:B2)", &c, "S"),
             Err(FormulaError::NA)
