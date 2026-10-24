@@ -212,7 +212,12 @@ def test_receipt_records_pending_excel_and_refused_spill(tmp_path):
     assert (tmp_path / "receipt" / "operating-scenario.exported.xlsx").is_file()
     assert (tmp_path / "receipt" / "scenario-roundtrip.json").is_file()
     assert (tmp_path / "receipt" / "red-flag-roundtrip.json").is_file()
-    assert not (tmp_path / "receipt" / "scenario").exists()
+    assert (tmp_path / "receipt" / "scenario").is_dir()
+    assert (tmp_path / "receipt" / "red-flags").is_dir()
+    assert receipt["export_lane"]["evaluator"] == "python:model.calculate"
+    assert receipt["export_lane"]["end_to_end_rust_only"] is False
+    assert len(receipt["export_lane"]["exported_sha256"]) == 64
+    assert receipt["artifact_retention"]["cleanup"] == "none"
     text = (tmp_path / "receipt" / "receipt.md").read_text(encoding="utf-8")
     assert "Spec 2 passed: `false`" in text
     assert "unit_price" in text
@@ -326,7 +331,7 @@ def test_receipt_refuses_to_replace_an_unsafe_directory(tmp_path):
     assert (ROOT / "python" / "workbook_forge" / "canonical_roundtrip.py").is_file()
 
 
-def test_receipt_replaces_a_previous_receipt_directory(tmp_path):
+def test_receipt_refuses_to_replace_a_previous_receipt_directory(tmp_path):
     directory = tmp_path / "receipt"
     directory.mkdir()
     (directory / "receipt.json").write_text('{"stale": true}\n', encoding="utf-8")
@@ -339,23 +344,20 @@ def test_receipt_replaces_a_previous_receipt_directory(tmp_path):
     (directory / "red-flags").mkdir()
     (directory / "red-flags" / "scratch.txt").write_text("scratch\n", encoding="utf-8")
 
-    receipt = build_canonical_receipt(FIXTURE, directory, rust=False)
-    written = (directory / "receipt.json").read_text(encoding="utf-8")
-    assert "stale" not in written
-    assert receipt["kind"] == "canonical-excel-receipt"
-    assert "scratch" not in written
-    assert not (directory / "scenario").exists()
-    assert not (directory / "red-flags").exists()
+    with pytest.raises(CanonicalReceiptError, match="must be new"):
+        build_canonical_receipt(FIXTURE, directory, rust=False)
+    assert (directory / "receipt.json").read_text(encoding="utf-8") == '{"stale": true}\n'
+    assert (directory / "receipt.md").read_text(encoding="utf-8") == "stale receipt\n"
+    assert (directory / "operating-scenario.exported.xlsx").read_bytes() == b"stale-xlsx"
+    assert (directory / "scenario" / "scratch.txt").read_text(encoding="utf-8") == "scratch\n"
+    assert (directory / "red-flags" / "scratch.txt").read_text(encoding="utf-8") == "scratch\n"
+    assert (directory / "scenario").is_dir()
+    assert (directory / "red-flags").is_dir()
     assert (directory / "operating-scenario.exported.xlsx").is_file()
     assert (directory / "scenario-roundtrip.json").is_file()
     assert (directory / "red-flag-roundtrip.json").is_file()
-
-    again = build_canonical_receipt(FIXTURE, directory, rust=False)
-    assert again["kind"] == "canonical-excel-receipt"
-    assert (directory / "receipt.json").is_file()
-    assert (directory / "receipt.md").is_file()
-    assert not (directory / "scenario").exists()
-    assert not (directory / "red-flags").exists()
+    with pytest.raises(CanonicalReceiptError, match="must be new"):
+        build_canonical_receipt(FIXTURE, directory, rust=False)
 
 
 def _assert_no_machine_path(value):

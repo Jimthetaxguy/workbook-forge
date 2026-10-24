@@ -53,6 +53,8 @@ pub enum FormulaError {
     Num,
     NA,
     Calc,
+    Null,
+    Spill,
     Unsupported(String),
     Parse(String),
 }
@@ -67,6 +69,8 @@ impl FormulaError {
             Self::Num => Some("#NUM!"),
             Self::NA => Some("#N/A"),
             Self::Calc => Some("#CALC!"),
+            Self::Null => Some("#NULL!"),
+            Self::Spill => Some("#SPILL!"),
             Self::Unsupported(_) | Self::Parse(_) => None,
         }
     }
@@ -82,6 +86,8 @@ impl fmt::Display for FormulaError {
             Self::Num => write!(f, "#NUM!"),
             Self::NA => write!(f, "#N/A"),
             Self::Calc => write!(f, "#CALC!"),
+            Self::Null => write!(f, "#NULL!"),
+            Self::Spill => write!(f, "#SPILL!"),
             Self::Unsupported(reason) => write!(f, "unsupported formula: {reason}"),
             Self::Parse(reason) => write!(f, "formula parse error: {reason}"),
         }
@@ -152,6 +158,7 @@ pub fn evaluate_result(
         cells,
         sheet_name,
         wildcard_work_remaining: Cell::new(MAX_WILDCARD_WORK),
+        primitive_value_profile: false,
     };
     match eval(&expression, &env)? {
         CalcValue::Scalar(value) => {
@@ -214,13 +221,14 @@ struct Environment<'a> {
     cells: &'a HashMap<String, Value>,
     sheet_name: &'a str,
     wildcard_work_remaining: Cell<usize>,
+    primitive_value_profile: bool,
 }
 
 #[derive(Clone, Debug, PartialEq)]
 enum Token {
     Number(f64, String), // parsed binary64 value and original numeric token
     Text(String),
-    ErrorNA,
+    Error(FormulaError),
     Ident(String),
     QuotedSheet(String),
     Operator(String),
@@ -261,13 +269,25 @@ impl<'a> Lexer<'a> {
             return self.read_quoted_sheet();
         }
         if ch == '#' {
-            let literal: String = self.chars[self.pos..].iter().take(4).collect();
-            if literal.eq_ignore_ascii_case("#N/A") {
-                self.pos += 4;
-                return Ok(Token::ErrorNA);
+            for (literal, error) in [
+                ("#DIV/0!", FormulaError::Div0),
+                ("#VALUE!", FormulaError::Value),
+                ("#REF!", FormulaError::Ref),
+                ("#NAME?", FormulaError::Name),
+                ("#NUM!", FormulaError::Num),
+                ("#N/A", FormulaError::NA),
+                ("#CALC!", FormulaError::Calc),
+                ("#NULL!", FormulaError::Null),
+                ("#SPILL!", FormulaError::Spill),
+            ] {
+                let found: String = self.chars[self.pos..].iter().take(literal.len()).collect();
+                if found.eq_ignore_ascii_case(literal) {
+                    self.pos += literal.len();
+                    return Ok(Token::Error(error));
+                }
             }
             return Err(FormulaError::Unsupported(
-                "only the #N/A error literal is currently supported".into(),
+                "unknown or unsupported error literal".into(),
             ));
         }
         if ch.is_ascii_digit() || (ch == '.' && self.peek_n(1).is_some_and(|c| c.is_ascii_digit()))
@@ -459,7 +479,7 @@ impl Parser {
         let mut lhs = match self.take() {
             Token::Number(n, source) => Expr::Number(n, source),
             Token::Text(s) => Expr::Text(s),
-            Token::ErrorNA => Expr::Error(FormulaError::NA),
+            Token::Error(error) => Expr::Error(error),
             Token::Operator(op) if op == "+" || op == "-" => {
                 let mut operators = vec![op.chars().next().unwrap()];
                 while matches!(self.peek(), Some(Token::Operator(next)) if next == "+" || next == "-")
@@ -698,7 +718,12 @@ fn eval(expr: &Expr, env: &Environment<'_>) -> Result<CalcValue, FormulaError> {
             let mut value = eval(current, env);
             for (operator, right) in chain.into_iter().rev() {
                 let right_value = eval(right, env);
-                value = apply_binary_results(operator, value, right_value);
+                value = apply_binary_results(
+                    operator,
+                    value,
+                    right_value,
+                    !env.primitive_value_profile,
+                );
             }
             value
         }
@@ -720,6 +745,7 @@ fn apply_binary_results(
     op: &str,
     left_value: Result<CalcValue, FormulaError>,
     right_value: Result<CalcValue, FormulaError>,
+    worksheet: bool,
 ) -> Result<CalcValue, FormulaError> {
     match (left_value, right_value) {
         (Ok(CalcValue::Scalar(Value::Error(error))), Ok(right))
@@ -734,12 +760,12 @@ fn apply_binary_results(
         {
             Ok(scalar(Value::Error(error)))
         }
-        (Ok(left), Ok(right)) => apply_binary_values(op, left, right),
+        (Ok(left), Ok(right)) => apply_binary_values(op, left, right, worksheet),
         (Err(error), Ok(right @ (CalcValue::Range(_) | CalcValue::Array(_)))) => {
-            apply_binary_values(op, scalar(Value::Error(error)), right)
+            apply_binary_values(op, scalar(Value::Error(error)), right, worksheet)
         }
         (Ok(left @ (CalcValue::Range(_) | CalcValue::Array(_))), Err(error)) => {
-            apply_binary_values(op, left, scalar(Value::Error(error)))
+            apply_binary_values(op, left, scalar(Value::Error(error)), worksheet)
         }
         (Err(error), _) => Err(error),
         (_, Err(error)) => Err(error),
@@ -1018,6 +1044,7 @@ fn apply_binary_values(
     op: &str,
     left: CalcValue,
     right: CalcValue,
+    worksheet: bool,
 ) -> Result<CalcValue, FormulaError> {
     let left_shape = calc_value_shape(&left);
     let right_shape = calc_value_shape(&right);
@@ -1025,7 +1052,7 @@ fn apply_binary_values(
         let (CalcValue::Scalar(left), CalcValue::Scalar(right)) = (left, right) else {
             unreachable!();
         };
-        return eval_binary(op, left, right).map(scalar);
+        return eval_binary(op, left, right, worksheet).map(scalar);
     }
     if left_shape.is_some() && right_shape.is_some() && left_shape != right_shape {
         return Err(FormulaError::Value);
@@ -1051,7 +1078,9 @@ fn apply_binary_values(
                 .as_ref()
                 .cloned()
                 .unwrap_or_else(|| right_matrix[row][column].clone());
-            output_row.push(eval_binary(op, left_value, right_value).unwrap_or_else(Value::Error));
+            output_row.push(
+                eval_binary(op, left_value, right_value, worksheet).unwrap_or_else(Value::Error),
+            );
         }
         result.push(output_row);
     }
@@ -1269,12 +1298,16 @@ fn encode_ref(mut col: usize, row: usize) -> String {
     format!("{letters}{row}")
 }
 
-fn eval_binary(op: &str, a: Value, b: Value) -> Result<Value, FormulaError> {
+fn eval_binary(op: &str, a: Value, b: Value, worksheet: bool) -> Result<Value, FormulaError> {
     if matches!(op, "=" | "<>" | "<" | "<=" | ">" | ">=") {
         if let Value::Error(error) = &a {
             return Err(error.clone());
         }
-        return Ok(Value::Bool(compare_operator(&a, &b, op)?));
+        return Ok(Value::Bool(if worksheet {
+            worksheet_comparison(&a, &b, op)?
+        } else {
+            compare_operator(&a, &b, op)?
+        }));
     }
     if let Value::Error(e) = a {
         return Err(e);
@@ -1307,6 +1340,66 @@ fn eval_binary(op: &str, a: Value, b: Value) -> Result<Value, FormulaError> {
         }
         _ => Err(FormulaError::Unsupported(format!("operator {op}"))),
     }
+}
+
+fn worksheet_comparison(a: &Value, b: &Value, op: &str) -> Result<bool, FormulaError> {
+    use std::cmp::Ordering;
+    for value in [a, b] {
+        if let Value::Error(error) = value {
+            return Err(error.clone());
+        }
+        if let Value::Number(number) = value
+            && !number.is_finite()
+        {
+            return Err(FormulaError::Num);
+        }
+    }
+    fn empty(other: &Value) -> Value {
+        match other {
+            Value::Text(_) => Value::Text(String::new()),
+            Value::Bool(_) => Value::Bool(false),
+            _ => Value::Number(0.0),
+        }
+    }
+    let left = if matches!(a, Value::Blank) {
+        empty(b)
+    } else {
+        a.clone()
+    };
+    let right = if matches!(b, Value::Blank) {
+        empty(&left)
+    } else {
+        b.clone()
+    };
+    fn rank(value: &Value) -> u8 {
+        match value {
+            Value::Number(_) => 0,
+            Value::Text(_) => 1,
+            Value::Bool(_) => 2,
+            _ => unreachable!(),
+        }
+    }
+    let order = match (&left, &right) {
+        (Value::Number(a), Value::Number(b)) => a.partial_cmp(b).ok_or(FormulaError::Num)?,
+        (Value::Bool(a), Value::Bool(b)) => a.cmp(b),
+        (Value::Text(a), Value::Text(b)) => {
+            if a.is_ascii() && b.is_ascii() {
+                a.to_ascii_lowercase().cmp(&b.to_ascii_lowercase())
+            } else {
+                a.as_bytes().cmp(b.as_bytes())
+            }
+        }
+        _ => rank(&left).cmp(&rank(&right)),
+    };
+    Ok(match op {
+        "=" => order == Ordering::Equal,
+        "<>" => order != Ordering::Equal,
+        "<" => order == Ordering::Less,
+        "<=" => order != Ordering::Greater,
+        ">" => order == Ordering::Greater,
+        ">=" => order != Ordering::Less,
+        _ => unreachable!(),
+    })
 }
 
 fn compare_operator(a: &Value, b: &Value, op: &str) -> Result<bool, FormulaError> {
@@ -2633,6 +2726,66 @@ fn truthy(v: &Value) -> Result<bool, FormulaError> {
 #[allow(clippy::needless_return)]
 fn eval_call(name: &str, args: &[Expr], env: &Environment<'_>) -> Result<Value, FormulaError> {
     match name {
+        "SUM" => {
+            arity(name, args, 1, 255)?;
+            let mut numbers = Vec::new();
+            for argument in args {
+                let evaluated = eval(argument, env)?;
+                let referenced = env.primitive_value_profile
+                    || matches!(argument, Expr::Ref(_, _))
+                    || matches!(evaluated, CalcValue::Range(_) | CalcValue::Array(_));
+                for value in flatten(evaluated) {
+                    if let Value::Error(error) = value {
+                        return Err(error);
+                    }
+                    if referenced && !matches!(value, Value::Number(_)) {
+                        continue;
+                    }
+                    numbers.push(to_number(&value)?);
+                }
+            }
+            return Ok(Value::Number(
+                numbers.iter().fold(0.0, |total, value| total + value),
+            ));
+        }
+        "AVERAGE" => {
+            arity(name, args, 1, 255)?;
+            let mut total = 0.0;
+            let mut count = 0usize;
+            for argument in args {
+                let evaluated = eval(argument, env)?;
+                let referenced = env.primitive_value_profile
+                    || matches!(argument, Expr::Ref(_, _))
+                    || matches!(evaluated, CalcValue::Range(_) | CalcValue::Array(_));
+                for value in flatten(evaluated) {
+                    if let Value::Error(error) = value {
+                        return Err(error);
+                    }
+                    if referenced && !matches!(value, Value::Number(_)) {
+                        continue;
+                    }
+                    if let Value::Text(text) = &value {
+                        let text = text.trim_matches([' ', '\t', '\r', '\n']);
+                        if text.is_empty()
+                            || !text
+                                .bytes()
+                                .all(|c| c.is_ascii_digit() || b".+-eE".contains(&c))
+                        {
+                            return Err(FormulaError::Value);
+                        }
+                    }
+                    total += to_number(&value)?;
+                    count += 1;
+                }
+            }
+            if count == 0 {
+                return Err(FormulaError::Div0);
+            }
+            if !total.is_finite() {
+                return Err(FormulaError::Num);
+            }
+            return Ok(Value::Number(total / count as f64));
+        }
         "WEEKDAY" | "WEEKNUM" | "ISOWEEKNUM" => return week_call(name, args, env),
         "DAYS360" | "YEARFRAC" => return day_count_call(name, args, env),
         "FV" | "PV" | "PMT" => return tvm_call(name, args, env),
@@ -2801,7 +2954,7 @@ fn eval_call(name: &str, args: &[Expr], env: &Environment<'_>) -> Result<Value, 
     }
     let flat: Vec<Value> = values.iter().cloned().flat_map(flatten).collect();
     match name {
-        "SUM" | "AVERAGE" | "COUNT" | "COUNTA" | "MIN" | "MAX" => {
+        "COUNT" | "COUNTA" | "MIN" | "MAX" => {
             arity(name, args, 1, 255)?;
             let nums: Vec<f64> = flat
                 .iter()
@@ -2829,14 +2982,6 @@ fn eval_call(name: &str, args: &[Expr], env: &Environment<'_>) -> Result<Value, 
                 return Err(e.clone());
             }
             let n = match name {
-                "SUM" => nums.iter().sum(),
-                "AVERAGE" => {
-                    if nums.is_empty() {
-                        return Err(FormulaError::Div0);
-                    } else {
-                        nums.iter().sum::<f64>() / nums.len() as f64
-                    }
-                }
                 "MIN" if nums.is_empty() => 0.0,
                 "MIN" => nums.iter().copied().fold(f64::INFINITY, f64::min),
                 "MAX" if nums.is_empty() => 0.0,
@@ -4786,10 +4931,20 @@ fn selection_call(
         }
         "IFERROR" => {
             arity(name, args, 2, 2)?;
-            match eval(&args[0], env) {
-                Ok(CalcValue::Scalar(Value::Error(_))) | Err(_) => eval(&args[1], env),
+            let value = match eval(&args[0], env) {
+                Ok(CalcValue::Scalar(Value::Error(error))) if error.excel_code().is_some() => {
+                    eval(&args[1], env)
+                }
+                Err(error) if error.excel_code().is_some() => eval(&args[1], env),
+                Err(error) => Err(error),
                 Ok(value) => Ok(value),
-            }
+            }?;
+            Ok(match value {
+                CalcValue::Scalar(Value::Blank) if !env.primitive_value_profile => {
+                    scalar(Value::Text(String::new()))
+                }
+                value => value,
+            })
         }
         "IFNA" => {
             arity(name, args, 2, 2)?;
@@ -5215,6 +5370,8 @@ fn error_from_excel_code(code: &str) -> Option<FormulaError> {
         "#NUM!" => FormulaError::Num,
         "#N/A" => FormulaError::NA,
         "#CALC!" => FormulaError::Calc,
+        "#NULL!" => FormulaError::Null,
+        "#SPILL!" => FormulaError::Spill,
         _ => return None,
     })
 }
@@ -6541,6 +6698,27 @@ mod tests {
     }
 
     #[test]
+    fn iferror_catches_excel_values_but_not_engine_diagnostics() {
+        let cells = HashMap::new();
+        assert_eq!(
+            evaluate("=IFERROR(#NULL!,7)", &cells, "S"),
+            Ok(Value::Number(7.0))
+        );
+        assert_eq!(
+            evaluate("=IFERROR(#SPILL!,8)", &cells, "S"),
+            Ok(Value::Number(8.0))
+        );
+        assert!(matches!(
+            evaluate("=IFERROR(CUBEVALUE(1),7)", &cells, "S"),
+            Err(FormulaError::Unsupported(_))
+        ));
+        assert_eq!(
+            evaluate("=IFERROR(IF(TRUE,9,1/0),1/0)", &cells, "S"),
+            Ok(Value::Number(9.0))
+        );
+    }
+
+    #[test]
     fn sort_key_errors_follow_source_order_for_nonfinite_inputs() {
         let mixed_before_nonfinite = cells(&[
             ("A1", Value::Number(1.0)),
@@ -6641,6 +6819,8 @@ mod tests {
                     "#NUM!" => FormulaError::Num,
                     "#N/A" => FormulaError::NA,
                     "#CALC!" => FormulaError::Calc,
+                    "#NULL!" => FormulaError::Null,
+                    "#SPILL!" => FormulaError::Spill,
                     _ => panic!("unsupported shared fixture error code {code:?}"),
                 })
             }
@@ -6913,8 +7093,16 @@ mod tests {
             Ok(Value::Text("error fallback".into()))
         );
         assert_eq!(evaluate("=#N/A", &c, "Sheet1"), Err(FormulaError::NA));
-        assert!(matches!(
+        assert_eq!(
             evaluate("=IFERROR(#DIV/0!,0)", &c, "Sheet1"),
+            Ok(Value::Number(0.0))
+        );
+        assert_eq!(
+            evaluate("=IFNA(#DIV/0!,0)", &c, "Sheet1"),
+            Err(FormulaError::Div0)
+        );
+        assert!(matches!(
+            evaluate("=#NOT_AN_ERROR!", &c, "Sheet1"),
             Err(FormulaError::Unsupported(_))
         ));
     }
@@ -7557,5 +7745,11 @@ mod tests {
             evaluate("=SORT(A1:A2)", &cells, "S"),
             Err(FormulaError::Value)
         );
+    }
+
+    #[test]
+    fn sum_left_fold_has_positive_zero_identity() {
+        assert_eq!(number("=SUM(0*-1)").to_bits(), 0.0_f64.to_bits());
+        assert_eq!(number("=0*-1").to_bits(), (-0.0_f64).to_bits());
     }
 }
