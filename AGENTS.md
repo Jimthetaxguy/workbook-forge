@@ -1,13 +1,3 @@
-# START HERE (note from Jim's engineering bot, Oct 14 2026)
-
-Next session, do this in order:
-1. Read docs/specs/proposed/README.md and docs/specs/proposed/COMMIT-PLAN.md.
-2. Put this AGENTS.md and docs/specs/proposed/ on their own branch off main, commit them, and open a PR. Do not merge it.
-3. Start spec 01 (Excel export gate) on a new branch off main, following the order in the README index. PRs #9 and #10 already landed the Excel observation work, so build on them and don't redo them.
-4. Before any decision the specs mark as James's (duplicate-key policy, model v2, memory limits, ruff 0.17, Cargo license field), stop and ask him.
-
----
-
 # AGENTS.md — Workbook Forge
 
 Source of truth: `CONTEXT.md` (current state, terms, boundaries) and
