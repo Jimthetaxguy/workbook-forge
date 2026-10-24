@@ -1,0 +1,37 @@
+{
+  "name": "workbook-forge-univer-spike",
+  "private": true,
+  "version": "0.0.0",
+  "license": "MIT",
+  "type": "module",
+  "dependencies": {
+    "@univerjs/core": "1.2.0",
+    "@univerjs/design": "1.2.0",
+    "@univerjs/docs": "1.2.0",
+    "@univerjs/docs-ui": "1.2.0",
+    "@univerjs/engine-formula": "1.2.0",
+    "@univerjs/engine-render": "1.2.0",
+    "@univerjs/sheets": "1.2.0",
+    "@univerjs/sheets-formula": "1.2.0",
+    "@univerjs/sheets-formula-ui": "1.2.0",
+    "@univerjs/sheets-ui": "1.2.0",
+    "@univerjs/ui": "1.2.0",
+    "@workbook-forge/engine": "file:../forge-engine",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "rxjs": "7.8.2"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.64.1",
+    "typescript": "5.9.3",
+    "vite": "7.3.7"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "typecheck": "tsc -p .",
+    "test:e2e": "bash scripts/e2e.sh",
+    "check:licenses": "node scripts/check-licenses.mjs",
+    "size": "node scripts/bundle-size.mjs"
+  }
+}

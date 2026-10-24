@@ -43,6 +43,21 @@ impl BrowserWorkbook {
             .map_err(js_error)
     }
 
+    /// The current revision as a decimal string, so hosts never need `BigInt`.
+    #[wasm_bindgen(js_name = revisionString)]
+    pub fn revision_string(&self) -> String {
+        crate::browser_contract::revision_string(&self.imported)
+    }
+
+    /// Apply edits at a decimal-string revision and return a JSON envelope:
+    /// `{"ok":true,"revision":"N"}` or
+    /// `{"ok":false,"error":{"code","message","expected_revision","current_revision"}}`.
+    /// This never throws for a rejected edit.
+    #[wasm_bindgen(js_name = applyEditsResultJson)]
+    pub fn apply_edits_result_json(&self, edits_json: &str, expected_revision: &str) -> String {
+        crate::browser_contract::apply_edits_envelope(&self.imported, edits_json, expected_revision)
+    }
+
     /// Calculate the current workbook and return the existing report contract.
     #[wasm_bindgen(js_name = calculateJson)]
     pub fn calculate_json(&self) -> Result<String, JsValue> {
@@ -92,5 +107,26 @@ mod tests {
         let reopened = open_xlsx(&output).unwrap();
         let roundtrip: Json = serde_json::from_str(&reopened.calculate_json().unwrap()).unwrap();
         assert_eq!(roundtrip["values"]["Forecast!C2"], 2500.0);
+    }
+
+    #[wasm_bindgen_test]
+    fn browser_envelope_reports_revision_strings_and_structured_conflicts() {
+        let model = crate::toolkit::operating_scenario();
+        let workbook = open_xlsx(&xlsx::export_xlsx_bytes(&model).unwrap()).unwrap();
+        assert_eq!(workbook.revision_string(), "0");
+        let ok: Json = serde_json::from_str(&workbook.apply_edits_result_json(
+            r#"[{"sheet":"Assumptions","address":"B1","value":25}]"#,
+            "0",
+        ))
+        .unwrap();
+        assert_eq!(ok, serde_json::json!({"ok": true, "revision": "1"}));
+        let stale: Json = serde_json::from_str(&workbook.apply_edits_result_json(
+            r#"[{"sheet":"Assumptions","address":"B1","value":30}]"#,
+            "0",
+        ))
+        .unwrap();
+        assert_eq!(stale["ok"], false);
+        assert_eq!(stale["error"]["code"], "revision_conflict");
+        assert_eq!(stale["error"]["current_revision"], "1");
     }
 }
