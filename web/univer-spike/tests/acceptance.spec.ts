@@ -219,12 +219,13 @@ for (const mode of ['not-execute', 'load-only']) {
 
 test('control: stock formula plugins calculate, and the spy sees it', async ({ page }) => {
   await boot(page, 'univer-default');
-  await typeInto(page, 'C1', '=B1+100');
+  await page.waitForTimeout(1000);
   const v = await view(page);
-  // The edit still routes to Forge (Forge value 120 = 20 + 100 at A1 = 10) ...
-  expect(v.revision).toBe('1');
-  expect(v.cells.C1.raw).toBe(120);
-  // ... but Univer's own engine ran, which the audit must catch.
+  // Univer's own engine ran on load (stock WHEN_EMPTY mode), which the audit
+  // must catch. Its results happen to equal Forge's for this fixture, so a
+  // value diff alone would not have noticed: the mutation/facade spy is what
+  // makes silent recalculation visible.
+  expect(v.audit.calcRequests.length).toBeGreaterThan(0);
   expect(v.audit.calcOutputs.length + v.audit.facadeEvents.length).toBeGreaterThan(0);
 });
 

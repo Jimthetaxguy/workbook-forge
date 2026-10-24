@@ -35,3 +35,12 @@ test('open, edit, calculate, conflict, export, reopen', () => {
   assert.equal(call(reopened, 'snapshot').value.sheets[0].cells.C1.formula, 'B1+100');
   assert.equal(call(reopened, 'calculate').value.values['Sheet1!F1'], 1000);
 });
+
+test('the headless package imports no UI framework', async () => {
+  const { readdirSync, readFileSync: read } = await import('node:fs');
+  const dir = new URL('../src/', import.meta.url);
+  for (const name of readdirSync(dir)) {
+    const text = read(new URL(name, dir), 'utf8');
+    assert.doesNotMatch(text, /from\s+['"](@univerjs|react|react-dom|rxjs)/, name);
+  }
+});

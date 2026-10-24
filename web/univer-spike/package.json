@@ -24,6 +24,13 @@
   "devDependencies": {
     "@playwright/test": "1.64.1",
     "typescript": "5.9.3",
-    "vite": "8.3.5"
+    "vite": "7.3.7"
+  },
+  "scripts": {
+    "build": "vite build",
+    "typecheck": "tsc -p .",
+    "test:e2e": "bash scripts/e2e.sh",
+    "check:licenses": "node scripts/check-licenses.mjs",
+    "size": "node scripts/bundle-size.mjs"
   }
 }
