@@ -1079,6 +1079,44 @@ fn import_package(
     })
 }
 impl ImportedWorkbook {
+    /// Calculate a transferred toolkit IR against this immutable package baseline.
+    /// The ordinary preservation checks still govern layout, styles and blocked
+    /// regions. A snapshot cannot silently remove source cells from the package.
+    pub fn export_snapshot(&self, model: WorkbookModel, path: impl AsRef<Path>) -> Result<PathBuf> {
+        if self.original.sheets.len() != model.sheets.len()
+            || self
+                .original
+                .sheets
+                .iter()
+                .zip(&model.sheets)
+                .any(|(before, after)| before.cells.keys().ne(after.cells.keys()))
+        {
+            return Err(err(
+                "transferred snapshot must retain all source cell addresses",
+            ));
+        }
+        for (before, after) in self.original.sheets.iter().zip(&model.sheets) {
+            for (address, cell) in &before.cells {
+                if cell.blocked_reason != after.cells[address].blocked_reason {
+                    return Err(err(
+                        "transferred snapshot cannot change preserved-only guards",
+                    ));
+                }
+            }
+        }
+        Self {
+            source: self.source.clone(),
+            baseline: self.baseline.clone(),
+            original: self.original.clone(),
+            session: Session::new(model)?,
+            workbook_part: self.workbook_part.clone(),
+            sheet_parts: self.sheet_parts.clone(),
+            date1904: self.date1904,
+            capabilities: self.capabilities.clone(),
+        }
+        .export(path)
+    }
+
     pub fn snapshot(&self) -> WorkbookModel {
         self.session.snapshot()
     }
@@ -1515,7 +1553,9 @@ fn fresh(model: &WorkbookModel, report: &CalculationReport) -> Result<Package> {
     parts.insert("[Content_Types].xml".into(),format!("<?xml version=\"1.0\" encoding=\"UTF-8\"?><Types xmlns=\"{CT}\"><Default Extension=\"rels\" ContentType=\"application/vnd.openxmlformats-package.relationships+xml\"/><Default Extension=\"xml\" ContentType=\"application/xml\"/><Override PartName=\"/xl/workbook.xml\" ContentType=\"{WB_TYPE}\"/>{type_nodes}<Override PartName=\"/xl/styles.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml\"/></Types>").into_bytes());
     Ok(Package { parts })
 }
-/// Generate a new workbook using native calculation and original OOXML code.
+/// Calculate `model` and write a new `.xlsx` package built by `fresh`.
+///
+/// This does not preserve imported OOXML. That path is `ImportedWorkbook::export`.
 pub fn export_xlsx(model: &WorkbookModel, path: impl AsRef<Path>) -> Result<PathBuf> {
     let report = toolkit::calculate(model, 1);
     publish(&fresh(model, &report)?, path.as_ref())
@@ -1732,7 +1772,15 @@ fn patch(
             if old.style != cell.style {
                 return Err(err("imported style edits are unsupported"));
             }
-            let content_changed = old.value != cell.value || old.formula != cell.formula;
+            // CellValue enum equality separates types, but f64 equality erases
+            // zero sign; use exact bits for numeric package-change detection.
+            let same_value = match (&old.value, &cell.value) {
+                (CellValue::Number(before), CellValue::Number(after)) => {
+                    before.to_bits() == after.to_bits()
+                }
+                _ => old.value == cell.value,
+            };
+            let content_changed = !same_value || old.formula != cell.formula;
             let cache = if cell.formula.is_some() {
                 formula_cache(report, &after.name, reference)?
             } else {

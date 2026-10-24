@@ -63,8 +63,10 @@
   },
   {
     "id": "case-collation-text-number-pos",
+    "excluded": true,
+    "exclusion_reason": "No documented Microsoft example and no Excel receipt are cited for =\"a\">1. Workbook Forge's comparison profile returns #VALUE! for mixed text/number relational comparison and calls that a local rule, not verified Excel behavior. This pair is not Excel ground truth, and run_benchmark_eval does not score it.",
     "is_false_control": false,
-    "ground_truth": "excel_canonical_behavior",
+    "ground_truth": "unverified",
     "state": {
       "formula": "COMPARE",
       "fixture": {
@@ -93,8 +95,10 @@
   },
   {
     "id": "case-collation-text-number-neg",
+    "excluded": true,
+    "exclusion_reason": "No documented Microsoft example and no Excel receipt are cited for =\"a\">1. Workbook Forge's comparison profile returns #VALUE! for mixed text/number relational comparison and calls that a local rule, not verified Excel behavior. Labeling #VALUE! as artificial_local_profile would claim it conflicts with Excel Desktop, which is also unverified. This pair is not Excel ground truth, and run_benchmark_eval does not score it.",
     "is_false_control": true,
-    "ground_truth": "artificial_local_profile",
+    "ground_truth": "unverified",
     "state": {
       "formula": "COMPARE",
       "fixture": {

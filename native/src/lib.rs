@@ -1,7 +1,9 @@
-//! A batch boundary between Python and the authoritative Rust workbook model.
+//! A batch boundary between Python and the toolkit workbook form.
 //!
-//! JSON is an interchange representation, not a persistence or synchronization
-//! protocol. Calculation and session edits remain entirely inside Rust.
+//! The bridge uses toolkit::WorkbookModel and toolkit::calculate. It is not
+//! the canonical model::Workbook. JSON is an interchange representation, not a
+//! persistence or synchronization protocol. Calculation and session edits
+//! remain entirely inside Rust.
 
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;

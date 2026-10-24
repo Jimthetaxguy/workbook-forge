@@ -19,6 +19,7 @@ test = ["pytest>=9.1.1", "jsonschema>=4.26.0", "packaging>=26.3", "setuptools>=8
 
 [project.scripts]
 workbook-forge = "workbook_forge.cli:main"
+workbook-forge-compile = "workbook_forge.source_cli:main"
 
 [tool.setuptools]
 package-dir = {"" = "python"}
@@ -45,6 +46,9 @@ where = ["python"]
 # Ship only the library. Namespace discovery would also package python/tests.
 include = ["workbook_forge*"]
 namespaces = false
+
+[tool.setuptools.package-data]
+workbook_forge = ["source_runtime_v2.rs", "source_runtime_v3.rs", "source_runtime_v4.rs", "source_runtime_v5.rs"]
 
 # The wheel targets the stable ABI so one build serves every CPython from 3.12 on.
 [tool.distutils.bdist_wheel]
