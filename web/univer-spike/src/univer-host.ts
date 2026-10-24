@@ -48,11 +48,12 @@ export async function createUniverHost(container: HTMLElement, mode: Mode): Prom
     locale: LocaleType.EN_US,
     locales: { [LocaleType.EN_US]: mergeLocales(...locales) },
   });
-  univer.registerPlugin(UniverRenderEnginePlugin);
-  if (formula) formula.registerEngine(univer, mode);
-  univer.registerPlugin(UniverUIPlugin, { container });
+  // Same order as Univer's own sheets-core preset.
   univer.registerPlugin(UniverDocsPlugin);
+  univer.registerPlugin(UniverRenderEnginePlugin);
+  univer.registerPlugin(UniverUIPlugin, { container });
   univer.registerPlugin(UniverDocsUIPlugin);
+  if (formula) formula.registerEngine(univer, mode);
   univer.registerPlugin(UniverSheetsPlugin, {
     notExecuteFormula: mode === 'not-execute' || mode === 'no-formula-plugins',
   });

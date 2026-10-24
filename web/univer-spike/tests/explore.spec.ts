@@ -6,10 +6,13 @@ async function boot(page: Page, mode: string) {
   await page.goto(`/?mode=${mode}`);
   await page.waitForFunction(() => (window as any).__spike, null, { timeout: 30000 });
   await page.evaluate(() => (window as any).__spike.then(() => undefined));
-  await page.locator('canvas').first().click({ position: { x: 400, y: 300 } });
 }
+// Cell centres in the default 1280x800 layout (column width 88px, row 24px).
+const COLS: Record<string, number> = { A: 90, B: 178, C: 266, D: 354, E: 442, F: 530, G: 618, H: 706 };
 async function select(page: Page, address: string) {
-  await page.evaluate((a) => (window as any).__spike.then((s: any) => { s.host.univerAPI.getActiveWorkbook().getActiveSheet().getRange(a).activate(); }), address);
+  const col = address[0];
+  const row = Number(address.slice(1));
+  await page.mouse.click(COLS[col], 179 + (row - 1) * 24);
 }
 async function typeInto(page: Page, address: string, text: string) {
   await select(page, address);
