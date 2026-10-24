@@ -24,6 +24,14 @@ async function boot(page: Page, mode: string) {
   await page.goto(`/?mode=${mode}`);
   await page.waitForFunction(() => (window as any).__spike, null, { timeout: 30_000 });
   await page.evaluate(() => (window as any).__spike.then(() => undefined));
+  if (mode !== 'engine-only' && mode !== 'no-formula-plugins') {
+    // Univer creates its cell and formula-bar editors after first render.
+    await page.waitForFunction(
+      () => (window as any).__spike.then((s: any) => s.adapter.docUnitIds().length === 2),
+      null,
+      { timeout: 15_000 },
+    );
+  }
   // First click focuses Univer's canvas; the editor is ready after it.
   await clickCell(page, 'H5');
   await page.waitForTimeout(400);
@@ -85,7 +93,10 @@ function expectUniverNeverCalculated(v: Awaited<ReturnType<typeof view>>) {
   expect(v.audit.foreignWrites, 'cell writes not from the projection').toEqual([]);
 }
 
-async function formulaBar(page: Page) {
+/** Select a cell and read Univer's formula bar (re-selecting while it settles). */
+async function formulaBarFor(page: Page, address: string) {
+  await clickCell(page, address);
+  await page.waitForTimeout(100);
   return page.evaluate(() => (window as any).__spike.then((s: any) => s.adapter.formulaBarText()));
 }
 
@@ -99,8 +110,7 @@ for (const mode of ['not-execute', 'load-only']) {
       expect(v.revision).toBe('0');
       expectDisplayed(v, INITIAL);
       for (const [address, formula] of Object.entries(FORMULAS)) expect(v.cells[address].formula).toBe(`=${formula}`);
-      await clickCell(page, 'C1');
-      await expect.poll(() => formulaBar(page)).toBe('=B1+5');
+      await expect.poll(() => formulaBarFor(page, 'C1')).toBe('=B1+5');
 
       // Value edit through the cell editor.
       await typeInto(page, 'A1', '20');
@@ -115,8 +125,7 @@ for (const mode of ['not-execute', 'load-only']) {
       expect(v.revision).toBe('2');
       expectDisplayed(v, AFTER_FORMULA);
       expect(v.cells.C1.formula).toBe('=B1+100');
-      await clickCell(page, 'C1');
-      await expect.poll(() => formulaBar(page)).toBe('=B1+100');
+      await expect.poll(() => formulaBarFor(page, 'C1')).toBe('=B1+100');
       let f = await forge(page);
       expect(f.snapshot.revision).toBe('2');
       expect(f.snapshot.sheets[0].cells.C1.formula).toBe('B1+100');
