@@ -35,6 +35,8 @@ agreement and established expected values; it does not replace either implementa
 | --- | --- |
 | Read the North Star (Excel compiler, three directions, build rules) | [Vision](docs/vision.md) |
 | Understand how intake, Python/Rust, agents/apps and OOXML fit as one compiler | [Compiler pipeline and shared-model contract](docs/specs/compiler-pipeline.md) |
+| Compile arithmetic/SUM workbooks to executable Rust/Python, translate edited source, and export it | [Multi-cell source compiler profile 2](docs/source-graph-v2.md) and [four-route benchmarks](docs/compiler-benchmarks.md) |
+| Inspect every pinned function's Python/Rust implementation and translation status | [Versioned compiler coverage mapping](catalog/compiler-coverage.v1.json) |
 | Red-flag build contracts (schema, export parity, detectors, model versioning) | [Red-flag specs](docs/specs/red-flags.md) |
 | Run a formula against supplied cell values | [Python evaluator](#python-quick-start) |
 | Compose calculations with named inputs and no workbook | [Native primitives](docs/primitives.md) |
@@ -498,3 +500,7 @@ describe compatibility and do not mean old dependency packages are selected.
 ## License and source policy
 
 Original project code is MIT. Workbook Forge must stay usable in enterprise settings, so third-party components, whether used at runtime or only in development and including transitive dependencies, must carry a permissive open-source license with no copyleft terms. The accepted SPDX licenses are MIT, MIT-0, Apache-2.0, BSD-2-Clause, BSD-3-Clause, 0BSD, ISC, Zlib, PSF-2.0, Unicode-3.0, Unicode-DFS-2016, BSL-1.0, CC0-1.0, and Unlicense. A dual-licensed package qualifies when one of its options is on that list. Copyleft licenses (GPL, LGPL, AGPL, MPL, EPL, EUPL, CDDL) and source-available licenses (SSPL, BUSL) are excluded. `python/tests/test_project_policy.py` checks the installed Python dependency tree against this list, and it fails if a Rust crate is added without a license review. The original Python formula evaluator remains standard-library-only; the native workbook engine and bridge use the reviewed dependencies recorded with the catalog. Microsoft documentation is linked as provenance; the catalog records names and categories rather than copying function descriptions. Open-source implementation patterns are separately catalogued with license evidence and an explicit adopt/defer decision; no third-party implementation code is copied. The Python wheel installs catalog JSON into `share/workbook_forge/catalog` and the API reads the source-tree copy during development. Jev is an advisory development-time critic and is not part of either package runtime.
+
+Source compiler [profile 3](docs/source-graph-v3.md) adds multiple sheets, quoted references, nine scalar errors and independent lazy IF/IFERROR code generation.
+Source compiler [profile 4](docs/source-graph-v4.md) adds six typed comparison operators; [stage-four review](docs/source-compiler-review-stage4.md) records adversarial validation and fidelity fixes.
+Source compiler [profile 5](docs/source-graph-v5.md) adds origin-aware AVERAGE, a packaged `workbook-forge-compile` CLI and verified writer publication. Its [cumulative review brief](docs/compiler-review-brief.md) records interfaces and unresolved evidence, including conflicting AVERAGE documentation.

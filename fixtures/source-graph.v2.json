@@ -1,0 +1,82 @@
+{
+  "fixture_version": 2,
+  "source_profile": 2,
+  "sheet": "Calc",
+  "values": {
+    "A1": 2,
+    "A2": 3,
+    "A3": "4",
+    "A4": true,
+    "A5": "",
+    "A6": null,
+    "A7": {
+      "error": "#N/A"
+    }
+  },
+  "formulas": {
+    "B1": "=$A1*2",
+    "B2": "=SUM($A$1:A6)+B1",
+    "B3": "=10/(A1-2)",
+    "B4": "=B3+1",
+    "B5": "=A3+1",
+    "B6": "=SUM(A3,A4,A5,A6,2)",
+    "B7": "=SUM(\"5\",15,TRUE)",
+    "B8": "=SUM(A7,1)",
+    "B9": "=A9",
+    "B10": "=A5+1",
+    "B11": "=A6+1",
+    "B12": "=SUM(B$1:B$2)",
+    "B13": "=A3",
+    "B14": "=A5",
+    "B15": "=A6",
+    "B16": "=SUM(\"bad\",2)",
+    "B17": "=SUM()"
+  },
+  "edits": {
+    "source_B1_multiplier": 5,
+    "source_A2_default": 6,
+    "input_A1": 7
+  },
+  "expected_after_edits": {
+    "A1": 7,
+    "A2": 6,
+    "A3": "4",
+    "A4": true,
+    "A5": "",
+    "A6": null,
+    "A7": {
+      "error": "#N/A"
+    },
+    "B1": 35,
+    "B2": 48,
+    "B3": 2,
+    "B4": 3,
+    "B5": 5,
+    "B6": 2,
+    "B7": 21,
+    "B8": {
+      "error": "#N/A"
+    },
+    "B9": 0,
+    "B10": 1,
+    "B11": 1,
+    "B12": 83,
+    "B13": "4",
+    "B14": "",
+    "B15": 0,
+    "B16": {
+      "error": "#VALUE!"
+    },
+    "B17": {
+      "error": "#VALUE!"
+    }
+  },
+  "evidence": {
+    "arithmetic": "independent integer arithmetic; B1=7*5, B2=7+6+35, B12=35+48",
+    "sum_direct_literals": "Microsoft example SUM(\"5\",15,TRUE)=21",
+    "sum_references": "Microsoft states text and logical values in references are not translated and are ignored",
+    "source": "https://support.microsoft.com/en-us/excel/use-the-sum-function-to-sum-numbers-in-a-range",
+    "empty_text_arithmetic": "existing Workbook Forge profile: empty text coerces to zero; no fresh Excel observation",
+    "excel_observed": false
+  }
+}

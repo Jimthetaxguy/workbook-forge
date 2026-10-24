@@ -1376,7 +1376,9 @@ class Workbook:
                 value = float(value)
             except ValueError as exc:
                 raise WorkbookError(f"invalid numeric value at {address}") from exc
-            if value.is_integer():
+            # Preserve binary64 negative zero through the OOXML scalar boundary.
+            # Other integral values retain the existing integer representation.
+            if value.is_integer() and (value != 0 or math.copysign(1.0, value) > 0):
                 value = int(value)
         formula = formula_node.text if formula_node is not None else None
         formula_kind = formula_node.attrib.get("t") if formula_node is not None else None

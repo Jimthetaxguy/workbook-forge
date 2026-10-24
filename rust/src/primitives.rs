@@ -731,6 +731,7 @@ fn evaluate_ast(expression: &Expr) -> Result<FormulaResult> {
         cells: &cells,
         sheet_name: "",
         wildcard_work_remaining: std::cell::Cell::new(crate::MAX_WILDCARD_WORK),
+        primitive_value_profile: true,
     };
     match crate::eval(expression, &environment) {
         Ok(CalcValue::Scalar(value)) => Ok(FormulaResult::Scalar(normalized_scalar(value))),
