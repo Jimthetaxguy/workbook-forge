@@ -13,11 +13,18 @@ include = ["/src/**", "/examples/**", "/Cargo.toml", "/Cargo.lock"]
 [lib]
 name = "workbook_forge"
 path = "src/lib.rs"
+crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = { version = "1.0.151", features = ["unbounded_depth", "float_roundtrip"] }
 quick-xml = "0.42.0"
 zip = { version = "8.6.0", default-features = false, features = ["deflate-flate2-zlib-rs"] }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen = "0.2.129"
+
+[target.'cfg(target_arch = "wasm32")'.dev-dependencies]
+wasm-bindgen-test = "0.3.79"
 
 [dev-dependencies]
