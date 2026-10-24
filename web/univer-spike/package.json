@@ -27,6 +27,7 @@
     "vite": "7.3.7"
   },
   "scripts": {
+    "dev": "vite",
     "build": "vite build",
     "typecheck": "tsc -p .",
     "test:e2e": "bash scripts/e2e.sh",

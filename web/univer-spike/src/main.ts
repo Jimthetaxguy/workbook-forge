@@ -7,7 +7,7 @@ import { ForgeUniverAdapter } from './adapter';
 import { MODES, createUniverHost, type Mode } from './univer-host';
 
 const params = new URLSearchParams(location.search);
-const mode = (MODES as readonly string[]).includes(params.get('mode') ?? '') ? (params.get('mode') as Mode) : 'no-formula-plugins';
+const mode = (MODES as readonly string[]).includes(params.get('mode') ?? '') ? (params.get('mode') as Mode) : 'not-execute';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const select = $<HTMLSelectElement>('mode');
