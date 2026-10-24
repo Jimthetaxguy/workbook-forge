@@ -2,12 +2,13 @@
 author: Codex
 created: 2026-09-24
 agent: codex/Codex
-date: '2026-10-14'
+date: '2026-10-23'
 type: project-context
 task: Build an SDK for Excel in agent-ready formats using independent Python and Rust implementations
 status: active
-summary: "Workbook Forge is an agent-ready Excel compiler: supported inputs and calculations pass through one versioned model to independent Python/Rust runtimes and editable OOXML. The model, one bound calculation, workbook intake, a shared calculation report, and privacy-safe Python intake views are built. Excel 16.113.4 has observed the scalar operating scenario; Spec 2 and the joined headless path remain outstanding because spill placement is blocked."
+summary: "Workbook Forge is an agent-ready Excel compiler: supported inputs and calculations pass through one versioned model to independent Python/Rust runtimes and editable OOXML. The model, one bound calculation, workbook intake, a shared calculation report, privacy-safe Python intake views, and a prototype Rust/WASM byte boundary are built. Excel 16.113.4 has observed the scalar operating scenario; Spec 2, the browser canvas and the joined headless path remain outstanding because spill placement is blocked."
 next_steps:
+  - Build the browser canvas on the target-gated byte API; decide blank-workbook authoring and absent-cell insertion behavior before promising unrestricted cell editing. Keep the local MCP companion a separate, independently verified integration.
   - Keep the Excel 16.113.4 operating-scenario observation uncommitted. The saved package contains a machine-local path. Spec 2 stays false until export writes every declared spill cell and a fresh Excel reimport matches them.
   - Fix remaining confirmed defects from Microsoft's examples or decimal arithmetic, never from either engine. The SUM accumulation rule, the serial-0 date, the typed reason on unsupported-function results, the defined-name diagnostic, and the calculation report are already in place.
   - Settle the profiles that were written from Microsoft's prose rather than an example in one Excel session: criteria over numbers stored as text, error cells under criteria, text functions over errors, EDATE before serial 1.
@@ -20,9 +21,10 @@ next_steps:
   - Use observed Excel results to validate Workbook Forge profiles and update shared fixtures before expanding formula-family coverage; keep observers optional and formula-recovery candidates separate and uncertain.
   - After the core loop is evidenced, prioritize additional formula families by documented workbook use and dependency value.
 remaining:
+  - The Rust/WASM boundary is a library prototype only: there is no browser grid, browser constructor for a blank workbook, or MCP server/companion. Imported workbook edits still reject insertion into cells absent from the original model.
   - Worksheet spill projection, volatile/iteration/quirk round-trip classes, cross-backend bound export, and broad Excel 365 coverage are not complete.
   - From impl/v1-intake and impl/v1-calc-binding, intake is ported. Duplicate JSON keys are refused. Typed binding constraints and the calculation session with revisions are not. The joined headless workflow has not started.
-  - No pull request so far has had checks run on it or a review; mergeability alone is not acceptance evidence. tools/gate.sh is the check to run.
+  - Run `bash tools/gate.sh` locally before a commit or pull request; GitHub Actions is blocked by billing, and mergeability alone is not acceptance evidence.
   - Of the 33 confirmed review findings that were open on 2026-09-29, ten were fixed on 2026-09-30 (counting and criteria functions, text functions over errors, arithmetic overflow, EDATE before serial 1, expression depth, `_xHHHH_` escapes, missing and unchecked versions, blank references). On 2026-10-05 four more of the six named findings were resolved: the SUM accumulation rule and typed reason on unsupported-function results were already fixed in prior commits; serial 0 as a date was fixed (MONTH(0)=1, DAY(0)=0, YEAR(0)=1900 to match Excel's display of 1900-01-00); and a formula using a defined name is now reported as `unsupported_formula` instead of `parse_error`. The calculation report now exists. An output origin of `calculated` means `Formula.result` was produced by the engine; cell provenance is left unchanged so an imported cache is not promoted. The per-cell memory bound remains deferred. The remaining 17 unnamed findings from the `.verification/` ledger could not be individually assessed (gitignored, not on disk). The 2026-09-30 fixes carry Workbook Forge profiles that have not been checked in Excel.
   - "GitHub reports Jimthetaxguy/workbook-forge as public, verified 2026-09-28; historical private-release preparation notes in docs/run-history.md describe their original checkpoints."
 open_questions: []
@@ -44,6 +46,7 @@ Build an **SDK for Excel in agent-ready formats**: expose supported workbook dat
 - **Input preview:** a detached calculation of proposed inputs, with before/after outputs and cell changes; it never changes the owned session or writes files.
 - **Calculation provenance:** source formulas, references, explicit bindings and model revision attached to a result; imported caches are never evidence that Forge calculated a value.
 - **Workbook model:** sparse sheets, authored content, formulas, styles, and explicit input/output bindings, implemented independently in each language and separate from XML.
+- **BrowserWorkbook / WASM boundary:** a target-gated `wasm-bindgen` wrapper around the Rust XLSX byte import, versioned snapshot, existing-cell edit session, calculation report and byte export. The wrapper has no path or network API; the browser UI, blank-workbook constructor and MCP bridge remain future work.
 - **Compiler pipeline:** supported Excel and structured-calculation inputs pass through the canonical workbook model before runtime or OOXML output; every stage reports what it did and could not carry.
 - **Intermediate representation (IR):** the versioned canonical workbook model that preserves the shared meaning between front ends and Python/Rust/OOXML targets.
 - **Lowering:** turning a validated model operation into a backend calculation or OOXML output while preserving supported meaning or reporting a limitation.
@@ -58,6 +61,8 @@ Build an **SDK for Excel in agent-ready formats**: expose supported workbook dat
 - **Preservation baseline:** immutable imported package content used to patch supported changes without rereading or rewriting the original file.
 - **Python engine:** the hand-written Python expression, validation, graph-calculation and session implementation; default for Python APIs, with no native execution dependency.
 - **Native backend:** optional Python interoperability bridge selecting the separately implemented Rust engine through PyO3. It is not the Python implementation.
+- **Evidence grade:** per function (and optionally per fixture case), one of `profile` (declared by a Workbook Forge rule), `dual_engine` (Python and Rust agree; not evidence against Excel), `expected_value` (matches a Microsoft example or independent arithmetic) or `excel_observed` (Excel Desktop produced it; cites a receipt with the saved workbook sha256, Excel version and `event_time`). An observation whose workbook hash changed is stale and does not count. See `docs/evidence-grades.md`.
+- **Profile class:** `semantic` when a function's profile rule can change a calculated value, `cosmetic` when it cannot, `unclassified` (every function today) until reviewed. Opt-in strict export (`export_canonical(..., strict_evidence=True)`) refuses with `evidence_insufficient` any cell calling a semantic, unclassified or uncatalogued function without a current Excel observation.
 - **Catalogued:** a formula feature or function has an entry with provenance and compatibility metadata.
 - **Parsed:** the engine recognizes the construct and produces a typed representation.
 - **Evaluated:** the engine calculates the construct for its documented input domain.
@@ -91,6 +96,8 @@ At the accepted toolkit checkpoint, coverage was 115 implemented functions, 85 d
 
 The versioned canonical workbook schema, Python and Rust hydration, the bound operating-scenario calculation and its shared fixtures are on `main`: `schemas/workbook-model.v1.schema.json`, `python/workbook_forge/model.py`, `rust/src/model.rs` and `fixtures/operating-scenario.workbook.json`. Both engines read the same bytes and calculate with their own evaluators. `workbook_forge.intake` reads an `.xlsx` file into that model, and `workbook-forge intake` prints it, or with `--summary` its versions and counts. `impl/v1-intake` and `impl/v1-calc-binding` hold an earlier shape of the model. Their intake is ported. Their typed binding constraints and calculation session are not.
 
+The Rust crate also has a target-gated browser boundary in `rust/src/wasm.rs`. It imports caller-provided XLSX bytes, exposes the existing versioned model and calculation session through JSON, and returns exported XLSX bytes. Native Rust tests cover byte round trips; a headless Chrome/WASM test exercises open, edit, recalculate and export. This does not yet provide a browser canvas or a blank workbook through the WASM API. Imported workbooks still reject edits to cells absent from the original model. The boundary itself does not upload workbook bytes, but a future hosted app's network behavior must be assessed separately.
+
 The Excel round-trip harness is `tools/excel_oracle.py`, with `tools/canonical_excel_receipt.py` for the canonical fixture. The committed receipts under `receipts/canonical-operating-scenario/` are preflight only: they record that Excel was not invoked and that Spec 2 is not passed. `docs/excel-observations.md` describes one run of Microsoft Excel 16.113.2 on the older SDK scenario in which all 12 declared checks matched; no receipt for that run is committed. On 2026-10-14, Excel 16.113.4 observed the canonical operating-scenario contract after a full rebuild and an in-place `save` of the open workbook. The working copy omitted `Forecast!J2` (`=1+`) because that formula does not open while alerts are off, and a changed cache counted only when `xl/calcChain.xml` named the cell. `spec2_passed` stayed false because spill is blocked. That receipt was not committed. The full red-flag contract is still blocked before Excel opens because export cannot place dynamic-array spill cells, and the volatile, iteration, scalar-array and Excel-quirk classes are unobserved.
 - The source-linked function inventory contains 521 records; it is a versioned discovery catalog, not an evaluator coverage claim.
 - The Python and Rust evaluators implement the same bounded scalar, reference, operator, common-function, conditional-aggregation, and rectangular formula-result slice. Both load `fixtures/formula-cases.jsonl`. The toolkit adds reviewed Serde dependencies and a separate PyO3 bridge; exact license receipts cover both lockfiles.
@@ -104,6 +111,7 @@ The Excel round-trip harness is `tools/excel_oracle.py`, with `tools/canonical_e
 - `docs/extraction-patterns.md`: independent XML parsing/extraction contract, limits, formula mappings and source provenance.
 - `docs/agent-protocol.md`: the versioned operation, pagination, error, provenance and JSON-lines transport contract; catalog/agent-operations.json owns its discoverable schemas.
 - `docs/excel-observations.md`: observation meanings, harness usage and actual Excel evidence.
+- `docs/evidence-grades.md`: evidence grades per function/case, Excel observations pinned to receipts, stale-receipt checks and the opt-in strict export gate. `python/workbook_forge/evidence.py` and `rust/src/evidence.rs` implement the record rules.
 - `docs/run-history.md`: dated project activity, superseded checkpoint decisions, Runs 1–24 and the pre-loop baseline. Historical counts and repository visibility describe their original checkpoints.
 - `docs/behavior-profiles.md`: current behavior and profile notes by function family, plus workbook adapter details.
 - `python/workbook_forge/intake.py`: reads an `.xlsx` file into the canonical model; `workbook-forge intake` is its command.

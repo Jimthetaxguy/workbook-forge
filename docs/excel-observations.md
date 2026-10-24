@@ -110,6 +110,12 @@ and reimport those cells.
 - `forge_profile` expectation: a local behavior choice, not Microsoft evidence.
 - `excel_observed`: a typed cache read from the new workbook after the Excel
   commands completed. The receipt separately records comparison results.
+- A receipt with status `observed` also carries an `excel_observation` block
+  (saved workbook sha256, Excel version, `event_time` when Excel ran). That
+  block is what a catalog `excel_observed` grade cites; if the saved workbook's
+  hash changes the observation is stale. `python3 tools/excel_oracle.py
+  --check-receipt <receipt.json>` reports `current`, `stale`, `missing` or
+  `not_an_observation`. See [evidence grades](evidence-grades.md).
 - `excel_live_observed`: a live value returned by Excel before saving or closing.
   Live-scenario values are emitted before cleanup and survive a later failure.
 

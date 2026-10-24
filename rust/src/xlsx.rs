@@ -284,8 +284,7 @@ fn publish(package: &Package, path: &Path) -> Result<PathBuf> {
     if path.exists() {
         return Err(err("output path already exists"));
     }
-    let bytes = package.encode()?;
-    Package::from_bytes(&bytes)?;
+    let bytes = encode_checked(package)?;
     let parent = path.parent().unwrap_or_else(|| Path::new("."));
     fs::create_dir_all(parent)?;
     let temporary = parent.join(format!(
@@ -306,6 +305,12 @@ fn publish(package: &Package, path: &Path) -> Result<PathBuf> {
     drop(file);
     let _ = fs::remove_file(temporary);
     result
+}
+
+fn encode_checked(package: &Package) -> Result<Vec<u8>> {
+    let bytes = package.encode()?;
+    Package::from_bytes(&bytes)?;
+    Ok(bytes)
 }
 
 fn number(text: &str) -> Result<f64> {
@@ -1022,7 +1027,7 @@ pub(crate) fn extraction_source(path: &Path) -> Result<ExtractionSource> {
 
 /// An immutable source package plus a native transient workbook session.
 pub struct ImportedWorkbook {
-    source: PathBuf,
+    source: Option<PathBuf>,
     baseline: Package,
     original: WorkbookModel,
     session: Session,
@@ -1038,9 +1043,32 @@ pub fn import_xlsx(
 ) -> Result<ImportedWorkbook> {
     let path = path.as_ref();
     let package = Package::read(path)?;
+    import_package(package, Some(fs::canonicalize(path)?), inputs, outputs)
+}
+
+/// Import an `.xlsx` package directly from caller-owned bytes.
+///
+/// The same ZIP/XML limits and parsing rules as [`import_xlsx`] apply. No
+/// filesystem path is retained; export this workbook with
+/// [`ImportedWorkbook::export_bytes`] so the caller controls where the bytes
+/// are saved.
+pub fn import_xlsx_bytes(
+    bytes: &[u8],
+    inputs: BTreeMap<String, InputBinding>,
+    outputs: BTreeMap<String, CellAddress>,
+) -> Result<ImportedWorkbook> {
+    import_package(Package::from_bytes(bytes)?, None, inputs, outputs)
+}
+
+fn import_package(
+    package: Package,
+    source: Option<PathBuf>,
+    inputs: BTreeMap<String, InputBinding>,
+    outputs: BTreeMap<String, CellAddress>,
+) -> Result<ImportedWorkbook> {
     let decoded = decode(&package, inputs, outputs)?;
     Ok(ImportedWorkbook {
-        source: fs::canonicalize(path)?,
+        source,
         baseline: package,
         original: decoded.model.clone(),
         session: Session::new(decoded.model)?,
@@ -1099,19 +1127,7 @@ impl ImportedWorkbook {
             Some(model.revision),
         )
     }
-    pub fn export(&self, path: impl AsRef<Path>) -> Result<PathBuf> {
-        let path = path.as_ref();
-        let canonical_parent = path
-            .parent()
-            .filter(|p| !p.as_os_str().is_empty())
-            .unwrap_or_else(|| Path::new("."));
-        let same_original_path = fs::canonicalize(canonical_parent)
-            .ok()
-            .zip(path.file_name())
-            .is_some_and(|(parent, name)| parent.join(name) == self.source);
-        if same_original_path || (path.exists() && fs::canonicalize(path)? == self.source) {
-            return Err(err("refusing source overwrite"));
-        }
+    fn export_package(&self) -> Result<Package> {
         let model = self.snapshot();
         let report = self.calculate(1);
         if report.stale || report.revision != model.revision {
@@ -1130,7 +1146,30 @@ impl ImportedWorkbook {
         if self.snapshot().revision != model.revision {
             return Err(err("model changed during export"));
         }
-        publish(&package, path)
+        Ok(package)
+    }
+    /// Export the current workbook as a validated `.xlsx` byte buffer.
+    pub fn export_bytes(&self) -> Result<Vec<u8>> {
+        encode_checked(&self.export_package()?)
+    }
+    /// Export to a new filesystem path, refusing to overwrite the original
+    /// source when this workbook was imported from a path.
+    pub fn export(&self, path: impl AsRef<Path>) -> Result<PathBuf> {
+        let path = path.as_ref();
+        if let Some(source) = &self.source {
+            let canonical_parent = path
+                .parent()
+                .filter(|p| !p.as_os_str().is_empty())
+                .unwrap_or_else(|| Path::new("."));
+            let same_original_path = fs::canonicalize(canonical_parent)
+                .ok()
+                .zip(path.file_name())
+                .is_some_and(|(parent, name)| parent.join(name) == *source);
+            if same_original_path || (path.exists() && fs::canonicalize(path)? == *source) {
+                return Err(err("refusing source overwrite"));
+            }
+        }
+        publish(&self.export_package()?, path)
     }
 }
 
@@ -1482,6 +1521,12 @@ pub fn export_xlsx(model: &WorkbookModel, path: impl AsRef<Path>) -> Result<Path
     publish(&fresh(model, &report)?, path.as_ref())
 }
 
+/// Generate a new `.xlsx` package entirely in memory.
+pub fn export_xlsx_bytes(model: &WorkbookModel) -> Result<Vec<u8>> {
+    let report = toolkit::calculate(model, 1);
+    encode_checked(&fresh(model, &report)?)
+}
+
 fn replace_spans(bytes: &[u8], mut patches: Vec<(usize, usize, Vec<u8>)>) -> Result<Vec<u8>> {
     patches.sort_by_key(|p| p.0);
     let mut out = Vec::new();
@@ -1791,6 +1836,52 @@ mod tests {
         );
         assert!(imported.export(&output).is_err());
         assert!(imported.export(&source).is_err());
+    }
+    #[test]
+    fn byte_import_export_preserves_the_package_without_a_filesystem_path() {
+        let model = toolkit::operating_scenario();
+        let mut package = scenario_package();
+        package
+            .parts
+            .insert("custom/payload.bin".into(), vec![0, 255, 7, 19]);
+        let source = encode_checked(&package).unwrap();
+        let imported =
+            import_xlsx_bytes(&source, model.inputs.clone(), model.outputs.clone()).unwrap();
+        assert!(imported.source.is_none());
+
+        imported
+            .set_inputs(
+                &BTreeMap::from([("unit_price".into(), CellValue::Number(25.0))]),
+                Some(0),
+            )
+            .unwrap();
+        let output = imported.export_bytes().unwrap();
+        let exported_package = Package::from_bytes(&output).unwrap();
+        assert_eq!(
+            exported_package.parts["custom/payload.bin"],
+            [0, 255, 7, 19]
+        );
+
+        let reopened = import_xlsx_bytes(&output, model.inputs, model.outputs).unwrap();
+        assert_eq!(
+            reopened.calculate(1).outputs["revenue"],
+            toolkit::CalculatedValue::Scalar(CellValue::Number(9250.0))
+        );
+        assert!(
+            import_xlsx_bytes(b"not an xlsx package", BTreeMap::new(), BTreeMap::new()).is_err()
+        );
+    }
+    #[test]
+    fn authored_workbook_can_be_exported_and_reopened_as_bytes() {
+        let model = toolkit::operating_scenario();
+        let bytes = export_xlsx_bytes(&model).unwrap();
+        let imported =
+            import_xlsx_bytes(&bytes, model.inputs.clone(), model.outputs.clone()).unwrap();
+        assert_eq!(
+            imported.calculate(1).outputs,
+            toolkit::calculate(&model, 1).outputs
+        );
+        assert!(imported.source.is_none());
     }
     #[test]
     fn immutable_baseline_preserves_unknown_parts_and_unrelated_formula_xml() {
