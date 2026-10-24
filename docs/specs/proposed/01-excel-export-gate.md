@@ -36,8 +36,9 @@ Phase A (scalar, needs a Mac with Excel):
   otherwise and reports `blocked`). Never change global calculation or
   iteration settings, run macros, or send cleanup commands after an uncertain
   failure (excel-observations.md).
-- The 2026-09-28 SDK export round trip is already observed (12 cells). Phase A
-  is the separate canonical-package receipt; do not re-run or re-claim the SDK one.
+- The 2026-09-28 SDK export round trip is unreceipted narrative, not a finished
+  observation. Phase A is the separate canonical-package receipt. Do not treat
+  the SDK note as already observed.
 - Commit the receipt directory and a short dated entry in
   `docs/excel-observations.md` and `docs/run-history.md`. Before committing,
   strip machine paths, account names and workbook author metadata, per
