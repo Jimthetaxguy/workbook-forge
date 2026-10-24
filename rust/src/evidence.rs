@@ -879,7 +879,10 @@ def accept(value):
 
 json.dump([accept(item) for item in json.load(sys.stdin)], sys.stdout)
 "#;
-        let mut child = std::process::Command::new("python3")
+        let python = std::env::var_os("WORKBOOK_PYTHON")
+            .or_else(|| std::env::var_os("PYTHON"))
+            .unwrap_or_else(|| "python".into());
+        let mut child = std::process::Command::new(python)
             .arg("-c")
             .arg(script)
             .stdin(std::process::Stdio::piped())
