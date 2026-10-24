@@ -44,13 +44,13 @@ This report describes the 2026-09-24 review snapshots, when the project was name
   | Disagreements | 913 | 852 (65 fixed, 4 new) |
 
   - Of the 21 root-cause classes, 3 are fixed, 3 changed and 15 are unchanged.
-  - Two of the three fixes settled on answers that differ from Excel. `SUBSTITUTE("abc","","-")` is now #VALUE! in both engines (Excel: "abc"), and number-to-text now gives "1e-09"-style output in both.
+  - Two of the three fixes settled on answers that differ from the reviewer's expectation of Excel. `SUBSTITUTE("abc","","-")` is now #VALUE! in both engines (reviewer's expectation: "abc"), and number-to-text now gives "1e-09"-style output in both.
   - The 4 new classes:
     - A Rust comparison with an error on the right-hand side now changes which error a formula returns.
     - Rust's ISERROR misses #CALC!, now also through UNIQUE.
     - UNIQUE resolves competing argument errors in a different order in each engine.
     - `ROWS(SORT(...))`: Python says unsupported, Rust returns #VALUE!.
-- **Regression.** `=1E-05&""` now returns `1e-05` in both engines. Rust previously returned `0.00001`, which matches Excel. The routine chose shortest round-trip text instead of Excel's 15-significant-digit General format.
+- **Regression.** `=1E-05&""` now returns `1e-05` in both engines. Rust previously returned `0.00001`, which the reviewer expected to match Excel. The routine chose shortest round-trip text instead of the 15-significant-digit General format the reviewer expected from Excel.
 - **SORT and UNIQUE.**
   - Python and Rust agree on 97.87% of 3,000 generated cases, and on all 1,245 array results.
   - Both return #VALUE! for sort keys that contain blanks, booleans or mixed types, e.g. sorting sales rows when one sales cell is empty. An error in the key fails the whole sort.
@@ -58,7 +58,7 @@ This report describes the 2026-09-24 review snapshots, when the project was name
   - Fixtures pin these behaviors: 53 of the 76 new fixtures (70%) are "-profile" cases.
 - **LibreOffice on the 76 new fixtures:** 36.8% agree exactly and 59.2% agree counting error classes. The whole original corpus scored 66.6% and 79.4%. The largest groups of disagreements are profile strictness (11 cases) and number rendering (10 cases).
 - **Unchanged from the analysis below.**
-  - Python still matches Excel on only 2 of the 23 headline checks.
+  - Python still matches the reviewer's expectation of Excel on only 2 of the 23 headline checks.
   - Python still raises `RecursionError` at 1,000 terms, and the wildcard match takes 2.8 s on 300 characters.
   - Rust still aborts with a stack overflow at 300 nested calls (debug build), reads cells in O(n²), resolves duplicate keys nondeterministically, returns 1.23 for `ROUND(A5:A6,0)`, fails XLOOKUP on blanks, and returns 4 for `LEN(#N/A)`.
 - **Fixed.** CONCAT error passthrough, the "-0" text output, and memory blowups from nested SUBSTITUTE (the text cap now catches them).
@@ -128,7 +128,7 @@ kernels are strong. The loop has been optimizing the wrong thing, though.
 
 ### 1. Both engines share non-Excel answers on everyday formulas (the corpus cannot see this)
 
-| Formula | Formula Atlas (Python and Rust) | Excel |
+| Formula | Formula Atlas (Python and Rust) | Reviewer's expectation |
 |---|---|---|
 | `=IF(A1="","empty","filled")`, A1 blank | `filled` ✔ | `empty` |
 | `=A1=""`, A1 blank | FALSE ✔ | TRUE |
@@ -309,7 +309,7 @@ steps 3 and 4 can run in parallel with step 1.
 1. **Build the Excel oracle (plan step 4).** The pieces already exist.
    1. Write each fixture to its own sheet with `Workbook.set_value` and `set_formula`.
    2. Open, recalculate and save once in the installed Excel. AppleScript can do this, or you can do it by hand once.
-   3. Read Excel's saved results back with `Workbook.get()`, which already returns the cached `<v>` value, and diff them against the fixtures.
+   3. Read Excel's saved results back with `Workbook.get()`, which already returns the cached `<v>` value, and diff them against the fixtures. A saved `<v>` cache is not an observation; see [Excel observations](../excel-observations.md).
    4. Start with the 1,286 fixtures, the repro formulas in the evidence folder and the disputed cases in section 8.
    5. Keep LibreOffice as a CI-friendly second oracle, knowing where it deviates from Excel (the harness is preserved).
 2. **Build one "Excel value layer" per engine,** with expected values taken from the oracle rather than the author:
