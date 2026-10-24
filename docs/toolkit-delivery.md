@@ -7,7 +7,7 @@ type: implementation-record
 task: Deliver the programmable workbook toolkit
 status: review-candidate-live-excel-pending
 summary: Independent Python and Rust native primitives, workbook workflows and review fixes pass local tests and installed-package checks; full Excel Desktop acceptance remains outstanding.
-next_steps: [Review the verified SDK candidate and current-state findings, complete live Excel acceptance before integration, define explicit composition-to-workbook bindings for the next milestone]
+next_steps: [Review the verified SDK candidate and current-state findings, complete live Excel acceptance, define explicit composition-to-workbook bindings for the next milestone]
 remaining: [Full live Excel acceptance, wider optional native-wheel platform coverage, hosted CI evidence]
 open_questions: []
 ---
@@ -50,8 +50,8 @@ it is not implemented by silently changing the current spreadsheet profile.
 This record has one coordinating writer, codex/Codex. Contributors report what
 changed, actual checks and unresolved work at meaningful milestones. Their
 reports are attributed here; an assignment does not count as verification.
-The feature branch preserves prior work and local evidence. No merge or package
-publication is authorized by the implementation checkpoint.
+The toolkit implementation was merged to `main` on 2026-09-28. This section
+keeps that checkpoint's checks and the work it left open.
 
 ## Current-state findings
 
@@ -108,11 +108,8 @@ prove recovery of the original native composition.
 **Evidence must remain attached to the claim it supports.** Shared cases establish
 agreement between implementations. Independently derived arithmetic checks the
 scenario's business result. Installed consumers establish package usability.
-Three live Excel formula observations establish only those observed cases and
-settings. They do not establish generated-file validity, copied-formula behavior,
-validation enforcement or the complete edit/save/reimport cycle. The full
-Excel Desktop gate and hosted CI evidence remain outstanding; see
-[Excel observations](excel-observations.md).
+Current Excel evidence is recorded in [Excel observations](excel-observations.md).
+The full Excel Desktop gate and hosted CI evidence remain outstanding.
 
 **Conservative extraction is useful even when calculation is unavailable.**
 Original formula text, imported caches and calculated values have distinct roles.
@@ -348,9 +345,9 @@ diagnostic. It does not expand Forge's supported functions.
   operations in both languages, shared contract tests and live agent acceptance
 - [x] Existing regressions, policy/license checks and independent final review
 
-The implementation is a reviewable delivery candidate. The complete milestone's
-Excel acceptance criterion has not passed; three direct formula observations
-are narrower evidence. See [Excel observations](excel-observations.md).
+The toolkit implementation is on `main`. The complete milestone's Excel
+acceptance criterion has not passed. Current Excel evidence is in
+[Excel observations](excel-observations.md).
 
 ## Public surfaces and retained limits
 
@@ -546,12 +543,10 @@ different public-call overhead and are not a controlled language speed compariso
 
 ## Remaining acceptance and next dependency
 
-The next required step is independent Excel observation of the actual generated
-scenario: open without repair, edit price 20 → 25, calculate, save, and reimport.
-The harness and synthetic cases are retained. Excel 16.113.2 produced three
-live arithmetic/IF/SUM results; file-mode automation returned an unpopulated
-cache set, and the complete live scenario encountered Apple-event error `-50`.
-These failures do not count as a passing roundtrip.
+Current Excel evidence is in [Excel observations](excel-observations.md).
+The harness and synthetic cases from this checkpoint are retained. Excel
+acceptance for this delivery still requires a committed receipt for an open,
+edit, full recalculation, save, and reimport.
 
 The proposed [next integration milestone](#next-integration-milestone-one-authored-calculation)
 connects native compositions to workbook authoring through explicit bindings.
