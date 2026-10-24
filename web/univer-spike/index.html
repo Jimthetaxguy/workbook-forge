@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Workbook Forge × Univer spike</title>
+    <style>
+      html, body { margin: 0; height: 100%; font: 13px system-ui, sans-serif; }
+      #bar { display: flex; gap: 8px; align-items: center; padding: 6px 10px; border-bottom: 1px solid #ddd; }
+      #notices { padding: 4px 10px; min-height: 18px; color: #8a1c1c; background: #fff4f4; border-bottom: 1px solid #f1caca; }
+      #app { height: calc(100% - 80px); }
+    </style>
+  </head>
+  <body>
+    <div id="bar">
+      <strong>Forge × Univer</strong>
+      <label>Mode <select id="mode"></select></label>
+      <input id="file" type="file" accept=".xlsx" />
+      <button id="undo">Undo (Forge)</button>
+      <button id="redo">Redo (Forge)</button>
+      <button id="export">Export .xlsx</button>
+      <span id="status"></span>
+    </div>
+    <div id="notices" role="status" aria-live="polite"></div>
+    <div id="app"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
