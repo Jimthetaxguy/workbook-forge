@@ -487,13 +487,15 @@ def _patch_import(workbook: Workbook, original: dict[str, Any], current: dict[st
     for before, after in zip(original["sheets"], current["sheets"], strict=True):
         for address in before["cells"].keys() | after["cells"].keys():
             old, new = before["cells"].get(address, {}), after["cells"].get(address, {})
-            if old == new:
+            if _digest(old) == _digest(new):
                 continue
             if old.get("blocked_reason") or new.get("blocked_reason"):
                 raise UnsupportedWorkbook(f"cannot edit preserved-only cell {after['name']}!{address}")
             if old.get("style") != new.get("style"):
                 raise UnsupportedWorkbook("imported style changes require a separately audited style transformer")
-            if old.get("formula") == new.get("formula") and old.get("value") == new.get("value"):
+            # Typed/sign-aware comparison: Python equality conflates false/0
+            # and positive/negative zero, so it cannot guard package patches.
+            if old.get("formula") == new.get("formula") and _digest(old.get("value")) == _digest(new.get("value")):
                 continue
             if new.get("formula") is not None:
                 workbook.set_formula(after["name"], address, "=" + new["formula"].removeprefix("="))
@@ -502,6 +504,32 @@ def _patch_import(workbook: Workbook, original: dict[str, Any], current: dict[st
                 _write_cell_content(workbook._writable_cell(after["name"], address), new)
             else:
                 workbook.set_value(after["name"], address, new.get("value"))
+
+
+def export_snapshot(imported: WorkbookModel, document: dict[str, Any], output: str | Path) -> Path:
+    """Calculate a transferred toolkit IR using an immutable imported package.
+
+    This is an IR handoff, not Rust/Python source generation. Existing export
+    checks retain layout/style/validation and blocked-region protections.
+    """
+    import json
+
+    if imported._source_baseline is None:
+        raise WorkbookError("snapshot export requires an imported package baseline")
+    original = json.loads(imported._source_baseline.document_json)
+    transferred = WorkbookModel(document=document, backend=imported.backend)
+    current = transferred.to_dict()
+    if len(original["sheets"]) != len(current["sheets"]) or any(
+        before["cells"].keys() != after["cells"].keys()
+        for before, after in zip(original["sheets"], current["sheets"], strict=True)
+    ):
+        raise UnsupportedWorkbook("transferred snapshot must retain all source cell addresses")
+    for before, after in zip(original["sheets"], current["sheets"], strict=True):
+        for address, cell in before["cells"].items():
+            if cell.get("blocked_reason") != after["cells"][address].get("blocked_reason"):
+                raise UnsupportedWorkbook("transferred snapshot cannot change preserved-only guards")
+    transferred._source_baseline = imported._source_baseline
+    return export_xlsx(transferred, output)
 
 
 def export_xlsx(model: WorkbookModel, output: str | Path, *, report: dict[str, Any] | None = None) -> Path:

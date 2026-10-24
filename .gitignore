@@ -28,3 +28,6 @@ exports-rust/
 _archive-*/
 *.bak-*
 .autoresearch/backups/
+
+# Optional TypeScript client build products (source/checks remain tracked).
+/typescript/dist/

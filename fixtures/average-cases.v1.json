@@ -1,0 +1,341 @@
+{
+  "version": 1,
+  "excel_observed": false,
+  "direct_policy": "count booleans and decimal numeric text; conflicting Microsoft documentation requires Excel confirmation",
+  "cases": [
+    {
+      "id": "ms-example-range",
+      "formula": "AVERAGE(A2:A6)",
+      "cells": {
+        "A2": 10,
+        "A3": 7,
+        "A4": 9,
+        "A5": 27,
+        "A6": 2
+      },
+      "expected": 11,
+      "evidence": "primary_numeric_example"
+    },
+    {
+      "id": "ms-example-range-plus-direct",
+      "formula": "AVERAGE(A2:A6,5)",
+      "cells": {
+        "A2": 10,
+        "A3": 7,
+        "A4": 9,
+        "A5": 27,
+        "A6": 2
+      },
+      "expected": 10,
+      "evidence": "primary_numeric_example"
+    },
+    {
+      "id": "ms-example-rectangle",
+      "formula": "AVERAGE(A2:C2)",
+      "cells": {
+        "A2": 10,
+        "B2": 15,
+        "C2": 32
+      },
+      "expected": 19,
+      "evidence": "primary_numeric_example"
+    },
+    {
+      "id": "reference-ignored-kinds-and-zero",
+      "formula": "AVERAGE(A1:A5)",
+      "cells": {
+        "A1": 4,
+        "A2": 0,
+        "A3": "8",
+        "A4": true,
+        "A5": null
+      },
+      "expected": 2,
+      "evidence": "primary_reference_count_rule"
+    },
+    {
+      "id": "reference-bool",
+      "formula": "AVERAGE(A1,4)",
+      "cells": {
+        "A1": true
+      },
+      "expected": 4,
+      "evidence": "primary_reference_count_rule"
+    },
+    {
+      "id": "reference-text",
+      "formula": "AVERAGE(A1,4)",
+      "cells": {
+        "A1": "8"
+      },
+      "expected": 4,
+      "evidence": "primary_reference_count_rule"
+    },
+    {
+      "id": "reference-zero",
+      "formula": "AVERAGE(A1:A2)",
+      "cells": {
+        "A1": 0,
+        "A2": null
+      },
+      "expected": 0,
+      "evidence": "primary_reference_count_rule"
+    },
+    {
+      "id": "direct-bools",
+      "formula": "AVERAGE(TRUE,FALSE)",
+      "cells": {},
+      "expected": 0.5,
+      "evidence": "conflicted_primary_direct_policy"
+    },
+    {
+      "id": "direct-numeric-text",
+      "formula": "AVERAGE(\"5\",1)",
+      "cells": {},
+      "expected": 3,
+      "evidence": "conflicted_primary_direct_policy"
+    },
+    {
+      "id": "direct-zero-text",
+      "formula": "AVERAGE(\"0\")",
+      "cells": {},
+      "expected": 0,
+      "evidence": "conflicted_primary_direct_policy"
+    },
+    {
+      "id": "direct-false",
+      "formula": "AVERAGE(FALSE)",
+      "cells": {},
+      "expected": 0,
+      "evidence": "conflicted_primary_direct_policy"
+    },
+    {
+      "id": "mixed-direct-and-range",
+      "formula": "AVERAGE(TRUE,\"3\",A1:A2)",
+      "cells": {
+        "A1": 2,
+        "A2": 4
+      },
+      "expected": 2.5,
+      "evidence": "conflicted_primary_direct_policy"
+    },
+    {
+      "id": "empty-range",
+      "formula": "AVERAGE(A1:A3)",
+      "cells": {},
+      "expected": {
+        "error": "#DIV/0!"
+      },
+      "evidence": "unobserved_empty_count_error"
+    },
+    {
+      "id": "only-text-reference",
+      "formula": "AVERAGE(A1)",
+      "cells": {
+        "A1": "0"
+      },
+      "expected": {
+        "error": "#DIV/0!"
+      },
+      "evidence": "unobserved_empty_count_error"
+    },
+    {
+      "id": "only-bool-reference",
+      "formula": "AVERAGE(A1)",
+      "cells": {
+        "A1": false
+      },
+      "expected": {
+        "error": "#DIV/0!"
+      },
+      "evidence": "unobserved_empty_count_error"
+    },
+    {
+      "id": "direct-bad-text",
+      "formula": "AVERAGE(\"bad\",1)",
+      "cells": {},
+      "expected": {
+        "error": "#VALUE!"
+      },
+      "evidence": "primary_error_rule_local_code"
+    },
+    {
+      "id": "direct-empty-text",
+      "formula": "AVERAGE(\"\",1)",
+      "cells": {},
+      "expected": {
+        "error": "#VALUE!"
+      },
+      "evidence": "unobserved_text_conversion_profile"
+    },
+    {
+      "id": "reference-error",
+      "formula": "AVERAGE(A1,1)",
+      "cells": {
+        "A1": {
+          "error": "#N/A"
+        }
+      },
+      "expected": {
+        "error": "#N/A"
+      },
+      "evidence": "primary_error_rule_local_code"
+    },
+    {
+      "id": "direct-error",
+      "formula": "AVERAGE(#REF!,1)",
+      "cells": {},
+      "expected": {
+        "error": "#REF!"
+      },
+      "evidence": "primary_error_rule_local_code"
+    },
+    {
+      "id": "left-text-coercion-first",
+      "formula": "AVERAGE(\"bad\",#N/A)",
+      "cells": {},
+      "expected": {
+        "error": "#VALUE!"
+      },
+      "evidence": "unobserved_error_order_profile"
+    },
+    {
+      "id": "left-error-first",
+      "formula": "AVERAGE(#N/A,\"bad\")",
+      "cells": {},
+      "expected": {
+        "error": "#N/A"
+      },
+      "evidence": "unobserved_error_order_profile"
+    },
+    {
+      "id": "accumulation-overflow",
+      "formula": "AVERAGE(1e308,1e308)",
+      "cells": {},
+      "expected": {
+        "error": "#NUM!"
+      },
+      "evidence": "unobserved_binary64_profile"
+    },
+    {
+      "id": "empty-guard",
+      "formula": "IFERROR(AVERAGE(A1:A3),17)",
+      "cells": {},
+      "expected": 17,
+      "evidence": "unobserved_empty_count_error"
+    },
+    {
+      "id": "computed-direct-bool",
+      "formula": "AVERAGE(1<2,3)",
+      "cells": {},
+      "expected": 2,
+      "evidence": "conflicted_primary_direct_policy"
+    },
+    {
+      "id": "transport-#DIV/0!",
+      "formula": "AVERAGE(#DIV/0!,1)",
+      "cells": {},
+      "expected": {
+        "error": "#DIV/0!"
+      },
+      "evidence": "typed_error_transport_profile_not_excel_observed"
+    },
+    {
+      "id": "transport-#VALUE!",
+      "formula": "AVERAGE(#VALUE!,1)",
+      "cells": {},
+      "expected": {
+        "error": "#VALUE!"
+      },
+      "evidence": "typed_error_transport_profile_not_excel_observed"
+    },
+    {
+      "id": "transport-#REF!",
+      "formula": "AVERAGE(#REF!,1)",
+      "cells": {},
+      "expected": {
+        "error": "#REF!"
+      },
+      "evidence": "typed_error_transport_profile_not_excel_observed"
+    },
+    {
+      "id": "transport-#NAME?",
+      "formula": "AVERAGE(#NAME?,1)",
+      "cells": {},
+      "expected": {
+        "error": "#NAME?"
+      },
+      "evidence": "typed_error_transport_profile_not_excel_observed"
+    },
+    {
+      "id": "transport-#NUM!",
+      "formula": "AVERAGE(#NUM!,1)",
+      "cells": {},
+      "expected": {
+        "error": "#NUM!"
+      },
+      "evidence": "typed_error_transport_profile_not_excel_observed"
+    },
+    {
+      "id": "transport-#N/A",
+      "formula": "AVERAGE(#N/A,1)",
+      "cells": {},
+      "expected": {
+        "error": "#N/A"
+      },
+      "evidence": "typed_error_transport_profile_not_excel_observed"
+    },
+    {
+      "id": "transport-#CALC!",
+      "formula": "AVERAGE(#CALC!,1)",
+      "cells": {},
+      "expected": {
+        "error": "#CALC!"
+      },
+      "evidence": "typed_error_transport_profile_not_excel_observed"
+    },
+    {
+      "id": "transport-#NULL!",
+      "formula": "AVERAGE(#NULL!,1)",
+      "cells": {},
+      "expected": {
+        "error": "#NULL!"
+      },
+      "evidence": "typed_error_transport_profile_not_excel_observed"
+    },
+    {
+      "id": "transport-#SPILL!",
+      "formula": "AVERAGE(#SPILL!,1)",
+      "cells": {},
+      "expected": {
+        "error": "#SPILL!"
+      },
+      "evidence": "typed_error_transport_profile_not_excel_observed"
+    },
+    {
+      "id": "ascii-spaces",
+      "formula": "AVERAGE(\" 4 \",2)",
+      "cells": {},
+      "expected": 3,
+      "evidence": "conflicted_primary_direct_policy_ascii_profile"
+    },
+    {
+      "id": "control-separator-text",
+      "formula": "AVERAGE(\"\u001c1\",2)",
+      "cells": {},
+      "expected": {
+        "error": "#VALUE!"
+      },
+      "evidence": "unobserved_ascii_conversion_profile"
+    },
+    {
+      "id": "nbsp-text",
+      "formula": "AVERAGE(\" 1\",2)",
+      "cells": {},
+      "expected": {
+        "error": "#VALUE!"
+      },
+      "evidence": "unobserved_ascii_conversion_profile"
+    }
+  ]
+}

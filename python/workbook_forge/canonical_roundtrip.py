@@ -9,6 +9,7 @@ not mark Spec 2 passed, and it does not mark array-spill placement passed.
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import hashlib
 import importlib.util
 import json
 from pathlib import Path
@@ -25,11 +26,10 @@ RED_FLAG_CONTRACT = ROOT / "fixtures" / "excel-roundtrip-red-flags.contract.json
 DESKTOP_COMMAND = (
     "python3 tools/canonical_excel_receipt.py "
     "--fixture fixtures/operating-scenario.workbook.json "
-    "--output-dir receipts/canonical-operating-scenario-excel "
+    "--output-dir receipts/canonical-operating-scenario-excel-new-run "
     "--excel"
 )
 
-# Names left by a finished or interrupted run of this builder.
 _RECEIPT_ENTRIES = frozenset({
     "receipt.json",
     "receipt.md",
@@ -41,8 +41,8 @@ _RECEIPT_ENTRIES = frozenset({
 })
 
 
-class CanonicalReceiptError(ValueError):
-    """The receipt directory is not one this builder may replace."""
+class CanonicalReceiptError(FileExistsError):
+    """An existing path cannot be reused for canonical receipt output."""
 
 
 def _is_repository_root_or_parent(path: Path) -> bool:
@@ -50,66 +50,25 @@ def _is_repository_root_or_parent(path: Path) -> bool:
     return path == root or root.is_relative_to(path)
 
 
-def _only_receipt_entries(path: Path) -> bool:
-    if not path.is_dir() or path.is_symlink():
-        return False
+def _existing_output_detail(path: Path) -> str:
+    if path.is_symlink():
+        return f"refusing an existing symbolic link ({path})"
+    resolved = path.resolve()
+    if _is_repository_root_or_parent(resolved):
+        return f"refusing the repository root or a parent of it ({resolved})"
+    if not path.is_dir():
+        return f"existing path is not a canonical receipt directory ({path})"
     entries = list(path.iterdir())
     if not entries:
-        return False
-    return all(entry.name in _RECEIPT_ENTRIES and not entry.is_symlink() for entry in entries)
-
-
-def _refusal_detail(path: Path) -> str:
-    if not path.exists():
-        return "refusing to delete a path that does not exist"
-    if not path.is_dir():
-        return "refusing to delete a path that is not a canonical receipt directory"
+        return f"refusing an existing empty directory ({path})"
     unexpected = sorted(
         entry.name
-        for entry in path.iterdir()
+        for entry in entries
         if entry.name not in _RECEIPT_ENTRIES or entry.is_symlink()
     )
     if unexpected:
-        listed = ", ".join(unexpected)
-        return (
-            "refusing to delete a directory that is not a canonical receipt; "
-            f"it contains {listed}"
-        )
-    return "refusing to delete an empty directory that is not a canonical receipt"
-
-
-def _delete_receipt_directory(path: Path, *, created: set[Path]) -> None:
-    """Delete a directory this call created, or one that holds only a previous receipt.
-
-    Refuses the repository root, any parent of it, symbolic links, and any
-    directory that contains anything other than receipt files.
-    """
-    if path.is_symlink():
-        raise CanonicalReceiptError(f"refusing to delete a symbolic link ({path})")
-    resolved = path.resolve()
-    if _is_repository_root_or_parent(resolved):
-        raise CanonicalReceiptError(
-            f"refusing to delete the repository root or a parent of it ({resolved})"
-        )
-    if resolved in created or _only_receipt_entries(resolved):
-        shutil.rmtree(resolved)
-        created.discard(resolved)
-        return
-    raise CanonicalReceiptError(f"{_refusal_detail(resolved)} ({resolved})")
-
-
-def _mark_created(path: Path, *, root: Path, created: set[Path]) -> None:
-    if path.is_symlink():
-        raise CanonicalReceiptError(f"refusing to delete a symbolic link ({path})")
-    resolved = path.resolve()
-    inside = resolved.is_relative_to(root) and resolved != root
-    if not inside or _is_repository_root_or_parent(resolved):
-        raise CanonicalReceiptError(
-            "refusing to delete a directory this call did not create inside the receipt directory "
-            f"({resolved})"
-        )
-    created.add(resolved)
-
+        return f"refusing an existing directory containing {', '.join(unexpected)} ({path})"
+    return f"refusing an existing canonical receipt directory ({path})"
 
 def build_canonical_receipt(
     fixture: str | Path,
@@ -119,19 +78,25 @@ def build_canonical_receipt(
     rust: bool = True,
     timeout: float = 180,
 ) -> dict[str, Any]:
-    """Export the canonical fixture and run the existing round-trip harness."""
-    oracle = _oracle()
-    fixture_path = Path(fixture).resolve()
+    """Export into a new directory, retaining all harness evidence."""
     requested = Path(output_dir)
-    if requested.is_symlink():
-        raise CanonicalReceiptError(f"refusing to delete a symbolic link ({requested})")
-    directory = requested.resolve()
-    created: set[Path] = set()
-    if directory.exists():
-        _delete_receipt_directory(directory, created=created)
-    directory.mkdir(parents=True)
+    if requested.exists() or requested.is_symlink():
+        detail = _existing_output_detail(requested)
+        raise CanonicalReceiptError(
+            f"{detail}; receipt output directory must be new, existing contents are never replaced"
+        )
+    fixture_path = Path(fixture).resolve()
     raw = fixture_path.read_bytes()
     original = hydrate(raw)
+    directory = requested.resolve()
+    # Exclusive creation also refuses a concurrent creator; no recursive cleanup.
+    try:
+        directory.mkdir(parents=True, exist_ok=False)
+    except FileExistsError as error:
+        raise CanonicalReceiptError(
+            "receipt output directory must be new; another process created it first"
+        ) from error
+    oracle = _oracle()
     python_before = calculate(original)
     changed = with_input(original, "unit_price", 25)
     python_after = calculate(changed)
@@ -155,14 +120,10 @@ def build_canonical_receipt(
     spill_receipt_path, spill = oracle.run_roundtrip(
         exported, red_flag_contract, spill_root, run_excel=False, timeout=timeout
     )
-    _mark_created(scenario_root, root=directory, created=created)
-    _mark_created(spill_root, root=directory, created=created)
     stable_scenario = directory / "scenario-roundtrip.json"
     stable_spill = directory / "red-flag-roundtrip.json"
     shutil.copyfile(scenario_receipt_path, stable_scenario)
     shutil.copyfile(spill_receipt_path, stable_spill)
-    _delete_receipt_directory(scenario_root, created=created)
-    _delete_receipt_directory(spill_root, created=created)
     coverage = {item["class"]: item["status"] for item in spill.get("fixture_coverage", [])}
     spill_blocked = spill.get("status") == "blocked" and spill.get("blocker_kind") == "unsupported_capability"
     scenario_status = scenario.get("status")
@@ -172,6 +133,16 @@ def build_canonical_receipt(
         "schema_version": 1,
         "kind": "canonical-excel-receipt",
         "harness": "excel_export_roundtrip_v1",
+        "export_lane": {
+            "reader": "python:model.hydrate",
+            "evaluator": "python:model.calculate",
+            "writer": "python:canonical_xlsx.export_canonical",
+            "rust_role": "independent calculation comparison only" if rust else "not used",
+            "end_to_end_rust_only": False,
+            "fixture_sha256": hashlib.sha256(raw).hexdigest(),
+            "exported_sha256": hashlib.sha256(exported.read_bytes()).hexdigest(),
+        },
+        "artifact_retention": {"scenario": "scenario", "red_flags": "red-flags", "cleanup": "none"},
         "recorded_at_utc": datetime.now(timezone.utc).isoformat(),
         "spec2_passed": spec2_passed,
         "spec2_note": (

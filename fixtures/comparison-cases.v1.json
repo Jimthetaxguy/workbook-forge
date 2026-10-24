@@ -1,0 +1,180 @@
+{
+  "version": 1,
+  "excel_observed": false,
+  "pairs": [
+    {
+      "id": "numbers",
+      "left": 1,
+      "right": 2,
+      "order": -1,
+      "evidence": "independent_numeric_arithmetic"
+    },
+    {
+      "id": "equal-numbers",
+      "left": 9,
+      "right": 9,
+      "order": 0,
+      "evidence": "independent_numeric_arithmetic"
+    },
+    {
+      "id": "negative-number-zero",
+      "left": -1,
+      "right": 0,
+      "order": -1,
+      "evidence": "independent_numeric_arithmetic"
+    },
+    {
+      "id": "number-bool",
+      "left": 1,
+      "right": true,
+      "order": -1,
+      "evidence": "local_unobserved_profile"
+    },
+    {
+      "id": "false-zero",
+      "left": false,
+      "right": 0,
+      "order": 1,
+      "evidence": "local_unobserved_profile"
+    },
+    {
+      "id": "false-true",
+      "left": false,
+      "right": true,
+      "order": -1,
+      "evidence": "local_unobserved_profile"
+    },
+    {
+      "id": "text-number",
+      "left": "9",
+      "right": 9,
+      "order": 1,
+      "evidence": "local_unobserved_profile"
+    },
+    {
+      "id": "number-text",
+      "left": 9,
+      "right": "9",
+      "order": -1,
+      "evidence": "local_unobserved_profile"
+    },
+    {
+      "id": "empty-text-zero",
+      "left": "",
+      "right": 0,
+      "order": 1,
+      "evidence": "local_unobserved_profile"
+    },
+    {
+      "id": "text-bool",
+      "left": "a",
+      "right": false,
+      "order": -1,
+      "evidence": "local_unobserved_profile"
+    },
+    {
+      "id": "ascii-case",
+      "left": "AbC",
+      "right": "aBc",
+      "order": 0,
+      "evidence": "local_unobserved_profile"
+    },
+    {
+      "id": "ascii-lexical",
+      "left": "B",
+      "right": "a",
+      "order": 1,
+      "evidence": "local_unobserved_profile"
+    },
+    {
+      "id": "blank-zero",
+      "left": null,
+      "right": 0,
+      "order": 0,
+      "evidence": "local_unobserved_profile"
+    },
+    {
+      "id": "blank-false",
+      "left": null,
+      "right": false,
+      "order": 0,
+      "evidence": "local_unobserved_profile"
+    },
+    {
+      "id": "blank-empty-text",
+      "left": null,
+      "right": "",
+      "order": 0,
+      "evidence": "local_unobserved_profile"
+    },
+    {
+      "id": "blank-text",
+      "left": null,
+      "right": "0",
+      "order": -1,
+      "evidence": "local_unobserved_profile"
+    },
+    {
+      "id": "blank-true",
+      "left": null,
+      "right": true,
+      "order": -1,
+      "evidence": "local_unobserved_profile"
+    },
+    {
+      "id": "two-blanks",
+      "left": null,
+      "right": null,
+      "order": 0,
+      "evidence": "local_unobserved_profile"
+    },
+    {
+      "id": "blank-negative",
+      "left": null,
+      "right": -1,
+      "order": 1,
+      "evidence": "local_unobserved_profile"
+    },
+    {
+      "id": "text-empty",
+      "left": "a",
+      "right": "",
+      "order": 1,
+      "evidence": "local_unobserved_profile"
+    },
+    {
+      "id": "unicode-local-ordinal",
+      "left": "Ä",
+      "right": "ä",
+      "order": -1,
+      "evidence": "local_unobserved_profile"
+    },
+    {
+      "id": "left-error",
+      "left": {
+        "error": "#REF!"
+      },
+      "right": {
+        "error": "#N/A"
+      },
+      "order": "#REF!",
+      "evidence": "local_unobserved_profile"
+    },
+    {
+      "id": "right-error",
+      "left": 0,
+      "right": {
+        "error": "#SPILL!"
+      },
+      "order": "#SPILL!",
+      "evidence": "local_unobserved_profile"
+    },
+    {
+      "id": "signed-zero",
+      "left": 0.0,
+      "right": -0.0,
+      "order": 0,
+      "evidence": "independent_numeric_arithmetic"
+    }
+  ]
+}

@@ -449,3 +449,8 @@ def test_rust_line_transport_recovers_after_malformed_and_oversized_requests(rus
     assert len(responses) == 3
     assert [item["error"]["code"] for item in responses[:2]] == ["invalid_expression", "resource_limit"]
     assert responses[2]["ok"] and responses[2]["value"] == 5
+
+
+def test_average_native_values_keep_their_existing_origin_profile(primitive):
+    assert value(primitive,call('AVERAGE',literal(4),literal(True),literal('9')))==4
+    assert value(primitive,call('AVERAGE',literal(False),literal('0')))=={'error':'#DIV/0!'}
