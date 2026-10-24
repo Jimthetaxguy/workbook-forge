@@ -46,7 +46,8 @@ Checked against `docs/vision.md`, `docs/product-specifications.md`,
   contract. Removed the proposed separate allowlist file.
 - 01: added the harness rules: no workbook open, no global setting changes, no
   cleanup after an uncertain failure, and receipt sanitising before commit.
-  Noted that the SDK round trip is already observed.
+  The 2026-09-28 SDK round trip is unreceipted narrative, not a finished
+  observation.
 - 01: replaced the refusal-code question with the missing result-range contract.
 - 02: dependency changed from "parallel with 01" to "after the full gate", per
   product-specifications.md. Index row and note updated to match.
