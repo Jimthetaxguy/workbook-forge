@@ -358,6 +358,7 @@ are narrower evidence. See [Excel observations](excel-observations.md).
 | --- | --- |
 | Rust model, expression, session and calculation | `workbook_forge::toolkit` |
 | Independent Rust Excel extraction and production | `workbook_forge::xlsx::{import_xlsx, export_xlsx, ImportedWorkbook}` |
+| Rust byte-based XLSX and browser/WASM prototype | `workbook_forge::xlsx::{import_xlsx_bytes, export_xlsx_bytes, ImportedWorkbook::export_bytes}`, `workbook_forge::wasm::BrowserWorkbook` |
 | Independent Python authoring and calculation | `workbook_forge.toolkit.WorkbookModel` (default `backend="python"`) |
 | Python typed expression construction | `workbook_forge.expressions` |
 | Independent Python Excel extraction and production | `workbook_forge.xlsx.import_xlsx` / `export_xlsx` |
@@ -365,6 +366,14 @@ are narrower evidence. See [Excel observations](excel-observations.md).
 | Agent transports | `workbook-forge agent`, Rust `agent_workbook` example |
 | CLI | `workbook-forge scenario`, `inspect`, `run`, `capabilities` |
 | Capability report | `workbook_forge.catalog.workbook_capabilities()` |
+
+The WASM facade is a library boundary, not a browser UI or MCP endpoint. It
+accepts caller-selected workbook bytes and exposes the versioned model snapshot,
+revision-checked existing-cell edits, calculation report, and XLSX export bytes.
+It has no filesystem-path or network operations, so the browser caller owns file
+selection and saving. The import and preservation limits remain those of the
+Rust XLSX adapter: edits to cells absent from an imported workbook are rejected.
+The WASM API does not yet construct a blank workbook.
 
 Each engine owns its revisions and mutations. Shared interchange data and
 differential tests establish parity without reusing executable implementations.
