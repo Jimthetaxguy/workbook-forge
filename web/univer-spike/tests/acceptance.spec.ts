@@ -102,6 +102,31 @@ async function formulaBarFor(page: Page, address: string) {
 
 for (const mode of ['not-execute', 'load-only']) {
   test.describe(`${mode}: Forge is the only calculator`, () => {
+    test('switching workbooks clears the previous projection before recovery', async ({ page }) => {
+      const errors = await boot(page, mode);
+      await page.locator('#file').setInputFiles('tests/fixtures/single-cell.xlsx');
+      await expect.poll(() => page.evaluate(() =>
+        (window as any).__spike.then((s: any) => s.adapter.cell('Sheet1', 'A1').raw),
+      )).toBe(7);
+
+      const afterRejectedEdit = await page.evaluate(async () => {
+        const s = await (window as any).__spike;
+        await s.adapter.edit([{ sheet: 'Sheet1', address: 'H10', value: 7 }], 'new workbook recovery');
+        const snapshot = await s.client.snapshot();
+        return {
+          visibleOldCells: ['B1', 'C1', 'D1', 'E1', 'F1'].map((address) => s.adapter.cell('Sheet1', address).raw),
+          forgeCells: Object.keys(snapshot.value.sheets[0].cells),
+          divergence: s.adapter.divergence(),
+          notice: s.adapter.notices.at(-1),
+        };
+      });
+      expect(afterRejectedEdit.forgeCells).toEqual(['A1']);
+      expect(afterRejectedEdit.visibleOldCells).toEqual([null, null, null, null, null]);
+      expect(afterRejectedEdit.divergence).toEqual([]);
+      expect(afterRejectedEdit.notice).toContain('absent_cell');
+      expect(errors).toEqual([]);
+    });
+
     test('value edit, formula edit, undo/redo, export round trip', async ({ page }) => {
       const errors = await boot(page, mode);
 
@@ -133,7 +158,7 @@ for (const mode of ['not-execute', 'load-only']) {
 
       // Undo: Univer's undo command is routed to Forge, which applies the
       // inverse edit at the expected revision (2 -> 3).
-      await page.keyboard.press('Control+z');
+      await page.keyboard.press(process.platform === 'darwin' ? 'Meta+z' : 'Control+z');
       await settle(page);
       v = await view(page);
       expect(v.audit.routed).toContain('univer.command.undo');

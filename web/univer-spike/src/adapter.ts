@@ -141,6 +141,7 @@ export class ForgeUniverAdapter {
     this.revision = opened.value.revision;
     this.undoStack = [];
     this.redoStack = [];
+    this.projected.clear();
     const [snapshot, calc] = await this.read();
     const data: IWorkbookData = {
       id: UNIT_ID,
