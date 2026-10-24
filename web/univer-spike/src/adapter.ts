@@ -242,6 +242,25 @@ export class ForgeUniverAdapter {
     return out;
   }
 
+  /** What Univer shows for one cell: raw model value, displayed value, formula. */
+  cell(sheetName: string, address: string) {
+    const sheet = this.workbook()?.getSheetBySheetId(this.sheetIds.get(sheetName) ?? '');
+    const { row, col } = fromA1(address);
+    const raw = sheet?.getCellRaw(row, col);
+    const shown = sheet?.getCell(row, col);
+    return { raw: raw?.v ?? null, displayed: shown?.v ?? null, formula: raw?.f ?? null };
+  }
+
+  /** Text currently in Univer's formula bar editor. */
+  formulaBarText(): string | null {
+    const doc = this.instances.getUnit<{ getBody(): { dataStream: string } | undefined }>(
+      '__INTERNAL_EDITOR__DOCS_FORMULA_BAR',
+      UniverInstanceType.UNIVER_DOC,
+    );
+    const text = doc?.getBody()?.dataStream;
+    return text === undefined ? null : text.replace(/\r\n$/, '');
+  }
+
   // ---- internals -------------------------------------------------------
 
   private workbook(): Workbook | null {
@@ -301,6 +320,7 @@ export class ForgeUniverAdapter {
     const [snapshot, calc] = await this.read();
     this.remember(snapshot);
     const bySheet = new Map<string, Record<number, Record<number, ICellData>>>();
+    const diverged = new Set(this.divergence().map((line) => line.split(' ')[0]));
     for (const sheet of snapshot.sheets) {
       for (const [address, cell] of Object.entries(sheet.cells)) {
         const key = `${sheet.name}!${address}`;
@@ -309,7 +329,7 @@ export class ForgeUniverAdapter {
         const next: Projected = { v: data.v as CellValue, f: cell.formula };
         const prev = this.projected.get(key);
         this.projected.set(key, next);
-        if (prev && prev.v === next.v && prev.f === next.f && !this.divergenceAt(key)) continue;
+        if (prev && prev.v === next.v && prev.f === next.f && !diverged.has(key)) continue;
         const { row, col } = fromA1(address);
         const matrix = bySheet.get(sheet.name) ?? {};
         (matrix[row] ??= {})[col] = data;
@@ -317,10 +337,6 @@ export class ForgeUniverAdapter {
       }
     }
     this.write(bySheet);
-  }
-
-  private divergenceAt(key: string): boolean {
-    return this.divergence().some((line) => line.startsWith(`${key} `));
   }
 
   /** Restore Univer to the last projection, e.g. after a rejected edit. */
