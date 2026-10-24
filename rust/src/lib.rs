@@ -10,6 +10,8 @@ pub mod extraction;
 pub mod model;
 pub mod primitives;
 pub mod toolkit;
+#[cfg(target_arch = "wasm32")]
+pub mod wasm;
 pub mod xlsx;
 pub mod xml_patterns;
 pub use toolkit::{
