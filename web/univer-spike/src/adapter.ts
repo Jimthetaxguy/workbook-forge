@@ -1,7 +1,7 @@
 // Univer adapter: command interception + projection. It talks to Forge only
 // through the @workbook-forge/engine command API; Univer's model is a view.
 //
-//   Univer UI --(commands)--> intercept --> CellEdit[] --> ForgeClient (worker)
+//   Univer UI --(commands)--> intercept --> Edit[] --> ForgeClient (worker)
 //   Forge calculate()/snapshot() --> projection --> sheet.mutation.set-range-values {v, f}
 //
 // Undo/redo never replays Univer mutations: the adapter keeps its own history
@@ -14,12 +14,13 @@ import {
   ICommandService,
   IUniverInstanceService,
   UniverInstanceType,
+  type DocumentDataModel,
   type ICellData,
   type ICommandInfo,
   type IWorkbookData,
   type Workbook,
 } from '@univerjs/core';
-import type { CalculatedValue, CellEdit, CellValue, ForgeClient, Revision, Snapshot } from '@workbook-forge/engine';
+import type { CalculatedValue, Edit, Scalar, ForgeClient, Revision, Snapshot } from '@workbook-forge/engine';
 import { fromA1, toA1 } from './a1';
 import type { UniverHost } from './univer-host';
 
@@ -68,18 +69,18 @@ export interface Audit {
 
 interface HistoryEntry {
   label: string;
-  forward: CellEdit[];
-  inverse: CellEdit[];
+  forward: Edit[];
+  inverse: Edit[];
 }
 
-type Projected = { v: CellValue | string; f?: string };
+type Projected = { v: Scalar | string; f?: string };
 
-function scalar(value: CalculatedValue | undefined): CellValue {
+function scalar(value: CalculatedValue | undefined): Scalar {
   if (value && typeof value === 'object' && 'rows' in value) return value.rows[0]?.[0] ?? null;
-  return (value ?? null) as CellValue;
+  return (value ?? null) as Scalar;
 }
 
-function toCellData(value: CellValue, formula?: string): ICellData {
+function toCellData(value: Scalar, formula?: string): ICellData {
   const cell: ICellData = {};
   if (value === null) cell.v = null;
   else if (typeof value === 'number') Object.assign(cell, { v: value, t: CellValueType.NUMBER });
@@ -90,7 +91,7 @@ function toCellData(value: CellValue, formula?: string): ICellData {
   return cell;
 }
 
-function parseInput(cell: ICellData): { value?: CellValue; formula?: string } | null {
+function parseInput(cell: ICellData): { value: Scalar } | { formula: string } | null {
   if (typeof cell.f === 'string' && cell.f.startsWith('=')) return { formula: cell.f.slice(1) };
   let raw: unknown = cell.v;
   if (raw === undefined && cell.p?.body?.dataStream) raw = cell.p.body.dataStream.replace(/\r\n$/, '');
@@ -110,7 +111,7 @@ export class ForgeUniverAdapter {
   private undoStack: HistoryEntry[] = [];
   private redoStack: HistoryEntry[] = [];
   private projected = new Map<string, Projected>();
-  private snapshotCells = new Map<string, { value: CellValue; formula?: string }>();
+  private snapshotCells = new Map<string, { value: Scalar; formula?: string }>();
   private sheetIds = new Map<string, string>();
   private projecting = false;
   private queue: Promise<unknown> = Promise.resolve();
@@ -164,7 +165,7 @@ export class ForgeUniverAdapter {
         cols = Math.max(cols, col + 5);
         const value = cell.formula !== undefined ? scalar(calc[`${sheet.name}!${address}`]) : cell.value;
         (cellData[row] ??= {})[col] = toCellData(value, cell.formula);
-        this.projected.set(`${sheet.name}!${address}`, { v: toCellData(value).v as CellValue, f: cell.formula });
+        this.projected.set(`${sheet.name}!${address}`, { v: toCellData(value).v as Scalar, f: cell.formula });
       }
       data.sheets[id] = { id, name: sheet.name, rowCount: rows, columnCount: cols, cellData };
     });
@@ -213,7 +214,7 @@ export class ForgeUniverAdapter {
   }
 
   /** Route user edits (sheet name + A1) through Forge. */
-  edit(edits: CellEdit[], label = 'edit') {
+  edit(edits: Edit[], label = 'edit') {
     return this.enqueue(async () => {
       const inverse = edits.map((edit) => this.inverseOf(edit));
       if (await this.applyToForge(edits, label)) {
@@ -255,12 +256,12 @@ export class ForgeUniverAdapter {
 
   /** Ids of every doc unit (editors) Univer has created. */
   docUnitIds(): string[] {
-    return this.instances.getAllUnitsForType(UniverInstanceType.UNIVER_DOC).map((u) => u.getUnitId());
+    return this.instances.getAllUnitsForType<DocumentDataModel>(UniverInstanceType.UNIVER_DOC).map((u) => u.getUnitId());
   }
 
   /** Text currently in Univer's formula bar editor. */
   formulaBarText(): string | null {
-    const doc = this.instances.getUnit<{ getBody(): { dataStream: string } | undefined }>(
+    const doc = this.instances.getUnit<DocumentDataModel>(
       '__INTERNAL_EDITOR__DOCS_FORMULA_BAR',
       UniverInstanceType.UNIVER_DOC,
     );
@@ -285,13 +286,13 @@ export class ForgeUniverAdapter {
     this.onNotice(text);
   }
 
-  private inverseOf(edit: CellEdit): CellEdit {
+  private inverseOf(edit: Edit): Edit {
     const prior = this.snapshotCells.get(`${edit.sheet}!${edit.address}`);
     if (prior?.formula !== undefined) return { sheet: edit.sheet, address: edit.address, formula: prior.formula };
     return { sheet: edit.sheet, address: edit.address, value: prior?.value ?? null };
   }
 
-  private async applyToForge(edits: CellEdit[], label: string): Promise<boolean> {
+  private async applyToForge(edits: Edit[], label: string): Promise<boolean> {
     const result = await this.client.applyEdits(edits, this.revision);
     if (!result.ok) {
       const e = result.error;
@@ -333,7 +334,7 @@ export class ForgeUniverAdapter {
         const key = `${sheet.name}!${address}`;
         const value = cell.formula !== undefined ? scalar(calc[key]) : cell.value;
         const data = toCellData(value, cell.formula);
-        const next: Projected = { v: data.v as CellValue, f: cell.formula };
+        const next: Projected = { v: data.v as Scalar, f: cell.formula };
         const prev = this.projected.get(key);
         this.projected.set(key, next);
         if (prev && prev.v === next.v && prev.f === next.f && !diverged.has(key)) continue;
@@ -353,7 +354,7 @@ export class ForgeUniverAdapter {
       const [sheet, address] = key.split('!');
       const { row, col } = fromA1(address);
       const matrix = bySheet.get(sheet) ?? {};
-      (matrix[row] ??= {})[col] = toCellData(cell.v as CellValue, cell.f);
+      (matrix[row] ??= {})[col] = toCellData(cell.v as Scalar, cell.f);
       bySheet.set(sheet, matrix);
     }
     this.write(bySheet);
@@ -417,7 +418,7 @@ export class ForgeUniverAdapter {
   }
 
   /** SetRangeValuesCommand params -> Forge edits, or a reason to refuse. */
-  private translateSetRangeValues(params: Record<string, unknown>): CellEdit[] | string {
+  private translateSetRangeValues(params: Record<string, unknown>): Edit[] | string {
     const sheet = this.sheetName(params.subUnitId as string | undefined);
     if (!sheet) return 'unknown sheet';
     const value = params.value as unknown;
@@ -436,7 +437,7 @@ export class ForgeUniverAdapter {
       }
     }
     if (cells.length === 0) return 'no cells';
-    const edits: CellEdit[] = [];
+    const edits: Edit[] = [];
     for (const { row, col, cell } of cells) {
       const input = parseInput(cell ?? {});
       if (!input) return 'style-only change is outside the spike scope';

@@ -1,7 +1,7 @@
 // Typed client for the Forge command API over any MessagePort-like channel
 // (a Worker, a MessagePort, or a WebView bridge with the same shape).
 
-import type { CellEdit, CommandName, Commands, RequestMessage, ResponseMessage, Result, Revision } from './protocol';
+import type { Edit, CommandName, Commands, RequestMessage, ResponseMessage, Result, Revision } from './protocol';
 
 export interface Port {
   postMessage(message: unknown, transfer?: Transferable[]): void;
@@ -54,7 +54,7 @@ export class ForgeClient {
   snapshot() {
     return this.send('snapshot', {});
   }
-  applyEdits(edits: CellEdit[], expectedRevision: Revision) {
+  applyEdits(edits: Edit[], expectedRevision: Revision) {
     return this.send('applyEdits', { edits, expectedRevision });
   }
   calculate() {

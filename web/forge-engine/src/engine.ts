@@ -6,8 +6,8 @@
 import type {
   CalculatedValue,
   Calculation,
-  CellEdit,
-  CellValue,
+  Edit,
+  Scalar,
   CommandName,
   Commands,
   EngineError,
@@ -41,7 +41,7 @@ const messageOf = (error: unknown): string => (error instanceof Error ? error.me
 
 /** Forge model JSON cell -> protocol cell. */
 function toCell(raw: { value?: unknown; formula?: string | null }) {
-  const cell: { value: CellValue; formula?: string } = { value: (raw.value ?? null) as CellValue };
+  const cell: { value: Scalar; formula?: string } = { value: (raw.value ?? null) as Scalar };
   if (typeof raw.formula === 'string') cell.formula = raw.formula.replace(/^=/, '');
   return cell;
 }
@@ -110,7 +110,7 @@ export class ForgeEngine {
     return { ok: true, value: { revision: wb.revisionString(), sheets } };
   }
 
-  private applyEdits(wb: ForgeWorkbook, edits: CellEdit[], expectedRevision: string): Result<{ revision: string }> {
+  private applyEdits(wb: ForgeWorkbook, edits: Edit[], expectedRevision: string): Result<{ revision: string }> {
     if (!Array.isArray(edits)) return fail('invalid_request', 'edits must be an array');
     const payload = edits.map((edit) => {
       const out: Record<string, unknown> = { sheet: edit.sheet, address: edit.address };
