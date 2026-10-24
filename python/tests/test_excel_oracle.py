@@ -318,17 +318,6 @@ def _add_excel_cache(path, *, input_value=5, output_value=10, formula='A1*2'):
             target.writestr(name, content)
 
 
-def _add_calc_chain(path, *addresses):
-    cells = ''.join(f'<c r="{address}" i="1"/>' for address in addresses)
-    with zipfile.ZipFile(path, 'a') as archive:
-        archive.writestr(
-            'xl/calcChain.xml',
-            '<?xml version="1.0" encoding="UTF-8"?>'
-            '<calcChain xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
-            f'{cells}</calcChain>',
-        )
-
-
 def _excel_metadata():
     return '''excel_version=16.113.2
 calculation_version=1
@@ -473,56 +462,16 @@ def test_removed_parse_error_is_not_a_scenario_mismatch():
     assert any(item.startswith('Main!Z9') for item in flagged)
 
 
-def test_calc_chain_names_cells_and_keeps_the_sheet_when_the_index_is_omitted(tmp_path):
-    path = tmp_path / "chain.xlsx"
-    with zipfile.ZipFile(path, "w") as archive:
-        archive.writestr("xl/workbook.xml", """<?xml version="1.0" encoding="UTF-8"?>
-<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
-  <sheets>
-    <sheet name="Assumptions"/>
-    <sheet name="Forecast"/>
-  </sheets>
-</workbook>""")
-        archive.writestr("xl/calcChain.xml", """<?xml version="1.0" encoding="UTF-8"?>
-<calcChain xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
-  <c r="F2" i="2"/>
-  <c r="F3"/>
-  <c r="B1" i="1"/>
-</calcChain>""")
-    assert oracle._excel_calc_chain_cells(path) == {"Forecast!F2", "Forecast!F3", "Assumptions!B1"}
-    empty = tmp_path / "empty.xlsx"
-    with zipfile.ZipFile(empty, "w") as archive:
-        archive.writestr("xl/workbook.xml", "<workbook/>")
-    assert oracle._excel_calc_chain_cells(empty) == set()
-
-
-def test_every_matched_formula_cell_must_be_named_by_the_calc_chain():
-    matched = {
-        'formula_matches': True, 'result_matches': True,
-        'after_recalc_and_reimport': {'formula': '=A1*2'},
-    }
-    outcomes = [
-        {'cell': 'Main!B1', **matched},
-        {'cell': 'Main!C1', **matched},
-        {'cell': 'Main!D1', 'formula_matches': False, 'result_matches': True,
-         'after_recalc_and_reimport': {'formula': '=1+9'}},
-        {'cell': 'Main!E1', 'formula_matches': True, 'result_matches': True,
-         'after_recalc_and_reimport': {'formula': None}},
-    ]
-    assert oracle._matched_formula_cells_outside_calc_chain(outcomes, {'Main!B1'}) == ['Main!C1']
-    assert oracle._matched_formula_cells_outside_calc_chain(outcomes, {'Main!B1', 'Main!C1'}) == []
-
-
-def test_a_changed_cache_counts_only_when_excel_calc_chain_names_the_cell():
+def test_a_changed_cache_counts_only_after_full_rebuild_is_confirmed():
     contract = _scenario_contract()
     before = {"Main!B1": {"formula": "=A1*2", "result": {"type": "number", "value": 8}}}
     after = {"Main!B1": {"formula": "=A1*2", "result": {"type": "number", "value": 10}}}
     outcomes, _, mismatches = oracle._compare_roundtrip(before, after, contract, {})
     assert outcomes[0]["result_matches"] is False
     assert any("not a recalculation" in item for item in mismatches)
-    outcomes, _, mismatches = oracle._compare_roundtrip(before, after, contract, {}, None, {"Main!Z9"})
-    assert outcomes[0]["result_matches"] is False
-    outcomes, _, mismatches = oracle._compare_roundtrip(before, after, contract, {}, None, {"Main!B1"})
+    outcomes, _, mismatches = oracle._compare_roundtrip(
+        before, after, contract, {"full_rebuild_invoked": "true"},
+    )
     assert outcomes[0]["result_matches"] is True
     assert mismatches == []
 
@@ -569,7 +518,7 @@ def test_roundtrip_full_excel_cycle_reimports_formula_and_behavior_diff(tmp_path
     monkeypatch.setattr(oracle.platform, 'system', lambda: 'Darwin')
 
     def save_as_excel(args, **kwargs):
-        _add_excel_cache(Path(args[2]))
+        _add_excel_cache(Path(args[2]), output_value=11)
         return oracle.subprocess.CompletedProcess(args[0], 0, _excel_metadata(), '')
 
     monkeypatch.setattr(oracle.subprocess, 'run', save_as_excel)
@@ -579,7 +528,7 @@ def test_roundtrip_full_excel_cycle_reimports_formula_and_behavior_diff(tmp_path
     assert receipt['mismatches']
     assert receipt['full_rebuild_invoked'] is True
     assert receipt['observations'][0]['before_recalc']['formula'] == '=A1*2'
-    assert receipt['observations'][0]['after_recalc_and_reimport']['result'] == {'type': 'number', 'value': 10.0}
+    assert receipt['observations'][0]['after_recalc_and_reimport']['result'] == {'type': 'number', 'value': 11.0}
     assert receipt['formula_diffs'] == []
     assert receipt['source_unchanged'] is True
     assert json.loads(path.read_text())['excel']['owned_workbook_closed'] == 'true'
@@ -606,74 +555,51 @@ def test_roundtrip_accepts_only_an_exact_allowlisted_formula_rewrite(tmp_path, m
     _, receipt = oracle.run_roundtrip(
         source, _allowlisted_rewrite_contract(), tmp_path / 'receipts', run_excel=True,
     )
-    assert receipt['status'] != 'observed'
-    assert 'excel_observation' not in receipt
-    assert any('calc chain' in item for item in receipt['mismatches'])
-    assert receipt['fixture_coverage'][0]['status'] == 'not_observed'
+    assert receipt['status'] == 'observed'
+    assert receipt['excel_observation']['kind'] == 'excel_observed'
+    assert receipt['fixture_coverage'][0]['status'] == 'observed'
     assert receipt['formula_diffs'] == [{
         'cell': 'Main!B1', 'before': '=A1*2', 'after': '=(A1*2)', 'allowlisted': True,
     }]
     assert receipt['observations'][0]['result_matches'] is True
 
 
-def test_allowlisted_formula_rewrite_is_observed_when_calc_chain_names_the_cell(tmp_path, monkeypatch):
-    source = _sdk_export(tmp_path / 'sdk-generated.xlsx')
-    monkeypatch.setattr(oracle.platform, 'system', lambda: 'Darwin')
-
-    def save_with_chain(args, **kwargs):
-        saved = Path(args[2])
-        _add_excel_cache(saved, formula='(A1*2)')
-        _add_calc_chain(saved, 'B1')
-        return oracle.subprocess.CompletedProcess(args[0], 0, _excel_metadata(), '')
-
-    monkeypatch.setattr(oracle.subprocess, 'run', save_with_chain)
-    _, receipt = oracle.run_roundtrip(
-        source, _allowlisted_rewrite_contract(), tmp_path / 'receipts', run_excel=True,
-    )
-    assert receipt['status'] == 'observed', receipt.get('mismatches')
-    assert receipt['excel_observation']['kind'] == 'excel_observed'
-    assert receipt['excel_observation']['workbook'] == 'roundtrip.xlsx'
-    assert receipt['observations'][0]['result_matches'] is True
-    assert receipt['fixture_coverage'][0]['status'] == 'observed'
-
-
-def test_prematching_cache_without_calc_chain_is_not_observed(tmp_path, monkeypatch):
+def test_matching_cache_can_be_observed_without_optional_calc_chain(tmp_path, monkeypatch):
     source = _sdk_export(tmp_path / 'sdk-generated.xlsx')
     _add_excel_cache(source, input_value=5, output_value=10, formula='A1*2')
     monkeypatch.setattr(oracle.platform, 'system', lambda: 'Darwin')
 
-    def add_chain_for_another_cell(args, **kwargs):
-        _add_calc_chain(Path(args[2]), 'Z9')
+    def save_without_calc_chain(args, **kwargs):
+        saved = Path(args[2])
+        _add_excel_cache(saved, input_value=5, output_value=10, formula='A1*2')
+        with zipfile.ZipFile(saved, 'a') as archive:
+            archive.comment = b'full rebuild saved workbook'
         return oracle.subprocess.CompletedProcess(args[0], 0, _excel_metadata(), '')
 
-    monkeypatch.setattr(oracle.subprocess, 'run', add_chain_for_another_cell)
+    monkeypatch.setattr(oracle.subprocess, 'run', save_without_calc_chain)
     _, receipt = oracle.run_roundtrip(source, _scenario_contract(), tmp_path / 'receipts', run_excel=True)
     assert receipt['saved_workbook_sha256'] != receipt['working_copy_sha256_before_excel']
     outcome = receipt['observations'][0]
     assert outcome['formula_matches'] is True
     assert outcome['result_matches'] is True
-    assert receipt['status'] != 'observed'
-    assert 'excel_observation' not in receipt
-    assert any('Main!B1' in item and 'calc chain' in item for item in receipt['mismatches'])
-    assert receipt['fixture_coverage'][0]['status'] == 'not_observed'
+    assert receipt['status'] == 'observed', receipt.get('mismatches')
+    assert receipt['excel_observation']['kind'] == 'excel_observed'
+    assert receipt['fixture_coverage'][0]['status'] == 'observed'
 
 
-def test_prematching_cache_named_by_calc_chain_is_observed(tmp_path, monkeypatch):
+def test_unchanged_workbook_is_not_an_observation_even_after_full_rebuild_metadata(tmp_path, monkeypatch):
     source = _sdk_export(tmp_path / 'sdk-generated.xlsx')
     _add_excel_cache(source, input_value=5, output_value=10, formula='A1*2')
     monkeypatch.setattr(oracle.platform, 'system', lambda: 'Darwin')
-
-    def add_chain_for_the_cell(args, **kwargs):
-        _add_calc_chain(Path(args[2]), 'B1')
-        return oracle.subprocess.CompletedProcess(args[0], 0, _excel_metadata(), '')
-
-    monkeypatch.setattr(oracle.subprocess, 'run', add_chain_for_the_cell)
+    monkeypatch.setattr(oracle.subprocess, 'run', lambda args, **kwargs: oracle.subprocess.CompletedProcess(
+        args[0], 0, _excel_metadata(), '',
+    ))
     _, receipt = oracle.run_roundtrip(source, _scenario_contract(), tmp_path / 'receipts', run_excel=True)
-    assert receipt['saved_workbook_sha256'] != receipt['working_copy_sha256_before_excel']
-    assert receipt['status'] == 'observed', receipt.get('mismatches')
-    assert receipt['excel_observation']['kind'] == 'excel_observed'
-    assert receipt['observations'][0]['result_matches'] is True
-    assert receipt['fixture_coverage'][0]['status'] == 'observed'
+    assert receipt['saved_workbook_sha256'] == receipt['working_copy_sha256_before_excel']
+    assert receipt['status'] != 'observed'
+    assert 'excel_observation' not in receipt
+    assert receipt['fixture_coverage'][0]['status'] == 'not_observed'
+    assert 'unchanged workbook hash' in receipt['reason']
 
 
 def test_loose_numeric_cache_is_not_a_stored_number(tmp_path):

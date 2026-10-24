@@ -1306,41 +1306,10 @@ def _fixture_coverage(contract: dict[str, Any]) -> list[dict[str, Any]]:
     ]
 
 
-def _excel_calc_chain_cells(path: Path) -> set[str]:
-    """Cells named by Excel's saved calc chain, as ``Sheet!Address``.
-
-    The chain is written when Excel saves a calculation. A cache planted into
-    the sheet XML does not create one. The ``i`` attribute is the 1-based sheet
-    position; a following cell that omits ``i`` stays on that sheet.
-    """
-    with zipfile.ZipFile(path) as archive:
-        parts = {info.filename.casefold(): archive.read(info.filename) for info in archive.infolist()}
-    workbook_xml = parts.get("xl/workbook.xml")
-    chain_xml = parts.get("xl/calcchain.xml")
-    if workbook_xml is None or chain_xml is None:
-        return set()
-    workbook = ET.fromstring(workbook_xml)
-    sheets = [sheet.attrib["name"] for sheet in workbook.findall(f"{_q('sheets')}/{_q('sheet')}") if sheet.attrib.get("name")]
-    chain = ET.fromstring(chain_xml)
-    found: set[str] = set()
-    sheet_index: int | None = None
-    for cell in chain.findall(_q("c")):
-        if "i" in cell.attrib:
-            try:
-                sheet_index = int(cell.attrib["i"])
-            except ValueError:
-                sheet_index = None
-        ref = cell.attrib.get("r")
-        if ref and sheet_index is not None and 1 <= sheet_index <= len(sheets):
-            found.add(f"{sheets[sheet_index - 1]}!{ref}")
-    return found
-
-
 def _compare_roundtrip(
     before: dict[str, dict[str, Any]], after: dict[str, dict[str, Any]],
     contract: dict[str, Any], metadata: dict[str, str],
     omitted_unopenable: set[str] | None = None,
-    calculated_cells: set[str] | None = None,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[str]]:
     checks_by_key = _contract_check_map(contract)
     unopenable = omitted_unopenable or set()
@@ -1390,21 +1359,20 @@ def _compare_roundtrip(
         before_observed = {"type": "blank"} if old is None else old["result"]
         expected_result = check["expected_result"]
         value_matches = roundtrip_result_matches(observed, expected_result)
-        # A result that newly agrees under an unchanged formula was not shown to be
-        # recalculated, including predicates, text, and booleans, unless Excel's
-        # saved calc chain names the cell. A planter that only writes a cached
-        # value does not write that chain. A value already stored before Excel
-        # remains a value match, and an allowlisted rewrite can match too. Neither
-        # is status observed unless the calc chain names every matched formula
-        # cell. An unchanged file hash still cannot be observed.
+        # A matching cache that appeared under an unchanged formula is not
+        # evidence by itself. The production caller passes metadata only after
+        # the owned-workbook automation confirms that it invoked a full rebuild,
+        # saved, and closed the workbook. A calcChain part is optional and only
+        # records calculation order; it cannot prove this run recalculated a cell.
+        full_rebuild_confirmed = metadata.get("full_rebuild_invoked") == "true"
         planted_expected_cache = (
-            before_formula == after_formula
+            not full_rebuild_confirmed
+            and before_formula == after_formula
             and value_matches
             and (
                 not roundtrip_result_matches(before_observed, expected_result)
                 or _predicate_value_changed(expected_result, before_observed, observed)
             )
-            and key not in (calculated_cells or set())
         )
         result_matches = value_matches and not planted_expected_cache
         settings_match = True
@@ -1444,28 +1412,6 @@ def _compare_roundtrip(
         if not item["allowlisted"] and not item.get("excel_unopenable"):
             mismatches.append(f"{item['cell']}: formula changed outside the exact allowlist")
     return outcomes, formula_diffs, mismatches
-
-
-def _matched_formula_cells_outside_calc_chain(
-    outcomes: list[dict[str, Any]], calculated_cells: set[str],
-) -> list[str]:
-    """Matched formula cells the saved calc chain does not name.
-
-    A match is an accepted formula and a cache that agrees with the contract.
-    That includes a cache already stored before Excel and an allowlisted
-    formula rewrite. Neither is an Excel observation unless ``xl/calcChain.xml``
-    names the cell.
-    """
-    missing: list[str] = []
-    for outcome in outcomes:
-        after = outcome["after_recalc_and_reimport"]
-        if after["formula"] is None:
-            continue
-        if not outcome["formula_matches"] or not outcome["result_matches"]:
-            continue
-        if outcome["cell"] not in calculated_cells:
-            missing.append(outcome["cell"])
-    return missing
 
 
 def run_roundtrip(
@@ -1549,9 +1495,8 @@ def run_roundtrip(
                 receipt["saved_calc_properties"] = saved_calc_properties
                 receipt["formula_count_after"] = sum(item["formula"] is not None for item in after.values())
                 receipt["date_system_after"] = "1904" if saved_uses_1904 else "1900"
-                calculated_cells = _excel_calc_chain_cells(working_copy)
                 outcomes, formula_diffs, mismatches = _compare_roundtrip(
-                    before, after, contract, metadata, set(unopenable), calculated_cells,
+                    before, after, contract, metadata, set(unopenable),
                 )
                 receipt["observations"] = outcomes
                 receipt["formula_diffs"] = formula_diffs
@@ -1583,26 +1528,6 @@ def run_roundtrip(
                         mismatches=mismatches,
                     )
                 else:
-                    missing_chain = _matched_formula_cells_outside_calc_chain(
-                        outcomes, calculated_cells,
-                    )
-                    if missing_chain:
-                        mismatches.extend(
-                            f"{cell}: matched formula cell is not named by the saved calc chain"
-                            for cell in missing_chain
-                        )
-                        absent = set(missing_chain)
-                        for item in receipt["fixture_coverage"]:
-                            if item["status"] != "observed":
-                                continue
-                            covered = {
-                                outcome_by_id[check_id]["cell"] for check_id in item["check_ids"]
-                            }
-                            if covered & absent:
-                                item["status"] = "not_observed"
-                        receipt["reason"] = (
-                            "A matched formula cell is not named by the saved calc chain"
-                        )
                     receipt.update(
                         status="mismatch" if mismatches else "observed",
                         stage="reimport",

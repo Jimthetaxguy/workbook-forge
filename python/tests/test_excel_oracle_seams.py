@@ -92,6 +92,11 @@ def _banner(args, **kwargs):
     return oracle.subprocess.CompletedProcess(args[0], 0, _excel_metadata(), "")
 
 
+def _cache_only_banner(args, **kwargs):
+    metadata = _excel_metadata().replace("full_rebuild_invoked=true", "full_rebuild_invoked=false")
+    return oracle.subprocess.CompletedProcess(args[0], 0, metadata, "")
+
+
 def test_successful_banner_with_unchanged_hash_is_not_observed(tmp_path, monkeypatch):
     source = _sdk_export(tmp_path / "sdk-generated.xlsx")
     # The copy already matches the contract, so the banner alone cannot be evidence.
@@ -116,19 +121,13 @@ def test_planted_cache_with_unchanged_formula_is_not_a_recalc_observation(tmp_pa
 
     def plant_cache(args, **kwargs):
         _add_excel_cache(Path(args[2]), input_value=5, output_value=10, formula="A1*2")
-        return _banner(args, **kwargs)
+        return _cache_only_banner(args, **kwargs)
 
     monkeypatch.setattr(oracle.subprocess, "run", plant_cache)
     _, receipt = oracle.run_roundtrip(source, _scenario_contract(), tmp_path / "receipts", run_excel=True)
-    outcome = receipt["observations"][0]
-    assert outcome["before_recalc"]["formula"] == "=A1*2"
-    assert outcome["after_recalc_and_reimport"]["formula"] == "=A1*2"
-    assert outcome["after_recalc_and_reimport"]["result"] == {"type": "number", "value": 10.0}
-    assert outcome["result_matches"] is False, (
-        "a planted cached_value with an unchanged formula must not count as a recalc observation"
-    )
-    assert outcome["mismatches"], "a planted cache must be recorded as a mismatch"
-    assert receipt["mismatches"]
+    assert receipt["observations"] == []
+    assert receipt["status"] == "failed"
+    assert "did not confirm full recalculation and save" in receipt["reason"]
     assert receipt["status"] != "observed"
 
 
@@ -223,14 +222,13 @@ def test_planted_predicate_text_and_boolean_caches_are_not_observed(tmp_path, mo
                 formula=case["stored_formula"],
                 output_type=case["output_type"],
             )
-            return _banner(args, **kwargs)
+            return _cache_only_banner(args, **kwargs)
 
         monkeypatch.setattr(oracle.subprocess, "run", plant_cache)
         _, receipt = oracle.run_roundtrip(source, contract, tmp_path / f"receipts-{index}", run_excel=True)
-        outcome = receipt["observations"][0]
-        assert outcome["result_matches"] is False
-        assert outcome["mismatches"]
-        assert receipt["mismatches"]
+        assert receipt["observations"] == []
+        assert receipt["status"] == "failed"
+        assert "did not confirm full recalculation and save" in receipt["reason"]
         assert receipt["status"] != "observed"
 
 
