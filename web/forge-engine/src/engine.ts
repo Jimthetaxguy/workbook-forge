@@ -48,8 +48,11 @@ function toCell(raw: { value?: unknown; formula?: string | null }) {
 
 export class ForgeEngine {
   private workbook: ForgeWorkbook | null = null;
+  private readonly wasm: ForgeWasm;
 
-  constructor(private readonly wasm: ForgeWasm) {}
+  constructor(wasm: ForgeWasm) {
+    this.wasm = wasm;
+  }
 
   handle<K extends CommandName>(request: RequestMessage<K>): ResponseMessage<K> {
     let result: Result<unknown>;

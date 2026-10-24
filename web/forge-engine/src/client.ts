@@ -20,7 +20,10 @@ export class ForgeClient {
   /** Every command sent and how it ended; hosts may audit it. */
   readonly log: CommandLogEntry[] = [];
 
-  constructor(private readonly port: Port) {
+  private readonly port: Port;
+
+  constructor(port: Port) {
+    this.port = port;
     port.addEventListener('message', (event: MessageEvent<ResponseMessage>) => {
       const resolve = this.pending.get(event.data.id);
       if (resolve) {
