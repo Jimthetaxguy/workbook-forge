@@ -16,7 +16,7 @@ export default defineConfig({
     launchOptions: { executablePath, args: ['--no-sandbox'] },
   },
   webServer: process.env.SPIKE_EXTERNAL_SERVER ? undefined : {
-    command: 'npx vite --port 4179 --strictPort --host 127.0.0.1',
+    command: 'npx vite build --logLevel error && python3 -m http.server 4179 --bind 127.0.0.1 --directory dist',
     url: 'http://127.0.0.1:4179',
     reuseExistingServer: true,
     timeout: 60_000,
