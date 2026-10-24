@@ -624,12 +624,36 @@ def test_a_failure_is_one_line_and_code_two(tmp_path):
 def test_the_shipped_benchmark_is_laid_out_in_pairs():
     cases = json.loads((ROOT / "catalog" / "behavior_critic_benchmarks.json").read_text())
     by_fixture = {}
+    excluded = []
     for case in cases:
+        if case.get("excluded") is True:
+            assert case["ground_truth"] == "unverified", case["id"]
+            excluded.append(case["id"])
+            continue
         labels = list(next(iter(case["questions"].values()))["criteria"])
         assert case["ground_truth"] in labels, case["id"]
         fixture = case["state"]["fixture"]
         by_fixture.setdefault(fixture["formula"], []).append(case["is_false_control"])
+    assert excluded == [
+        "case-collation-text-number-pos",
+        "case-collation-text-number-neg",
+    ]
     assert all(sorted(pair) == [False, True] for pair in by_fixture.values()), by_fixture
+
+
+def test_an_excluded_case_is_not_asked_or_scored(tmp_path):
+    withheld = _case("withheld", "unverified", False)
+    withheld["excluded"] = True
+    service = Service(*RIGHT)
+    report = critic.run_benchmark_eval(service.client(), _benchmark(tmp_path, [withheld, *PAIR]))
+    assert [item["id"] for item in report["details"]] == ["real", "control"]
+    assert report["total_cases"] == 2 and len(service.requests) == 2
+    only = _case("only", "unverified", True)
+    only["excluded"] = True
+    quiet = Service()
+    with pytest.raises(critic.CriticError, match="holds no cases"):
+        critic.run_benchmark_eval(quiet.client(), _benchmark(tmp_path, [only]))
+    assert quiet.requests == []
 
 
 def test_the_blank_cell_case_holds_a_blank_cell_and_not_empty_text():

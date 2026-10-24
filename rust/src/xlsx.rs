@@ -1515,7 +1515,9 @@ fn fresh(model: &WorkbookModel, report: &CalculationReport) -> Result<Package> {
     parts.insert("[Content_Types].xml".into(),format!("<?xml version=\"1.0\" encoding=\"UTF-8\"?><Types xmlns=\"{CT}\"><Default Extension=\"rels\" ContentType=\"application/vnd.openxmlformats-package.relationships+xml\"/><Default Extension=\"xml\" ContentType=\"application/xml\"/><Override PartName=\"/xl/workbook.xml\" ContentType=\"{WB_TYPE}\"/>{type_nodes}<Override PartName=\"/xl/styles.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml\"/></Types>").into_bytes());
     Ok(Package { parts })
 }
-/// Generate a new workbook using native calculation and original OOXML code.
+/// Calculate `model` and write a new `.xlsx` package built by `fresh`.
+///
+/// This does not preserve imported OOXML. That path is `ImportedWorkbook::export`.
 pub fn export_xlsx(model: &WorkbookModel, path: impl AsRef<Path>) -> Result<PathBuf> {
     let report = toolkit::calculate(model, 1);
     publish(&fresh(model, &report)?, path.as_ref())
