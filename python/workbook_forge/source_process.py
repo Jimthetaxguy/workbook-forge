@@ -41,5 +41,15 @@ def run_validated_source(source, language, arguments, output, *, stdin=None):
         except subprocess.TimeoutExpired as error:
             raise SourceDiagnostic("resource_limit","generated program exceeded its timeout") from error
         except subprocess.CalledProcessError as error:
-            code="resource_limit" if "resource_limit:" in (error.stderr or "") else "execution_failed"
-            raise SourceDiagnostic(code,"generated runtime failed or exceeded a declared budget") from error
+            stderr = error.stderr or ""
+            code = (
+                "resource_limit" if "resource_limit:" in stderr
+                else "unsupported_formula" if "unsupported_formula:" in stderr
+                else "execution_failed"
+            )
+            message = (
+                "generated runtime requested an unimplemented formula mode"
+                if code == "unsupported_formula"
+                else "generated runtime failed or exceeded a declared budget"
+            )
+            raise SourceDiagnostic(code, message) from error

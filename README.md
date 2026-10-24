@@ -35,7 +35,7 @@ agreement and established expected values; it does not replace either implementa
 | --- | --- |
 | Read the North Star (Excel compiler, three directions, build rules) | [Vision](docs/vision.md) |
 | Understand how intake, Python/Rust, agents/apps and OOXML fit as one compiler | [Compiler pipeline and shared-model contract](docs/specs/compiler-pipeline.md) |
-| Compile arithmetic/SUM workbooks to executable Rust/Python, translate edited source, and export it | [Multi-cell source compiler profile 2](docs/source-graph-v2.md) and [four-route benchmarks](docs/compiler-benchmarks.md) |
+| Compile supported workbook formulas to executable Rust/Python, translate edited source, and export it | [Source compiler profile 6](docs/source-graph-v6.md) and [four-route benchmarks](docs/compiler-benchmarks.md) |
 | Inspect every pinned function's Python/Rust implementation and translation status | [Versioned compiler coverage mapping](catalog/compiler-coverage.v1.json) |
 | Red-flag build contracts (schema, export parity, detectors, model versioning) | [Red-flag specs](docs/specs/red-flags.md) |
 | Run a formula against supplied cell values | [Python evaluator](#python-quick-start) |
@@ -504,3 +504,4 @@ Original project code is MIT. Workbook Forge must stay usable in enterprise sett
 Source compiler [profile 3](docs/source-graph-v3.md) adds multiple sheets, quoted references, nine scalar errors and independent lazy IF/IFERROR code generation.
 Source compiler [profile 4](docs/source-graph-v4.md) adds six typed comparison operators; [stage-four review](docs/source-compiler-review-stage4.md) records adversarial validation and fidelity fixes.
 Source compiler [profile 5](docs/source-graph-v5.md) adds origin-aware AVERAGE, a packaged `workbook-forge-compile` CLI and verified writer publication. Its [cumulative review brief](docs/compiler-review-brief.md) records interfaces and unresolved evidence, including conflicting AVERAGE documentation.
+Source compiler [profile 6](docs/source-graph-v6.md) adds bounded XLOOKUP source generation with all six positional arguments, lazy scalar fallback, exact one-dimensional lookup arrays, and forward/reverse linear search. Approximate/wildcard/binary modes and multi-cell spill results remain unsupported; generated agreement is not Excel compatibility evidence.

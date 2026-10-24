@@ -29,9 +29,15 @@ from .xlsx import export_xlsx, import_xlsx
 from .workbook import WorkbookError
 
 VERSION = 2
-SOURCE_FUNCTIONS = ("SUM", "IF", "IFERROR", "AVERAGE")
-FUNCTIONS_BY_VERSION = {2:("SUM",), 3:("SUM","IF","IFERROR"), 4:("SUM","IF","IFERROR"), 5:SOURCE_FUNCTIONS}
-CURRENT_VERSION = 5
+FUNCTIONS_BY_VERSION = {
+    2: ("SUM",),
+    3: ("SUM", "IF", "IFERROR"),
+    4: ("SUM", "IF", "IFERROR"),
+    5: ("SUM", "IF", "IFERROR", "AVERAGE"),
+    6: ("SUM", "IF", "IFERROR", "AVERAGE", "XLOOKUP"),
+}
+SOURCE_FUNCTIONS = FUNCTIONS_BY_VERSION[6]
+CURRENT_VERSION = 6
 MAX_SOURCE_BYTES = MAX_ARTIFACT_BYTES
 MAX_EDGES = 100000
 ERRORS = {"#DIV/0!", "#VALUE!", "#REF!", "#NAME?", "#NUM!", "#N/A", "#CALC!", "#NULL!", "#SPILL!"}
@@ -156,8 +162,28 @@ def cell_sheet(address, program):
     return split_reference(address, program.sheet, program.sheets)[0]
 
 
+def xlookup_vector_length(node, context, program):
+    """Return the size of a scalar cell reference or one-dimensional range."""
+    if node.kind == "reference":
+        split_reference(node.value, context, program.sheets)
+        return 1
+    if node.kind != "range_ref":
+        fail("unsupported_shape", "XLOOKUP arrays must be direct cell references or ranges")
+    try:
+        first, last = node.value.split(":")
+    except ValueError as error:
+        raise SourceDiagnostic("invalid_reference", "XLOOKUP range needs two endpoints") from error
+    first_sheet, start = split_reference(first, context, program.sheets)
+    last_sheet, end = split_reference(last, first_sheet, program.sheets)
+    if first_sheet != last_sheet:
+        fail("unsupported_reference", "XLOOKUP arrays cannot span multiple worksheets")
+    if start.row != end.row and start.column != end.column:
+        fail("unsupported_shape", "XLOOKUP arrays must be one-dimensional; 2D spill is unsupported")
+    return abs(start.row - end.row) + abs(start.column - end.column) + 1
+
+
 def validate(program):
-    if type(program.version) is not int or program.version not in {2,3,4,5}:
+    if type(program.version) is not int or program.version not in {2,3,4,5,6}:
         fail("unsupported_version", "unknown source profile contract")
     identities=list(program.sheets) if isinstance(program.sheets,(list,tuple)) else []
     if any(isinstance(name,str) and any(char in name for char in ("\u0085","\u2028","\u2029")) for name in [program.sheet,*identities]):
@@ -168,7 +194,7 @@ def validate(program):
         WorkbookModel(sheets=list(program.sheets) if program.sheets else [program.sheet])
     except ValueError as error:
         raise SourceDiagnostic("invalid_reference", "invalid worksheet name") from error
-    if program.version not in {2, 3, 4, 5} or (program.version == 2 and program.sheets):
+    if program.version not in {2, 3, 4, 5, 6} or (program.version == 2 and program.sheets):
         fail("unsupported_version", "unknown source profile/sheet contract")
     if program.version >= 3 and (not program.sheets or program.sheet != program.sheets[0]):
         fail("invalid_reference", "profile v3 requires ordered worksheet identities")
@@ -199,19 +225,34 @@ def validate(program):
     range_expansions = {}
     for address, root in program.formulas.items():
         context = cell_sheet(address, program)
-        pending, deps, nodes = [(root, 1, None)], set(), 0
+        pending, deps, nodes = [(root, 1, None, None)], set(), 0
         while pending:
-            node, depth, parent = pending.pop()
+            node, depth, parent, parent_index = pending.pop()
             nodes += 1
             if nodes > 256 or depth > 32:
                 fail("resource_limit", "source expression exceeds 256 nodes or 32 levels")
             arity = {"num": 0, "text_hex": 0, "boolean": 0, "blank": 0, "error": 0,
                      "reference": 0, "range_ref": 0, "add": 2, "sub": 2, "mul": 2, "div": 2,
-                     "neg": 1, "positive": 1, "if_value": 3, "if_error": 2, **{name:2 for name in COMPARISONS.values()}}
+                     "neg": 1, "positive": 1, "if_value": 3, "if_error": 2, "xlookup": 6,
+                     "missing": 0, **{name:2 for name in COMPARISONS.values()}}
             if node.kind not in {"sum_values","average_values"} and (node.kind not in arity or len(node.args) != arity[node.kind]):
                 fail("invalid_source", "invalid expression constructor/arity")
             if program.version < 5 and node.kind == "average_values":
                 fail("unsupported_formula", "AVERAGE requires source profile v5")
+            if program.version < 6 and node.kind == "xlookup":
+                fail("unsupported_formula", "XLOOKUP requires source profile v6")
+            if node.kind == "missing" and (parent != "xlookup" or parent_index not in {0,3,4,5}):
+                fail("unsupported_formula", "omitted arguments are supported only in XLOOKUP optional positions")
+            if node.kind == "xlookup":
+                args = node.args
+                if args[1].kind not in {"reference", "range_ref"} or args[2].kind not in {"reference", "range_ref"}:
+                    fail("unsupported_shape", "XLOOKUP lookup_array and return_array must be direct cell references or ranges")
+                if any(args[index].kind == "range_ref" for index in (0, 3, 4, 5)):
+                    fail("unsupported_shape", "XLOOKUP lookup_value, fallback and modes must be scalar")
+                lookup_size = xlookup_vector_length(args[1], context, program)
+                return_size = xlookup_vector_length(args[2], context, program)
+                if lookup_size != return_size:
+                    fail("unsupported_shape", "XLOOKUP lookup_array and return_array must have equal size")
             if node.kind == "average_values" and not node.args:
                 fail("unsupported_formula", "AVERAGE requires at least one argument")
             if program.version < 4 and node.kind in COMPARISONS.values():
@@ -236,8 +277,8 @@ def validate(program):
             if node.kind == "reference":
                 deps.add(key(node.value, context, program.sheets))
             if node.kind == "range_ref":
-                if parent not in {"sum_values","average_values"}:
-                    fail("unsupported_shape", "range expressions are currently supported as SUM/AVERAGE arguments")
+                if parent not in {"sum_values", "average_values"} and not (parent == "xlookup" and parent_index in {1,2}):
+                    fail("unsupported_shape", "range expressions are supported as SUM/AVERAGE or XLOOKUP array arguments")
                 cache_key = (context, node.value) if isinstance(node.value, str) else None
                 if cache_key is not None and cache_key in range_expansions:
                     members = range_expansions[cache_key]
@@ -251,7 +292,7 @@ def validate(program):
                 deps.update(members)
             if node.kind in {"sum_values","average_values"} and len(node.args) > 255:
                 fail("resource_limit", "aggregate exceeds 255 arguments")
-            pending.extend((child, depth+1, node.kind) for child in node.args)
+            pending.extend((child, depth+1, node.kind, index) for index, child in enumerate(node.args))
         edges += len(deps)
         if edges > MAX_EDGES:
             fail("resource_limit", "source graph exceeds the existing 100000-edge budget")
@@ -285,6 +326,8 @@ def from_excel(node, sheet, depth=1, version=2):
         fail("resource_limit", "source expression exceeds 32 levels")
     def children():
         return tuple(from_excel(child, sheet, depth+1, version) for child in node.children)
+    if node.kind == "missing":
+        return Node("missing")
     if node.kind == "number":
         value = float(node.value)
         if not math.isfinite(value):
@@ -304,7 +347,11 @@ def from_excel(node, sheet, depth=1, version=2):
         return Node(COMPARISONS[node.value],args=children())
     if node.kind == "unary" and node.value in {"+", "-"}:
         return Node("positive" if node.value == "+" else "neg", args=children())
-    if node.kind == "call" and node.value.upper() in SOURCE_FUNCTIONS:
+    if node.kind == "call" and node.value.upper() == "AVERAGE" and version < 5:
+        fail("unsupported_formula", "AVERAGE requires source profile v5")
+    if node.kind == "call" and node.value.upper() == "XLOOKUP" and version < 6:
+        fail("unsupported_formula", "XLOOKUP requires source profile v6")
+    if node.kind == "call" and node.value.upper() in FUNCTIONS_BY_VERSION.get(version, ()):
         name = node.value.upper()
         if name == "SUM":
             return Node("sum_values", args=children())
@@ -312,6 +359,13 @@ def from_excel(node, sheet, depth=1, version=2):
             if version < 5:
                 fail("unsupported_formula", "AVERAGE requires source profile v5")
             return Node("average_values", args=children())
+        if name == "XLOOKUP":
+            if version < 6:
+                fail("unsupported_formula", "XLOOKUP requires source profile v6")
+            args = children()
+            if not 3 <= len(args) <= 6:
+                fail("unsupported_formula", "XLOOKUP requires three through six positional arguments")
+            return Node("xlookup", args=(*args, *(Node("missing") for _ in range(6-len(args)))))
         if version >= 3:
             args = children()
             if name == "IF" and len(args) in {2,3}:
@@ -345,6 +399,18 @@ def render(node, language):
         branches = [render(child, language) for child in node.args[1:]]
         closures = [f"lambda e: {branch}" if language == "python" else f"|e| {branch}" for branch in branches]
         return f"{node.kind}({head}, e, " + ", ".join(closures) + ")"
+    if node.kind == "xlookup":
+        lookup, lookup_array, return_array, fallback, match_mode, search_mode = node.args
+        fallback_body = render(fallback, language)
+        fallback_closure = (
+            f"lambda e: {fallback_body}" if language == "python" else f"|e| {fallback_body}"
+        )
+        arguments = [lookup, lookup_array, return_array, match_mode, search_mode]
+        rendered = [render(argument, language) for argument in arguments]
+        return (
+            f"xlookup({rendered[0]}, {rendered[1]}, {rendered[2]}, e, "
+            f"{fallback_closure}, {rendered[3]}, {rendered[4]})"
+        )
     arguments = ", ".join(render(child, language) for child in node.args)
     if node.kind in {"sum_values","average_values"}:
         return f"{node.kind}({'vec!' if language == 'rust' else ''}[{arguments}])"
@@ -354,7 +420,7 @@ def render(node, language):
 def template(language, version=2):
     if language not in {"python", "rust"}:
         fail("unsupported_language", "source profile requires Rust or Python")
-    if type(version) is not int or version not in {2,3,4,5}:
+    if type(version) is not int or version not in {2,3,4,5,6}:
         fail("unsupported_version", "unknown source runtime profile")
     return Path(__file__).with_name(f"source_runtime_v{version}.py" if language == "python" else f"source_runtime_v{version}.rs").read_text()
 
@@ -417,10 +483,23 @@ def source_node(tree, depth=1):
                 fail("unsupported_source", "selection branch requires a single lazy runtime context")
             branches.append(source_node(branch.body,depth+1))
         return Node(name,args=(source_node(args[0],depth+1),*branches))
+    if name == "missing" and not args:
+        return Node(name)
     if name in {"sum_values","average_values"} and len(args) == 1 and isinstance(args[0], ast.List):
         if len(args[0].elts) > 255:
             fail("resource_limit", "aggregate exceeds 255 arguments")
         return Node(name, args=tuple(source_node(child, depth+1) for child in args[0].elts))
+    if name == "xlookup" and len(args) == 7:
+        if not isinstance(args[3], ast.Name) or args[3].id != "e":
+            fail("unsupported_source", "XLOOKUP runtime context required")
+        fallback = args[4]
+        if not isinstance(fallback, ast.Lambda) or ast.dump(fallback.args) != ast.dump(ast.parse("lambda e: 0",mode="eval").body.args):
+            fail("unsupported_source", "XLOOKUP fallback requires a lazy runtime context")
+        return Node("xlookup", args=(
+            source_node(args[0],depth+1), source_node(args[1],depth+1),
+            source_node(args[2],depth+1), source_node(fallback.body,depth+1),
+            source_node(args[5],depth+1), source_node(args[6],depth+1),
+        ))
     fail("unsupported_source", f"unsupported source constructor: {name}")
 
 
@@ -439,7 +518,7 @@ def parse_constructor(text):
 def import_source(source, language):
     if len(source.encode()) > MAX_SOURCE_BYTES:
         fail("resource_limit", "source exceeds 1 MiB")
-    version = next((version for version in (5,4,3,2) if source.startswith(template(language,version))),2)
+    version = next((version for version in (6,5,4,3,2) if source.startswith(template(language,version))),2)
     prefix = template(language,version)
     if not source.startswith(prefix):
         fail("unsupported_source", "runtime scaffold was changed or has an unknown version")
@@ -514,7 +593,7 @@ def compile_workbook(path, language, version=2):
 
 
 def source_model(path, version=2):
-    if type(version) is not int or version not in {2,3,4,5}:
+    if type(version) is not int or version not in {2,3,4,5,6}:
         fail("unsupported_version", "unknown source profile")
     model = import_xlsx(path).to_dict()
     if version == 2 and len(model["sheets"]) != 1:
@@ -575,8 +654,8 @@ def formula_text(node):
         return node.value
     if node.kind in {"reference", "range_ref"}:
         return node.value
-    if node.kind in {"sum_values", "average_values", "if_value", "if_error"}:
-        return {"sum_values":"SUM", "average_values":"AVERAGE", "if_value":"IF", "if_error":"IFERROR"}[node.kind] + "(" + ",".join(formula_text(child) for child in node.args) + ")"
+    if node.kind in {"sum_values", "average_values", "if_value", "if_error", "xlookup"}:
+        return {"sum_values":"SUM", "average_values":"AVERAGE", "if_value":"IF", "if_error":"IFERROR", "xlookup":"XLOOKUP"}[node.kind] + "(" + ",".join("" if child.kind == "missing" else formula_text(child) for child in node.args) + ")"
     if node.kind in {"positive", "neg"}:
         return "(" + ("+" if node.kind == "positive" else "-") + formula_text(node.args[0]) + ")"
     operator = {v:k for k,v in (OPS | COMPARISONS).items()}[node.kind]
@@ -596,7 +675,7 @@ def canonical_sheet_references(node, sheet, sheets):
 
 
 def lower(source, language, manifest, inputs):
-    if not isinstance(manifest, dict) or type(manifest.get("source_subset_version")) is not int or manifest["source_subset_version"] not in {2,3,4,5}:
+    if not isinstance(manifest, dict) or type(manifest.get("source_subset_version")) is not int or manifest["source_subset_version"] not in {2,3,4,5,6}:
         fail("unsupported_version", "unknown source graph manifest version")
     manifest_bytes(manifest)
     program = import_source(source, language)
