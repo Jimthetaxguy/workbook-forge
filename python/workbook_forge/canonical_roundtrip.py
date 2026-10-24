@@ -30,6 +30,46 @@ DESKTOP_COMMAND = (
     "--excel"
 )
 
+_RECEIPT_ENTRIES = frozenset({
+    "receipt.json",
+    "receipt.md",
+    "operating-scenario.exported.xlsx",
+    "scenario-roundtrip.json",
+    "red-flag-roundtrip.json",
+    "scenario",
+    "red-flags",
+})
+
+
+class CanonicalReceiptError(FileExistsError):
+    """An existing path cannot be reused for canonical receipt output."""
+
+
+def _is_repository_root_or_parent(path: Path) -> bool:
+    root = ROOT.resolve()
+    return path == root or root.is_relative_to(path)
+
+
+def _existing_output_detail(path: Path) -> str:
+    if path.is_symlink():
+        return f"refusing an existing symbolic link ({path})"
+    resolved = path.resolve()
+    if _is_repository_root_or_parent(resolved):
+        return f"refusing the repository root or a parent of it ({resolved})"
+    if not path.is_dir():
+        return f"existing path is not a canonical receipt directory ({path})"
+    entries = list(path.iterdir())
+    if not entries:
+        return f"refusing an existing empty directory ({path})"
+    unexpected = sorted(
+        entry.name
+        for entry in entries
+        if entry.name not in _RECEIPT_ENTRIES or entry.is_symlink()
+    )
+    if unexpected:
+        return f"refusing an existing directory containing {', '.join(unexpected)} ({path})"
+    return f"refusing an existing canonical receipt directory ({path})"
+
 def build_canonical_receipt(
     fixture: str | Path,
     output_dir: str | Path,
@@ -41,13 +81,21 @@ def build_canonical_receipt(
     """Export into a new directory, retaining all harness evidence."""
     requested = Path(output_dir)
     if requested.exists() or requested.is_symlink():
-        raise FileExistsError("receipt output directory must be new; existing contents are never replaced")
+        detail = _existing_output_detail(requested)
+        raise CanonicalReceiptError(
+            f"{detail}; receipt output directory must be new, existing contents are never replaced"
+        )
     fixture_path = Path(fixture).resolve()
     raw = fixture_path.read_bytes()
     original = hydrate(raw)
     directory = requested.resolve()
     # Exclusive creation also refuses a concurrent creator; no recursive cleanup.
-    directory.mkdir(parents=True, exist_ok=False)
+    try:
+        directory.mkdir(parents=True, exist_ok=False)
+    except FileExistsError as error:
+        raise CanonicalReceiptError(
+            "receipt output directory must be new; another process created it first"
+        ) from error
     oracle = _oracle()
     python_before = calculate(original)
     changed = with_input(original, "unit_price", 25)
