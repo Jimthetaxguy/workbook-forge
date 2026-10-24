@@ -5,6 +5,8 @@
 //                       Univer is expected to calculate)
 //   load-only           sheets-formula initialFormulaComputing = NO_CALCULATION
 //   not-execute         load-only + engine-formula and sheets notExecuteFormula
+//   engine-only         UniverFormulaEnginePlugin { notExecuteFormula } but no
+//                       sheets-formula(-ui); sheets notExecuteFormula = true
 //   no-formula-plugins  no UniverFormulaEnginePlugin / sheets-formula(-ui);
 //                       sheets notExecuteFormula = true
 
@@ -30,7 +32,7 @@ import '@univerjs/ui/lib/index.css';
 import '@univerjs/docs-ui/lib/index.css';
 import '@univerjs/sheets-ui/lib/index.css';
 
-export const MODES = ['univer-default', 'load-only', 'not-execute', 'no-formula-plugins'] as const;
+export const MODES = ['univer-default', 'load-only', 'not-execute', 'engine-only', 'no-formula-plugins'] as const;
 export type Mode = (typeof MODES)[number];
 
 export interface UniverHost {
@@ -55,7 +57,7 @@ export async function createUniverHost(container: HTMLElement, mode: Mode): Prom
   univer.registerPlugin(UniverDocsUIPlugin);
   if (formula) formula.registerEngine(univer, mode);
   univer.registerPlugin(UniverSheetsPlugin, {
-    notExecuteFormula: mode === 'not-execute' || mode === 'no-formula-plugins',
+    notExecuteFormula: mode === 'not-execute' || mode === 'engine-only' || mode === 'no-formula-plugins',
   });
   univer.registerPlugin(UniverSheetsUIPlugin);
   if (formula) formula.registerSheetsFormula(univer, mode);

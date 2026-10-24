@@ -15,10 +15,11 @@ import type { Mode } from './univer-host';
 export const locales = [SheetsFormulaEnUS, SheetsFormulaUIEnUS];
 
 export function registerEngine(univer: Univer, mode: Mode) {
-  univer.registerPlugin(UniverFormulaEnginePlugin, { notExecuteFormula: mode === 'not-execute' });
+  univer.registerPlugin(UniverFormulaEnginePlugin, { notExecuteFormula: mode === 'not-execute' || mode === 'engine-only' });
 }
 
 export function registerSheetsFormula(univer: Univer, mode: Mode) {
+  if (mode === 'engine-only') return;
   // sheets-formula's own notExecuteFormula expects Univer's RPC worker
   // (IRPCChannelService); that is Univer's worker mode, not a "don't calculate"
   // switch, so it is left unset and initialFormulaComputing is used instead.

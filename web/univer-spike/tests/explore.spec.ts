@@ -28,13 +28,15 @@ async function state(page: Page) {
     return { rev: s.adapter.revision, cells, audit: s.adapter.audit, div: s.adapter.divergence(), notices: s.adapter.notices };
   });
 }
-for (const mode of ['univer-default', 'load-only', 'not-execute', 'no-formula-plugins']) {
+for (const mode of ['univer-default', 'load-only', 'not-execute', 'engine-only', 'no-formula-plugins']) {
   test(`explore ${mode}`, async ({ page }) => {
     const errors: string[] = [];
     page.on('pageerror', (e) => errors.push(e.message));
     await boot(page, mode);
+    await select(page, 'H5');
+    await page.waitForTimeout(500);
     await select(page, 'C1');
-    await page.waitForTimeout(300);
+    await page.waitForTimeout(500);
     const bar = await page.evaluate(() => (window as any).__spike.then((s: any) => s.adapter.formulaBarText()));
     await typeInto(page, 'A1', '20');
     const s1 = await state(page);
