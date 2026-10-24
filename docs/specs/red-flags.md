@@ -78,8 +78,7 @@ across the language boundary. Ad-hoc dicts and dual native types drift.
      (optional string), and `formula` (optional Formula).
    - `Formula`: `expression`, `dependencies` (array of `Sheet!A1` strings),
      and `result`, the value Workbook Forge calculated, which is null until
-     it has calculated one. Today it is also null after calculating a
-     formula that refers to a blank cell. A value read from OOXML is kept in `Cell.value`
+     it has calculated one. A value read from OOXML is kept in `Cell.value`
      with provenance `imported`. A formula cache is an imported observation,
      distinct from an authored cell value and from a result freshly calculated
      by Workbook Forge.
