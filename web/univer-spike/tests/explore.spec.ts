@@ -40,6 +40,10 @@ for (const mode of ['univer-default', 'load-only', 'not-execute', 'no-formula-pl
     await page.keyboard.press('Control+z');
     await page.waitForTimeout(500);
     const s3 = await state(page);
+    const docs = await page.evaluate(() => (window as any).__spike.then((s: any) => s.adapter.docUnitIds()));
+    const trace = await page.evaluate(() => (window as any).__spike.then((s: any) => s.adapter.audit.trace.filter((t: string) => !t.startsWith('2:'))));
+    await page.screenshot({ path: `test-results/explore-${mode}.png` });
+    console.log(JSON.stringify({ mode, bar, docs, trace }));
     console.log(JSON.stringify({ mode, bar, s1, s2, s3, errors: errors.slice(0, 3) }));
   });
 }

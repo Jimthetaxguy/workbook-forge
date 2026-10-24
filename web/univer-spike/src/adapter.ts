@@ -62,6 +62,8 @@ export interface Audit {
   blocked: string[];
   /** Commands routed to Forge. */
   routed: string[];
+  /** Recent command/operation ids (debug trace, capped). */
+  trace: string[];
 }
 
 interface HistoryEntry {
@@ -102,7 +104,7 @@ function parseInput(cell: ICellData): { value?: CellValue; formula?: string } | 
 }
 
 export class ForgeUniverAdapter {
-  readonly audit: Audit = { calcRequests: [], calcOutputs: [], facadeEvents: [], foreignWrites: [], blocked: [], routed: [] };
+  readonly audit: Audit = { calcRequests: [], calcOutputs: [], facadeEvents: [], foreignWrites: [], blocked: [], routed: [], trace: [] };
   readonly notices: string[] = [];
   revision: Revision = '0';
   private undoStack: HistoryEntry[] = [];
@@ -251,6 +253,11 @@ export class ForgeUniverAdapter {
     return { raw: raw?.v ?? null, displayed: shown?.v ?? null, formula: raw?.f ?? null };
   }
 
+  /** Ids of every doc unit (editors) Univer has created. */
+  docUnitIds(): string[] {
+    return this.instances.getAllUnitsForType(UniverInstanceType.UNIVER_DOC).map((u) => u.getUnitId());
+  }
+
   /** Text currently in Univer's formula bar editor. */
   formulaBarText(): string | null {
     const doc = this.instances.getUnit<{ getBody(): { dataStream: string } | undefined }>(
@@ -375,6 +382,7 @@ export class ForgeUniverAdapter {
 
   private intercept(info: Readonly<ICommandInfo>) {
     const id = info.id;
+    if (this.audit.trace.push(`${info.type}:${id}`) > 300) this.audit.trace.shift();
     if (info.type === CommandType.MUTATION) {
       if (CALC_REQUEST.test(id)) this.audit.calcRequests.push(id);
       if (CALC_OUTPUT.test(id)) this.audit.calcOutputs.push(id);
