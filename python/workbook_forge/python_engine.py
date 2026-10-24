@@ -351,9 +351,6 @@ class _Graph:
             if cell.get("blocked_reason") is not None:
                 graph.errors[current] = ToolkitError("unsupported_cell", cell["blocked_reason"])
                 continue
-            if isinstance(cell.get("value"), dict) and cell["value"]["error"] in {"#NULL!", "#SPILL!"}:
-                graph.errors[current] = ToolkitError("unsupported_error_value", "this preserved Excel error has no evaluator semantics")
-                continue
             if "formula" not in cell:
                 continue
             try:

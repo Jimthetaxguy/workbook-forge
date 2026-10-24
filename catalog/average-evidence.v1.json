@@ -1,0 +1,22 @@
+{
+  "evidence_version": 1,
+  "retrieved": "2026-10-23",
+  "excel_observed": false,
+  "sources": [
+    {
+      "id": "worksheet-support",
+      "url": "https://support.microsoft.com/en-us/excel/functions/average-function",
+      "direct_bool_numeric_text_excerpt": "are not counted",
+      "context": "Directly supplied logical and numeric-text arguments."
+    },
+    {
+      "id": "worksheetfunction-api",
+      "url": "https://learn.microsoft.com/en-us/office/vba/api/excel.worksheetfunction.average",
+      "direct_bool_numeric_text_excerpt": "are counted",
+      "context": "Directly supplied logical and numeric-text arguments; Excel method documentation."
+    }
+  ],
+  "agreement": "Referenced text/logical/blank values are ignored; numerical zero is counted; nonnumeric direct text/errors cause errors.",
+  "selected_policy": "Provisionally count direct booleans and decimal numeric text, matching the method page. This does not establish worksheet behavior or resolve the support-page contradiction.",
+  "required_confirmation": "Synthetic Excel recalculation on a chosen target build/channel."
+}

@@ -22,10 +22,11 @@ describes the smaller direct-call and named-input interface over these evaluator
 ## General
 
 Unsupported syntax returns typed errors instead of approximations. Shared fixtures
-verify Python/Rust agreement and their stated expected results. Three targeted
-formula observations have succeeded in Excel; broader function-family checks and
-the complete workbook roundtrip remain outstanding. See [Excel observations](excel-observations.md)
-for the exact evidence. The engines are not full Excel calculation engines.
+verify Python and Rust agreement and their stated expected results. No Excel
+receipt for a function family is committed. The catalog grade is `dual_engine`.
+Broader function-family checks and the complete workbook round trip remain
+outstanding. See [Excel observations](excel-observations.md). The engines are
+not full Excel calculation engines.
 
 Both evaluators cap formula length at 8,192 UTF-16 code units and function nesting
 at 64 levels. Parenthesis nesting is limited to 96 levels, and wildcard matching
@@ -104,7 +105,7 @@ Python and Rust implement the rule separately, Python with decimal arithmetic an
 
 ### Dates and times
 
-`MONTH`, `DAY`, and `YEAR` read the integer date portion of numeric serials; `DAYS` subtracts numeric serials, preserving time fractions; `EDATE` clamps to the target month; and `EOMONTH` returns the target month's last day. `HOUR`, `MINUTE`, and `SECOND` extract whole-second components from date/time serials; the 1900 serial ceiling and negative/non-finite error behavior are unverified evaluator boundaries. `TIME` normalizes components and returns a fraction of a day. The extractor's half-ULP precision correction and `TIME` fractional-component truncation are evaluator profile rules that need Excel spot-checks. `WEEKDAY` supports return types 1, 2, 3, and 11–17; `WEEKNUM` supports System 1 selectors 1, 2, and 11–17 plus ISO selector 21; and `ISOWEEKNUM` uses ISO week-year rules. These functions floor time fractions. Fractional selector truncation and exact results around the fictional serial 60 remain unverified evaluator-profile choices. Human-readable time strings such as `6:45 PM` are documented by Microsoft for the extractors but are not parsed here; numeric text follows the shared number coercion. `EDATE` and `EOMONTH` truncate fractional month offsets toward zero. Their date semantics use the 1900 system, preserve serial 60, and do not model workbook-specific 1904 settings or locale-sensitive text dates. `EDATE` and `EOMONTH` return whole-day serials and discard start-date time fractions as profile behavior that still needs an Excel spot-check. Both refuse a result before 1899-12-31 (serial 0) with `#NUM!`, which Microsoft documents for a result outside the supported range; `EOMONTH(1,-1)` is the lowest result, 0, and `EDATE(1,-1)` is `#NUM!` in both engines.
+`MONTH`, `DAY`, and `YEAR` read the integer date portion of numeric serials; `DAYS` subtracts numeric serials, preserving time fractions; `EDATE` clamps to the target month; and `EOMONTH` returns the target month's last day. Serial 0 is an engine profile, not an Excel observation. Both engines return `MONTH(0)` as 1, `DAY(0)` as 0, and `YEAR(0)` as 1900 before the EDATE and EOMONTH conversion. `HOUR`, `MINUTE`, and `SECOND` extract whole-second components from date/time serials; the 1900 serial ceiling and negative/non-finite error behavior are unverified evaluator boundaries. `TIME` normalizes components and returns a fraction of a day. The extractor's half-ULP precision correction and `TIME` fractional-component truncation are evaluator profile rules that need Excel spot-checks. `WEEKDAY` supports return types 1, 2, 3, and 11–17; `WEEKNUM` supports System 1 selectors 1, 2, and 11–17 plus ISO selector 21; and `ISOWEEKNUM` uses ISO week-year rules. These functions floor time fractions. Fractional selector truncation and exact results around the fictional serial 60 remain unverified evaluator-profile choices. Human-readable time strings such as `6:45 PM` are documented by Microsoft for the extractors but are not parsed here; numeric text follows the shared number coercion. `EDATE` and `EOMONTH` truncate fractional month offsets toward zero. Their date semantics use the 1900 system, preserve serial 60, and do not model workbook-specific 1904 settings or locale-sensitive text dates. `EDATE` and `EOMONTH` return whole-day serials and discard start-date time fractions as profile behavior that still needs an Excel spot-check. Both refuse a result before 1899-12-31 (serial 0) with `#NUM!`, which Microsoft documents for a result outside the supported range; `EOMONTH(1,-1)` is the lowest result, 0, and `EDATE(1,-1)` is `#NUM!` in both engines.
 
 ### Error predicates
 
@@ -181,9 +182,8 @@ Authored values, formulas, imported caches and calculated results remain distinc
 Caches are not calculation inputs. Exported results must match the model revision
 and supported meaning; a stale or unsupported result refuses export. Supported
 edits invalidate stale calculation-chain metadata and request Excel recalculation
-on next open. A scalar formula reference to a blank cell is cached as numeric zero;
-an explicit empty string remains a string cache, matching
-[Microsoft's documented reference behavior](https://support.microsoft.com/en-us/excel/clear-cells-of-contents-or-formats).
+on next open. A scalar formula reference to a blank cell is cached as numeric zero.
+An explicit empty string remains a string cache.
 The canonical model follows the same rule: a scalar formula whose value is a
 blank reference (`=B1`, `=IF(TRUE,B1)` with B1 empty) has `Formula.result` 0 in
 both engines, never `null`, so a null result always means "not calculated".

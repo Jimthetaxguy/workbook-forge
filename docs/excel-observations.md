@@ -6,7 +6,7 @@ date: '2026-09-28'
 type: verification-guide
 status: partial
 task: Independently observe bounded workbook behavior in Microsoft Excel
-summary: Excel-oracle verifies the operating-scenario SDK export round-trip; the full red-flag gate remains blocked by unsupported worksheet spill placement.
+summary: Two 2026-09-28 Excel runs are unreceipted local notes. They grade no function excel_observed. The full red-flag gate remains blocked by unsupported worksheet spill placement.
 ---
 # Excel observations
 
@@ -61,8 +61,10 @@ model version, cell edits, formulas, expected result types and values, numeric
 tolerances, volatile predicates, formula allowlists, and required fixture
 classes. The harness checks formulas and exported package safety, opens only its
 owned scratch copy, applies only declared input edits, calls Excel's full
-dependency rebuild, saves and closes the copy, then imports the saved workbook
-with `workbook_forge.xlsx.import_xlsx`. It records formula changes separately
+dependency rebuild, saves and closes the copy, then reimports the saved workbook
+with the toolkit importer `workbook_forge.xlsx.import_xlsx`
+(`tools/excel_oracle.py`, `_model_view`). That importer is not canonical import
+(`workbook_forge.canonical_xlsx.import_canonical`). The harness records formula changes separately
 from typed cell results, compares expected outputs after reimport, and checks
 that edited inputs survived. A cached value without a completed Excel rebuild,
 save, and reimport cannot produce `observed`.
@@ -138,43 +140,50 @@ Excel 16.113.2 removed redundant single quotes around the simple sheet name
 `Assumptions` from several formulas. That rewrite is recorded per cell; other
 formula changes still fail the comparison.
 
-## Observed on 2026-09-28
+## Unreceipted local note, 2026-09-28 — three-formula smoke
 
-An Excel-created synthetic workbook in Microsoft Excel **16.113.2**, automatic
-calculation, produced these actual live values:
+This section is an unreceipted local note. No receipt is committed. It grades
+no function `excel_observed`.
 
-| Formula | Excel result |
+The note records these live values from Microsoft Excel 16.113.2, with
+automatic calculation, on an Excel-created synthetic workbook:
+
+| Formula | Recorded result |
 | --- | ---: |
 | `=2+3*4` | 14 |
 | `=IF(FALSE,1/0,42)` | 42 |
 | `=SUM(1080,1000)` | 2080 |
 
-Those values were emitted before cleanup. The same owned workbook was confirmed
-closed without saving. This three-formula smoke check does not establish
-workbook import/export, copied-reference, or validation conformance. Its exact
-script hash is `a7987c0c9e67a2a44f9c6f0cb80b4e29c1d6ad144c3c19933119aa170870d856`.
-The local receipt is retained outside the repository; raw Excel-generated files
-are not suitable for publication without a separate metadata review.
+The note says the values were emitted before cleanup. It says the owned
+workbook was confirmed closed without saving. This three-formula smoke check
+does not establish workbook import, export, copied-reference, or validation
+conformance. The script hash in the note is
+`a7987c0c9e67a2a44f9c6f0cb80b4e29c1d6ad144c3c19933119aa170870d856`.
+The local receipt is outside the repository. Raw Excel-generated files are
+not suitable for publication without a separate metadata review.
 
-File automation had inconsistent open behavior and a save timeout (`-1712`).
-One later open/calculate/save/close command sequence completed, with Excel
-reporting the 1900 date system, full precision, and automatic calculation, but
-the resulting package lacked formula caches. The harness rejected it as evidence.
-The complete six-output live scenario check subsequently encountered Excel
-Apple-event parameter error `-50`; no scenario result is claimed from that
-run. At that point, the generated-XLSX roundtrip remained unverified. The later
-SDK-export observation is recorded below. No global settings or user workbook
-contents were changed in these earlier attempts.
+The note records inconsistent open behavior and a save timeout (`-1712`).
+One later open, calculate, save, and close sequence completed. Excel reported
+the 1900 date system, full precision, and automatic calculation. The resulting
+package lacked formula caches. The harness rejected that package. The
+six-output live scenario check then hit Apple-event parameter error `-50`.
+No scenario result is claimed from that run. The generated XLSX round trip
+was still unverified. The later SDK export note is below. No global settings
+or user workbook contents were changed in these earlier attempts.
 
-## Observed on 2026-09-28 — SDK export round-trip
+## Unreceipted local note, 2026-09-28 — SDK export round trip
 
-The harness exported `operating_scenario()` with the Python SDK, copied the
-generated workbook, changed `Assumptions!B1` from 20 to 25, requested Excel's
-full dependency rebuild, saved and closed the copy, then reimported it with
-`workbook_forge.xlsx.import_xlsx`. Microsoft Excel **16.113.2** completed the
-cycle. All twelve declared cell checks matched:
+This section is an unreceipted local note. No receipt is committed. It grades
+no function `excel_observed`.
 
-| Cell | Expected and reimported result |
+The note says the harness exported `operating_scenario()` with the Python SDK,
+copied the generated workbook, and changed `Assumptions!B1` from 20 to 25. It
+says Excel then ran a full dependency rebuild, saved and closed the copy, and
+the harness reimported that file with the toolkit importer
+`workbook_forge.xlsx.import_xlsx`. The note records Microsoft Excel 16.113.2
+and says all twelve declared cell checks matched:
+
+| Cell | Recorded result |
 | --- | ---: |
 | `Forecast!C2:C4` revenue | 2500, 3000, 3750 |
 | `Forecast!D2:D4` variable costs | 800, 960, 1200 |
@@ -183,23 +192,24 @@ cycle. All twelve declared cell checks matched:
 | `Forecast!F3` total profit | 3290 |
 | `Forecast!F4` break-even units | 58.8235294117647 |
 
-The package retained all twelve formulas. Excel removed redundant quotes around
-the simple sheet name `Assumptions` in nine formulas; each exact alternate
-spelling is listed for its own cell in the contract allowlist. No other formula
-diffs remained. The receipt says `observed`, confirms full rebuild, save, close,
-and reimport, and confirms that the SDK source file stayed unchanged. Global
-calculation and iteration properties returned `missing value` through this
-Excel build's AppleScript interface. The receipt marks them unavailable and
-unverified; this run does not prove those global settings stayed unchanged.
+The note says the package retained all twelve formulas. It says Excel removed
+redundant quotes around the simple sheet name `Assumptions` in nine formulas.
+Each exact alternate spelling is listed for its own cell in the contract
+allowlist. The note says no other formula diffs remained. It describes a local
+receipt status of `observed`, with full rebuild, save, close, and reimport,
+and an unchanged SDK source file. That receipt is outside the repository.
+This note is not a finished observation. The note says global calculation and
+iteration properties returned `missing value` through this Excel build's
+AppleScript interface, and that those fields were marked unavailable and
+unverified. The note does not prove those global settings stayed unchanged.
 
 The complete red-flag contract produces a separate `blocked` receipt before
 Excel opens. Its `array-spill-placement` check explicitly names `Red Flags!B7`
 and expected spill cells `B7:B9`. SDK export currently raises
-`UnsupportedWorkbook` for worksheet array spill caches, so the receipt marks
-that required class `blocked` with `blocker_kind=unsupported_capability` and
-leaves volatile, iteration, scalar-array and quirk classes `not_observed`. The
-twelve-cell scenario round-trip is evidence for that supported scenario slice;
-it does not close the full export gate.
+`UnsupportedWorkbook` for worksheet array spill caches, so that required class
+is `blocked` with `blocker_kind=unsupported_capability`. Volatile, iteration,
+scalar-array, and quirk classes stay `not_observed`. The twelve-cell note
+grades no function `excel_observed`. It does not close the full export gate.
 
 ## Completing workbook acceptance
 
@@ -210,9 +220,14 @@ outputs, and every required behavior class; a dynamic-array spill check must
 inspect all cells in its declared spill range. Creating equivalent cells
 directly in Excel cannot establish that the generated file survives this
 roundtrip. `tools/canonical_excel_receipt.py` now exports
-`fixtures/operating-scenario.workbook.json` and calls this harness. The SDK
-observation above is a separate package. The canonical package's Desktop
-receipt is still pending on hosts without Excel. The scenario contract is
+`fixtures/operating-scenario.workbook.json` and calls this harness. The harness
+reimports Excel's saved file with the toolkit importer
+`workbook_forge.xlsx.import_xlsx` (`tools/excel_oracle.py`, `_model_view`), not
+canonical import (`workbook_forge.canonical_xlsx.import_canonical`). The SDK
+note above is a separate unreceipted local note. The canonical package's Desktop
+receipt is still pending on hosts without Excel. The Excel 16.113.4 run
+described in [CONTEXT.md](../CONTEXT.md) and [run-history.md](run-history.md)
+is uncommitted and unreceipted, with `spec2_passed` false. The scenario contract is
 `fixtures/operating-scenario.excel-roundtrip.contract.json`. Its
 `expected_formula` values are the authored fixture text. The nine period-cell
 allowlist spellings are the exact strings Excel 16.113.2 wrote on the SDK
