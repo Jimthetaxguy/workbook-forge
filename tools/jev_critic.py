@@ -343,6 +343,14 @@ def run_benchmark_eval(client: JevClient, benchmark_path: Path, gate_threshold: 
         raise CriticError(f"{benchmark_path} could not be read as JSON: {type(error).__name__}") from None
     if not isinstance(cases, list) or not cases:
         raise CriticError(f"{benchmark_path} holds no cases")
+    # excluded: true stays in the file as an unverified claim. The gate does not grade it.
+    cases = [
+        case
+        for case in cases
+        if not (isinstance(case, dict) and case.get("excluded") is True)
+    ]
+    if not cases:
+        raise CriticError(f"{benchmark_path} holds no cases")
     if not any(isinstance(case, dict) and case.get("is_false_control") for case in cases):
         raise CriticError(f"{benchmark_path} holds no control cases")
     if not math.isfinite(gate_threshold) or not 0.0 <= gate_threshold <= WORST_BRIER:

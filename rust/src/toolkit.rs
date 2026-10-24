@@ -1404,13 +1404,14 @@ fn reserve_result(
         CalculatedValue::Scalar(_) => 1,
         CalculatedValue::Array { rows } => rows.iter().map(Vec::len).sum(),
     };
-    if materialized
-        .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |used| {
-            used.checked_add(cells)
-                .filter(|total| *total <= MAX_RESULT_CELLS)
-        })
-        .is_err()
-    {
+    // Stable rustc deprecates fetch_update in favor of try_update, which is
+    // still unstable on rust-version 1.88 (feature atomic_try_update).
+    #[allow(deprecated)]
+    let updated = materialized.fetch_update(Ordering::Relaxed, Ordering::Relaxed, |used| {
+        used.checked_add(cells)
+            .filter(|total| *total <= MAX_RESULT_CELLS)
+    });
+    if updated.is_err() {
         exhausted.store(true, Ordering::Relaxed);
         return Err(ToolkitError::new(
             "resource_limit",
