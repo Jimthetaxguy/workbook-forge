@@ -5,6 +5,7 @@
 //! is reported rather than guessed.
 
 pub mod agent;
+pub mod browser_contract;
 pub mod evidence;
 pub mod extraction;
 pub mod model;
