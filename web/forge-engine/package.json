@@ -1,0 +1,13 @@
+{
+  "name": "@workbook-forge/engine",
+  "private": true,
+  "version": "0.0.0",
+  "license": "MIT",
+  "description": "Headless Forge WASM engine in a Web Worker behind a typed, host-agnostic command API. No UI imports.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./worker": "./src/worker.ts",
+    "./engine": "./src/engine.ts"
+  }
+}
