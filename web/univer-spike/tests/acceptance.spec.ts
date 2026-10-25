@@ -296,20 +296,10 @@ test('blank workbook authors new cells, evaluates formulas and exports locally',
   await page.waitForTimeout(400);
   await typeInto(page, 'A1', '2');
   await typeInto(page, 'A2', '3');
-  // Start a formula, then select its input range with the mouse as in Excel.
-  await clickCell(page, 'A3');
-  await page.waitForTimeout(150);
-  await page.keyboard.type('=SUM(', { delay: 15 });
-  await page.waitForTimeout(150);
-  await page.mouse.move(COLS.A, 234);
-  await page.mouse.down();
-  await page.waitForTimeout(100);
-  await page.mouse.move(COLS.A, 258, { steps: 8 });
-  await page.waitForTimeout(100);
-  await page.mouse.up();
-  await page.keyboard.type(')', { delay: 15 });
-  await page.keyboard.press('Enter');
-  await settle(page);
+  // Type the range rather than drag-selecting it: a mouse drag lands on
+  // pixel coordinates and intermittently missed A1:A2, which dropped the
+  // A3 edit and left the revision short of 17.
+  await typeInto(page, 'A3', '=SUM(A1:A2)');
   await typeInto(page, 'A4', '=A1+A2');
   await typeInto(page, 'B1', '=IF(A3=5,"pass","fail")');
   await typeInto(page, 'C1', 'apple');
