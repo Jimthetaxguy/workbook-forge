@@ -2,7 +2,7 @@
 # Install development requirements and opt into the bridge to compare both engines.
 set -euo pipefail
 cd "$(dirname "$0")/.."
-WORKBOOK_PYTHON="${WORKBOOK_PYTHON:-python3.13}"
+export WORKBOOK_PYTHON="${WORKBOOK_PYTHON:-python3.13}"
 "$WORKBOOK_PYTHON" -c 'from workbook_forge import _native; assert _native.Session'
 "$WORKBOOK_PYTHON" -c 'from workbook_forge.python_engine import Session; assert Session'
 "$WORKBOOK_PYTHON" tools/sync_primitive_catalog.py

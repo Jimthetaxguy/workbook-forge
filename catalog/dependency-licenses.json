@@ -1,7 +1,7 @@
 {
   "reviewed": "2026-10-23",
   "reviewer": "Codex",
-  "scope": "Independent Rust core, Rust XLSX adapter, optional PyO3 bridge, target-specific WASM binding and browser test dependencies; package manifests and bundled license files",
+  "scope": "Independent Rust core, Rust XLSX adapter, optional PyO3 bridge, target-specific WASM binding and Rust browser test dependencies; package manifests and bundled license files. npm packages are not listed here; they are checked from web/univer-spike/package-lock.json.",
   "packages": [
     {
       "name": "async-trait",
