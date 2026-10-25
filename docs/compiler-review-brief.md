@@ -1,10 +1,8 @@
 # Cumulative compiler review brief (through source profile 5)
 
-For a separate reviewer: assess the accumulated local patch, not another feature
-implementation. Base commit: `6cc7b7625d89cbcb1fd0d1dfdf8eb4d8a66991a3`;
-branch `agent/codex-dependency-optimization`, uncommitted/local-only. The task's
-patch manifest records cumulative and stage-five delta hashes and exact paths.
-No canonical checkout edits, pushes, merges, deployment or client workbook use.
+Merged as #19. These notes are the review invariants of that merged checkpoint,
+for a separate reading of the compiler rather than another feature
+implementation. Base commit: `6cc7b7625d89cbcb1fd0d1dfdf8eb4d8a66991a3`.
 
 ## Interfaces and ownership
 
@@ -66,9 +64,11 @@ No canonical checkout edits, pushes, merges, deployment or client workbook use.
   six comparison operators and documented scalar/reference grammar; SDK catalog
   declarations are 115 names, historical inventory 521. Inventory refresh,
   target-build reconciliation, arrays/spills/names/tables/providers/UDFs/iteration
-  and complete fidelity are unfinished. TS is a future transport-neutral client.
-- No fresh Excel recalculation/no-repair opening. Seven original sandbox-only
-  test failures remain excluded; the complete original gate is not green.
+  and complete fidelity are unfinished. The TypeScript client in `typescript/`
+  implements the transport-neutral agent-workbook-v1 contract, with a Node
+  JSON-lines process adapter. Tauri, HTTP/WebSocket and a spreadsheet UI are
+  not implemented.
+- No fresh Excel recalculation/no-repair opening is recorded for this checkpoint.
 
 Read `docs/source-compiler-review-stage4.md` for reproduced prior findings and
 `docs/source-graph-v5.md` for this stage's exact subset. Review priorities:

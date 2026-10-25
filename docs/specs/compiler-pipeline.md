@@ -74,8 +74,9 @@ The code-to-code promise is **shared meaning across supported runtimes**. It is
 not a promise to translate arbitrary Python source into Rust or arbitrary Rust
 source into Python. A supported calculation is represented by the canonical
 model and declared operations; each engine implements that contract
-independently. A future source-code generator needs its own language subset,
-safety rules, and acceptance tests before it becomes a supported target.
+independently. The bounded standalone compiler now supplies a source-code
+subset with its own limits and checks. It is separate from this canonical-model
+path. See [source profile 5](../source-graph-v5.md).
 
 When we say “code to XML,” the actual target is an `.xlsx` OOXML package: a ZIP
 container with related XML parts, relationships, content types and sometimes

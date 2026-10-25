@@ -14,9 +14,9 @@ version 1 does not describe the newer source bundle version.
 
 | Product | Adoption boundary | Present foundation | Missing acceptance |
 | --- | --- | --- | --- |
-| Standalone compiler CLI/library | Workbook to executable Rust/Python to workbook, including source-language translation; no UI/server/agent required | OOXML adapters, typed models, intake CLI; repository-local numeric source compiler and all four source routes | General multi-cell/function source compilation, packaged compile command and wider receipts |
+| Standalone compiler CLI/library | Workbook to executable Rust/Python to workbook, including source-language translation; no UI/server/agent required | OOXML adapters, typed models, intake CLI; older numeric-v1 lane; graph profiles 2-5 source-translating SUM, IF, IFERROR and AVERAGE across all four source routes; packaged `workbook-forge-compile` defaults to graph-v5 | General function coverage beyond those four profiles, and wider receipts |
 | Embeddable runtime engine | Independent Rust crate or Python library with versioned values, errors, shapes, dependency edits and diagnostics | Native independent evaluators and toolkit sessions, JSON-lines operations | Full language coverage, canonical/toolkit convergence, wider fidelity and conformance evidence |
-| TypeScript integration and optional spreadsheet UI | A typed client/runtime interface over either engine | Existing [operation contract](agent-protocol.md) with request IDs, revisions, pagination and limits | TS contract implementation, transport adapters and equivalent visible/edit/export acceptance tests |
+| TypeScript integration and optional spreadsheet UI | A typed client/runtime interface over either engine | Existing [operation contract](agent-protocol.md) with request IDs, revisions, pagination and limits, and the typed client in [typescript/](../typescript/README.md) | Transport adapters beyond the Node JSON-lines process, and equivalent visible/edit/export acceptance tests |
 
 Generated code may depend on a versioned Forge runtime; its dependency contract
 must be recorded. Standalone means independently usable, not zero dependencies.
@@ -101,22 +101,27 @@ guard weakening and incompatible layout/style/validation edits. They leave the
 owned import/session unchanged. Portable self-contained preservation packaging
 and cryptographic binding of IR to its baseline are future work.
 
-Passing these IR paths alone cannot close the code-translation acceptance gate.
-The separate source slice below implements that gate for a small arithmetic
-subset. The IR receipt's `source_translation: not_implemented` means that route
-does not perform source translation; it does not describe the separate source
-compiler's capabilities. No inventoried function call is source-translated yet.
+These toolkit IR routes are an older lane. Passing them alone cannot close the
+code-translation acceptance gate. The IR receipt's `source_translation: not_implemented`
+means that route does not perform source translation; it does not describe the
+separate source compiler. Graph profiles 2-5 source-translate inventoried calls:
+SUM on profile 2, IF and IFERROR on profile 3 (retained on profile 4), and
+AVERAGE on profile 5. The packaged command `workbook-forge-compile` defaults to
+graph-v5. See [source profile 5](source-graph-v5.md).
 
-## Actual executable-source slice
+## Older lane: numeric-v1 executable-source slice
 
-`tools/source_compiler.py` is a separately runnable compiler/library module with
-`compile`, `translate` and `emit` commands. The version 1 source bundle supports
-one numeric A1 input, a B1 expression, numeric literals, unary signs, and `+`,
+`tools/source_compiler.py` is the compatibility launcher. It defaults to
+numeric-v1 and delegates to the packaged compiler module, with `compile`,
+`translate` and `emit` commands. The version 1 source bundle supports one
+numeric A1 input, a B1 expression, numeric literals, unary signs, and `+`,
 `-`, `*`. Values are finite binary64 with magnitude at most 1e15; this is a local
-numeric profile, not an Excel precision/conformance claim. It rejects calls,
-division, powers, extra references, unsupported workbook shapes, metadata outside
-its representable profile and edits outside the versioned source scaffold.
-Full versions of those features remain planned.
+numeric profile, not an Excel precision/conformance claim. This lane rejects
+calls, division, powers, extra references, unsupported workbook shapes, metadata
+outside its representable profile and edits outside the versioned source
+scaffold. Those refusals belong to numeric-v1. Graph profiles 2-5 are the
+later lane above: they add division, multi-cell references, and the four
+inventoried calls.
 
 All four **actual source** paths are exercised:
 

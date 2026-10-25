@@ -76,6 +76,8 @@ agent operations. None of these counts implies complete Excel support.
 | Support an agent task | Discovery, focused reads, previews, edits, calculation, explanation and export work through real SDK operations | The live consumer exercise covers one synthetic task; it is not a general agent reliability benchmark |
 | Support an application interface | Native values and inspectable expressions can serve application code | No spreadsheet grid, forms application or automatic script-equivalence detector is implemented |
 
+That row records the 2026-09-28 checkpoint. Merged #24 later added the view-only [Univer spike](specs/univer-spike.md) over the WASM facade, and that spike is not a product decision.
+
 ### What the implementation teaches us
 
 **A familiar function identity needs an explicit behavior contract.** The catalog
@@ -370,7 +372,10 @@ revision-checked existing-cell edits, calculation report, and XLSX export bytes.
 It has no filesystem-path or network operations, so the browser caller owns file
 selection and saving. The import and preservation limits remain those of the
 Rust XLSX adapter: edits to cells absent from an imported workbook are rejected.
-The WASM API does not yet construct a blank workbook.
+The WASM API does not yet construct a blank workbook. Merged #24 adds
+`web/univer-spike`, a view-only page over this facade: Univer presents the
+sheet and Forge WASM calculates. That page is not a product decision. Its
+limits are in the [Univer spike note](specs/univer-spike.md).
 
 Each engine owns its revisions and mutations. Shared interchange data and
 differential tests establish parity without reusing executable implementations.
