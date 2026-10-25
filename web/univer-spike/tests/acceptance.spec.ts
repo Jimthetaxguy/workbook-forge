@@ -15,7 +15,7 @@ const AFTER_INPUT = [20, 40, 45, 135, 95, 335];
 const AFTER_FORMULA = [20, 40, 140, 420, 380, 1000];
 const FORMULAS = { B1: 'A1*2', C1: 'B1+5', D1: 'C1*3', E1: 'D1-B1', F1: 'SUM(A1:E1)' };
 
-// Cell centres in the default 1280x800 layout (column width 88px, row 24px).
+// Cell centres from the grid canvas's left edge (column width 88px, row 24px).
 const COLS: Record<string, number> = { A: 90, B: 178, C: 266, D: 354, E: 442, F: 530, G: 618, H: 706, I: 794 };
 
 async function boot(page: Page, mode: string) {
@@ -38,8 +38,32 @@ async function boot(page: Page, mode: string) {
   return errors;
 }
 
+// Row 1's centre sits 32px below the grid canvas top (20px column header plus
+// half a 24px row).
+const ROW1_CENTRE = 32;
+
+// The grid canvas's page position. Measured rather than fixed because the
+// notices above the grid wrap differently with the host's fonts, which moves
+// the grid down by a row's height on some machines.
+async function gridOrigin(page: Page) {
+  return page.evaluate(() => {
+    const rects = [...document.querySelectorAll('canvas')]
+      .map((canvas) => canvas.getBoundingClientRect())
+      .filter((rect) => rect.width > 0 && rect.height > 0);
+    // Before Univer renders (or in modes without a grid) fall back to the
+    // default 1280x800 layout, where the grid canvas starts at y=202.
+    if (rects.length === 0) return { x: 0, y: 202 };
+    const grid = rects.reduce((a, b) => (a.width * a.height >= b.width * b.height ? a : b));
+    return { x: grid.x, y: grid.y };
+  });
+}
+
 async function clickCell(page: Page, address: string) {
-  await page.mouse.click(COLS[address[0]], 234 + (Number(address.slice(1)) - 1) * 24);
+  const origin = await gridOrigin(page);
+  await page.mouse.click(
+    origin.x + COLS[address[0]],
+    origin.y + ROW1_CENTRE + (Number(address.slice(1)) - 1) * 24,
+  );
 }
 
 /** Type into a cell through Univer's real cell editor and commit with Enter. */
