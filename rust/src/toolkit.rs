@@ -1145,137 +1145,230 @@ pub struct CalculationReport {
     pub stale: bool,
 }
 
-#[derive(Default)]
+/// Formula precedents for every populated cell, plus empty entries for
+/// referenced cells that are not populated. `dependents` is the reverse index
+/// and the totals are the sums the workbook limits are checked against; all
+/// three are kept in step by `update`, so a session can reuse one graph
+/// across edits instead of rebuilding it.
+#[derive(Clone, Debug, Default, PartialEq)]
 struct Graph {
     dependencies: BTreeMap<String, BTreeSet<String>>,
     errors: BTreeMap<String, ToolkitError>,
+    dependents: BTreeMap<String, BTreeSet<String>>,
+    /// Expanded reference cells per formula, before de-duplication. Only
+    /// nonzero counts are stored.
+    expanded: BTreeMap<String, u64>,
+    expanded_total: u64,
+    edge_total: usize,
+}
+struct CellPrecedents {
+    deps: BTreeSet<String>,
+    error: Option<ToolkitError>,
+    expanded: u64,
+}
+fn cell_precedents(model: &WorkbookModel, sheet_name: &str, cell: &Cell) -> CellPrecedents {
+    let mut result = CellPrecedents {
+        deps: BTreeSet::new(),
+        error: None,
+        expanded: 0,
+    };
+    if let Some(reason) = &cell.blocked_reason {
+        result.error = Some(ToolkitError::new("unsupported_cell", reason));
+        return result;
+    }
+    let Some(formula) = &cell.formula else {
+        return result;
+    };
+    let parsed = Expression::parse(formula).and_then(|expression| {
+        if let Some(name) = expression
+            .functions()
+            .iter()
+            .find(|name| !SUPPORTED_FUNCTIONS.contains(&name.as_str()))
+        {
+            return Err(ToolkitError::new(
+                "unsupported_formula",
+                format!("unsupported function {name}"),
+            ));
+        }
+        expression.references()
+    });
+    let refs = match parsed {
+        Ok(refs) => refs,
+        Err(error) => {
+            result.error = Some(error);
+            return result;
+        }
+    };
+    for reference in refs {
+        let ref_sheet = reference.start.sheet.as_deref().unwrap_or(sheet_name);
+        let end = reference.end.as_ref().unwrap_or(&reference.start);
+        let rows = reference.start.row.min(end.row)..=reference.start.row.max(end.row);
+        let cols = reference.start.column.min(end.column)..=reference.start.column.max(end.column);
+        let count =
+            u64::from(rows.end() - rows.start() + 1) * u64::from(cols.end() - cols.start() + 1);
+        if count > MAX_DEPENDENCIES as u64 {
+            result.error = Some(ToolkitError::new(
+                "resource_limit",
+                "reference range exceeds 100000 cells",
+            ));
+            break;
+        }
+        result.expanded = result.expanded.saturating_add(count);
+        // The workbook total already fails; stop before expanding more.
+        if result.expanded > MAX_DEPENDENCIES as u64 {
+            break;
+        }
+        let Some(actual) = model
+            .sheets
+            .iter()
+            .find(|s| s.name.eq_ignore_ascii_case(ref_sheet))
+            .map(|s| &s.name)
+        else {
+            result.error = Some(ToolkitError::new(
+                "invalid_reference",
+                format!("unknown worksheet {ref_sheet}"),
+            ));
+            break;
+        };
+        for row in rows {
+            for col in cols.clone() {
+                result
+                    .deps
+                    .insert(key(actual, &crate::encode_ref(col as usize, row as usize)));
+            }
+        }
+        if result.deps.len() > MAX_DEPENDENCIES {
+            result.error = Some(ToolkitError::new(
+                "resource_limit",
+                "formula dependencies exceed 100000 cells",
+            ));
+            break;
+        }
+    }
+    result
 }
 impl Graph {
     fn build(model: &WorkbookModel) -> Result<Self, ToolkitError> {
         let mut graph = Self::default();
-        let mut total = 0usize;
-        let mut expanded_references = 0u64;
         for sheet in &model.sheets {
             for (address, cell) in &sheet.cells {
-                let current = key(&sheet.name, address);
-                let mut deps = BTreeSet::new();
-                if let Some(reason) = &cell.blocked_reason {
-                    graph.errors.insert(
-                        current.clone(),
-                        ToolkitError::new("unsupported_cell", reason),
-                    );
-                } else if let Some(formula) = &cell.formula {
-                    let parsed = Expression::parse(formula).and_then(|expression| {
-                        if let Some(name) = expression
-                            .functions()
-                            .iter()
-                            .find(|name| !SUPPORTED_FUNCTIONS.contains(&name.as_str()))
-                        {
-                            return Err(ToolkitError::new(
-                                "unsupported_formula",
-                                format!("unsupported function {name}"),
-                            ));
-                        }
-                        expression.references()
-                    });
-                    match parsed {
-                        Err(error) => {
-                            graph.errors.insert(current.clone(), error);
-                        }
-                        Ok(refs) => {
-                            for reference in refs {
-                                let sheet_name =
-                                    reference.start.sheet.as_deref().unwrap_or(&sheet.name);
-                                let end = reference.end.as_ref().unwrap_or(&reference.start);
-                                let rows = reference.start.row.min(end.row)
-                                    ..=reference.start.row.max(end.row);
-                                let cols = reference.start.column.min(end.column)
-                                    ..=reference.start.column.max(end.column);
-                                let count = u64::from(rows.end() - rows.start() + 1)
-                                    * u64::from(cols.end() - cols.start() + 1);
-                                if count > MAX_DEPENDENCIES as u64 {
-                                    graph.errors.insert(
-                                        current.clone(),
-                                        ToolkitError::new(
-                                            "resource_limit",
-                                            "reference range exceeds 100000 cells",
-                                        ),
-                                    );
-                                    break;
-                                }
-                                expanded_references = expanded_references.saturating_add(count);
-                                if expanded_references > MAX_DEPENDENCIES as u64 {
-                                    return Err(ToolkitError::new(
-                                        "resource_limit",
-                                        "expanded workbook references exceed 100000 cells",
-                                    ));
-                                }
-                                let actual = match model
-                                    .sheets
-                                    .iter()
-                                    .find(|s| s.name.eq_ignore_ascii_case(sheet_name))
-                                {
-                                    Some(s) => &s.name,
-                                    None => {
-                                        graph.errors.insert(
-                                            current.clone(),
-                                            ToolkitError::new(
-                                                "invalid_reference",
-                                                format!("unknown worksheet {sheet_name}"),
-                                            ),
-                                        );
-                                        break;
-                                    }
-                                };
-                                for row in rows {
-                                    for col in cols.clone() {
-                                        deps.insert(key(
-                                            actual,
-                                            &crate::encode_ref(col as usize, row as usize),
-                                        ));
-                                    }
-                                }
-                                if deps.len() > MAX_DEPENDENCIES {
-                                    graph.errors.insert(
-                                        current.clone(),
-                                        ToolkitError::new(
-                                            "resource_limit",
-                                            "formula dependencies exceed 100000 cells",
-                                        ),
-                                    );
-                                    break;
-                                }
-                            }
-                        }
-                    }
-                }
-                total = total.saturating_add(deps.len());
-                if total > MAX_DEPENDENCIES {
-                    return Err(ToolkitError::new(
-                        "resource_limit",
-                        "workbook exceeds 100000 dependency edges",
-                    ));
-                }
-                graph.dependencies.insert(current, deps);
+                graph.set_cell(
+                    key(&sheet.name, address),
+                    cell_precedents(model, &sheet.name, cell),
+                );
+                graph.check_reference_limits()?;
             }
         }
-        let missing: Vec<_> = graph
-            .dependencies
-            .values()
-            .flat_map(|deps| deps.iter())
-            .filter(|dep| !graph.dependencies.contains_key(*dep))
-            .cloned()
-            .collect();
-        for dep in missing {
-            graph.dependencies.entry(dep).or_default();
+        graph.check_cell_limit()?;
+        Ok(graph)
+    }
+    /// Re-derives the edges of `changed` cells from `model`. On a limit
+    /// failure the graph is restored from `previous`, the model it matched
+    /// before the edit, so a rejected edit leaves it untouched.
+    fn update(
+        &mut self,
+        previous: &WorkbookModel,
+        model: &WorkbookModel,
+        changed: &BTreeSet<String>,
+    ) -> Result<(), ToolkitError> {
+        self.reanalyze(model, changed);
+        let checked = self
+            .check_reference_limits()
+            .and_then(|()| self.check_cell_limit());
+        if checked.is_err() {
+            self.reanalyze(previous, changed);
         }
-        if graph.dependencies.len() > MAX_WORKBOOK_CELLS {
+        checked
+    }
+    fn reanalyze(&mut self, model: &WorkbookModel, changed: &BTreeSet<String>) {
+        let mut released = BTreeSet::new();
+        for current in changed {
+            let (sheet, _) = current.rsplit_once('!').unwrap();
+            match model.get_cell(current) {
+                Some(cell) => {
+                    released.extend(self.clear_cell(current));
+                    self.set_cell(current.clone(), cell_precedents(model, sheet, cell));
+                }
+                // Absent before an edit created it: drop it unless referenced.
+                None => {
+                    released.extend(self.clear_cell(current));
+                    released.insert(current.clone());
+                }
+            }
+        }
+        for dep in released {
+            let referenced = self.dependents.contains_key(&dep);
+            if !referenced
+                && model.get_cell(&dep).is_none()
+                && self.dependencies.get(&dep).is_some_and(BTreeSet::is_empty)
+            {
+                self.dependencies.remove(&dep);
+            }
+        }
+    }
+    /// Removes a cell's own edges and returns the precedents it released.
+    fn clear_cell(&mut self, current: &str) -> BTreeSet<String> {
+        self.errors.remove(current);
+        self.expanded_total -= self.expanded.remove(current).unwrap_or(0);
+        let deps = self
+            .dependencies
+            .get_mut(current)
+            .map(std::mem::take)
+            .unwrap_or_default();
+        self.edge_total -= deps.len();
+        for dep in &deps {
+            if let Some(dependents) = self.dependents.get_mut(dep) {
+                dependents.remove(current);
+                if dependents.is_empty() {
+                    self.dependents.remove(dep);
+                }
+            }
+        }
+        deps
+    }
+    fn set_cell(&mut self, current: String, precedents: CellPrecedents) {
+        if let Some(error) = precedents.error {
+            self.errors.insert(current.clone(), error);
+        }
+        if precedents.expanded > 0 {
+            self.expanded.insert(current.clone(), precedents.expanded);
+            self.expanded_total = self.expanded_total.saturating_add(precedents.expanded);
+        }
+        self.edge_total = self.edge_total.saturating_add(precedents.deps.len());
+        for dep in &precedents.deps {
+            self.dependents
+                .entry(dep.clone())
+                .or_default()
+                .insert(current.clone());
+            self.dependencies.entry(dep.clone()).or_default();
+        }
+        self.dependencies.insert(current, precedents.deps);
+    }
+    // Every dependency comes from an expanded reference, so the expanded
+    // total reaches its limit no later than the edge total does.
+    fn check_reference_limits(&self) -> Result<(), ToolkitError> {
+        if self.expanded_total > MAX_DEPENDENCIES as u64 {
+            return Err(ToolkitError::new(
+                "resource_limit",
+                "expanded workbook references exceed 100000 cells",
+            ));
+        }
+        if self.edge_total > MAX_DEPENDENCIES {
+            return Err(ToolkitError::new(
+                "resource_limit",
+                "workbook exceeds 100000 dependency edges",
+            ));
+        }
+        Ok(())
+    }
+    fn check_cell_limit(&self) -> Result<(), ToolkitError> {
+        if self.dependencies.len() > MAX_WORKBOOK_CELLS {
             return Err(ToolkitError::new(
                 "resource_limit",
                 "populated and referenced workbook cells exceed 100000",
             ));
         }
-        Ok(graph)
+        Ok(())
     }
     fn closure(&self, model: &WorkbookModel) -> Result<BTreeSet<String>, ToolkitError> {
         let mut pending = if model.outputs.is_empty() {
@@ -1297,24 +1390,11 @@ impl Graph {
         }
         Ok(selected)
     }
-    fn reverse(&self) -> BTreeMap<String, BTreeSet<String>> {
-        let mut reverse: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
-        for (current, deps) in &self.dependencies {
-            for dep in deps {
-                reverse
-                    .entry(dep.clone())
-                    .or_default()
-                    .insert(current.clone());
-            }
-        }
-        reverse
-    }
     fn invalidated(&self, dirty: &BTreeSet<String>) -> BTreeSet<String> {
-        let reverse = self.reverse();
         let mut invalidated = dirty.clone();
         let mut pending = dirty.iter().cloned().collect::<Vec<_>>();
         while let Some(current) = pending.pop() {
-            if let Some(dependents) = reverse.get(&current) {
+            if let Some(dependents) = self.dependents.get(&current) {
                 for dependent in dependents {
                     if invalidated.insert(dependent.clone()) {
                         pending.push(dependent.clone());
@@ -1429,19 +1509,41 @@ fn calculate_inner(
     previous: Option<&CalculationReport>,
     dirty: &BTreeSet<String>,
 ) -> CalculationReport {
-    let mut report = CalculationReport {
-        revision: model.revision,
-        ..CalculationReport::default()
-    };
-    let graph = match model.validate().and_then(|()| {
+    match model.validate().and_then(|()| {
         validate_inputs(model, &BTreeMap::new())?;
         Graph::build(model)
     }) {
-        Ok(graph) => graph,
-        Err(error) => {
-            report.diagnostics.push(Diagnostic::for_key(error, None));
-            return report;
-        }
+        Ok(graph) => calculate_with_graph(model, &graph, workers, previous, dirty),
+        Err(error) => CalculationReport {
+            revision: model.revision,
+            diagnostics: vec![Diagnostic::for_key(error, None)],
+            ..CalculationReport::default()
+        },
+    }
+}
+/// A previous report can seed a calculation only when it covered every
+/// selected cell; one cut short by a limit or a worker failure is discarded.
+fn reusable(report: &CalculationReport) -> bool {
+    report.diagnostics.iter().all(|diagnostic| {
+        diagnostic.address.is_some()
+            && diagnostic.code != "resource_limit"
+            && diagnostic.code != "worker_failure"
+    })
+}
+/// Evaluates the selected cells that `dirty` invalidated, or that the
+/// previous report never covered, in dependency order. Every other selected
+/// cell keeps its previous value and diagnostics. With no previous report
+/// this is a full calculation.
+fn calculate_with_graph(
+    model: &WorkbookModel,
+    graph: &Graph,
+    workers: usize,
+    previous: Option<&CalculationReport>,
+    dirty: &BTreeSet<String>,
+) -> CalculationReport {
+    let mut report = CalculationReport {
+        revision: model.revision,
+        ..CalculationReport::default()
     };
     let selected = match graph.closure(model) {
         Ok(selected) => selected,
@@ -1450,15 +1552,63 @@ fn calculate_inner(
             return report;
         }
     };
-    let invalidated = graph.invalidated(dirty);
-    let reverse = graph.reverse();
-    let mut remaining: BTreeMap<String, usize> = selected
+    let materialized = AtomicUsize::new(0);
+    let exhausted = AtomicBool::new(false);
+    let previous = previous.filter(|old| reusable(old));
+    // Cells the previous report left on a cycle; anything depending on one
+    // that stays clean can never become ready.
+    let mut blocked = BTreeSet::new();
+    let pending = match previous {
+        None => selected.clone(),
+        Some(old) => {
+            let invalidated = graph.invalidated(dirty);
+            let mut covered: BTreeSet<String> = old.values.keys().cloned().collect();
+            let mut carried: BTreeMap<String, Vec<&Diagnostic>> = BTreeMap::new();
+            for diagnostic in &old.diagnostics {
+                let (Some(sheet), Some(address)) = (&diagnostic.sheet, &diagnostic.address) else {
+                    continue;
+                };
+                let current = key(sheet, address);
+                if diagnostic.code == "dependency_cycle" {
+                    blocked.insert(current.clone());
+                }
+                carried.entry(current.clone()).or_default().push(diagnostic);
+                covered.insert(current);
+            }
+            let pending: BTreeSet<String> = selected
+                .iter()
+                .filter(|current| invalidated.contains(*current) || !covered.contains(*current))
+                .cloned()
+                .collect();
+            for current in selected.difference(&pending) {
+                if let Some(value) = old.values.get(current) {
+                    if let Err(error) = reserve_result(value, &materialized, &exhausted) {
+                        report
+                            .diagnostics
+                            .push(Diagnostic::for_key(error, Some(current)));
+                        return report;
+                    }
+                    report.values.insert(current.clone(), value.clone());
+                }
+                if let Some(diagnostics) = carried.get(current) {
+                    report
+                        .diagnostics
+                        .extend(diagnostics.iter().map(|diagnostic| (*diagnostic).clone()));
+                }
+            }
+            blocked.retain(|current| !pending.contains(current));
+            pending
+        }
+    };
+    let mut remaining: BTreeMap<String, usize> = pending
         .iter()
         .map(|current| {
-            (
-                current.clone(),
-                graph.dependencies.get(current).map_or(0, BTreeSet::len),
-            )
+            let count = graph.dependencies.get(current).map_or(0, |deps| {
+                deps.iter()
+                    .filter(|dep| pending.contains(*dep) || blocked.contains(*dep))
+                    .count()
+            });
+            (current.clone(), count)
         })
         .collect();
     let mut ready = remaining
@@ -1468,31 +1618,18 @@ fn calculate_inner(
         .collect::<Vec<_>>();
     let mut finished = BTreeSet::new();
     let worker_count = workers.clamp(1, MAX_WORKERS);
-    let materialized = AtomicUsize::new(0);
-    let exhausted = AtomicBool::new(false);
     while !ready.is_empty() {
         ready.sort();
         let mut evaluate = Vec::new();
         for current in &ready {
-            if let Some(value) = previous
-                .filter(|_| !invalidated.contains(current))
-                .and_then(|old| old.values.get(current))
-            {
-                if let Err(error) = reserve_result(value, &materialized, &exhausted) {
-                    report
-                        .diagnostics
-                        .push(Diagnostic::for_key(error, Some(current)));
-                    return report;
-                }
-                report.values.insert(current.clone(), value.clone());
-            } else if model
+            if model
                 .get_cell(current)
                 .is_some_and(|cell| cell.formula.is_some())
                 && !graph.errors.contains_key(current)
             {
                 evaluate.push(current.clone());
             } else {
-                match evaluate_node(model, &graph, current, &report.values) {
+                match evaluate_node(model, graph, current, &report.values) {
                     Ok(value) => {
                         if let Err(error) = reserve_result(&value, &materialized, &exhausted) {
                             report
@@ -1515,7 +1652,7 @@ fn calculate_inner(
                     break;
                 }
                 let result =
-                    evaluate_node(model, &graph, current, &report.values).and_then(|value| {
+                    evaluate_node(model, graph, current, &report.values).and_then(|value| {
                         reserve_result(&value, &materialized, &exhausted)?;
                         Ok(value)
                     });
@@ -1568,7 +1705,7 @@ fn calculate_inner(
         let mut next = Vec::new();
         for current in ready {
             finished.insert(current.clone());
-            if let Some(dependents) = reverse.get(&current) {
+            if let Some(dependents) = graph.dependents.get(&current) {
                 for dependent in dependents {
                     if let Some(count) = remaining.get_mut(dependent) {
                         *count -= 1;
@@ -1581,7 +1718,7 @@ fn calculate_inner(
         }
         ready = next;
     }
-    for current in selected.difference(&finished) {
+    for current in pending.difference(&finished) {
         report.diagnostics.push(Diagnostic::for_key(
             ToolkitError::new(
                 "dependency_cycle",
@@ -1614,6 +1751,10 @@ fn calculate_inner(
 
 struct SessionState {
     model: WorkbookModel,
+    /// Present only while `model` has passed validation, input validation
+    /// and the graph limits; it then matches `model` exactly. Edits update it
+    /// in place, and calculation shares it through the `Arc` without a copy.
+    graph: Option<Arc<Graph>>,
     published: Option<CalculationReport>,
     dirty: BTreeSet<String>,
 }
@@ -1638,9 +1779,15 @@ impl Session {
     }
     pub fn new(model: WorkbookModel) -> Result<Self, ToolkitError> {
         model.validate()?;
+        // A model that fails here still opens; calculation reports why.
+        let graph = validate_inputs(&model, &BTreeMap::new())
+            .and_then(|_| Graph::build(&model))
+            .ok()
+            .map(Arc::new);
         Ok(Self {
             state: Arc::new(Mutex::new(SessionState {
                 model,
+                graph,
                 published: None,
                 dirty: BTreeSet::new(),
             })),
@@ -1742,25 +1889,46 @@ impl Session {
         }
         candidate.validate()?;
         validate_inputs(&candidate, &BTreeMap::new())?;
-        Graph::build(&candidate)?;
-        candidate.revision = candidate
+        let revision = candidate
             .revision
             .checked_add(1)
             .ok_or_else(|| ToolkitError::new("resource_limit", "revision counter exhausted"))?;
+        let state = &mut *state;
+        match &mut state.graph {
+            // Copies the graph only if a calculation is still reading it.
+            Some(graph) => Arc::make_mut(graph).update(&state.model, &candidate, &changed)?,
+            None => state.graph = Some(Arc::new(Graph::build(&candidate)?)),
+        }
+        candidate.revision = revision;
         state.model = candidate;
         state.dirty.extend(changed);
         Ok(state.model.revision)
     }
+    /// Applies the edits, then recalculates the cells they invalidated. The
+    /// report is marked stale if another edit lands before it publishes.
+    pub fn apply_and_calculate(
+        &self,
+        edits: Vec<Edit>,
+        expected_revision: Option<u64>,
+        workers: usize,
+    ) -> Result<CalculationReport, ToolkitError> {
+        self.apply(edits, expected_revision)?;
+        Ok(self.calculate(workers))
+    }
     pub fn calculate(&self, workers: usize) -> CalculationReport {
-        let (model, previous, dirty) = {
+        let (model, graph, previous, dirty) = {
             let state = self.state();
             (
                 state.model.clone(),
+                state.graph.clone(),
                 state.published.clone(),
                 state.dirty.clone(),
             )
         };
-        let report = calculate_inner(&model, workers, previous.as_ref(), &dirty);
+        let report = match graph {
+            Some(graph) => calculate_with_graph(&model, &graph, workers, previous.as_ref(), &dirty),
+            None => calculate_inner(&model, workers, previous.as_ref(), &dirty),
+        };
         self.publish(report)
     }
     fn publish(&self, mut report: CalculationReport) -> CalculationReport {
@@ -2664,5 +2832,176 @@ mod tests {
             report.values["Data!C1"],
             CalculatedValue::Scalar(CellValue::Blank)
         );
+    }
+    /// Deterministic generator so failures replay; no extra dev-dependency.
+    struct Lcg(u64);
+    impl Lcg {
+        fn below(&mut self, n: usize) -> usize {
+            self.0 = self
+                .0
+                .wrapping_mul(6364136223846793005)
+                .wrapping_add(1442695040888963407);
+            ((self.0 >> 33) as usize) % n
+        }
+    }
+    fn random_edit(rng: &mut Lcg) -> Edit {
+        let cell =
+            |rng: &mut Lcg| format!("{}{}", ["A", "B", "C", "D"][rng.below(4)], 1 + rng.below(6));
+        let (sheet, address) = if rng.below(5) == 0 {
+            ("Other", cell(rng))
+        } else {
+            ("Data", cell(rng))
+        };
+        let (x, y) = (cell(rng), cell(rng));
+        let formula = match rng.below(9) {
+            0 => format!("={x}+1"),
+            1 => format!("=SUM({x}:{y})"),
+            2 => format!("={x}*{y}"),
+            3 => format!("=other!{x}+{y}"),
+            4 => format!("=Data!{x}-1"),
+            5 => "=1/0".to_string(),
+            6 => format!("=NOPE({x})"),
+            7 => format!("=Missing!{x}"),
+            _ => format!("=IF({x}>2,{y},0)"),
+        };
+        match rng.below(3) {
+            0 => Edit::value(sheet, address, CellValue::Number(rng.below(10) as f64)),
+            _ => Edit::formula(sheet, address, formula),
+        }
+    }
+    fn assert_matches_full_rebuild(session: &Session) {
+        let state = session.state();
+        let graph = state.graph.as_ref().expect("session keeps its graph");
+        assert_eq!(**graph, Graph::build(&state.model).unwrap());
+    }
+    #[test]
+    fn persistent_graph_and_incremental_reports_match_full_rebuilds() {
+        let (mut accepted, mut cycles) = (0, 0);
+        for seed in 0..40u64 {
+            let mut rng = Lcg(seed);
+            let mut workbook = model(
+                &[("A1", number(1.0)), ("B1", Cell::formula("=A1+1"))],
+                if seed % 2 == 0 {
+                    &[("main", "B1")]
+                } else {
+                    &[]
+                },
+            );
+            let mut other = Sheet::new("Other");
+            other.cells.insert("A1".into(), number(5.0));
+            workbook.sheets.push(other);
+            let session = Session::new(workbook).unwrap();
+            session.calculate(1);
+            for step in 0..60 {
+                let edits = (0..1 + rng.below(3))
+                    .map(|_| random_edit(&mut rng))
+                    .collect::<Vec<_>>();
+                // Batches that edit one cell twice are refused; skip them.
+                accepted += usize::from(session.apply(edits, None).is_ok());
+                assert_matches_full_rebuild(&session);
+                if rng.below(3) > 0 {
+                    let incremental = session.calculate(1 + rng.below(3));
+                    let full = calculate(&session.snapshot(), 1);
+                    assert_eq!(incremental.values, full.values, "seed {seed} step {step}");
+                    assert_eq!(incremental.outputs, full.outputs, "seed {seed} step {step}");
+                    assert_eq!(
+                        incremental.diagnostics, full.diagnostics,
+                        "seed {seed} step {step}"
+                    );
+                    cycles += usize::from(
+                        full.diagnostics
+                            .iter()
+                            .any(|d| d.code == "dependency_cycle"),
+                    );
+                }
+            }
+        }
+        // Guard against a generator that only produces rejected edits.
+        assert!(
+            accepted > 1500 && cycles > 50,
+            "{accepted} accepted, {cycles} cyclic"
+        );
+    }
+    #[test]
+    fn rewriting_a_formula_releases_unreferenced_placeholders() {
+        let session = Session::new(model(&[("A1", Cell::formula("=SUM(B1:B3)"))], &[])).unwrap();
+        assert!(
+            session
+                .state()
+                .graph
+                .as_ref()
+                .unwrap()
+                .dependencies
+                .contains_key("Data!B3")
+        );
+        session
+            .apply(
+                vec![Edit::value("Data", "A1", CellValue::Number(1.0))],
+                None,
+            )
+            .unwrap();
+        let state = session.state();
+        let graph = state.graph.as_ref().unwrap();
+        assert_eq!(graph.dependencies.keys().collect::<Vec<_>>(), ["Data!A1"]);
+        assert!(graph.dependents.is_empty());
+        assert_eq!((graph.edge_total, graph.expanded_total), (0, 0));
+    }
+    #[test]
+    fn an_edit_over_the_reference_limit_leaves_the_graph_unchanged() {
+        let session =
+            Session::new(model(&[("A1", Cell::formula("=SUM(B1:B60000)"))], &[])).unwrap();
+        let before = session.state().graph.as_ref().unwrap().as_ref().clone();
+        let error = session
+            .apply(vec![Edit::formula("Data", "C1", "=SUM(D1:D60000)")], None)
+            .unwrap_err();
+        assert_eq!(
+            error.message,
+            "expanded workbook references exceed 100000 cells"
+        );
+        assert_eq!(**session.state().graph.as_ref().unwrap(), before);
+        assert_eq!(session.snapshot().revision, 0);
+    }
+    #[test]
+    fn apply_and_calculate_evaluates_only_the_dirty_subgraph() {
+        let workbook = model(
+            &[
+                ("A1", number(1.0)),
+                ("A2", number(10.0)),
+                ("B1", Cell::formula("=A1+1")),
+                ("B2", Cell::formula("=A2+1")),
+            ],
+            &[],
+        );
+        let session = Session::new(workbook).unwrap();
+        session.calculate(1);
+        let report = session
+            .apply_and_calculate(
+                vec![Edit::value("Data", "A1", CellValue::Number(5.0))],
+                None,
+                1,
+            )
+            .unwrap();
+        assert_eq!(report.evaluated_cells, ["Data!B1"]);
+        assert_eq!(report.values["Data!B1"], scalar(6.0));
+        assert_eq!(report.values["Data!B2"], scalar(11.0));
+        assert_eq!(session.published(), Some(report));
+        let cycle = session
+            .apply_and_calculate(vec![Edit::formula("Data", "A1", "=B1")], None, 1)
+            .unwrap();
+        assert!(
+            cycle
+                .diagnostics
+                .iter()
+                .any(|d| d.code == "dependency_cycle")
+        );
+        let broken = session
+            .apply_and_calculate(
+                vec![Edit::value("Data", "A1", CellValue::Number(2.0))],
+                None,
+                1,
+            )
+            .unwrap();
+        assert!(broken.diagnostics.is_empty());
+        assert_eq!(broken.values["Data!B1"], scalar(3.0));
     }
 }
