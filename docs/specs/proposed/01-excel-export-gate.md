@@ -11,9 +11,12 @@ summary: Record the first scalar Excel Desktop receipt for the canonical fixture
 
 The trust path in [compiler-pipeline.md](../compiler-pipeline.md#execution-order) is
 **shared calculation report → scalar Excel observation → full Spec 2 evidence →
-headless workflow**. The report exists. Nothing after it does. The receipts in
-`receipts/canonical-operating-scenario/` are preflight only: Excel was not
-invoked. [red-flags.md](../red-flags.md) lists as not built: an observed
+headless workflow**. The report exists. Committed receipts in
+`receipts/canonical-operating-scenario/` are preflight only: those files record
+that Excel was not invoked. The uncommitted Excel 16.113.4 run described in
+[Completing workbook acceptance](../../excel-observations.md#completing-workbook-acceptance)
+is separate: `spec2_passed` stayed false, and that receipt was not committed.
+Phase A still means committing a path-sanitized receipt. [red-flags.md](../red-flags.md) lists as not built: an observed
 round trip of the canonical fixture, the spill/volatile/iteration/quirk
 classes, and the `oracle_optional` / `oracle_required` test runs.
 
