@@ -82,7 +82,7 @@ def main():
                     "source_kind": kind,
                     "actual_calculation": "Python SDK"
                     if backend == "python"
-                    else "independent Rust process",
+                    else "Rust process ran; values validated by Python SDK reimport",
                     "reader_and_writer": backend,
                     "client": "compiled TypeScript",
                     "transport": "Node child process JSON-lines",
