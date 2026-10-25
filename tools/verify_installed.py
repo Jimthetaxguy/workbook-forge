@@ -24,6 +24,7 @@ from workbook_forge.xlsx import export_xlsx, import_xlsx
 from workbook_forge.agent import AgentWorkbook, operation_catalog
 from workbook_forge.extraction import extract_xlsx, pattern_catalog
 from workbook_forge import primitives as xl
+from workbook_forge import source_graph
 
 
 def main() -> None:
@@ -36,6 +37,8 @@ def main() -> None:
     assert "site-packages" in Path(workbook_forge.__file__).parts, "must test the installed wheel"
     if args.require_pure:
         assert importlib.util.find_spec("workbook_forge._native") is None, "pure wheel must not contain a Rust extension"
+    for version in (2, 3, 4, 5, 6):
+        assert source_graph.template("rust", version), f"wheel is missing source_runtime_v{version}.rs"
     assert evaluate("=SUM(1,2,3)") == 6
     assert evaluate_result("=SEQUENCE(2,2)").shape == (2, 2)
     assert lookup_function("SUM")["name"] == "SUM"

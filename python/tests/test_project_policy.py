@@ -219,3 +219,13 @@ def test_tracked_files_are_portable():
                 if pattern.search(line):
                     offences.append(f"{name}:{line_number}: {label}: {line.strip()[:80]}")
     assert not offences, "\n".join(offences)
+
+
+def test_every_rust_source_runtime_ships_as_package_data():
+    # source_graph.template() reads source_runtime_v{n}.rs next to the module,
+    # so an installed wheel needs every one of them listed as package data.
+    configuration = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    declared = set(configuration["tool"]["setuptools"]["package-data"]["workbook_forge"])
+    runtimes = {path.name for path in (ROOT / "python" / "workbook_forge").glob("source_runtime_v*.rs")}
+    assert runtimes, "no Rust source runtimes found"
+    assert runtimes <= declared, f"missing from package-data: {sorted(runtimes - declared)}"

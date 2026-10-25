@@ -48,7 +48,7 @@ include = ["workbook_forge*"]
 namespaces = false
 
 [tool.setuptools.package-data]
-workbook_forge = ["source_runtime_v2.rs", "source_runtime_v3.rs", "source_runtime_v4.rs", "source_runtime_v5.rs"]
+workbook_forge = ["source_runtime_v2.rs", "source_runtime_v3.rs", "source_runtime_v4.rs", "source_runtime_v5.rs", "source_runtime_v6.rs"]
 
 # The wheel targets the stable ABI so one build serves every CPython from 3.12 on.
 [tool.distutils.bdist_wheel]
