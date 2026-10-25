@@ -1235,12 +1235,25 @@ fn read_cell(env: &Environment<'_>, sheet: &str, address: &str) -> Value {
     } else {
         sheet
     };
-    let key = format!("{actual_sheet}!{}", address.replace('$', ""));
+    let bare = address.replace('$', "");
+    let key = format!("{actual_sheet}!{bare}");
+    // Fast path: callers normally key cells exactly as `Sheet!A1` (or bare
+    // `A1` for unqualified fixtures), so an exact hit avoids scanning every
+    // cell. Range reads call this once per cell, so the scan below made a
+    // K-cell range O(K * cells). The case-insensitive scan stays as the
+    // fallback for differently-cased keys and for misses.
+    if let Some(value) = env.cells.get(&key) {
+        return value.clone();
+    }
+    if sheet.is_empty()
+        && let Some(value) = env.cells.get(&bare)
+    {
+        return value.clone();
+    }
     env.cells
         .iter()
         .find(|(k, _)| {
-            k.eq_ignore_ascii_case(&key)
-                || (sheet.is_empty() && k.eq_ignore_ascii_case(&address.replace('$', "")))
+            k.eq_ignore_ascii_case(&key) || (sheet.is_empty() && k.eq_ignore_ascii_case(&bare))
         })
         .map(|(_, v)| v.clone())
         .unwrap_or(Value::Blank)
