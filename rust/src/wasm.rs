@@ -16,6 +16,7 @@ fn js_error(error: impl std::fmt::Display) -> JsValue {
 #[wasm_bindgen]
 pub struct BrowserWorkbook {
     imported: ImportedWorkbook,
+    commands: crate::browser_contract::CommandSession,
 }
 
 #[wasm_bindgen]
@@ -58,6 +59,16 @@ impl BrowserWorkbook {
         crate::browser_contract::apply_edits_envelope(&self.imported, edits_json, expected_revision)
     }
 
+    /// Apply one command envelope (`{"v":1,"command_id",...,"op":{"type":
+    /// "set_cells","edits":[...]}}`), calculate, and return the delta response
+    /// `{"v":1,"command_id","status","revision","previous_revision","changed",
+    /// "evaluated_cells","diagnostics","duplicate"[,"error"]}`. Never throws.
+    #[wasm_bindgen(js_name = applyAndCalculateJson)]
+    pub fn apply_and_calculate_json(&self, envelope_json: &str) -> String {
+        self.commands
+            .apply_and_calculate(&self.imported, envelope_json)
+    }
+
     /// Calculate the current workbook and return the existing report contract.
     #[wasm_bindgen(js_name = calculateJson)]
     pub fn calculate_json(&self) -> Result<String, JsValue> {
@@ -76,7 +87,10 @@ impl BrowserWorkbook {
 pub fn open_xlsx(bytes: &[u8]) -> Result<BrowserWorkbook, JsValue> {
     let imported =
         xlsx::import_xlsx_bytes(bytes, BTreeMap::new(), BTreeMap::new()).map_err(js_error)?;
-    Ok(BrowserWorkbook { imported })
+    Ok(BrowserWorkbook {
+        imported,
+        commands: crate::browser_contract::CommandSession::new(),
+    })
 }
 
 #[cfg(test)]

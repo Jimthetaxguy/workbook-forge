@@ -8,9 +8,12 @@ import type {
   Calculation,
   Edit,
   Scalar,
+  CommandEnvelope,
   CommandName,
+  CommandResponse,
   Commands,
   EngineError,
+  PatchEvent,
   RequestMessage,
   ResponseMessage,
   Result,
@@ -27,6 +30,7 @@ export interface ForgeWorkbook {
   snapshotJson(): string;
   revisionString(): string;
   applyEditsResultJson(editsJson: string, expectedRevision: string): string;
+  applyAndCalculateJson(envelopeJson: string): string;
   calculateJson(): string;
   exportXlsx(): Uint8Array;
   free(): void;
@@ -46,8 +50,19 @@ function toCell(raw: { value?: unknown; formula?: string | null }) {
   return cell;
 }
 
+/** Protocol edits -> the Rust edit shape (formulas carry a leading "="). */
+function toRustEdits(edits: Edit[]) {
+  return edits.map((edit) => {
+    const out: Record<string, unknown> = { sheet: edit.sheet, address: edit.address };
+    if (edit.formula !== undefined) out.formula = edit.formula.startsWith('=') ? edit.formula : `=${edit.formula}`;
+    else out.value = edit.value ?? null;
+    return out;
+  });
+}
+
 export class ForgeEngine {
   private workbook: ForgeWorkbook | null = null;
+  private patches: PatchEvent[] = [];
   private readonly wasm: ForgeWasm;
 
   constructor(wasm: ForgeWasm) {
@@ -78,6 +93,10 @@ export class ForgeEngine {
         return this.withWorkbook((wb) => this.calculate(wb));
       case 'export':
         return this.withWorkbook((wb) => ({ ok: true, value: { bytes: wb.exportXlsx() } }));
+      case 'applyAndCalculate': {
+        const { envelope } = args as Commands['applyAndCalculate']['args'];
+        return this.withWorkbook((wb) => this.applyAndCalculate(wb, envelope));
+      }
       default:
         return fail('unknown_command', `unknown command ${String(command)}`);
     }
@@ -112,14 +131,42 @@ export class ForgeEngine {
 
   private applyEdits(wb: ForgeWorkbook, edits: Edit[], expectedRevision: string): Result<{ revision: string }> {
     if (!Array.isArray(edits)) return fail('invalid_request', 'edits must be an array');
-    const payload = edits.map((edit) => {
-      const out: Record<string, unknown> = { sheet: edit.sheet, address: edit.address };
-      if (edit.formula !== undefined) out.formula = edit.formula.startsWith('=') ? edit.formula : `=${edit.formula}`;
-      else out.value = edit.value ?? null;
-      return out;
-    });
+    const payload = toRustEdits(edits);
     const envelope = JSON.parse(wb.applyEditsResultJson(JSON.stringify(payload), String(expectedRevision)));
     return envelope.ok ? { ok: true, value: { revision: envelope.revision } } : { ok: false, error: envelope.error };
+  }
+
+  /**
+   * Patches for commands applied since the last drain, oldest first. The
+   * transport posts them to every connected client after the response.
+   */
+  drainPatches(): PatchEvent[] {
+    const out = this.patches;
+    this.patches = [];
+    return out;
+  }
+
+  private applyAndCalculate(wb: ForgeWorkbook, envelope: CommandEnvelope): Result<CommandResponse> {
+    const ops = envelope?.op;
+    if (!ops || !Array.isArray(ops.edits)) return fail('invalid_request', 'envelope.op.edits must be an array');
+    const wire = { ...envelope, op: { ...ops, edits: toRustEdits(ops.edits) } };
+    const response = JSON.parse(wb.applyAndCalculateJson(JSON.stringify(wire))) as CommandResponse;
+    if (response.status !== 'applied') {
+      return { ok: false, error: response.error ?? { code: 'engine_error', message: 'command rejected' } };
+    }
+    if (!response.duplicate) {
+      this.patches.push({
+        type: 'patch',
+        command_id: envelope.command_id,
+        client_id: envelope.client_id,
+        actor: envelope.actor,
+        revision: response.revision,
+        previous_revision: response.previous_revision,
+        changed: response.changed,
+        evaluated_cells: response.evaluated_cells,
+      });
+    }
+    return { ok: true, value: response };
   }
 
   private calculate(wb: ForgeWorkbook): Result<Calculation> {

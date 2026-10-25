@@ -1,8 +1,11 @@
 // Univer adapter: command interception + projection. It talks to Forge only
 // through the @workbook-forge/engine command API; Univer's model is a view.
 //
-//   Univer UI --(commands)--> intercept --> Edit[] --> ForgeClient (worker)
-//   Forge calculate()/snapshot() --> projection --> sheet.mutation.set-range-values {v, f}
+//   Univer UI --(commands)--> intercept --> Edit[] --> command envelope --> ForgeClient (worker)
+//   applyAndCalculate() delta (changed cells) --> projection --> sheet.mutation.set-range-values {v, f}
+//
+// open() still pulls a full snapshot + calculation; each edit after that is one
+// envelope round-trip that answers with only the cells that changed.
 //
 // Undo/redo never replays Univer mutations: the adapter keeps its own history
 // of Forge edits and applies the inverse edits at the expected revision.
@@ -20,7 +23,17 @@ import {
   type IWorkbookData,
   type Workbook,
 } from '@univerjs/core';
-import type { CalculatedValue, Edit, Scalar, ForgeClient, Revision, Snapshot } from '@workbook-forge/engine';
+import type {
+  CalculatedValue,
+  ChangedCell,
+  CommandEnvelope,
+  Edit,
+  PatchEvent,
+  Scalar,
+  ForgeClient,
+  Revision,
+  Snapshot,
+} from '@workbook-forge/engine';
 import { fromA1, toA1 } from './a1';
 import type { UniverHost } from './univer-host';
 
@@ -108,6 +121,9 @@ export class ForgeUniverAdapter {
   readonly audit: Audit = { calcRequests: [], calcOutputs: [], facadeEvents: [], foreignWrites: [], blocked: [], routed: [], trace: [] };
   readonly notices: string[] = [];
   revision: Revision = '0';
+  /** One per tab; client_seq counts this tab's envelopes. */
+  readonly clientId: string = crypto.randomUUID();
+  private clientSeq = 0;
   private undoStack: HistoryEntry[] = [];
   private redoStack: HistoryEntry[] = [];
   private projected = new Map<string, Projected>();
@@ -127,6 +143,7 @@ export class ForgeUniverAdapter {
     this.commands = injector.get(ICommandService);
     this.instances = injector.get(IUniverInstanceService);
     this.commands.beforeCommandExecuted((info) => this.intercept(info));
+    this.client.onPatch((patch) => this.onPatch(patch));
     this.spyOnFacade();
   }
 
@@ -293,8 +310,24 @@ export class ForgeUniverAdapter {
     return { sheet: edit.sheet, address: edit.address, value: prior?.value ?? null };
   }
 
+  private envelope(edits: Edit[]): CommandEnvelope {
+    this.clientSeq += 1;
+    return {
+      v: 1,
+      command_id: crypto.randomUUID(),
+      client_id: this.clientId,
+      client_seq: String(this.clientSeq),
+      idempotency_key: null,
+      actor: { kind: 'human', id: this.clientId, on_behalf_of: null },
+      base_revision: this.revision,
+      mode: 'strict',
+      preconditions: [],
+      op: { type: 'set_cells', edits },
+    };
+  }
+
   private async applyToForge(edits: Edit[], label: string): Promise<boolean> {
-    const result = await this.client.applyEdits(edits, this.revision);
+    const result = await this.client.applyAndCalculate(this.envelope(edits));
     if (!result.ok) {
       const e = result.error;
       const revisions = e.current_revision ? ` (expected r${e.expected_revision}, Forge at r${e.current_revision})` : '';
@@ -303,8 +336,53 @@ export class ForgeUniverAdapter {
       return false;
     }
     this.revision = result.value.revision;
-    await this.refresh();
+    // Repaint the delta, plus the edited cells so any editor residue in Univer
+    // is overwritten even when Forge reports no change for them.
+    this.applyChanged(result.value.changed, edits.map((edit) => `${edit.sheet}!${edit.address}`));
     return true;
+  }
+
+  /** Patches from other clients (agents, other tabs). Our own arrive as responses. */
+  private onPatch(patch: PatchEvent) {
+    if (patch.client_id === this.clientId) return;
+    void this.enqueue(async () => {
+      if (patch.previous_revision === this.revision) {
+        this.revision = patch.revision;
+        this.applyChanged(patch.changed, []);
+      } else if (BigInt(patch.revision) > BigInt(this.revision)) {
+        this.revision = patch.revision;
+        await this.refresh();
+      }
+    });
+  }
+
+  /** Write changed cells into the projection, the inverse cache and Univer. */
+  private applyChanged(changed: ChangedCell[], alsoRepaint: string[]) {
+    const bySheet = new Map<string, Record<number, Record<number, ICellData>>>();
+    const repaint = new Set(alsoRepaint);
+    const put = (sheet: string, address: string, data: ICellData) => {
+      const { row, col } = fromA1(address);
+      const matrix = bySheet.get(sheet) ?? {};
+      (matrix[row] ??= {})[col] = data;
+      bySheet.set(sheet, matrix);
+    };
+    for (const cell of changed) {
+      const key = `${cell.sheet}!${cell.address}`;
+      const formula = cell.formula ?? undefined;
+      const value = scalar(cell.value);
+      const data = toCellData(value, formula);
+      this.projected.set(key, { v: data.v as Scalar, f: formula });
+      this.snapshotCells.set(key, formula !== undefined ? { value: null, formula } : { value });
+      repaint.delete(key);
+      put(cell.sheet, cell.address, data);
+    }
+    for (const key of repaint) {
+      const prior = this.projected.get(key);
+      if (!prior) continue;
+      const [sheet, address] = key.split('!');
+      put(sheet, address, toCellData(prior.v as Scalar, prior.f));
+    }
+    this.write(bySheet);
   }
 
   private async read(): Promise<[Snapshot, Record<string, CalculatedValue>]> {

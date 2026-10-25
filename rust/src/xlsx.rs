@@ -1120,6 +1120,18 @@ impl ImportedWorkbook {
     pub fn snapshot(&self) -> WorkbookModel {
         self.session.snapshot()
     }
+    /// The current revision without cloning the model.
+    pub fn revision(&self) -> u64 {
+        self.session.revision()
+    }
+    /// Canonical `Sheet!A1` key for a sheet name and address.
+    pub fn resolve_key(&self, sheet: &str, address: &str) -> Result<String> {
+        Ok(self.session.resolve_key(sheet, address)?)
+    }
+    /// Copy only the named cells (canonical keys), not the whole model.
+    pub fn read_cells(&self, keys: &[String]) -> Vec<Option<Cell>> {
+        self.session.read_cells(keys)
+    }
     pub fn capabilities(&self) -> &Json {
         &self.capabilities
     }

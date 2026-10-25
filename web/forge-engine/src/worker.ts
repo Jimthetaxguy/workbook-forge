@@ -9,6 +9,8 @@ import type { RequestMessage } from './protocol';
 
 const ready = init().then(() => new ForgeEngine({ openXlsx }));
 let queue: Promise<unknown> = Promise.resolve();
+/** Every client that receives patches. One today (the page that started us). */
+const subscribers: { postMessage(message: unknown): void }[] = [self as unknown as Worker];
 
 self.addEventListener('message', (event: MessageEvent<RequestMessage>) => {
   const request = event.data;
@@ -20,5 +22,8 @@ self.addEventListener('message', (event: MessageEvent<RequestMessage>) => {
       transfer.push((response.result.value as { bytes: Uint8Array }).bytes.buffer as ArrayBuffer);
     }
     (self as unknown as Worker).postMessage(response, transfer);
+    // Ack before patch: the submitter's response goes first, then each patch
+    // to every subscriber.
+    for (const patch of engine.drainPatches()) for (const port of subscribers) port.postMessage(patch);
   });
 });

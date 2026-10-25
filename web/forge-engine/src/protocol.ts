@@ -76,6 +76,78 @@ export interface ExportResult {
   bytes: Uint8Array;
 }
 
+// ---- Command envelope (multi-user contract section 6.1) -------------------
+// One envelope per intent; the worker applies it, calculates, and answers with
+// a delta. Only mode "strict" (compare-and-swap on base_revision) is
+// implemented; "rebase" fails closed with unsupported_mode and non-empty
+// preconditions with unsupported_precondition.
+
+export interface Actor {
+  kind: 'human' | 'agent';
+  id: string;
+  on_behalf_of: string | null;
+}
+
+export interface SetCellsOp {
+  type: 'set_cells';
+  edits: Edit[];
+}
+
+export interface CommandEnvelope {
+  v: 1;
+  /** Globally unique, client-generated (crypto.randomUUID()). The dedupe key. */
+  command_id: string;
+  /** One per tab / agent connection. */
+  client_id: string;
+  /** Decimal-string counter, monotonic per client_id. */
+  client_seq: string;
+  /** Agents set their own so a retry under a new command_id is still deduped. */
+  idempotency_key: string | null;
+  actor: Actor;
+  base_revision: Revision;
+  mode: 'strict' | 'rebase';
+  preconditions: unknown[];
+  op: SetCellsOp;
+}
+
+/** A cell whose calculated value or input changed in a command. */
+export interface ChangedCell {
+  sheet: string;
+  address: string;
+  value: CalculatedValue;
+  /** Formula without the leading "=", or null for a literal. */
+  formula: string | null;
+}
+
+export interface CommandResponse {
+  v: 1;
+  command_id: string | null;
+  status: 'applied' | 'rejected';
+  revision: Revision;
+  previous_revision: Revision;
+  changed: ChangedCell[];
+  evaluated_cells: number;
+  diagnostics: unknown[];
+  /** True when this is the remembered response to an earlier, identical id. */
+  duplicate: boolean;
+  error?: EngineError;
+}
+
+/**
+ * Posted by the worker to every connected client after each applied,
+ * non-duplicate command, after the submitter's response.
+ */
+export interface PatchEvent {
+  type: 'patch';
+  command_id: string;
+  client_id: string;
+  actor: Actor;
+  revision: Revision;
+  previous_revision: Revision;
+  changed: ChangedCell[];
+  evaluated_cells: number;
+}
+
 /** Requests, keyed by command name. */
 export interface Commands {
   open: { args: { bytes: Uint8Array }; result: OpenResult };
@@ -83,6 +155,8 @@ export interface Commands {
   applyEdits: { args: { edits: Edit[]; expectedRevision: Revision }; result: ApplyResult };
   calculate: { args: Record<string, never>; result: Calculation };
   export: { args: Record<string, never>; result: ExportResult };
+  /** Apply + calculate in one call; ok:true only for status "applied". */
+  applyAndCalculate: { args: { envelope: CommandEnvelope }; result: CommandResponse };
 }
 
 export type CommandName = keyof Commands;
@@ -99,4 +173,4 @@ export interface ResponseMessage<K extends CommandName = CommandName> {
   result: Result<Commands[K]['result']>;
 }
 
-export const COMMANDS: readonly CommandName[] = ['open', 'snapshot', 'applyEdits', 'calculate', 'export'];
+export const COMMANDS: readonly CommandName[] = ['open', 'snapshot', 'applyEdits', 'calculate', 'export', 'applyAndCalculate'];

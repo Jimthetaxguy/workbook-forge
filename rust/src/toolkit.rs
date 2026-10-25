@@ -1649,6 +1649,22 @@ impl Session {
     pub fn snapshot(&self) -> WorkbookModel {
         self.state().model.clone()
     }
+    /// The current revision, read under the lock without cloning the model.
+    pub fn revision(&self) -> u64 {
+        self.state().model.revision
+    }
+    /// Resolve a sheet name (case-insensitive) and A1 address to the canonical
+    /// `Sheet!A1` key the calculation report uses.
+    pub fn resolve_key(&self, sheet: &str, address: &str) -> Result<String, ToolkitError> {
+        self.state().model.resolve(sheet, address)
+    }
+    /// Copy only the named cells (canonical `Sheet!A1` keys), not the model.
+    pub fn read_cells(&self, keys: &[String]) -> Vec<Option<Cell>> {
+        let state = self.state();
+        keys.iter()
+            .map(|key| state.model.get_cell(key).cloned())
+            .collect()
+    }
     pub fn published(&self) -> Option<CalculationReport> {
         let state = self.state();
         state
