@@ -1,7 +1,17 @@
 // Typed client for the Forge command API over any MessagePort-like channel
 // (a Worker, a MessagePort, or a WebView bridge with the same shape).
 
-import type { Edit, CommandName, Commands, RequestMessage, ResponseMessage, Result, Revision } from './protocol';
+import type {
+  CommandEnvelope,
+  Edit,
+  CommandName,
+  Commands,
+  PatchEvent,
+  RequestMessage,
+  ResponseMessage,
+  Result,
+  Revision,
+} from './protocol';
 
 export interface Port {
   postMessage(message: unknown, transfer?: Transferable[]): void;
@@ -17,6 +27,7 @@ export interface CommandLogEntry {
 export class ForgeClient {
   private nextId = 1;
   private pending = new Map<number, (response: ResponseMessage) => void>();
+  private patchListeners = new Set<(patch: PatchEvent) => void>();
   /** Every command sent and how it ended; hosts may audit it. */
   readonly log: CommandLogEntry[] = [];
 
@@ -24,11 +35,17 @@ export class ForgeClient {
 
   constructor(port: Port) {
     this.port = port;
-    port.addEventListener('message', (event: MessageEvent<ResponseMessage>) => {
-      const resolve = this.pending.get(event.data.id);
+    port.addEventListener('message', (event: MessageEvent<ResponseMessage | PatchEvent>) => {
+      const data = event.data;
+      if ('type' in data && data.type === 'patch') {
+        for (const listener of this.patchListeners) listener(data);
+        return;
+      }
+      const response = data as ResponseMessage;
+      const resolve = this.pending.get(response.id);
       if (resolve) {
-        this.pending.delete(event.data.id);
-        resolve(event.data);
+        this.pending.delete(response.id);
+        resolve(response);
       }
     });
   }
@@ -65,6 +82,15 @@ export class ForgeClient {
   }
   export() {
     return this.send('export', {});
+  }
+  /** Apply one command envelope and calculate; answers with the delta. */
+  applyAndCalculate(envelope: CommandEnvelope) {
+    return this.send('applyAndCalculate', { envelope });
+  }
+  /** Subscribe to patches the worker broadcasts after each applied command. */
+  onPatch(listener: (patch: PatchEvent) => void): () => void {
+    this.patchListeners.add(listener);
+    return () => this.patchListeners.delete(listener);
   }
 }
 

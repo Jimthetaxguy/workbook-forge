@@ -197,6 +197,13 @@ for (const mode of ['not-execute', 'load-only']) {
       expect(v.revision).toBe('4');
       expectDisplayed(v, AFTER_FORMULA);
 
+      // Edits, undo and redo went through command envelopes, not applyEdits.
+      const commands: string[] = await page.evaluate(() =>
+        (window as any).__spike.then((s: any) => s.client.log.map((entry: any) => entry.command)),
+      );
+      expect(commands.filter((c) => c === 'applyAndCalculate').length).toBeGreaterThanOrEqual(4);
+      expect(commands).not.toContain('applyEdits');
+
       // A stale revision is refused by Forge with structured revision data.
       const stale = await page.evaluate(() =>
         (window as any).__spike.then((s: any) => s.client.applyEdits([{ sheet: 'Sheet1', address: 'A1', value: 1 }], '3')),

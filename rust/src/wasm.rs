@@ -57,6 +57,7 @@ fn js_error(error: impl std::fmt::Display) -> JsValue {
 #[wasm_bindgen]
 pub struct BrowserWorkbook {
     session: WorkbookSession,
+    commands: crate::browser_contract::CommandSession,
 }
 
 #[wasm_bindgen]
@@ -105,6 +106,22 @@ impl BrowserWorkbook {
             ),
             WorkbookSession::Authored(session) => {
                 apply_authored_edits_envelope(session, edits_json, expected_revision)
+            }
+        }
+    }
+
+    /// Apply one command envelope (`{"v":1,"command_id",...,"op":{"type":
+    /// "set_cells","edits":[...]}}`), calculate, and return the delta response
+    /// `{"v":1,"command_id","status","revision","previous_revision","changed",
+    /// "evaluated_cells","diagnostics","duplicate"[,"error"]}`. Never throws.
+    #[wasm_bindgen(js_name = applyAndCalculateJson)]
+    pub fn apply_and_calculate_json(&self, envelope_json: &str) -> String {
+        match &self.session {
+            WorkbookSession::Imported(workbook) => {
+                self.commands.apply_and_calculate(workbook, envelope_json)
+            }
+            WorkbookSession::Authored(session) => {
+                self.commands.apply_and_calculate(session, envelope_json)
             }
         }
     }
@@ -175,6 +192,7 @@ pub fn open_xlsx(bytes: &[u8]) -> Result<BrowserWorkbook, JsValue> {
         xlsx::import_xlsx_bytes(bytes, BTreeMap::new(), BTreeMap::new()).map_err(js_error)?;
     Ok(BrowserWorkbook {
         session: WorkbookSession::Imported(imported),
+        commands: crate::browser_contract::CommandSession::new(),
     })
 }
 
@@ -186,6 +204,7 @@ pub fn create_blank_workbook(sheet_name: &str) -> Result<BrowserWorkbook, JsValu
     let session = Session::new(model).map_err(js_error)?;
     Ok(BrowserWorkbook {
         session: WorkbookSession::Authored(session),
+        commands: crate::browser_contract::CommandSession::new(),
     })
 }
 
