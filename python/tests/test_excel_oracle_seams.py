@@ -1,4 +1,4 @@
-"""Open round-trip seams. These checks fail until a receipt stops treating stand-ins as Excel observations."""
+"""Open round-trip seams."""
 from __future__ import annotations
 
 import importlib.util

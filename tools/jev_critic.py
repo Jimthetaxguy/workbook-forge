@@ -247,12 +247,12 @@ def audit_formula_profile(client: JevClient, formula_name: str, proposed_fixture
             "criteria": {
                 "excel_canonical_behavior": {
                     "what": "Exact match with documented Microsoft Excel 365 calculation results or verified Excel behavior.",
-                    "examples": ["SUM('1', 2) coerces numeric text in arguments to numbers", "='a'>1 returns TRUE"],
+                    "examples": ["SUM('1', 2) coerces numeric text in arguments to numbers"],
                     "not_for": "Local non-Excel approximations, standard IEEE float mismatch, or language exceptions."
                 },
                 "artificial_local_profile": {
                     "what": "A behavioral choice introduced by local engine design that conflicts with Excel Desktop.",
-                    "examples": ["='a'>1 returning #VALUE!", "=0.1+0.2=0.3 returning FALSE", "LEN('😀') returning 1"],
+                    "examples": ["=0.1+0.2=0.3 returning FALSE", "LEN('😀') returning 1"],
                     "not_for": "Documented Excel error behaviors."
                 },
                 "syntax_or_spill_boundary": {

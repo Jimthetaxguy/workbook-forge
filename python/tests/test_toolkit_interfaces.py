@@ -67,7 +67,7 @@ def test_python_inputs_are_atomic_and_errors_cross_boundary():
     assert model.to_dict() == before
 
 
-def test_cli_runs_and_reopens_real_excel_output(tmp_path):
+def test_cli_runs_scenario_and_reimports_output(tmp_path):
     from workbook_forge.xlsx import import_xlsx
     from workbook_forge.toolkit import operating_scenario
 
