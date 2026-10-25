@@ -1245,16 +1245,15 @@ fn read_cell(env: &Environment<'_>, sheet: &str, address: &str) -> Value {
     if let Some(value) = env.cells.get(&key) {
         return value.clone();
     }
-    if sheet.is_empty() {
-        if let Some(value) = env.cells.get(&bare) {
-            return value.clone();
-        }
+    if sheet.is_empty()
+        && let Some(value) = env.cells.get(&bare)
+    {
+        return value.clone();
     }
     env.cells
         .iter()
         .find(|(k, _)| {
-            k.eq_ignore_ascii_case(&key)
-                || (sheet.is_empty() && k.eq_ignore_ascii_case(&bare))
+            k.eq_ignore_ascii_case(&key) || (sheet.is_empty() && k.eq_ignore_ascii_case(&bare))
         })
         .map(|(_, v)| v.clone())
         .unwrap_or(Value::Blank)
