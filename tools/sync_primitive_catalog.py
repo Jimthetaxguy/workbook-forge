@@ -24,7 +24,7 @@ def projected_catalog() -> dict:
         item = supported[name]
         limits = ['Behavior inherits the existing independent evaluator profile; function identity does not claim complete Excel equivalence.']
         if name in {'SUM', 'AVERAGE', 'MIN', 'MAX', 'COUNT'}:
-            limits.append('The current Forge aggregate profile ignores Boolean and text values in scalar arguments as well as ranges. Direct scalar Excel coercion is not established by this mapping.')
+            limits.append('The primitive API ignores Boolean and text values in scalar arguments as well as ranges. This limit describes the primitive API only and does not describe formula evaluation. Direct scalar Excel coercion is not established by this mapping.')
         if name in {'IF', 'IFERROR'}:
             limits.append('Composed expressions evaluate branches lazily; host-language arguments to direct functions are evaluated before the function is called. All declared named inputs are required even in untaken branches.')
         if name == 'ROUND':
@@ -47,7 +47,7 @@ def projected_catalog() -> dict:
             entry['documented_difference'] = {
                 'source': 'https://learn.microsoft.com/en-us/office/vba/api/excel.worksheetfunction.sum',
                 'basis': 'documented, not independently observed in Excel',
-                'behavior': 'Microsoft documents counting direct logical/numeric-text arguments while ignoring those values in arrays/references. Forge currently ignores them in both contexts.',
+                'behavior': 'Microsoft documents counting direct logical/numeric-text arguments while ignoring those values in arrays/references. The primitive API ignores them in both contexts. Formula evaluation counts direct logical values and numeric text and ignores those values in arrays and references.',
             }
         functions.append(entry)
     return {
