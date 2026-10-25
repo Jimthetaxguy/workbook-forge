@@ -2,7 +2,10 @@
 
 import json
 import math
+import os
 from pathlib import Path
+import shutil
+import subprocess
 import xml.etree.ElementTree as ET
 import zipfile
 
@@ -14,7 +17,31 @@ from workbook_forge.toolkit import WorkbookModel
 from workbook_forge.xlsx import export_xlsx, import_xlsx
 
 NS = "{http://schemas.openxmlformats.org/spreadsheetml/2006/main}"
-WRITER = Path(__file__).resolve().parents[2] / "rust/target/debug/examples/compiler_roundtrip"
+ROOT = Path(__file__).resolve().parents[2]
+
+
+@pytest.fixture(scope="module")
+def compiler_roundtrip():
+    if not shutil.which("rustc"):
+        pytest.skip("Rust toolchain unavailable")
+    subprocess.run(
+        [
+            "cargo",
+            "build",
+            "--manifest-path",
+            str(ROOT / "rust/Cargo.toml"),
+            "--locked",
+            "--offline",
+            "--release",
+            "--example",
+            "compiler_roundtrip",
+        ],
+        env={**os.environ, "CARGO_TARGET_DIR": str(ROOT / "rust/target")},
+        check=True,
+        capture_output=True,
+        timeout=180,
+    )
+    return ROOT / "rust/target/release/examples/compiler_roundtrip"
 
 
 def workbook(path, formula="=A1*2"):
@@ -142,7 +169,9 @@ def test_library_producer_and_consumer_enforce_manifest_budget(tmp_path, monkeyp
     "origin,target",
     [("python", "python"), ("python", "rust"), ("rust", "python"), ("rust", "rust")],
 )
-def test_signed_zero_edited_routes_preserve_sign_and_sum_identity(tmp_path, origin, target):
+def test_signed_zero_edited_routes_preserve_sign_and_sum_identity(
+    tmp_path, origin, target, compiler_roundtrip
+):
     original = tmp_path / "original.xlsx"
     model = workbook(tmp_path / "seed.xlsx", "=0*-1")
     model.set_formula("Calc", "C1", "=SUM(0*-1)")
@@ -157,7 +186,7 @@ def test_signed_zero_edited_routes_preserve_sign_and_sum_identity(tmp_path, orig
     original.unlink()
     path = tmp_path / ("program.rs" if target == "rust" else "program.py")
     path.write_text(g.translate(source, origin, target))
-    actual = g.emit(path, target, manifest, {}, tmp_path / "output.xlsx", WRITER)
+    actual = g.emit(path, target, manifest, {}, tmp_path / "output.xlsx", compiler_roundtrip)
     assert g.typed(actual["'Calc'!B1"]) == "n:-0.0"
     assert g.typed(actual["'Calc'!C1"]) == "n:0.0"
     assert g.typed(actual["'Calc'!D1"]) == "n:-0.0"

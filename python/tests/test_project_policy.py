@@ -165,6 +165,30 @@ def test_rust_crate_has_no_unreviewed_third_party_dependencies():
     assert not problems, "\n".join(problems)
 
 
+# The Univer spike lockfile is not part of the Rust review catalog above.
+# web/univer-spike/scripts/check-licenses.mjs reads it, and the gate does not
+# run that script. Link packages are the local workspace and are skipped.
+NPM_LOCKFILE = ROOT / "web" / "univer-spike" / "package-lock.json"
+
+
+def test_npm_lockfile_uses_permissive_licenses():
+    lock = json.loads(NPM_LOCKFILE.read_text(encoding="utf-8"))
+    problems = []
+    checked = 0
+    for path, entry in lock["packages"].items():
+        if not path.startswith("node_modules/") or entry.get("link"):
+            continue
+        checked += 1
+        name = path[path.rfind("node_modules/") + len("node_modules/") :]
+        license_text = entry.get("license")
+        if isinstance(license_text, str) and license_text.strip() and _spdx_is_permissive(license_text):
+            continue
+        version = entry.get("version", "unknown")
+        problems.append(f"{name}@{version}: {license_text!r} is not a permissive, copyleft-free license")
+    assert checked, "web/univer-spike/package-lock.json lists no npm packages to review"
+    assert not problems, "\n".join(problems)
+
+
 # CONTEXT.md, "Working conventions": tracked files use repository-relative
 # paths and synthetic data, never home-directory paths or personal contact
 # details. The check reads the tracked file list from git so untracked scratch
