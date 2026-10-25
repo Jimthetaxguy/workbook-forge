@@ -63,12 +63,18 @@ def test_conditional_aggregation_glossary_has_behavior_and_provenance():
     assert "ms-count-criteria" in spec["source_refs"]
 
 
-def test_date_semantics_record_excel_serial_boundaries():
+def test_date_semantics_record_serial_zero_engine_profile():
     date = lookup_function("DATE")["semantic_spec"]
     assert "0 through 1899 are offset by 1900" in date["semantics"]["year_rules"]
     assert "serial 60" in date["semantics"]["serial_60"]
-    assert lookup_function("DAY")["semantic_spec"]["semantics"]["serial_zero"].startswith(
-        "returns 31"
+    assert lookup_function("DAY")["semantic_spec"]["semantics"]["serial_zero"] == (
+        "Serial 0 is an engine profile, not an Excel observation. Both engines return DAY(0) as 0."
+    )
+    assert lookup_function("MONTH")["semantic_spec"]["semantics"]["serial_zero"] == (
+        "Serial 0 is an engine profile, not an Excel observation. Both engines return MONTH(0) as 1."
+    )
+    assert lookup_function("YEAR")["semantic_spec"]["semantics"]["serial_zero"] == (
+        "Serial 0 is an engine profile, not an Excel observation. Both engines return YEAR(0) as 1900."
     )
 
 
