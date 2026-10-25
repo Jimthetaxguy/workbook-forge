@@ -1,0 +1,42 @@
+{
+  "fixture_version": 1,
+  "primary_sources": [
+    "https://support.microsoft.com/en-us/excel/functions/xlookup-function"
+  ],
+  "expectation_basis": "Expected values are independently derived from the input vectors and the documented positional/default behavior. These are implementation fixtures, not Excel observations.",
+  "sheet": "Calc",
+  "values": {
+    "A1": "Pear",
+    "A2": "pear",
+    "A3": null,
+    "A4": "Apple",
+    "B1": 10,
+    "B2": 20,
+    "B3": 30,
+    "B4": 40
+  },
+  "formulas": {
+    "D1": "=XLOOKUP(\"PEAR\",A1:A4,B1:B4)",
+    "D2": "=XLOOKUP(\"pear\",A1:A4,B1:B4,,, -1)",
+    "D3": "=XLOOKUP(,A1:A4,B1:B4)",
+    "D4": "=XLOOKUP(\"missing\",A1:A4,B1:B4,\"not found\")",
+    "D5": "=XLOOKUP(\"missing\",A1:A4,B1:B4)",
+    "D6": "=XLOOKUP(\"Pear\",A1:A4,B1:B4,1/0)",
+    "D7": "=XLOOKUP(\"missing\",A1:A4,B1:B4,1/0)",
+    "D8": "=XLOOKUP(\"Apple\",A1:A4,B1:B4,,0,1)",
+    "D9": "=XLOOKUP(\"Apple\",A1:A4,B1:B4,,0,-1)",
+    "D10": "=XLOOKUP(\"pear\",A1:A4,B1:B4,\"not found\",0,-1)"
+  },
+  "expected": {
+    "D1": 10,
+    "D2": 20,
+    "D3": 30,
+    "D4": "not found",
+    "D5": {"error": "#N/A"},
+    "D6": 10,
+    "D7": {"error": "#DIV/0!"},
+    "D8": 40,
+    "D9": 40,
+    "D10": 20
+  }
+}

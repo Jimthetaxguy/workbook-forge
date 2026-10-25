@@ -6,8 +6,8 @@
 /** A workbook revision as a decimal string, e.g. "0", "12". */
 export type Revision = string;
 
-// Names and shapes below match the agent-workbook-v1 TypeScript client in
-// draft PR #19 (typescript/src/client.ts) where they overlap: ExcelError,
+// Names and shapes below align with the agent-workbook-v1 TypeScript client
+// (typescript/src/client.ts) where they overlap: ExcelError,
 // Scalar, Address, Edit. Divergences are listed in docs/specs/univer-spike.md.
 
 export type ExcelError = { error: string; message?: string };
@@ -79,6 +79,7 @@ export interface ExportResult {
 /** Requests, keyed by command name. */
 export interface Commands {
   open: { args: { bytes: Uint8Array }; result: OpenResult };
+  newWorkbook: { args: { sheetName: string }; result: OpenResult };
   snapshot: { args: Record<string, never>; result: Snapshot };
   applyEdits: { args: { edits: Edit[]; expectedRevision: Revision }; result: ApplyResult };
   calculate: { args: Record<string, never>; result: Calculation };
@@ -99,4 +100,4 @@ export interface ResponseMessage<K extends CommandName = CommandName> {
   result: Result<Commands[K]['result']>;
 }
 
-export const COMMANDS: readonly CommandName[] = ['open', 'snapshot', 'applyEdits', 'calculate', 'export'];
+export const COMMANDS: readonly CommandName[] = ['open', 'newWorkbook', 'snapshot', 'applyEdits', 'calculate', 'export'];

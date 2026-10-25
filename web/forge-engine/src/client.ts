@@ -51,6 +51,9 @@ export class ForgeClient {
     const copy = bytes.slice();
     return this.send('open', { bytes: copy }, [copy.buffer]);
   }
+  newWorkbook(sheetName = 'Sheet1') {
+    return this.send('newWorkbook', { sheetName });
+  }
   snapshot() {
     return this.send('snapshot', {});
   }

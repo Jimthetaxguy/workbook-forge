@@ -144,7 +144,7 @@ def run(output, binary, repeats, version=2):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("output",type=Path)
-    parser.add_argument("--profile",type=int,choices=[2,3,4,5],default=2)
+    parser.add_argument("--profile",type=int,choices=[2,3,4,5,6],default=2)
     parser.add_argument("--repeats",type=int,default=3)
     parser.add_argument("--rust-binary",type=Path,default=ROOT/"rust/target/release/examples/compiler_roundtrip")
     args = parser.parse_args()

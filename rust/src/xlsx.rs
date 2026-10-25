@@ -760,7 +760,7 @@ fn decode_mode(
                 let value = stored_value(&xml, source, &strings)?;
                 let mut cell = Cell::default();
                 if let Some(formula) = xml.child(source, "f") {
-                    cell.formula = Some(formula.text.clone());
+                    cell.formula = Some(formula_from_ooxml(&formula.text));
                     cell.cached_value = Some(value);
                     let kind = formula
                         .attrs
@@ -1281,6 +1281,84 @@ fn formula_cache(
         None => Ok(None),
     }
 }
+
+/// Add or remove OOXML's namespace marker for functions whose formulas are
+/// otherwise the same in the workbook model and Excel's formula bar.
+fn rewrite_ooxml_function_markers(formula: &str, add_markers: bool) -> String {
+    let formula = formula.strip_prefix('=').unwrap_or(formula);
+    let bytes = formula.as_bytes();
+    let mut output = String::with_capacity(formula.len() + 8);
+    let mut offset = 0;
+    let mut in_string = false;
+
+    while offset < bytes.len() {
+        if bytes[offset] == b'"' {
+            output.push('"');
+            offset += 1;
+            if in_string && bytes.get(offset) == Some(&b'"') {
+                output.push('"');
+                offset += 1;
+            } else {
+                in_string = !in_string;
+            }
+            continue;
+        }
+
+        if !in_string && (bytes[offset].is_ascii_alphabetic() || bytes[offset] == b'_') {
+            let start = offset;
+            while offset < bytes.len()
+                && (bytes[offset].is_ascii_alphanumeric() || matches!(bytes[offset], b'_' | b'.'))
+            {
+                offset += 1;
+            }
+            let token = &formula[start..offset];
+            let mut lookahead = offset;
+            while bytes.get(lookahead).is_some_and(u8::is_ascii_whitespace) {
+                lookahead += 1;
+            }
+            if bytes.get(lookahead) == Some(&b'(') {
+                let has_marker = token
+                    .get(..6)
+                    .is_some_and(|marker| marker.eq_ignore_ascii_case("_xlfn."));
+                let name = if has_marker { &token[6..] } else { token };
+                let is_new_function =
+                    name.eq_ignore_ascii_case("XLOOKUP") || name.eq_ignore_ascii_case("XMATCH");
+                if is_new_function {
+                    match (add_markers, has_marker) {
+                        (true, false) => {
+                            output.push_str("_xlfn.");
+                            output.push_str(name);
+                        }
+                        (false, true) => output.push_str(name),
+                        _ => output.push_str(token),
+                    }
+                    continue;
+                }
+            }
+            output.push_str(token);
+            continue;
+        }
+
+        let character = formula[offset..]
+            .chars()
+            .next()
+            .expect("offset is before the end of a valid UTF-8 formula");
+        output.push(character);
+        offset += character.len_utf8();
+    }
+    output
+}
+
+/// Excel accepts newer function names without `_xlfn.` while editing, but the
+/// marker is needed in OOXML for Excel to recalculate the saved formula.
+fn formula_for_ooxml(formula: &str) -> String {
+    rewrite_ooxml_function_markers(formula, true)
+}
+
+fn formula_from_ooxml(formula: &str) -> String {
+    rewrite_ooxml_function_markers(formula, false)
+}
+
 fn cell_xml(
     reference: &str,
     cell: &Cell,
@@ -1320,7 +1398,7 @@ fn cell_xml(
         } else {
             body.push_str(&format!(
                 "<{prefix}f>{}</{prefix}f>",
-                xml_escape(formula.strip_prefix('=').unwrap_or(formula))?
+                xml_escape(&formula_for_ooxml(formula))?
             ));
         }
     }
@@ -1917,6 +1995,77 @@ mod tests {
         );
         assert!(
             import_xlsx_bytes(b"not an xlsx package", BTreeMap::new(), BTreeMap::new()).is_err()
+        );
+    }
+    #[test]
+    fn authored_xlookup_and_xmatch_use_excel_ooxml_function_markers() {
+        assert_eq!(
+            formula_for_ooxml("=XLOOKUP(\"pear\",A1:A2,B1:B2)"),
+            "_xlfn.XLOOKUP(\"pear\",A1:A2,B1:B2)"
+        );
+        assert_eq!(
+            formula_for_ooxml("=IF(A1=\"XLOOKUP(\",XMATCH(\"pear\",A1:A2,0),0)"),
+            "IF(A1=\"XLOOKUP(\",_xlfn.XMATCH(\"pear\",A1:A2,0),0)"
+        );
+        assert_eq!(
+            formula_for_ooxml("=_xlfn.XLOOKUP(\"pear\",A1:A2,B1:B2)"),
+            "_xlfn.XLOOKUP(\"pear\",A1:A2,B1:B2)"
+        );
+        assert_eq!(
+            formula_from_ooxml("_xlfn.XLOOKUP(\"pear\",A1:A2,B1:B2)"),
+            "XLOOKUP(\"pear\",A1:A2,B1:B2)"
+        );
+        assert_eq!(
+            formula_from_ooxml("IF(A1=\"_xlfn.XLOOKUP(\",_xlfn.XMATCH(\"pear\",A1:A2,0),0)"),
+            "IF(A1=\"_xlfn.XLOOKUP(\",XMATCH(\"pear\",A1:A2,0),0)"
+        );
+
+        let mut model = WorkbookModel::default();
+        let mut sheet = Sheet::new("Formula Lab");
+        sheet
+            .cells
+            .insert("A1".into(), Cell::value(CellValue::Text("apple".into())));
+        sheet
+            .cells
+            .insert("A2".into(), Cell::value(CellValue::Text("pear".into())));
+        sheet
+            .cells
+            .insert("B1".into(), Cell::value(CellValue::Number(10.0)));
+        sheet
+            .cells
+            .insert("B2".into(), Cell::value(CellValue::Number(20.0)));
+        sheet
+            .cells
+            .insert("C1".into(), Cell::formula("=XLOOKUP(\"pear\",A1:A2,B1:B2)"));
+        sheet
+            .cells
+            .insert("C2".into(), Cell::formula("=XMATCH(\"pear\",A1:A2,0)"));
+        model.sheets.push(sheet);
+
+        let bytes = export_xlsx_bytes(&model).unwrap();
+        let package = Package::from_bytes(&bytes).unwrap();
+        let worksheet = std::str::from_utf8(&package.parts["xl/worksheets/sheet1.xml"]).unwrap();
+        assert!(worksheet.contains("<f>_xlfn.XLOOKUP(&quot;pear&quot;,A1:A2,B1:B2)</f>"));
+        assert!(worksheet.contains("<f>_xlfn.XMATCH(&quot;pear&quot;,A1:A2,0)</f>"));
+
+        let reopened = import_xlsx_bytes(&bytes, BTreeMap::new(), BTreeMap::new()).unwrap();
+        let snapshot = reopened.snapshot();
+        assert_eq!(
+            snapshot.sheets[0].cells["C1"].formula.as_deref(),
+            Some("XLOOKUP(\"pear\",A1:A2,B1:B2)")
+        );
+        assert_eq!(
+            snapshot.sheets[0].cells["C2"].formula.as_deref(),
+            Some("XMATCH(\"pear\",A1:A2,0)")
+        );
+        let report = reopened.calculate(1);
+        assert_eq!(
+            report.values["Formula Lab!C1"],
+            toolkit::CalculatedValue::Scalar(CellValue::Number(20.0))
+        );
+        assert_eq!(
+            report.values["Formula Lab!C2"],
+            toolkit::CalculatedValue::Scalar(CellValue::Number(2.0))
         );
     }
     #[test]

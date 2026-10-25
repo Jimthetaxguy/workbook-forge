@@ -1,4 +1,4 @@
-"""Installed source compiler CLI for numeric-v1 and graph-v2 through graph-v5.
+"""Installed source compiler CLI for numeric-v1 and graph-v2 through graph-v6.
 
 Generated code has no Forge runtime dependency. Source import accepts only the
 declared versioned scaffold/dialect, never arbitrary programs. Graph-v2 adds
@@ -108,7 +108,7 @@ def import_source(source: str, language: str) -> ast.expr:
 
 
 def translate(source: str, origin: str, destination: str) -> str:
-    if any(source.startswith(source_graph.template(origin,version)) for version in (2,3,4,5)):
+    if any(source.startswith(source_graph.template(origin,version)) for version in (2,3,4,5,6)):
         return source_graph.translate(source, origin, destination)
     return generate(import_source(source, origin), destination)
 
@@ -205,14 +205,14 @@ def read_source(path: Path) -> str:
     return content.decode("utf-8")
 
 
-def main(argv=None, *, default_profile="graph-v5"):
-    parser = argparse.ArgumentParser(description=__doc__,epilog="Graph-v5 AVERAGE direct coercion is provisional: Microsoft sources conflict. Excel observation is unavailable. Rust emission needs an explicit writer adapter.")
+def main(argv=None, *, default_profile="graph-v6"):
+    parser = argparse.ArgumentParser(description=__doc__,epilog="Graph-v5/v6 AVERAGE direct coercion is provisional: Microsoft sources conflict. Graph-v6 XLOOKUP is limited to exact matching and forward/reverse linear search over one-dimensional referenced arrays; Excel observation is unavailable. Rust emission needs an explicit writer adapter.")
     commands = parser.add_subparsers(dest="command", required=True)
     compile_ = commands.add_parser("compile")
     compile_.add_argument("input", type=Path)
     compile_.add_argument("directory", type=Path)
     compile_.add_argument("--language", choices=SCAFFOLDS, required=True)
-    compile_.add_argument("--profile", choices=["numeric-v1", "graph-v2", "graph-v3", "graph-v4", "graph-v5"], default=default_profile, help="versioned source dialect (default: %(default)s)")
+    compile_.add_argument("--profile", choices=["numeric-v1", "graph-v2", "graph-v3", "graph-v4", "graph-v5", "graph-v6"], default=default_profile, help="versioned source dialect (default: %(default)s)")
     transfer = commands.add_parser("translate")
     transfer.add_argument("input", type=Path)
     transfer.add_argument("output", type=Path)
@@ -224,7 +224,7 @@ def main(argv=None, *, default_profile="graph-v5"):
     emit.add_argument("output", type=Path)
     emit.add_argument("--language", choices=SCAFFOLDS, required=True)
     emit.add_argument("--input", type=float)
-    emit.add_argument("--inputs", help="JSON object of typed cell overrides for graph-v2")
+    emit.add_argument("--inputs", help="JSON object of typed cell overrides for graph profiles")
     emit.add_argument("--rust-binary", type=Path)
     args = parser.parse_args(argv)
     try:
@@ -247,7 +247,7 @@ def main(argv=None, *, default_profile="graph-v5"):
             if len(manifest_payload) > MAX_ARTIFACT_BYTES:
                 raise SourceDiagnostic("resource_limit", "manifest exceeds 1 MiB")
             manifest = json.loads(manifest_payload)
-            if isinstance(manifest, dict) and manifest.get("source_subset_version") in {2,3,4,5}:
+            if isinstance(manifest, dict) and manifest.get("source_subset_version") in {2,3,4,5,6}:
                 if args.input is not None:
                     raise SourceDiagnostic("invalid_input", "graph profiles require --inputs; --input is numeric-v1 only")
                 source_graph.emit(args.source, args.language, manifest, json.loads(args.inputs or "{}"), args.output, args.rust_binary)

@@ -20,12 +20,33 @@ from xml.etree import ElementTree as ET
 from . import ErrorValue
 from .toolkit import WorkbookModel, _digest
 from .workbook import (
-    CONTENT_TYPES, EXCEL_ERROR_CODES, NS, PKG_REL, REL_DOC,
-    TABLE_CONTENT_TYPE, WORKBOOK_CONTENT_TYPE, WORKSHEET_CONTENT_TYPE,
-    MAX_CALCULATION_REFERENCE_CELLS, MAX_PACKAGE_BYTES, MAX_PACKAGE_ENTRIES,
-    MAX_XML_PART_BYTES, RANGE_RE, UnsupportedWorkbook, Workbook, WorkbookError,
-    XML_NS, _XML_SERIALIZE_LOCK, _cell_address, _cell_position, _in_range, _normal_address, _q, _safe_xml,
-    _string_part_text, _validate_xml_text,
+    CONTENT_TYPES,
+    EXCEL_ERROR_CODES,
+    NS,
+    PKG_REL,
+    REL_DOC,
+    TABLE_CONTENT_TYPE,
+    WORKBOOK_CONTENT_TYPE,
+    WORKSHEET_CONTENT_TYPE,
+    MAX_CALCULATION_REFERENCE_CELLS,
+    MAX_PACKAGE_BYTES,
+    MAX_PACKAGE_ENTRIES,
+    MAX_XML_PART_BYTES,
+    RANGE_RE,
+    UnsupportedWorkbook,
+    Workbook,
+    WorkbookError,
+    XML_NS,
+    _XML_SERIALIZE_LOCK,
+    _cell_address,
+    _cell_position,
+    _in_range,
+    _normal_address,
+    _q,
+    _safe_xml,
+    _rewrite_ooxml_function_markers,
+    _string_part_text,
+    _validate_xml_text,
 )
 
 STYLES_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"
@@ -83,7 +104,9 @@ def _scalar(value: Any) -> Any:
 
 
 def _styles(workbook: Workbook) -> tuple[list[dict[str, Any]], dict[str, Any]]:
-    parts = [name for name in workbook._parts if workbook._content_type_for(name) == STYLES_CONTENT_TYPE]
+    parts = [
+        name for name in workbook._parts if workbook._content_type_for(name) == STYLES_CONTENT_TYPE
+    ]
     if not parts:
         return [], {"count": 0, "status": "absent"}
     if len(parts) != 1:
@@ -115,13 +138,23 @@ def _styles(workbook: Workbook) -> tuple[list[dict[str, Any]], dict[str, Any]]:
             if color is not None and "rgb" in color.attrib:
                 style["fill_color"] = color.attrib["rgb"]
         alignment = xf.find(_q("alignment"))
-        if alignment is not None and alignment.attrib.get("horizontal") in {"left", "center", "right"}:
+        if alignment is not None and alignment.attrib.get("horizontal") in {
+            "left",
+            "center",
+            "right",
+        }:
             style["horizontal"] = alignment.attrib["horizontal"]
         result.append(style)
-    return result, {"part": parts[0], "count": len(result), "status": "preserved; supported fields exposed"}
+    return result, {
+        "part": parts[0],
+        "count": len(result),
+        "status": "preserved; supported fields exposed",
+    }
 
 
-def _block_range(cells: dict[str, Any], bounds: tuple[int, int, int, int], reason: str, budget: list[int]) -> None:
+def _block_range(
+    cells: dict[str, Any], bounds: tuple[int, int, int, int], reason: str, budget: list[int]
+) -> None:
     first_row, last_row, first_column, last_column = bounds
     area = (last_row - first_row + 1) * (last_column - first_column + 1)
     if area < 1 or budget[0] + area > MAX_CALCULATION_REFERENCE_CELLS:
@@ -136,7 +169,9 @@ def _block_range(cells: dict[str, Any], bounds: tuple[int, int, int, int], reaso
             cell["blocked_reason"] = reason
 
 
-def import_xlsx(path: str | Path, *, inputs=None, outputs=None, backend: str = "python") -> WorkbookModel:
+def import_xlsx(
+    path: str | Path, *, inputs=None, outputs=None, backend: str = "python"
+) -> WorkbookModel:
     """Extract an XLSX with explicit optional application input/output bindings.
 
     Styles, names, tables, validation, and opaque package content are preserved.
@@ -147,22 +182,57 @@ def import_xlsx(path: str | Path, *, inputs=None, outputs=None, backend: str = "
 
     with Workbook.open(path) as workbook:
         styles, style_metadata = _styles(workbook)
-        document: dict[str, Any] = {"schema_version": 1, "revision": 0, "sheets": [], "inputs": inputs or {}, "outputs": outputs or {}}
+        document: dict[str, Any] = {
+            "schema_version": 1,
+            "revision": 0,
+            "sheets": [],
+            "inputs": inputs or {},
+            "outputs": outputs or {},
+        }
         metadata: dict[str, Any] = {
             "date_system": "1904" if workbook._uses_1904_date_system else "1900",
-            "styles": style_metadata, "defined_names": [], "tables": [], "sheets": [],
-            "supported": ["scalar cells", "normal formulas", "basic style inspection", "column widths"],
-            "preserved_only": ["unmodeled package parts", "imported styles and validation", "defined names", "table metadata"],
-            "rejected": ["macros", "structural edits", "imported style or validation edits", "calculation through blocked cells"],
+            "styles": style_metadata,
+            "defined_names": [],
+            "tables": [],
+            "sheets": [],
+            "supported": [
+                "scalar cells",
+                "normal formulas",
+                "basic style inspection",
+                "column widths",
+            ],
+            "preserved_only": [
+                "unmodeled package parts",
+                "imported styles and validation",
+                "defined names",
+                "table metadata",
+            ],
+            "rejected": [
+                "macros",
+                "structural edits",
+                "imported style or validation edits",
+                "calculation through blocked cells",
+            ],
             "package_parts": list(workbook._parts),
         }
         wb_root = _safe_xml(workbook._parts[workbook._workbook_part], workbook._workbook_part)
         for node in wb_root.findall("m:definedNames/m:definedName", NS):
-            metadata["defined_names"].append({"attributes": dict(node.attrib), "expression": node.text or ""})
+            metadata["defined_names"].append(
+                {"attributes": dict(node.attrib), "expression": node.text or ""}
+            )
         for part, data in workbook._parts.items():
             if workbook._content_type_for(part) == TABLE_CONTENT_TYPE:
                 table = _safe_xml(data, part)
-                metadata["tables"].append({"part": part, "attributes": dict(table.attrib), "columns": [dict(column.attrib) for column in table.findall("m:tableColumns/m:tableColumn", NS)]})
+                metadata["tables"].append(
+                    {
+                        "part": part,
+                        "attributes": dict(table.attrib),
+                        "columns": [
+                            dict(column.attrib)
+                            for column in table.findall("m:tableColumns/m:tableColumn", NS)
+                        ],
+                    }
+                )
         budget = [0]
         width_work = 0
         for index, sheet in enumerate(workbook.sheet_names, 1):
@@ -173,27 +243,44 @@ def import_xlsx(path: str | Path, *, inputs=None, outputs=None, backend: str = "
             for address, element in workbook._cells[sheet].items():
                 source = workbook.get(sheet, address)
                 node = element.find(_q("f"))
-                cell: dict[str, Any] = {"value": None if node is not None else _scalar(source.value)}
+                cell: dict[str, Any] = {
+                    "value": None if node is not None else _scalar(source.value)
+                }
                 if node is not None:
-                    cell["formula"] = node.text or ""
+                    cell["formula"] = _rewrite_ooxml_function_markers(
+                        node.text or "", add_markers=False
+                    )
                     cell["cached_value"] = _scalar(source.value)
                     if not node.text or source.formula_kind not in {None, "normal"}:
                         cell["blocked_reason"] = f"unsupported formula kind {source.formula_kind!r}"
                     if workbook._uses_1904_date_system:
-                        cell["blocked_reason"] = "1904 date-system formula calculation is unsupported"
+                        cell["blocked_reason"] = (
+                            "1904 date-system formula calculation is unsupported"
+                        )
                     if source.formula_kind in {"shared", "array", "dataTable"}:
                         reference = node.attrib.get("ref")
                         if reference:
                             match = RANGE_RE.fullmatch(reference)
                             if not match:
-                                raise UnsupportedWorkbook(f"invalid grouped result range: {sheet}!{address}")
+                                raise UnsupportedWorkbook(
+                                    f"invalid grouped result range: {sheet}!{address}"
+                                )
                             first_column, first_row = _cell_position(match[1] + match[2])
-                            last_column, last_row = _cell_position((match[3] or match[1]) + (match[4] or match[2]))
+                            last_column, last_row = _cell_position(
+                                (match[3] or match[1]) + (match[4] or match[2])
+                            )
                             if first_column > last_column or first_row > last_row:
                                 raise UnsupportedWorkbook("reversed grouped result range")
-                            groups.append(((first_row, last_row, first_column, last_column), f"grouped formula region {sheet}!{reference}"))
+                            groups.append(
+                                (
+                                    (first_row, last_row, first_column, last_column),
+                                    f"grouped formula region {sheet}!{reference}",
+                                )
+                            )
                         elif source.formula_kind != "shared" or not node.attrib.get("si"):
-                            raise UnsupportedWorkbook("unbounded grouped formula cannot be imported safely")
+                            raise UnsupportedWorkbook(
+                                "unbounded grouped formula cannot be imported safely"
+                            )
                 if source.cell_type not in {None, "n", "b", "e", "s", "str", "inlineStr"}:
                     cell["blocked_reason"] = f"unsupported stored cell type {source.cell_type!r}"
                 if source.style_id is not None:
@@ -203,17 +290,38 @@ def import_xlsx(path: str | Path, *, inputs=None, outputs=None, backend: str = "
                 cells[address] = cell
             # Shared followers must have a real master range. A cache alone
             # cannot establish either their formula or their result footprint.
-            shared_masters = {node.attrib.get("si") for element in workbook._cells[sheet].values() if (node := element.find(_q("f"))) is not None and node.attrib.get("t") == "shared" and node.attrib.get("ref")}
+            shared_masters = {
+                node.attrib.get("si")
+                for element in workbook._cells[sheet].values()
+                if (node := element.find(_q("f"))) is not None
+                and node.attrib.get("t") == "shared"
+                and node.attrib.get("ref")
+            }
             for address, element in workbook._cells[sheet].items():
                 node = element.find(_q("f"))
-                if node is not None and node.attrib.get("t") == "shared" and not node.attrib.get("ref"):
+                if (
+                    node is not None
+                    and node.attrib.get("t") == "shared"
+                    and not node.attrib.get("ref")
+                ):
                     index_value = node.attrib.get("si")
                     if index_value not in shared_masters:
                         raise UnsupportedWorkbook("shared formula follower has no bounded master")
             for bounds, reason in groups:
                 _block_range(cells, bounds, reason, budget)
-            for first_row, last_row, first_column, last_column, owner in workbook._table_formula_ranges.get(sheet.casefold(), []):
-                _block_range(cells, (first_row, last_row, first_column, last_column), f"table formula result region {owner}", budget)
+            for (
+                first_row,
+                last_row,
+                first_column,
+                last_column,
+                owner,
+            ) in workbook._table_formula_ranges.get(sheet.casefold(), []):
+                _block_range(
+                    cells,
+                    (first_row, last_row, first_column, last_column),
+                    f"table formula result region {owner}",
+                    budget,
+                )
             widths = {}
             for col in root.findall("m:cols/m:col", NS):
                 first, last = int(col.attrib["min"]), int(col.attrib["max"])
@@ -221,7 +329,9 @@ def import_xlsx(path: str | Path, *, inputs=None, outputs=None, backend: str = "
                     raise WorkbookError("invalid column-width range")
                 width_work += last - first + 1
                 if width_work > MAX_CALCULATION_REFERENCE_CELLS:
-                    raise UnsupportedWorkbook("column-width expansion exceeds the 100000-cell import work limit")
+                    raise UnsupportedWorkbook(
+                        "column-width expansion exceeds the 100000-cell import work limit"
+                    )
                 if "width" in col.attrib:
                     width = float(col.attrib["width"])
                     if not math.isfinite(width) or not 0 <= width <= 255:
@@ -230,10 +340,32 @@ def import_xlsx(path: str | Path, *, inputs=None, outputs=None, backend: str = "
                         continue  # Hidden zero-width columns stay in the preserved baseline.
                     for column in range(first, last + 1):
                         widths[_cell_address(column, 1)[:-1]] = width
-            document["sheets"].append({"id": f"sheet-{index}", "name": sheet, "cells": cells, "column_widths": widths})
-            metadata["sheets"].append({"name": sheet, "part": part, "stored_cells": len(workbook._cells[sheet]), "blocked_cells": sum(bool(cell.get("blocked_reason")) for cell in cells.values()), "validation": [ET.tostring(item, encoding="unicode") for item in root.findall("m:dataValidations/m:dataValidation", NS)]})
+            document["sheets"].append(
+                {"id": f"sheet-{index}", "name": sheet, "cells": cells, "column_widths": widths}
+            )
+            metadata["sheets"].append(
+                {
+                    "name": sheet,
+                    "part": part,
+                    "stored_cells": len(workbook._cells[sheet]),
+                    "blocked_cells": sum(
+                        bool(cell.get("blocked_reason")) for cell in cells.values()
+                    ),
+                    "validation": [
+                        ET.tostring(item, encoding="unicode")
+                        for item in root.findall("m:dataValidations/m:dataValidation", NS)
+                    ],
+                }
+            )
         model = WorkbookModel(document=document, backend=backend)
-        model._source_baseline = _Baseline(workbook.source, tuple(workbook._parts.items()), tuple(copy.copy(info) for info in workbook._archive.infolist()), workbook._archive.comment, json.dumps(model.to_dict(), allow_nan=False), workbook._uses_1904_date_system)
+        model._source_baseline = _Baseline(
+            workbook.source,
+            tuple(workbook._parts.items()),
+            tuple(copy.copy(info) for info in workbook._archive.infolist()),
+            workbook._archive.comment,
+            json.dumps(model.to_dict(), allow_nan=False),
+            workbook._uses_1904_date_system,
+        )
         model._import_metadata = metadata
         return model
 
@@ -269,7 +401,9 @@ def _style_table(sheets) -> tuple[bytes, dict[str, int]]:
     style_work = 512
     for sheet in sheets:
         for cell in sheet["cells"].values():
-            style = {key: value for key, value in (cell.get("style") or {}).items() if value is not None}
+            style = {
+                key: value for key, value in (cell.get("style") or {}).items() if value is not None
+            }
             key = json.dumps(style, sort_keys=True)
             if key not in ids:
                 # Bound XML expansion before allocating the complete style tree.
@@ -289,15 +423,32 @@ def _style_table(sheets) -> tuple[bytes, dict[str, int]]:
         fill_id = "0"
         if style.get("fill_color"):
             fill_id = str(len(fills))
-            pattern = ET.SubElement(ET.SubElement(fills, _q("fill")), _q("patternFill"), {"patternType": "solid"})
+            pattern = ET.SubElement(
+                ET.SubElement(fills, _q("fill")), _q("patternFill"), {"patternType": "solid"}
+            )
             ET.SubElement(pattern, _q("fgColor"), {"rgb": _rgb(style["fill_color"])})
             ET.SubElement(pattern, _q("bgColor"), {"indexed": "64"})
         format_id = "0"
         if style.get("number_format"):
             _validate_xml_text(style["number_format"], "number format", 255)
             format_id = str(164 + index)
-            ET.SubElement(formats, _q("numFmt"), {"numFmtId": format_id, "formatCode": style["number_format"]})
-        xf = ET.SubElement(xfs, _q("xf"), {"numFmtId": format_id, "fontId": str(index), "fillId": fill_id, "borderId": "0", "xfId": "0", "applyNumberFormat": "1", "applyFont": "1", "applyFill": "1"})
+            ET.SubElement(
+                formats, _q("numFmt"), {"numFmtId": format_id, "formatCode": style["number_format"]}
+            )
+        xf = ET.SubElement(
+            xfs,
+            _q("xf"),
+            {
+                "numFmtId": format_id,
+                "fontId": str(index),
+                "fillId": fill_id,
+                "borderId": "0",
+                "xfId": "0",
+                "applyNumberFormat": "1",
+                "applyFont": "1",
+                "applyFill": "1",
+            },
+        )
         if style.get("horizontal"):
             xf.set("applyAlignment", "1")
             ET.SubElement(xf, _q("alignment"), {"horizontal": style["horizontal"]})
@@ -320,7 +471,9 @@ def _rgb(value: str) -> str:
 def _validation(binding: dict[str, Any]) -> str:
     address = _normal_address(binding["address"])
     kind = binding.get("kind", "number")
-    clauses = [{"number": "ISNUMBER", "text": "ISTEXT", "boolean": "ISLOGICAL"}[kind] + f"({address})"]
+    clauses = [
+        {"number": "ISNUMBER", "text": "ISTEXT", "boolean": "ISLOGICAL"}[kind] + f"({address})"
+    ]
     for field, operator in (("min", ">="), ("max", "<=")):
         if binding.get(field) is not None:
             clauses.append(f"{address}{operator}{binding[field]}")
@@ -350,7 +503,9 @@ def _write_cell_content(element: ET.Element, cell: dict[str, Any]) -> None:
     if formula is not None:
         formula = formula.removeprefix("=")
         _validate_xml_text(formula, "formula", 8192)
-        ET.SubElement(element, _q("f")).text = formula
+        ET.SubElement(element, _q("f")).text = _rewrite_ooxml_function_markers(
+            formula, add_markers=True
+        )
         return
     value = cell.get("value")
     if value is None:
@@ -380,10 +535,23 @@ def _fresh_parts(document: dict[str, Any]) -> dict[str, bytes]:
     import json
 
     types = ET.Element(f"{{{CONTENT_TYPES}}}Types")
-    ET.SubElement(types, f"{{{CONTENT_TYPES}}}Default", {"Extension": "rels", "ContentType": "application/vnd.openxmlformats-package.relationships+xml"})
-    ET.SubElement(types, f"{{{CONTENT_TYPES}}}Default", {"Extension": "xml", "ContentType": "application/xml"})
+    ET.SubElement(
+        types,
+        f"{{{CONTENT_TYPES}}}Default",
+        {
+            "Extension": "rels",
+            "ContentType": "application/vnd.openxmlformats-package.relationships+xml",
+        },
+    )
+    ET.SubElement(
+        types, f"{{{CONTENT_TYPES}}}Default", {"Extension": "xml", "ContentType": "application/xml"}
+    )
     package_rels = ET.Element(f"{{{PKG_REL}}}Relationships")
-    ET.SubElement(package_rels, f"{{{PKG_REL}}}Relationship", {"Id": "rId1", "Type": f"{REL_DOC}/officeDocument", "Target": "xl/workbook.xml"})
+    ET.SubElement(
+        package_rels,
+        f"{{{PKG_REL}}}Relationship",
+        {"Id": "rId1", "Type": f"{REL_DOC}/officeDocument", "Target": "xl/workbook.xml"},
+    )
     root = ET.Element(_q("workbook"))
     ET.SubElement(root, _q("workbookPr"), {"date1904": "0"})
     sheets_node = ET.SubElement(root, _q("sheets"))
@@ -391,41 +559,108 @@ def _fresh_parts(document: dict[str, Any]) -> dict[str, bytes]:
     parts = {}
     style_bytes, style_ids = _style_table(document["sheets"])
     parts["xl/styles.xml"] = style_bytes
-    ET.SubElement(rels, f"{{{PKG_REL}}}Relationship", {"Id": "styles", "Type": f"{REL_DOC}/styles", "Target": "styles.xml"})
-    for part, content_type in (("xl/workbook.xml", WORKBOOK_CONTENT_TYPE), ("xl/styles.xml", STYLES_CONTENT_TYPE)):
-        ET.SubElement(types, f"{{{CONTENT_TYPES}}}Override", {"PartName": "/" + part, "ContentType": content_type})
+    ET.SubElement(
+        rels,
+        f"{{{PKG_REL}}}Relationship",
+        {"Id": "styles", "Type": f"{REL_DOC}/styles", "Target": "styles.xml"},
+    )
+    for part, content_type in (
+        ("xl/workbook.xml", WORKBOOK_CONTENT_TYPE),
+        ("xl/styles.xml", STYLES_CONTENT_TYPE),
+    ):
+        ET.SubElement(
+            types,
+            f"{{{CONTENT_TYPES}}}Override",
+            {"PartName": "/" + part, "ContentType": content_type},
+        )
     for index, sheet in enumerate(document["sheets"], 1):
         name = sheet["name"]
         _validate_xml_text(name, "worksheet name", 31)
-        ET.SubElement(sheets_node, _q("sheet"), {"name": name, "sheetId": str(index), f"{{{REL_DOC}}}id": f"rId{index}"})
+        ET.SubElement(
+            sheets_node,
+            _q("sheet"),
+            {"name": name, "sheetId": str(index), f"{{{REL_DOC}}}id": f"rId{index}"},
+        )
         part = f"xl/worksheets/sheet{index}.xml"
-        ET.SubElement(rels, f"{{{PKG_REL}}}Relationship", {"Id": f"rId{index}", "Type": f"{REL_DOC}/worksheet", "Target": f"worksheets/sheet{index}.xml"})
-        ET.SubElement(types, f"{{{CONTENT_TYPES}}}Override", {"PartName": "/" + part, "ContentType": WORKSHEET_CONTENT_TYPE})
+        ET.SubElement(
+            rels,
+            f"{{{PKG_REL}}}Relationship",
+            {
+                "Id": f"rId{index}",
+                "Type": f"{REL_DOC}/worksheet",
+                "Target": f"worksheets/sheet{index}.xml",
+            },
+        )
+        ET.SubElement(
+            types,
+            f"{{{CONTENT_TYPES}}}Override",
+            {"PartName": "/" + part, "ContentType": WORKSHEET_CONTENT_TYPE},
+        )
         worksheet = ET.Element(_q("worksheet"))
         if sheet.get("column_widths"):
             columns = ET.SubElement(worksheet, _q("cols"))
-            for column, width in sorted(sheet["column_widths"].items(), key=lambda item: _cell_position(item[0] + "1")[0]):
+            for column, width in sorted(
+                sheet["column_widths"].items(), key=lambda item: _cell_position(item[0] + "1")[0]
+            ):
                 column_number, _ = _cell_position(column + "1")
-                ET.SubElement(columns, _q("col"), {"min": str(column_number), "max": str(column_number), "width": str(width), "customWidth": "1"})
+                ET.SubElement(
+                    columns,
+                    _q("col"),
+                    {
+                        "min": str(column_number),
+                        "max": str(column_number),
+                        "width": str(width),
+                        "customWidth": "1",
+                    },
+                )
         data = ET.SubElement(worksheet, _q("sheetData"))
         rows = {}
         sheet_work = 512
-        for address, cell in sorted(sheet["cells"].items(), key=lambda item: _cell_position(item[0])[::-1]):
+        for address, cell in sorted(
+            sheet["cells"].items(), key=lambda item: _cell_position(item[0])[::-1]
+        ):
             address = _normal_address(address)
             _, row_number = _cell_position(address)
             if row_number not in rows:
                 rows[row_number] = ET.SubElement(data, _q("row"), {"r": str(row_number)})
-            style_key = json.dumps({key: value for key, value in (cell.get("style") or {}).items() if value is not None}, sort_keys=True)
-            element = ET.SubElement(rows[row_number], _q("c"), {"r": address, "s": str(style_ids[style_key])})
+            style_key = json.dumps(
+                {
+                    key: value
+                    for key, value in (cell.get("style") or {}).items()
+                    if value is not None
+                },
+                sort_keys=True,
+            )
+            element = ET.SubElement(
+                rows[row_number], _q("c"), {"r": address, "s": str(style_ids[style_key])}
+            )
             _write_cell_content(element, cell)
             sheet_work += len(ET.tostring(element, encoding="utf-8")) + 40
             if sheet_work > MAX_XML_PART_BYTES:
                 raise UnsupportedWorkbook("generated worksheet exceeds the XML work limit")
-        validations = [binding for binding in document.get("inputs", {}).values() if binding["sheet"].casefold() == name.casefold()]
+        validations = [
+            binding
+            for binding in document.get("inputs", {}).values()
+            if binding["sheet"].casefold() == name.casefold()
+        ]
         if validations:
-            validation_nodes = ET.SubElement(worksheet, _q("dataValidations"), {"count": str(len(validations))})
+            validation_nodes = ET.SubElement(
+                worksheet, _q("dataValidations"), {"count": str(len(validations))}
+            )
             for binding in validations:
-                validation = ET.SubElement(validation_nodes, _q("dataValidation"), {"type": "custom", "allowBlank": "0" if binding.get("required", True) else "1", "showErrorMessage": "1", "errorStyle": "stop", "errorTitle": "Invalid input", "error": "Enter a value allowed by this model.", "sqref": _normal_address(binding["address"])})
+                validation = ET.SubElement(
+                    validation_nodes,
+                    _q("dataValidation"),
+                    {
+                        "type": "custom",
+                        "allowBlank": "0" if binding.get("required", True) else "1",
+                        "showErrorMessage": "1",
+                        "errorStyle": "stop",
+                        "errorTitle": "Invalid input",
+                        "error": "Enter a value allowed by this model.",
+                        "sqref": _normal_address(binding["address"]),
+                    },
+                )
                 ET.SubElement(validation, _q("formula1")).text = _validation(binding)
                 sheet_work += len(ET.tostring(validation, encoding="utf-8"))
                 if sheet_work > MAX_XML_PART_BYTES:
@@ -437,7 +672,11 @@ def _fresh_parts(document: dict[str, Any]) -> dict[str, bytes]:
     parts["xl/_rels/workbook.xml.rels"] = _xml(rels)
     parts["_rels/.rels"] = _xml(package_rels)
     parts["[Content_Types].xml"] = _xml(types)
-    if len(parts) > MAX_PACKAGE_ENTRIES or sum(map(len, parts.values())) > MAX_PACKAGE_BYTES or any(len(part) > MAX_XML_PART_BYTES for part in parts.values()):
+    if (
+        len(parts) > MAX_PACKAGE_ENTRIES
+        or sum(map(len, parts.values())) > MAX_PACKAGE_BYTES
+        or any(len(part) > MAX_XML_PART_BYTES for part in parts.values())
+    ):
         raise UnsupportedWorkbook("generated XLSX exceeds package resource limits")
     return parts
 
@@ -450,13 +689,18 @@ def _check_preserved_validation(workbook: Workbook, document: dict[str, Any]) ->
     are normalized; strings and the formula's logic retain exact meaning.
     """
     for binding in document.get("inputs", {}).values():
-        sheet = next(name for name in workbook.sheet_names if name.casefold() == binding["sheet"].casefold())
+        sheet = next(
+            name for name in workbook.sheet_names if name.casefold() == binding["sheet"].casefold()
+        )
         part = workbook._sheet_parts[sheet]
         root = _safe_xml(workbook._parts[part], part)
         address = _normal_address(binding["address"])
         covering = [
-            node for node in root.findall("m:dataValidations/m:dataValidation", NS)
-            if any(_in_range(address, reference) for reference in node.attrib.get("sqref", "").split())
+            node
+            for node in root.findall("m:dataValidations/m:dataValidation", NS)
+            if any(
+                _in_range(address, reference) for reference in node.attrib.get("sqref", "").split()
+            )
         ]
         expected_blank = not binding.get("required", True)
         matching = False
@@ -480,9 +724,15 @@ def _check_preserved_validation(workbook: Workbook, document: dict[str, Any]) ->
 
 def _patch_import(workbook: Workbook, original: dict[str, Any], current: dict[str, Any]) -> None:
     if original["inputs"] != current["inputs"]:
-        raise UnsupportedWorkbook("imported input/validation bindings cannot be changed during export")
-    if [(sheet["id"], sheet["name"], sheet["column_widths"]) for sheet in original["sheets"]] != [(sheet["id"], sheet["name"], sheet["column_widths"]) for sheet in current["sheets"]]:
-        raise UnsupportedWorkbook("imported workbook structural and column-width edits are unsupported")
+        raise UnsupportedWorkbook(
+            "imported input/validation bindings cannot be changed during export"
+        )
+    if [(sheet["id"], sheet["name"], sheet["column_widths"]) for sheet in original["sheets"]] != [
+        (sheet["id"], sheet["name"], sheet["column_widths"]) for sheet in current["sheets"]
+    ]:
+        raise UnsupportedWorkbook(
+            "imported workbook structural and column-width edits are unsupported"
+        )
     _check_preserved_validation(workbook, current)
     for before, after in zip(original["sheets"], current["sheets"], strict=True):
         for address in before["cells"].keys() | after["cells"].keys():
@@ -490,12 +740,18 @@ def _patch_import(workbook: Workbook, original: dict[str, Any], current: dict[st
             if _digest(old) == _digest(new):
                 continue
             if old.get("blocked_reason") or new.get("blocked_reason"):
-                raise UnsupportedWorkbook(f"cannot edit preserved-only cell {after['name']}!{address}")
+                raise UnsupportedWorkbook(
+                    f"cannot edit preserved-only cell {after['name']}!{address}"
+                )
             if old.get("style") != new.get("style"):
-                raise UnsupportedWorkbook("imported style changes require a separately audited style transformer")
+                raise UnsupportedWorkbook(
+                    "imported style changes require a separately audited style transformer"
+                )
             # Typed/sign-aware comparison: Python equality conflates false/0
             # and positive/negative zero, so it cannot guard package patches.
-            if old.get("formula") == new.get("formula") and _digest(old.get("value")) == _digest(new.get("value")):
+            if old.get("formula") == new.get("formula") and _digest(old.get("value")) == _digest(
+                new.get("value")
+            ):
                 continue
             if new.get("formula") is not None:
                 workbook.set_formula(after["name"], address, "=" + new["formula"].removeprefix("="))
@@ -527,12 +783,16 @@ def export_snapshot(imported: WorkbookModel, document: dict[str, Any], output: s
     for before, after in zip(original["sheets"], current["sheets"], strict=True):
         for address, cell in before["cells"].items():
             if cell.get("blocked_reason") != after["cells"][address].get("blocked_reason"):
-                raise UnsupportedWorkbook("transferred snapshot cannot change preserved-only guards")
+                raise UnsupportedWorkbook(
+                    "transferred snapshot cannot change preserved-only guards"
+                )
     transferred._source_baseline = imported._source_baseline
     return export_xlsx(transferred, output)
 
 
-def export_xlsx(model: WorkbookModel, output: str | Path, *, report: dict[str, Any] | None = None) -> Path:
+def export_xlsx(
+    model: WorkbookModel, output: str | Path, *, report: dict[str, Any] | None = None
+) -> Path:
     """Write to a new path, after staging and reopening the complete package.
 
     Supplied reports must come from this model's ``calculate()`` method and
@@ -551,7 +811,11 @@ def export_xlsx(model: WorkbookModel, output: str | Path, *, report: dict[str, A
         raise FileExistsError(target)
     document = model.to_dict()
     calculation = model.calculate() if report is None else copy.deepcopy(report)
-    if calculation.get("stale") or calculation.get("revision") != document["revision"] or calculation.get("model_digest") != _digest(document):
+    if (
+        calculation.get("stale")
+        or calculation.get("revision") != document["revision"]
+        or calculation.get("model_digest") != _digest(document)
+    ):
         raise WorkbookError("calculation report is stale or belongs to a different model snapshot")
     if report is not None:
         # Caller-owned dictionaries are evidence, not cache authority. A second
@@ -568,10 +832,15 @@ def export_xlsx(model: WorkbookModel, output: str | Path, *, report: dict[str, A
         if _digest({key: calculation.get(key) for key in fields}) != _digest(
             {key: authoritative.get(key) for key in fields}
         ):
-            raise WorkbookError("supplied calculation report differs from authoritative engine results")
+            raise WorkbookError(
+                "supplied calculation report differs from authoritative engine results"
+            )
         calculation = authoritative
     if calculation.get("diagnostics"):
-        raise UnsupportedWorkbook("cannot export calculation diagnostics: " + "; ".join(item["message"] for item in calculation["diagnostics"]))
+        raise UnsupportedWorkbook(
+            "cannot export calculation diagnostics: "
+            + "; ".join(item["message"] for item in calculation["diagnostics"])
+        )
     cache_values = {}
     for sheet in document["sheets"]:
         for address, cell in sheet["cells"].items():
@@ -582,9 +851,13 @@ def export_xlsx(model: WorkbookModel, output: str | Path, *, report: dict[str, A
                     if "rows" in value:
                         raise UnsupportedWorkbook("worksheet array spill caches are unsupported")
                     value = ErrorValue(value["error"])
-                cache_values[(sheet["name"], address)] = Workbook._normalize_formula_cache(value, sheet["name"], address)
+                cache_values[(sheet["name"], address)] = Workbook._normalize_formula_cache(
+                    value, sheet["name"], address
+                )
     if baseline is not None and baseline.uses_1904_date_system and cache_values:
-        raise UnsupportedWorkbook("1904 date-system formula caches cannot be calculated or exported")
+        raise UnsupportedWorkbook(
+            "1904 date-system formula caches cannot be calculated or exported"
+        )
     target.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix=".workbook-forge-", dir=target.parent) as folder:
         seed, staged = Path(folder) / "seed.xlsx", Path(folder) / "result.xlsx"

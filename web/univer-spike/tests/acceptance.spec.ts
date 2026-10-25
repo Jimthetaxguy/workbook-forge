@@ -16,7 +16,7 @@ const AFTER_FORMULA = [20, 40, 140, 420, 380, 1000];
 const FORMULAS = { B1: 'A1*2', C1: 'B1+5', D1: 'C1*3', E1: 'D1-B1', F1: 'SUM(A1:E1)' };
 
 // Cell centres in the default 1280x800 layout (column width 88px, row 24px).
-const COLS: Record<string, number> = { A: 90, B: 178, C: 266, D: 354, E: 442, F: 530, G: 618, H: 706 };
+const COLS: Record<string, number> = { A: 90, B: 178, C: 266, D: 354, E: 442, F: 530, G: 618, H: 706, I: 794 };
 
 async function boot(page: Page, mode: string) {
   const errors: string[] = [];
@@ -39,7 +39,7 @@ async function boot(page: Page, mode: string) {
 }
 
 async function clickCell(page: Page, address: string) {
-  await page.mouse.click(COLS[address[0]], 179 + (Number(address.slice(1)) - 1) * 24);
+  await page.mouse.click(COLS[address[0]], 234 + (Number(address.slice(1)) - 1) * 24);
 }
 
 /** Type into a cell through Univer's real cell editor and commit with Enter. */
@@ -104,26 +104,47 @@ for (const mode of ['not-execute', 'load-only']) {
   test.describe(`${mode}: Forge is the only calculator`, () => {
     test('switching workbooks clears the previous projection before recovery', async ({ page }) => {
       const errors = await boot(page, mode);
-      await page.locator('#file').setInputFiles('tests/fixtures/single-cell.xlsx');
+      await page.locator('#file').setInputFiles('tests/fixtures/sales-bang-boolean.xlsx');
       await expect.poll(() => page.evaluate(() =>
-        (window as any).__spike.then((s: any) => s.adapter.cell('Sheet1', 'A1').raw),
+        (window as any).__spike.then((s: any) => s.adapter.cell('Sales!2026', 'A1').raw),
       )).toBe(7);
 
       const afterRejectedEdit = await page.evaluate(async () => {
         const s = await (window as any).__spike;
-        await s.adapter.edit([{ sheet: 'Sheet1', address: 'H10', value: 7 }], 'new workbook recovery');
+        await s.adapter.edit([{ sheet: 'Sales!2026', address: 'H10', value: 7 }], 'new workbook recovery');
         const snapshot = await s.client.snapshot();
         return {
           visibleOldCells: ['B1', 'C1', 'D1', 'E1', 'F1'].map((address) => s.adapter.cell('Sheet1', address).raw),
+          newSheetValue: s.adapter.cell('Sales!2026', 'A1').raw,
+          boolean: s.adapter.cell('Sales!2026', 'B1'),
           forgeCells: Object.keys(snapshot.value.sheets[0].cells),
           divergence: s.adapter.divergence(),
           notice: s.adapter.notices.at(-1),
         };
       });
-      expect(afterRejectedEdit.forgeCells).toEqual(['A1']);
+      expect(afterRejectedEdit.forgeCells).toEqual(['A1', 'B1']);
+      expect(afterRejectedEdit.newSheetValue).toBe(7);
+      expect(afterRejectedEdit.boolean.raw).toBe(true);
       expect(afterRejectedEdit.visibleOldCells).toEqual([null, null, null, null, null]);
       expect(afterRejectedEdit.divergence).toEqual([]);
       expect(afterRejectedEdit.notice).toContain('absent_cell');
+      expect(errors).toEqual([]);
+    });
+
+    test('an invalid replacement file leaves the current workbook visible', async ({ page }) => {
+      const errors = await boot(page, mode);
+      const before = await view(page);
+      await page.locator('#file').setInputFiles({
+        name: 'invalid.xlsx',
+        mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        buffer: Buffer.from('not an xlsx package'),
+      });
+      await expect(page.locator('#notices')).toContainText('Could not open invalid.xlsx');
+      await expect(page.locator('#notices')).toContainText('open_failed');
+      const after = await view(page);
+      expect(after.revision).toBe(before.revision);
+      expectDisplayed(after, INITIAL);
+      expect(after.divergence).toEqual([]);
       expect(errors).toEqual([]);
     });
 
@@ -250,6 +271,113 @@ for (const mode of ['not-execute', 'load-only']) {
     });
   });
 }
+
+test('blank workbook authors new cells, evaluates formulas and exports locally', async ({ page }) => {
+  const errors: string[] = [];
+  const requests: { url: string; method: string; postData: string | null }[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  page.on('request', (request) => {
+    requests.push({ url: request.url(), method: request.method(), postData: request.postData() });
+  });
+  await boot(page, 'not-execute');
+  await page.locator('#new').click();
+  await expect.poll(() => page.evaluate(() =>
+    (window as any).__spike.then(async (s: any) => {
+      await s.adapter.idle();
+      const snapshot = await s.client.snapshot();
+      return { sheets: snapshot.value.sheets.map((sheet: any) => sheet.name), cells: Object.keys(snapshot.value.sheets[0].cells) };
+    }),
+  )).toEqual({ sheets: ['Sheet1'], cells: [] });
+  await page.waitForFunction(
+    () => (window as any).__spike.then((s: any) => s.adapter.docUnitIds().length === 2),
+    null,
+    { timeout: 15_000 },
+  );
+  await page.waitForTimeout(400);
+  await typeInto(page, 'A1', '2');
+  await typeInto(page, 'A2', '3');
+  // Start a formula, then select its input range with the mouse as in Excel.
+  await clickCell(page, 'A3');
+  await page.waitForTimeout(150);
+  await page.keyboard.type('=SUM(', { delay: 15 });
+  await page.waitForTimeout(150);
+  await page.mouse.move(COLS.A, 234);
+  await page.mouse.down();
+  await page.waitForTimeout(100);
+  await page.mouse.move(COLS.A, 258, { steps: 8 });
+  await page.waitForTimeout(100);
+  await page.mouse.up();
+  await page.keyboard.type(')', { delay: 15 });
+  await page.keyboard.press('Enter');
+  await settle(page);
+  await typeInto(page, 'A4', '=A1+A2');
+  await typeInto(page, 'B1', '=IF(A3=5,"pass","fail")');
+  await typeInto(page, 'C1', 'apple');
+  await typeInto(page, 'D1', '10');
+  await typeInto(page, 'C2', 'pear');
+  await typeInto(page, 'D2', '20');
+  await typeInto(page, 'C3', 'pear');
+  await typeInto(page, 'D3', '30');
+  await typeInto(page, 'D4', '40');
+  await typeInto(page, 'E1', '=XLOOKUP("pear",C1:C2,D1:D2)');
+  await typeInto(page, 'F1', '=INDEX(D1:D2,MATCH("pear",C1:C2,0))');
+  await typeInto(page, 'G1', '=XLOOKUP("plum",C1:C3,D1:D3,"not found")');
+  await typeInto(page, 'H1', '=XLOOKUP("pear",C1:C3,D1:D3,,,-1)');
+  await typeInto(page, 'I1', '=XLOOKUP(,C1:C4,D1:D4,"blank key missing")');
+
+  const state = await page.evaluate(async () => {
+    const s = await (window as any).__spike;
+    const [snapshot, calculation] = await Promise.all([s.client.snapshot(), s.client.calculate()]);
+    return { snapshot: snapshot.value, calculation: calculation.value, divergence: s.adapter.divergence() };
+  });
+  expect(state.snapshot.revision).toBe('17');
+  expect(state.snapshot.sheets[0].cells.A1.value).toBe(2);
+  expect(state.snapshot.sheets[0].cells.A3.formula).toBe('SUM(A1:A2)');
+  expect(state.snapshot.sheets[0].cells.A4.formula).toBe('A1+A2');
+  expect(state.snapshot.sheets[0].cells.B1.formula).toBe('IF(A3=5,"pass","fail")');
+  expect(state.snapshot.sheets[0].cells.E1.formula).toBe('XLOOKUP("pear",C1:C2,D1:D2)');
+  expect(state.snapshot.sheets[0].cells.F1.formula).toBe('INDEX(D1:D2,MATCH("pear",C1:C2,0))');
+  expect(state.snapshot.sheets[0].cells.G1.formula).toBe('XLOOKUP("plum",C1:C3,D1:D3,"not found")');
+  expect(state.snapshot.sheets[0].cells.H1.formula).toBe('XLOOKUP("pear",C1:C3,D1:D3,,,-1)');
+  expect(state.snapshot.sheets[0].cells.I1.formula).toBe('XLOOKUP(,C1:C4,D1:D4,"blank key missing")');
+  expect(state.calculation.values['Sheet1!A3']).toBe(5);
+  expect(state.calculation.values['Sheet1!A4']).toBe(5);
+  expect(state.calculation.values['Sheet1!B1']).toBe('pass');
+  expect(state.calculation.values['Sheet1!E1']).toBe(20);
+  expect(state.calculation.values['Sheet1!F1']).toBe(20);
+  expect(state.calculation.values['Sheet1!G1']).toBe('not found');
+  expect(state.calculation.values['Sheet1!H1']).toBe(30);
+  expect(state.calculation.values['Sheet1!I1']).toBe(40);
+  expect(state.divergence).toEqual([]);
+
+  const roundTrip = await page.evaluate(async () => {
+    const s = await (window as any).__spike;
+    const bytes: Uint8Array = await s.adapter.exportXlsx();
+    const reopened = s.startForgeWorker();
+    const opened = await reopened.client.open(bytes);
+    const [snapshot, calculation] = await Promise.all([reopened.client.snapshot(), reopened.client.calculate()]);
+    reopened.worker.terminate();
+    return { opened, snapshot: snapshot.value, calculation: calculation.value };
+  });
+  expect(roundTrip.opened).toEqual({ ok: true, value: { revision: '0', sheets: ['Sheet1'] } });
+  expect(roundTrip.snapshot.sheets[0].cells.A3.formula).toBe('SUM(A1:A2)');
+  expect(roundTrip.snapshot.sheets[0].cells.A4.formula).toBe('A1+A2');
+  expect(roundTrip.snapshot.sheets[0].cells.E1.formula).toBe('XLOOKUP("pear",C1:C2,D1:D2)');
+  expect(roundTrip.snapshot.sheets[0].cells.F1.formula).toBe('INDEX(D1:D2,MATCH("pear",C1:C2,0))');
+  expect(roundTrip.snapshot.sheets[0].cells.G1.formula).toBe('XLOOKUP("plum",C1:C3,D1:D3,"not found")');
+  expect(roundTrip.snapshot.sheets[0].cells.H1.formula).toBe('XLOOKUP("pear",C1:C3,D1:D3,,,-1)');
+  expect(roundTrip.snapshot.sheets[0].cells.I1.formula).toBe('XLOOKUP(,C1:C4,D1:D4,"blank key missing")');
+  expect(roundTrip.calculation.values['Sheet1!A3']).toBe(5);
+  expect(roundTrip.calculation.values['Sheet1!A4']).toBe(5);
+  expect(roundTrip.calculation.values['Sheet1!B1']).toBe('pass');
+  expect(roundTrip.calculation.values['Sheet1!E1']).toBe(20);
+  expect(roundTrip.calculation.values['Sheet1!F1']).toBe(20);
+  expect(roundTrip.calculation.values['Sheet1!G1']).toBe('not found');
+  expect(roundTrip.calculation.values['Sheet1!H1']).toBe(30);
+  expect(roundTrip.calculation.values['Sheet1!I1']).toBe(40);
+  expect(requests.every((request) => request.method === 'GET' && request.postData === null)).toBe(true);
+  expect(errors).toEqual([]);
+});
 
 test('control: stock formula plugins calculate, and the spy sees it', async ({ page }) => {
   await boot(page, 'univer-default');

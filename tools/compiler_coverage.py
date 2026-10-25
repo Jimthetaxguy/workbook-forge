@@ -58,7 +58,7 @@ def build(binary: Path) -> dict:
             languages[language] = {
                 "recognized": "catalogued", "parsed_syntax_probe": parsed,
                 "preserved": "generic_normal_formula_path; per_function_unverified",
-                "translated_source": "graph_source_subset_v5" if name in SOURCE_FUNCTIONS else "not_implemented",
+                "translated_source": "graph_source_subset_v6" if name in SOURCE_FUNCTIONS else "not_implemented",
                 "executable": "implemented_profile" if executable else "planned",
                 "tested_against_reference": "shared_expected_fixtures" if executable and cases[name] else "not_established",
                 "excel_observed": "not_established_by_this_mapping",
@@ -85,14 +85,14 @@ def build(binary: Path) -> dict:
             "grammar_features": catalog["syntax_features"],
             "grammar_evidence_note": "existing catalog statuses, not newly verified translation coverage",
             "reference_evidence_note": "fixture expected values include documented examples, independent arithmetic and local profiles; case membership or engine agreement is not an Excel oracle",
-            "source_translation": {"rust_to_python": "graph_source_subset_v5", "python_to_rust": "graph_source_subset_v5",
+            "source_translation": {"rust_to_python": "graph_source_subset_v6", "python_to_rust": "graph_source_subset_v6",
                 "functions": list(SOURCE_FUNCTIONS), "function_count": len(SOURCE_FUNCTIONS),
                 "comparison_operators": ["=","<>","<","<=",">",">="],
                 "evidence_audits": ["catalog/compiler-comparison-evidence.v1.json","catalog/average-evidence.v1.json"],
                 "average_direct_policy": "provisional; primary sources conflict; no Excel observation",
                 "error_scope": "nine existing scalar codes; modern service/security/Python/provider error contracts remain planned",
                 "typed_error_codes": sorted(ERRORS), "remaining_error_codes": [],
-                "subset": "multiple sheets, + - * /, SUM/AVERAGE ranges, lazy IF/IFERROR, six typed comparison operators, mixed/absolute/quoted references and nine typed scalar errors; numeric-v1 and graph-v2 retained",
+                "subset": "multiple sheets, + - * /, SUM/AVERAGE ranges, lazy IF/IFERROR, XLOOKUP with exact one-dimensional reference arrays and forward/reverse search, six typed comparison operators, mixed/absolute/quoted references and nine typed scalar errors; numeric-v1 and graph-v2 through graph-v6 remain supported",
                 "arbitrary_source_programs": "refused outside versioned scaffold; no restoration of embedded XML"}}
 
 

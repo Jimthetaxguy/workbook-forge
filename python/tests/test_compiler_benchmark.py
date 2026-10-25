@@ -108,6 +108,6 @@ def test_mapping_has_all_inventory_rows_and_honest_stages(compiler_binary):
     assert {r["name"] for r in actual["functions"]} == {r["name"] for r in inventory["functions"]}
     for row in actual["functions"]:
         for stages in row["languages"].values():
-            assert stages["translated_source"] == ("graph_source_subset_v5" if row["name"] in {"SUM","IF","IFERROR","AVERAGE"} else "not_implemented")
+            assert stages["translated_source"] == ("graph_source_subset_v6" if row["name"] in {"SUM","IF","IFERROR","AVERAGE","XLOOKUP"} else "not_implemented")
             assert stages["unsupported_now"] == (stages["executable"] == "planned")
             assert stages["excel_observed"] == "not_established_by_this_mapping"

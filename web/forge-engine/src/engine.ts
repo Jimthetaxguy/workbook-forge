@@ -21,6 +21,7 @@ import type {
 /** The subset of the wasm-bindgen module (rust/src/wasm.rs) the engine uses. */
 export interface ForgeWasm {
   openXlsx(bytes: Uint8Array): ForgeWorkbook;
+  createBlankWorkbook(sheetName: string): ForgeWorkbook;
 }
 
 export interface ForgeWorkbook {
@@ -68,6 +69,8 @@ export class ForgeEngine {
     switch (command) {
       case 'open':
         return this.open((args as Commands['open']['args']).bytes);
+      case 'newWorkbook':
+        return this.newWorkbook((args as Commands['newWorkbook']['args']).sheetName);
       case 'snapshot':
         return this.withWorkbook((wb) => this.snapshot(wb));
       case 'applyEdits': {
@@ -94,6 +97,22 @@ export class ForgeEngine {
       next = this.wasm.openXlsx(bytes);
     } catch (error) {
       return fail('open_failed', messageOf(error));
+    }
+    this.workbook?.free();
+    this.workbook = next;
+    const snapshot = this.snapshot(next);
+    return { ok: true, value: { revision: next.revisionString(), sheets: snapshot.value.sheets.map((s) => s.name) } };
+  }
+
+  private newWorkbook(sheetName: string): Result<Commands['newWorkbook']['result']> {
+    if (typeof sheetName !== 'string' || sheetName.length === 0) {
+      return fail('invalid_request', 'newWorkbook needs a non-empty worksheet name');
+    }
+    let next: ForgeWorkbook;
+    try {
+      next = this.wasm.createBlankWorkbook(sheetName);
+    } catch (error) {
+      return fail('create_failed', messageOf(error));
     }
     this.workbook?.free();
     this.workbook = next;

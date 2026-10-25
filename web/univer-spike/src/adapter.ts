@@ -73,7 +73,23 @@ interface HistoryEntry {
   inverse: Edit[];
 }
 
-type Projected = { v: Scalar | string; f?: string };
+type Projected = { value: Scalar; f?: string };
+
+function splitCellKey(key: string): { sheetName: string; address: string } {
+  const separator = key.lastIndexOf('!');
+  if (separator <= 0 || separator === key.length - 1) throw new Error(`invalid cell key ${key}`);
+  return { sheetName: key.slice(0, separator), address: key.slice(separator + 1) };
+}
+
+function displayValue(value: Scalar): Scalar {
+  return value !== null && typeof value === 'object' ? value.error : value;
+}
+
+function scalarFromCellData(cell: ICellData | null | undefined | void): Scalar {
+  if (!cell) return null;
+  if (cell.t === CellValueType.BOOLEAN) return Boolean(cell.v);
+  return (cell.v ?? null) as Scalar;
+}
 
 function scalar(value: CalculatedValue | undefined): Scalar {
   if (value && typeof value === 'object' && 'rows' in value) return value.rows[0]?.[0] ?? null;
@@ -138,11 +154,28 @@ export class ForgeUniverAdapter {
   async open(bytes: Uint8Array, name = 'Workbook'): Promise<void> {
     const opened = await this.client.open(bytes);
     if (!opened.ok) throw new Error(`${opened.error.code}: ${opened.error.message}`);
-    this.revision = opened.value.revision;
+    await this.projectCurrentWorkbook(name);
+  }
+
+  /** Start an authored workbook whose cells can be added anywhere in the grid. */
+  async newWorkbook(name = 'Sheet1'): Promise<void> {
+    const created = await this.client.newWorkbook(name);
+    if (!created.ok) throw new Error(`${created.error.code}: ${created.error.message}`);
+    await this.projectCurrentWorkbook(name);
+  }
+
+  private async projectCurrentWorkbook(name: string): Promise<void> {
+    const snapshot = await this.client.snapshot();
+    if (!snapshot.ok) throw new Error(`${snapshot.error.code}: ${snapshot.error.message}`);
+    this.revision = snapshot.value.revision;
     this.undoStack = [];
     this.redoStack = [];
     this.projected.clear();
-    const [snapshot, calc] = await this.read();
+    this.sheetIds.clear();
+    const calculated = await this.client.calculate();
+    if (!calculated.ok) throw new Error(`${calculated.error.code}: ${calculated.error.message}`);
+    if (calculated.value.revision !== snapshot.value.revision) throw new Error('revision drift while opening workbook');
+    const calc = calculated.value.values;
     const data: IWorkbookData = {
       id: UNIT_ID,
       name,
@@ -152,8 +185,7 @@ export class ForgeUniverAdapter {
       sheetOrder: [],
       sheets: {},
     };
-    this.sheetIds.clear();
-    snapshot.sheets.forEach((sheet, index) => {
+    snapshot.value.sheets.forEach((sheet, index) => {
       const id = `sheet-${index}`;
       this.sheetIds.set(sheet.name, id);
       data.sheetOrder.push(id);
@@ -166,17 +198,18 @@ export class ForgeUniverAdapter {
         cols = Math.max(cols, col + 5);
         const value = cell.formula !== undefined ? scalar(calc[`${sheet.name}!${address}`]) : cell.value;
         (cellData[row] ??= {})[col] = toCellData(value, cell.formula);
-        this.projected.set(`${sheet.name}!${address}`, { v: toCellData(value).v as Scalar, f: cell.formula });
+        this.projected.set(`${sheet.name}!${address}`, { value, f: cell.formula });
       }
       data.sheets[id] = { id, name: sheet.name, rowCount: rows, columnCount: cols, cellData };
     });
     this.projecting = true;
     try {
+      if (this.workbook()) this.host.univerAPI.disposeUnit(UNIT_ID);
       this.host.univerAPI.createWorkbook(data);
     } finally {
       this.projecting = false;
     }
-    this.remember(snapshot);
+    this.remember(snapshot.value);
   }
 
   /** Export the Forge workbook. Univer's model is never serialized. */
@@ -227,20 +260,26 @@ export class ForgeUniverAdapter {
 
   /** Cells whose Univer value or formula differs from the last projection. */
   divergence(): string[] {
-    const out: string[] = [];
+    return this.divergenceEntries().map(({ message }) => message);
+  }
+
+  private divergenceEntries(): { key: string; message: string }[] {
+    const out: { key: string; message: string }[] = [];
     const workbook = this.workbook();
-    if (!workbook) return ['no workbook'];
+    if (!workbook) return [{ key: '', message: 'no workbook' }];
     for (const [key, expected] of this.projected) {
-      const [sheetName, address] = key.split('!');
+      const { sheetName, address } = splitCellKey(key);
       const sheet = workbook.getSheetBySheetId(this.sheetIds.get(sheetName) ?? '');
       const { row, col } = fromA1(address);
       const raw = sheet?.getCellRaw(row, col);
       const shown = sheet?.getCell(row, col);
       const f = raw?.f ? String(raw.f).replace(/^=/, '') : undefined;
-      if (f !== expected.f) out.push(`${key} formula ${f} != ${expected.f}`);
+      if (f !== expected.f) out.push({ key, message: `${key} formula ${f} != ${expected.f}` });
       for (const [label, cell] of [['raw', raw], ['displayed', shown]] as const) {
-        const v = cell?.v ?? null;
-        if (v !== expected.v) out.push(`${key} ${label} ${String(v)} != ${String(expected.v)}`);
+        const value = scalarFromCellData(cell);
+        if (value !== displayValue(expected.value)) {
+          out.push({ key, message: `${key} ${label} ${String(value)} != ${String(displayValue(expected.value))}` });
+        }
       }
     }
     return out;
@@ -252,7 +291,7 @@ export class ForgeUniverAdapter {
     const { row, col } = fromA1(address);
     const raw = sheet?.getCellRaw(row, col);
     const shown = sheet?.getCell(row, col);
-    return { raw: raw?.v ?? null, displayed: shown?.v ?? null, formula: raw?.f ?? null };
+    return { raw: scalarFromCellData(raw), displayed: scalarFromCellData(shown), formula: raw?.f ?? null };
   }
 
   /** Ids of every doc unit (editors) Univer has created. */
@@ -329,16 +368,21 @@ export class ForgeUniverAdapter {
     const [snapshot, calc] = await this.read();
     this.remember(snapshot);
     const bySheet = new Map<string, Record<number, Record<number, ICellData>>>();
-    const diverged = new Set(this.divergence().map((line) => line.split(' ')[0]));
+    const diverged = new Set(this.divergenceEntries().map(({ key }) => key));
     for (const sheet of snapshot.sheets) {
       for (const [address, cell] of Object.entries(sheet.cells)) {
         const key = `${sheet.name}!${address}`;
         const value = cell.formula !== undefined ? scalar(calc[key]) : cell.value;
         const data = toCellData(value, cell.formula);
-        const next: Projected = { v: data.v as Scalar, f: cell.formula };
+        const next: Projected = { value, f: cell.formula };
         const prev = this.projected.get(key);
         this.projected.set(key, next);
-        if (prev && prev.v === next.v && prev.f === next.f && !diverged.has(key)) continue;
+        if (
+          prev &&
+          displayValue(prev.value) === displayValue(next.value) &&
+          prev.f === next.f &&
+          !diverged.has(key)
+        ) continue;
         const { row, col } = fromA1(address);
         const matrix = bySheet.get(sheet.name) ?? {};
         (matrix[row] ??= {})[col] = data;
@@ -352,11 +396,11 @@ export class ForgeUniverAdapter {
   private reprojectAll() {
     const bySheet = new Map<string, Record<number, Record<number, ICellData>>>();
     for (const [key, cell] of this.projected) {
-      const [sheet, address] = key.split('!');
+      const { sheetName, address } = splitCellKey(key);
       const { row, col } = fromA1(address);
-      const matrix = bySheet.get(sheet) ?? {};
-      (matrix[row] ??= {})[col] = toCellData(cell.v as Scalar, cell.f);
-      bySheet.set(sheet, matrix);
+      const matrix = bySheet.get(sheetName) ?? {};
+      (matrix[row] ??= {})[col] = toCellData(cell.value, cell.f);
+      bySheet.set(sheetName, matrix);
     }
     this.write(bySheet);
   }

@@ -27,8 +27,13 @@ from xml.sax.saxutils import quoteattr
 from . import ArrayValue, ErrorValue, analyze_formula, evaluate_result
 from .catalog import function_status
 from .xml_patterns import (
-    XMLLimitError, XMLPatternError, decode_ooxml_escapes, encode_ooxml_escapes, parse_xml,
-    rich_text, select_path,
+    XMLLimitError,
+    XMLPatternError,
+    decode_ooxml_escapes,
+    encode_ooxml_escapes,
+    parse_xml,
+    rich_text,
+    select_path,
 )
 
 MAIN = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
@@ -62,7 +67,18 @@ ZIP_CENTRAL_DIRECTORY_RECORD = struct.Struct("<4s6H3I5H2I")
 ZIP_CENTRAL_DIRECTORY_SIGNATURE = b"PK\x01\x02"
 MAX_CALCULATION_RANGE_CHECKS = 250_000
 EXCEL_ERROR_CODES = frozenset(
-    {"#NULL!", "#DIV/0!", "#VALUE!", "#REF!", "#NAME?", "#NUM!", "#N/A", "#N/A!", "#SPILL!", "#CALC!"}
+    {
+        "#NULL!",
+        "#DIV/0!",
+        "#VALUE!",
+        "#REF!",
+        "#NAME?",
+        "#NUM!",
+        "#N/A",
+        "#N/A!",
+        "#SPILL!",
+        "#CALC!",
+    }
 )
 _XML_SERIALIZE_LOCK = threading.RLock()
 _WORKBOOK_ORDER = (
@@ -112,6 +128,59 @@ def _q(name: str) -> str:
     return f"{{{MAIN}}}{name}"
 
 
+def _rewrite_ooxml_function_markers(formula: str, *, add_markers: bool) -> str:
+    """Normalize XLOOKUP/XMATCH names between formula text and OOXML."""
+    formula = formula.removeprefix("=")
+    output: list[str] = []
+    offset = 0
+    in_string = False
+
+    while offset < len(formula):
+        character = formula[offset]
+        if character == '"':
+            output.append(character)
+            offset += 1
+            if in_string and offset < len(formula) and formula[offset] == '"':
+                output.append('"')
+                offset += 1
+            else:
+                in_string = not in_string
+            continue
+
+        if not in_string and character.isascii() and (character.isalpha() or character == "_"):
+            start = offset
+            while offset < len(formula):
+                current = formula[offset]
+                if not current.isascii() or not (current.isalnum() or current in "_."):
+                    break
+                offset += 1
+            token = formula[start:offset]
+            lookahead = offset
+            while lookahead < len(formula) and formula[lookahead].isspace():
+                lookahead += 1
+            has_marker = token[:6].casefold() == "_xlfn."
+            name = token[6:] if has_marker else token
+            if (
+                lookahead < len(formula)
+                and formula[lookahead] == "("
+                and name.upper() in {"XLOOKUP", "XMATCH"}
+            ):
+                if add_markers and not has_marker:
+                    output.append("_xlfn." + name)
+                elif not add_markers and has_marker:
+                    output.append(name)
+                else:
+                    output.append(token)
+            else:
+                output.append(token)
+            continue
+
+        output.append(character)
+        offset += 1
+
+    return "".join(output)
+
+
 def _safe_xml(data: bytes, part: str) -> ET.Element:
     try:
         return parse_xml(data, max_bytes=MAX_XML_PART_BYTES)
@@ -128,7 +197,9 @@ def _read_archive_part(
 ) -> bytes:
     """Read a ZIP member with a bounded decompression request size."""
     name = info.filename
-    part_limit = MAX_XML_PART_BYTES if name.lower().endswith((".xml", ".rels")) else MAX_PACKAGE_BYTES
+    part_limit = (
+        MAX_XML_PART_BYTES if name.lower().endswith((".xml", ".rels")) else MAX_PACKAGE_BYTES
+    )
     if info.file_size > part_limit:
         raise UnsupportedWorkbook(f"package part exceeds size limit: {name}")
     if total_bytes + info.file_size > MAX_PACKAGE_BYTES:
@@ -168,9 +239,7 @@ def _preflight_archive_directory(source_stream: BinaryIO, source_size: int) -> i
         "_ECD_OFFSET",
         "_ECD_LOCATION",
     )
-    if end_record_reader is None or any(
-        not hasattr(zipfile, name) for name in end_record_indexes
-    ):
+    if end_record_reader is None or any(not hasattr(zipfile, name) for name in end_record_indexes):
         raise UnsupportedWorkbook("this Python runtime cannot safely inspect ZIP metadata")
 
     try:
@@ -205,9 +274,7 @@ def _preflight_archive_directory(source_stream: BinaryIO, source_size: int) -> i
     if disk_number != 0 or disk_start != 0 or entries_on_disk != declared_entries:
         raise UnsupportedWorkbook("multi-disk or inconsistent ZIP directories are not supported")
     if declared_entries > MAX_PACKAGE_ENTRIES:
-        raise UnsupportedWorkbook(
-            f"workbook has more than {MAX_PACKAGE_ENTRIES} package entries"
-        )
+        raise UnsupportedWorkbook(f"workbook has more than {MAX_PACKAGE_ENTRIES} package entries")
     if directory_size > MAX_CENTRAL_DIRECTORY_BYTES:
         raise UnsupportedWorkbook("workbook ZIP directory exceeds size limit")
 
@@ -216,11 +283,7 @@ def _preflight_archive_directory(source_stream: BinaryIO, source_size: int) -> i
     concat_offset = record_location - directory_size - directory_offset
     directory_start = directory_offset + concat_offset
     directory_end = directory_start + directory_size
-    if (
-        directory_start < 0
-        or directory_end != record_location
-        or record_location > source_size
-    ):
+    if directory_start < 0 or directory_end != record_location or record_location > source_size:
         raise WorkbookError("workbook ZIP directory offsets are invalid")
 
     source_stream.seek(directory_start)
@@ -260,9 +323,7 @@ def _root_namespaces(data: bytes) -> tuple[tuple[str, str], ...]:
     """Collect namespace declarations on the package part's root element."""
     declarations: list[tuple[str, str]] = []
     depth = 0
-    for event, value in ET.iterparse(
-        io.BytesIO(data), events=("start-ns", "start", "end")
-    ):
+    for event, value in ET.iterparse(io.BytesIO(data), events=("start-ns", "start", "end")):
         if event == "start-ns" and depth == 0:
             prefix, uri = value
             declarations.append((prefix or "", uri))
@@ -473,9 +534,7 @@ class Workbook:
         self._calc_chain_checked = False
         self._sheet_parts: dict[str, str] = {}
         self._cells: dict[str, dict[str, ET.Element]] = {}
-        self._table_formula_ranges: dict[
-            str, list[tuple[int, int, int, int, str]]
-        ] = {}
+        self._table_formula_ranges: dict[str, list[tuple[int, int, int, int, str]]] = {}
         self._shared_strings: list[str] = []
         self._uses_1904_date_system = False
         self._load()
@@ -484,7 +543,9 @@ class Workbook:
     def open(cls, path: str | Path) -> Workbook:
         source = Path(path).resolve()
         if source.suffix.lower() != ".xlsx":
-            raise UnsupportedWorkbook("v0.1 accepts .xlsx only; register an audited adapter for other formats")
+            raise UnsupportedWorkbook(
+                "v0.1 accepts .xlsx only; register an audited adapter for other formats"
+            )
         source_stream: BinaryIO | None = None
         archive: zipfile.ZipFile | None = None
         transferred = False
@@ -510,10 +571,7 @@ class Workbook:
                 raise UnsupportedWorkbook("duplicate package part names are not supported")
             if sum(info.file_size for info in infos) > MAX_PACKAGE_BYTES:
                 raise UnsupportedWorkbook("workbook exceeds uncompressed size limit")
-            if (
-                "_rels/.rels" not in names
-                or "[Content_Types].xml" not in names
-            ):
+            if "_rels/.rels" not in names or "[Content_Types].xml" not in names:
                 raise WorkbookError("not a complete Open Packaging Convention package")
 
             parts: dict[str, bytes] = {}
@@ -530,10 +588,12 @@ class Workbook:
             if any(not rel_id for rel_id in root_ids) or len(root_ids) != len(set(root_ids)):
                 raise UnsupportedWorkbook("package root relationship IDs are missing or duplicated")
             office_documents = [
-                rel for rel in root_relationships
-                if rel.attrib.get("Type") == OFFICE_DOCUMENT_REL
+                rel for rel in root_relationships if rel.attrib.get("Type") == OFFICE_DOCUMENT_REL
             ]
-            if len(office_documents) != 1 or office_documents[0].attrib.get("TargetMode") == "External":
+            if (
+                len(office_documents) != 1
+                or office_documents[0].attrib.get("TargetMode") == "External"
+            ):
                 raise WorkbookError("package must have one internal officeDocument relationship")
             workbook_part = _resolve_part("", office_documents[0].attrib.get("Target", ""))
             if workbook_part not in parts:
@@ -650,12 +710,8 @@ class Workbook:
                 raise KeyError(f"unknown worksheet: {sheet}")
             return canonical, _normal_address(address)
 
-        formula_cells: dict[
-            tuple[str, int, int], tuple[str, str, ET.Element, ET.Element, str]
-        ] = {}
-        grouped_formula_ranges_by_sheet: dict[
-            str, list[tuple[int, int, int, int, str]]
-        ] = {}
+        formula_cells: dict[tuple[str, int, int], tuple[str, str, ET.Element, ET.Element, str]] = {}
+        grouped_formula_ranges_by_sheet: dict[str, list[tuple[int, int, int, int, str]]] = {}
         for sheet, cells in self._cells.items():
             for address, cell in cells.items():
                 formula_node = cell.find(_q("f"))
@@ -669,20 +725,15 @@ class Workbook:
                         raise UnsupportedWorkbook(
                             f"grouped formula has an invalid result range at {sheet}!{address}"
                         )
-                    first_column, first_row = _cell_position(
-                        match.group(1) + match.group(2)
-                    )
+                    first_column, first_row = _cell_position(match.group(1) + match.group(2))
                     last_column, last_row = _cell_position(
-                        (match.group(3) or match.group(1))
-                        + (match.group(4) or match.group(2))
+                        (match.group(3) or match.group(1)) + (match.group(4) or match.group(2))
                     )
                     if first_column > last_column or first_row > last_row:
                         raise UnsupportedWorkbook(
                             f"grouped formula has a reversed result range at {sheet}!{address}"
                         )
-                    grouped_formula_ranges_by_sheet.setdefault(
-                        sheet.casefold(), []
-                    ).append(
+                    grouped_formula_ranges_by_sheet.setdefault(sheet.casefold(), []).append(
                         (
                             first_row,
                             last_row,
@@ -763,9 +814,7 @@ class Workbook:
                         and first_column <= range_last_column
                         and last_column >= range_first_column
                     ):
-                        raise UnsupportedWorkbook(
-                            f"{context} intersects {kind} {owner}"
-                        )
+                        raise UnsupportedWorkbook(f"{context} intersects {kind} {owner}")
 
         def prepare_formula(key: tuple[str, int, int]) -> set[tuple[str, int, int]]:
             nonlocal expanded_reference_cells, reference_expansion_cells
@@ -835,10 +884,7 @@ class Workbook:
                     raise UnsupportedWorkbook(
                         f"reference exceeds the {MAX_CALCULATION_REFERENCE_CELLS}-cell calculation limit at {sheet}!{address}"
                     )
-                if (
-                    reference_expansion_cells + area
-                    > MAX_CALCULATION_REFERENCE_EXPANSION_CELLS
-                ):
+                if reference_expansion_cells + area > MAX_CALCULATION_REFERENCE_EXPANSION_CELLS:
                     raise UnsupportedWorkbook(
                         "reference expansion exceeds the "
                         f"{MAX_CALCULATION_REFERENCE_EXPANSION_CELLS}-cell calculation work limit at {sheet}!{address}"
@@ -1038,19 +1084,17 @@ class Workbook:
     def _load(self) -> None:
         wb_root = _safe_xml(self._parts[self._workbook_part], self._workbook_part)
         if wb_root.tag != _q("workbook"):
-            raise UnsupportedWorkbook("strict OOXML or non-workbook XML is outside the XLSX adapter profile")
+            raise UnsupportedWorkbook(
+                "strict OOXML or non-workbook XML is outside the XLSX adapter profile"
+            )
         workbook_properties = wb_root.find(_q("workbookPr"))
         date1904 = (
-            workbook_properties.attrib.get("date1904")
-            if workbook_properties is not None
-            else None
+            workbook_properties.attrib.get("date1904") if workbook_properties is not None else None
         )
         if date1904 is not None and date1904.casefold() not in {"0", "1", "false", "true"}:
             raise UnsupportedWorkbook("workbook date1904 setting is not a recognized Boolean")
         self._uses_1904_date_system = date1904 is not None and date1904.casefold() in {"1", "true"}
-        rel_root = _safe_xml(
-            self._parts[self._workbook_rels_part], self._workbook_rels_part
-        )
+        rel_root = _safe_xml(self._parts[self._workbook_rels_part], self._workbook_rels_part)
         if rel_root.tag != f"{{{PKG_REL}}}Relationships":
             raise UnsupportedWorkbook("workbook relationships use an unsupported namespace")
         relationships = rel_root.findall(f"{{{PKG_REL}}}Relationship")
@@ -1072,7 +1116,9 @@ class Workbook:
             folded_names.add(name.casefold())
             relationship = rels[rid]
             if relationship.attrib.get("Type") != WORKSHEET_REL:
-                raise UnsupportedWorkbook("chartsheets and non-worksheet sheet types are outside this adapter")
+                raise UnsupportedWorkbook(
+                    "chartsheets and non-worksheet sheet types are outside this adapter"
+                )
             if relationship.attrib.get("TargetMode") == "External":
                 raise UnsupportedWorkbook("worksheet relationships must be internal")
             part = _resolve_part(self._workbook_part, relationship.attrib.get("Target", ""))
@@ -1082,7 +1128,9 @@ class Workbook:
                 raise UnsupportedWorkbook(f"worksheet part has an unexpected content type: {part}")
             worksheet_root = _safe_xml(self._parts[part], part)
             if worksheet_root.tag != _q("worksheet"):
-                raise UnsupportedWorkbook("strict OOXML or a non-worksheet part is outside the adapter profile")
+                raise UnsupportedWorkbook(
+                    "strict OOXML or a non-worksheet part is outside the adapter profile"
+                )
             self._sheet_parts[name] = part
             self._cells[name] = self._index_cells(worksheet_root)
             self._table_formula_ranges[name.casefold()] = self._load_table_formula_ranges(
@@ -1091,7 +1139,9 @@ class Workbook:
         if not self._sheet_parts:
             raise WorkbookError("workbook has no worksheets")
         shared_string_parts = [
-            part for part in self._parts if self._content_type_for(part)
+            part
+            for part in self._parts
+            if self._content_type_for(part)
             == "application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml"
         ]
         if len(shared_string_parts) > 1:
@@ -1101,10 +1151,7 @@ class Workbook:
             root = _safe_xml(self._parts[shared_string_part], shared_string_part)
             if root.tag != _q("sst"):
                 raise UnsupportedWorkbook("shared-string part has an unsupported XML root")
-            self._shared_strings = [
-                self._inline_text(item)
-                for item in root.findall(_q("si"))
-            ]
+            self._shared_strings = [self._inline_text(item) for item in root.findall(_q("si"))]
 
     def _load_table_formula_ranges(
         self, sheet: str, worksheet_root: ET.Element, worksheet_part: str
@@ -1116,12 +1163,8 @@ class Workbook:
 
         relationships_part = _relationship_part(worksheet_part)
         if relationships_part not in self._parts:
-            raise WorkbookError(
-                f"worksheet table relationships are absent: {relationships_part}"
-            )
-        relationships_root = _safe_xml(
-            self._parts[relationships_part], relationships_part
-        )
+            raise WorkbookError(f"worksheet table relationships are absent: {relationships_part}")
+        relationships_root = _safe_xml(self._parts[relationships_part], relationships_part)
         if relationships_root.tag != f"{{{PKG_REL}}}Relationships":
             raise UnsupportedWorkbook(
                 f"worksheet relationships use an unsupported namespace: {relationships_part}"
@@ -1150,9 +1193,7 @@ class Workbook:
                 )
             if relationship.attrib.get("TargetMode") == "External":
                 raise UnsupportedWorkbook("table relationships must be internal")
-            table_part_name = _resolve_part(
-                worksheet_part, relationship.attrib.get("Target", "")
-            )
+            table_part_name = _resolve_part(worksheet_part, relationship.attrib.get("Target", ""))
             if table_part_name not in self._parts:
                 raise WorkbookError(f"table part is absent: {table_part_name}")
             if self._content_type_for(table_part_name) != TABLE_CONTENT_TYPE:
@@ -1190,8 +1231,7 @@ class Workbook:
                 )
             first_column, first_row = _cell_position(match.group(1) + match.group(2))
             last_column, last_row = _cell_position(
-                (match.group(3) or match.group(1))
-                + (match.group(4) or match.group(2))
+                (match.group(3) or match.group(1)) + (match.group(4) or match.group(2))
             )
             if first_column > last_column or first_row > last_row:
                 raise UnsupportedWorkbook(
@@ -1201,7 +1241,9 @@ class Workbook:
                 raise UnsupportedWorkbook(
                     f"table formula column metadata does not match its table range: {table_part_name}"
                 )
-            declared_count = table_columns_node.attrib.get("count") if table_columns_node is not None else None
+            declared_count = (
+                table_columns_node.attrib.get("count") if table_columns_node is not None else None
+            )
             if declared_count is not None and declared_count != str(len(table_columns)):
                 raise UnsupportedWorkbook(
                     f"table formula column count is inconsistent: {table_part_name}"
@@ -1214,9 +1256,7 @@ class Workbook:
                 table_root, "totalsRowCount", default=0, part=table_part_name
             )
             insert_count = int(
-                self._table_boolean(
-                    table_root, "insertRow", default=False, part=table_part_name
-                )
+                self._table_boolean(table_root, "insertRow", default=False, part=table_part_name)
             )
             totals_shown = self._table_boolean(
                 table_root, "totalsRowShown", default=False, part=table_part_name
@@ -1227,7 +1267,9 @@ class Workbook:
                     f"table formula row metadata exceeds its table range: {table_part_name}"
                 )
 
-            table_name = table_root.attrib.get("displayName") or table_root.attrib.get("name") or "unnamed"
+            table_name = (
+                table_root.attrib.get("displayName") or table_root.attrib.get("name") or "unnamed"
+            )
             for index, column, calculated_formula, totals_formula in formula_columns:
                 column_number = first_column + index
                 if column_number > last_column:
@@ -1278,26 +1320,20 @@ class Workbook:
         return result
 
     @staticmethod
-    def _table_row_count(
-        table_root: ET.Element, attribute: str, *, default: int, part: str
-    ) -> int:
+    def _table_row_count(table_root: ET.Element, attribute: str, *, default: int, part: str) -> int:
         raw = table_root.attrib.get(attribute)
         if raw is None:
             return default
         try:
             value = int(raw)
         except ValueError as error:
-            raise UnsupportedWorkbook(
-                f"table has an invalid {attribute}: {part}"
-            ) from error
+            raise UnsupportedWorkbook(f"table has an invalid {attribute}: {part}") from error
         if value < 0:
             raise UnsupportedWorkbook(f"table has a negative {attribute}: {part}")
         return value
 
     @staticmethod
-    def _table_boolean(
-        table_root: ET.Element, attribute: str, *, default: bool, part: str
-    ) -> bool:
+    def _table_boolean(table_root: ET.Element, attribute: str, *, default: bool, part: str) -> bool:
         raw = table_root.attrib.get(attribute)
         if raw is None:
             return default
@@ -1324,15 +1360,21 @@ class Workbook:
                 if len(children) > 1:
                     raise UnsupportedWorkbook(f"duplicate cell {name} element")
                 if name in {"f", "v"} and children and len(children[0]):
-                    raise UnsupportedWorkbook(f"cell {name} element must not contain child elements")
+                    raise UnsupportedWorkbook(
+                        f"cell {name} element must not contain child elements"
+                    )
             if cell.find(_q("is")) is not None and (
                 cell.find(_q("v")) is not None or cell.find(_q("f")) is not None
             ):
-                raise UnsupportedWorkbook("inline-string payload cannot coexist with a value or formula")
+                raise UnsupportedWorkbook(
+                    "inline-string payload cannot coexist with a value or formula"
+                )
             address = cell.attrib.get("r")
             if not address:
                 # Dropping the cell would lose data without a word.
-                raise UnsupportedWorkbook("a cell has no address; cells placed by position are not read")
+                raise UnsupportedWorkbook(
+                    "a cell has no address; cells placed by position are not read"
+                )
             normalized = _normal_address(address)
             if normalized in result:
                 raise UnsupportedWorkbook(f"duplicate cell address: {normalized}")
@@ -1440,7 +1482,7 @@ class Workbook:
                 cell.remove(child)
         cell.attrib.pop("t", None)
         formula_node = ET.Element(_q("f"))
-        formula_node.text = formula[1:]
+        formula_node.text = _rewrite_ooxml_function_markers(formula[1:], add_markers=True)
         self._insert_cell_child(cell, formula_node, "f")
         self._insert_cell_child(cell, ET.Element(_q("v")), "v")
 
@@ -1501,7 +1543,9 @@ class Workbook:
                     f"cannot safely edit sheet with a grouped formula missing its range: {sheet}"
                 )
             if _in_range(address, reference):
-                raise UnsupportedWorkbook(f"cannot replace grouped formula range at {sheet}!{address}")
+                raise UnsupportedWorkbook(
+                    f"cannot replace grouped formula range at {sheet}!{address}"
+                )
         if current is not None:
             return current
         sheet_data = root.find(_q("sheetData"))
@@ -1509,11 +1553,18 @@ class Workbook:
             raise UnsupportedWorkbook(f"worksheet has no sheetData: {sheet}")
         column = _column_number(address)
         row_number = int(CELL_RE.fullmatch(address).group(2))  # validated above
-        row = next((item for item in sheet_data.findall(_q("row")) if int(item.attrib["r"]) == row_number), None)
+        row = next(
+            (item for item in sheet_data.findall(_q("row")) if int(item.attrib["r"]) == row_number),
+            None,
+        )
         if row is None:
             row = ET.Element(_q("row"), {"r": str(row_number)})
             following = next(
-                (idx for idx, item in enumerate(sheet_data) if int(item.attrib.get("r", "0")) > row_number),
+                (
+                    idx
+                    for idx, item in enumerate(sheet_data)
+                    if int(item.attrib.get("r", "0")) > row_number
+                ),
                 None,
             )
             sheet_data.insert(following if following is not None else len(sheet_data), row)
@@ -1527,7 +1578,9 @@ class Workbook:
             None,
         )
         if following is None:
-            following = next((idx for idx, item in enumerate(row) if item.tag == _q("extLst")), len(row))
+            following = next(
+                (idx for idx, item in enumerate(row) if item.tag == _q("extLst")), len(row)
+            )
         row.insert(following, cell)
         self._cells[sheet][address] = cell
         return cell
@@ -1599,10 +1652,12 @@ class Workbook:
             raise FileExistsError(target)
         target.parent.mkdir(parents=True, exist_ok=True)
         changed: dict[str, bytes] = dict(self._changed_misc)
-        changed.update({
-            part: _serialize_xml(root, self._parts[part], part)
-            for part, root in self._changed_sheets.items()
-        })
+        changed.update(
+            {
+                part: _serialize_xml(root, self._parts[part], part)
+                for part, root in self._changed_sheets.items()
+            }
+        )
         if self._changed_workbook is not None:
             changed[self._workbook_part] = _serialize_xml(
                 self._changed_workbook,

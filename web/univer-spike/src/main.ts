@@ -38,11 +38,26 @@ async function boot() {
   setInterval(showStatus, 250);
   $('undo').onclick = () => adapter.undo();
   $('redo').onclick = () => adapter.redo();
+  $('new').onclick = async () => {
+    try {
+      await adapter.newWorkbook('Sheet1');
+      notices.textContent = '';
+    } catch (error) {
+      notices.textContent = `Could not create workbook: ${String(error)}`;
+    }
+  };
   $('file').onchange = async (event) => {
-    const file = (event.target as HTMLInputElement).files?.[0];
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
     if (file) {
-      host.univerAPI.disposeUnit('forge-workbook');
-      await adapter.open(new Uint8Array(await file.arrayBuffer()), file.name);
+      try {
+        await adapter.open(new Uint8Array(await file.arrayBuffer()), file.name);
+        notices.textContent = '';
+      } catch (error) {
+        notices.textContent = `Could not open ${file.name}: ${String(error)}`;
+      } finally {
+        input.value = '';
+      }
     }
   };
   $('export').onclick = async () => {

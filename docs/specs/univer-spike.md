@@ -1,7 +1,8 @@
 # Univer engine-handoff spike
 
-Status: spike, October 24, 2026. Branch `spike/univer-engine-handoff`. Not a
-product decision; it answers one question.
+Status: prototype, October 24, 2026. Branch `agent/codex-formula-lab`. Not a
+general spreadsheet product; it proves one browser authoring and round-trip
+path over the existing engine.
 
 **Question.** Can Univer OSS (Apache-2.0, `@univerjs/*` 1.2.0) act purely as a
 presentation and editing layer while Forge, running as WASM in a Web Worker,
@@ -9,8 +10,8 @@ is the only calculator and the source of truth?
 
 **Answer: yes, with one specific configuration.** The cell editor and formula
 bar need Univer's formula plugins to be registered. Univer's engine can still
-be kept from calculating, and the spike shows it never calculated and never
-rewrote a value.
+be kept from calculating. The prototype shows it never calculated and never
+rewrote a value; Rust/WASM in a Web Worker owns the workbook state and results.
 
 ## Layout
 
@@ -31,25 +32,31 @@ web/univer-spike/   Univer adapter and demo, using only the command API
   tests/acceptance.spec.ts                  Playwright acceptance suite
 fixtures/univer-spike-chain.xlsx            A1 = 10 and five dependent formulas
 rust/examples/univer_spike_fixture.rs       writes that fixture
+tests/fixtures/sales-bang-boolean.xlsx       legal `!` sheet name and Boolean recovery case
+rust/examples/univer_edge_fixture.rs        writes that recovery fixture
 ```
 
-The demo keeps nothing between sessions and makes no server calls. The fixture
-is inlined at build time, the user may open a local `.xlsx`, and **Export**
-saves the bytes Forge produces. Univer's model is never serialized.
+The demo keeps no workbook session on Railway. The blank-workbook author/edit/
+calculate/export/reopen path uses only static GET requests with no request
+bodies in Playwright. The user may open a local `.xlsx`, and **Export** saves
+the bytes Forge produces. Univer's model is never serialized. This is scoped
+network evidence for the tested path, not a formal privacy audit; remotely
+served JavaScript remains part of the trust boundary.
 
 ## Command API
 
-`open(bytes)`, `snapshot()`, `applyEdits(edits, expectedRevision)`,
-`calculate()` and `export()`. Each returns `{ok: true, value}` or
+`newWorkbook(sheetName)`, `open(bytes)`, `snapshot()`,
+`applyEdits(edits, expectedRevision)`, `calculate()` and `export()`. Each
+returns `{ok: true, value}` or
 `{ok: false, error: {code, message, expected_revision?, current_revision?}}`.
 Revisions are decimal strings. Requests and responses are structured-clone
 plain data, so a Tauri/wry bridge or in-page MCP tools can carry the same
 messages. The worker handles requests in the order they arrive. One worker
 holds one workbook, which is one stateless session.
 
-### Alignment with draft PR #19 (`typescript/`, head 974e0fb, not merged)
+### Alignment with the agent-workbook TypeScript contract
 
-These names and shapes are shared with PR #19: `ExcelError`, `Scalar`
+These names and shapes align with the agent-workbook contract: `ExcelError`, `Scalar`
 (`null | boolean | number | string | ExcelError`), `Address {sheet, address}`,
 and `Edit = Address & ({value} | {formula})`.
 
@@ -64,9 +71,9 @@ Where this API differs, and why:
 | Calculation | `outputs` (bound outputs), `evaluated_cell_count`, diagnostics with counts | `values` for every cell as `Sheet!A1`, `stale`, `diagnostics` | The view needs every formula cell's value, not only bound outputs. |
 | Reads | paged `read` with dependencies | one full `snapshot` | The spike fixture is small. Paging is the obvious next step for large sheets. |
 
-If #19 lands, the adapter can take its `Scalar`/`Address`/`Edit` types from
-there, and the worker can answer `agent-workbook-v1` operations as a second
-message family. The intent is one TypeScript contract, not two.
+The adapter and worker share one TypeScript contract for `Scalar`/`Address`/
+`Edit`. A second agent-workbook message family is not implemented; the local
+MCP host-to-tab round trip remains unproven.
 
 ## WASM contract changes (`rust/src/wasm.rs`)
 
@@ -84,6 +91,34 @@ These are additive. The existing methods are unchanged.
 The logic lives in `rust/src/browser_contract.rs`, which is compiled for every
 target. It is covered natively by `rust/tests/browser_contract.rs` (5 tests)
 and by a `wasm_bindgen_test` in `wasm.rs`. No Cargo dependencies were added.
+
+## Formula Lab and XLOOKUP boundary
+
+The blank-workbook path exercises the formula bar and real grid selection with
+arithmetic, `SUM`, `IF`, `INDEX`/`MATCH`, and `XLOOKUP`. The Rust and Python
+evaluators preserve XLOOKUP's six positional arguments:
+
+```text
+=XLOOKUP(lookup_value, lookup_array, return_array, [if_not_found], [match_mode], [search_mode])
+```
+
+This demo supports an omitted/blank lookup value, one-dimensional row or
+column ranges, exact matching (`match_mode` omitted or `0`), forward or reverse
+linear search (`search_mode` omitted, `1`, or `-1`), and an optional scalar
+`if_not_found` result. Missing middle arguments keep their positions, so a
+reverse search can be written `=XLOOKUP("pear",C1:C3,D1:D3,,,-1)`.
+
+The evaluator currently rejects approximate and wildcard match modes (`-1`,
+`1`, `2`), binary search modes (`2`, `-2`), and multi-cell return arrays. It
+does not project dynamic array results into neighboring worksheet cells.
+Microsoft documents those broader XLOOKUP behaviors, including a return array
+that can produce multiple columns; this prototype must not imply that full
+compatibility. The official syntax and behavior are described in [Microsoft's
+XLOOKUP documentation](https://support.microsoft.com/en-us/excel/functions/xlookup-function).
+
+The OOXML boundary writes `_xlfn.XLOOKUP` and `_xlfn.XMATCH` so Excel recognizes
+newer function names when reopening an export, while both Python and Rust
+workbook models expose normal formula-bar syntax without that package marker.
 
 ## Univer configurations tested
 
@@ -148,7 +183,7 @@ Findings:
 
 `web/univer-spike/tests/acceptance.spec.ts`, headless Chromium (Playwright
 1.64.1 driving system Chromium 156), production build served statically:
-**7 passed**.
+**12 passed**.
 
 For `not-execute` and `load-only`:
 
@@ -170,6 +205,20 @@ For `not-execute` and `load-only`:
    content are all blocked with a visible notice. Sheet shape and revision are
    unchanged. An edit to absent cell H10 is refused by Forge (`absent_cell`)
    and nothing is written.
+9. A blank workbook can be created in the browser, edited through the cell
+   editor, and recalculated by Forge. The test uses mouse range selection for
+   `SUM`, then arithmetic, `IF`, `INDEX`/`MATCH`, and XLOOKUP with a custom
+   not-found value, omitted lookup value, and omitted middle mode arguments in
+   a six-position reverse-search call. Export/reopen through a fresh worker
+   preserves formulas and values. The observed browser requests were GETs with
+   no request bodies.
+10. Switching to an imported workbook whose valid sheet name contains `!`
+    preserves the full sheet name. After Forge rejects an edit to an absent
+    cell, the workbook projection is restored with its Boolean cell still a
+    Boolean, and cells from the previous workbook are gone.
+11. Selecting malformed XLSX bytes displays an `open_failed` notice and keeps
+    the previous workbook, values, and revision visible. These two recovery
+    cases run in both `not-execute` and `load-only` modes.
 
 The control test shows the spy catches Univer's own calculation. The
 `engine-only` and `no-formula-plugins` tests document that no editor is created.
@@ -181,12 +230,12 @@ generator and the tests, never from either engine.
 
 | Part | Raw | Gzip |
 |---|---|---|
-| Main JS (Univer core, sheets, sheets-ui, docs, UI, React, adapter; engine-formula is pulled in by `@univerjs/sheets`) | 6038 KiB | 1635 KiB |
+| Main JS (Univer core, sheets, sheets-ui, docs, UI, React, adapter; engine-formula is pulled in by `@univerjs/sheets`) | 6040 KiB | 1635 KiB |
 | Main CSS | 113 KiB | 17 KiB |
 | Lazy sheets-formula + sheets-formula-ui (JS+CSS) | 220 KiB | 63 KiB |
-| Forge worker JS | 7 KiB | 3 KiB |
-| Forge WASM | 1493 KiB | 466 KiB |
-| **Loaded at startup** | **7872 KiB** | **2183 KiB** |
+| Forge worker JS | 8 KiB | 3 KiB |
+| Forge WASM | 1566 KiB | 486 KiB |
+| **Loaded at startup** | **7947 KiB** | **2203 KiB** |
 | Lazy hyphenation dictionaries (docs; not loaded for en-US) | 4472 KiB | 990 KiB |
 
 Run `npm run build && npm run size` in `web/univer-spike`.
@@ -204,8 +253,10 @@ tools. Vite 7.3.7 (esbuild/rollup) is used instead.
 ## Known limits and next steps
 
 - Imported workbooks still reject edits to absent cells, so typing into an
-  empty cell is refused visibly. A blank-workbook constructor and new-cell
-  insertion remain Rust-side work.
+  empty cell is refused visibly. Blank-workbook authoring can add cells.
+- XLOOKUP has a bounded subset: exact mode, one-dimensional ranges, scalar
+  results, forward/reverse linear search, and optional `if_not_found`. Other
+  match/search modes and array spills remain unsupported.
 - Clearing content (Delete) is blocked rather than translated into blank-value
   edits. It is a small extension if wanted.
 - Projection writes the whole sheet each refresh, which is fine for a spike.

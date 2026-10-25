@@ -8,19 +8,24 @@
       html, body { margin: 0; height: 100%; font: 13px system-ui, sans-serif; }
       #bar { display: flex; gap: 8px; align-items: center; padding: 6px 10px; border-bottom: 1px solid #ddd; }
       #notices { padding: 4px 10px; min-height: 18px; color: #8a1c1c; background: #fff4f4; border-bottom: 1px solid #f1caca; }
-      #app { height: calc(100% - 80px); }
+      #privacy { padding: 4px 10px; color: #365a44; background: #f2faf4; border-bottom: 1px solid #d8eadc; }
+      #formula-support { padding: 4px 10px; color: #4b5563; background: #f7f8fa; border-bottom: 1px solid #e3e5e8; }
+      #app { height: calc(100% - 148px); }
     </style>
   </head>
   <body>
     <div id="bar">
-      <strong>Forge × Univer</strong>
+      <strong>Workbook Forge · Browser demo</strong>
       <label>Mode <select id="mode"></select></label>
+      <button id="new">New workbook</button>
       <input id="file" type="file" accept=".xlsx" />
       <button id="undo">Undo (Forge)</button>
       <button id="redo">Redo (Forge)</button>
       <button id="export">Export .xlsx</button>
       <span id="status"></span>
     </div>
+    <div id="privacy">Workbook data is processed in this browser tab. Opened files are not uploaded by the demo; use Export .xlsx to save a copy.</div>
+    <div id="formula-support">Formula Lab XLOOKUP subset: blank or scalar lookup values, one-dimensional ranges, exact matches, forward/reverse search, and optional if_not_found. Approximate/wildcard/binary modes and multi-cell return arrays are not covered by this demo.</div>
     <div id="notices" role="status" aria-live="polite"></div>
     <div id="app"></div>
     <script type="module" src="/src/main.ts"></script>
