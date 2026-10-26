@@ -3,7 +3,8 @@
 //! Workbook parsing, edits, calculation, and OOXML generation remain in the
 //! shared Rust implementation. The browser owns file selection and saving.
 
-use crate::toolkit::{CalculationReport, Edit, Session, Sheet, WorkbookModel};
+use crate::event_log::Baseline;
+use crate::toolkit::{CalculationReport, Session, Sheet, WorkbookModel};
 use crate::xlsx::{self, ImportedWorkbook};
 use std::collections::BTreeMap;
 use wasm_bindgen::prelude::*;
@@ -21,21 +22,17 @@ impl WorkbookSession {
         }
     }
 
+    fn revision(&self) -> u64 {
+        match self {
+            Self::Imported(workbook) => workbook.revision(),
+            Self::Authored(session) => session.revision(),
+        }
+    }
+
     fn calculate(&self) -> CalculationReport {
         match self {
             Self::Imported(workbook) => workbook.calculate(1),
             Self::Authored(session) => session.calculate(1),
-        }
-    }
-
-    fn apply(&self, edits: Vec<Edit>, expected_revision: u64) -> Result<u64, String> {
-        match self {
-            Self::Imported(workbook) => workbook
-                .apply(edits, Some(expected_revision))
-                .map_err(|error| error.to_string()),
-            Self::Authored(session) => session
-                .apply(edits, Some(expected_revision))
-                .map_err(|error| error.to_string()),
         }
     }
 
@@ -60,6 +57,12 @@ pub struct BrowserWorkbook {
     commands: crate::browser_contract::CommandSession,
 }
 
+impl BrowserWorkbook {
+    fn revision(&self) -> u64 {
+        self.session.revision()
+    }
+}
+
 #[wasm_bindgen]
 impl BrowserWorkbook {
     /// Return the current versioned workbook model as JSON for the browser UI.
@@ -70,50 +73,55 @@ impl BrowserWorkbook {
 
     /// Apply a bounded JSON edit array at an expected revision. Imported files
     /// keep their source-cell guard; authored workbooks may add new cells.
+    /// Logged as an `edits` intent from source `api`.
     #[wasm_bindgen(js_name = applyEditsJson)]
     pub fn apply_edits_json(
         &self,
         edits_json: &str,
         expected_revision: u64,
     ) -> Result<u64, JsValue> {
-        if edits_json.len() > crate::agent::MAX_REQUEST_BYTES {
-            return Err(JsValue::from_str("edit payload exceeds 1 MiB"));
-        }
-        crate::model::screen_json_text(edits_json).map_err(js_error)?;
-        let edits: Vec<Edit> = serde_json::from_str(edits_json).map_err(js_error)?;
-        self.session
-            .apply(edits, expected_revision)
-            .map_err(js_error)
+        let expected = expected_revision.to_string();
+        let result = match &self.session {
+            WorkbookSession::Imported(workbook) => self
+                .commands
+                .apply_edits_logged_result(workbook, edits_json, &expected),
+            WorkbookSession::Authored(session) => self
+                .commands
+                .apply_edits_logged_result(session, edits_json, &expected),
+        };
+        result.map_err(|error| JsValue::from_str(&format!("{}: {}", error.code, error.message)))
     }
 
     /// The current revision as a decimal string, so hosts never need `BigInt`.
     #[wasm_bindgen(js_name = revisionString)]
     pub fn revision_string(&self) -> String {
-        self.session.snapshot().revision.to_string()
+        self.revision().to_string()
     }
 
     /// Apply edits at a decimal-string revision and return a JSON envelope:
     /// `{"ok":true,"revision":"N"}` or
     /// `{"ok":false,"error":{"code","message","expected_revision","current_revision"}}`.
-    /// This never throws for a rejected edit.
+    /// This never throws for a rejected edit. Logged as an `api` intent.
     #[wasm_bindgen(js_name = applyEditsResultJson)]
     pub fn apply_edits_result_json(&self, edits_json: &str, expected_revision: &str) -> String {
         match &self.session {
-            WorkbookSession::Imported(workbook) => crate::browser_contract::apply_edits_envelope(
-                workbook,
-                edits_json,
-                expected_revision,
-            ),
+            WorkbookSession::Imported(workbook) => {
+                self.commands
+                    .apply_edits_logged(workbook, edits_json, expected_revision)
+            }
             WorkbookSession::Authored(session) => {
-                apply_authored_edits_envelope(session, edits_json, expected_revision)
+                self.commands
+                    .apply_edits_logged(session, edits_json, expected_revision)
             }
         }
     }
 
     /// Apply one command envelope (`{"v":1,"command_id",...,"op":{"type":
-    /// "set_cells","edits":[...]}}`), calculate, and return the delta response
+    /// "set_cells","edits":[...]}}`, or `{"type":"undo"|"redo","target"?}`),
+    /// calculate, log, and return the delta response
     /// `{"v":1,"command_id","status","revision","previous_revision","changed",
-    /// "evaluated_cells","diagnostics","duplicate"[,"error"]}`. Never throws.
+    /// "evaluated_cells","diagnostics","duplicate","event_id"[,"error"]}`.
+    /// Never throws.
     #[wasm_bindgen(js_name = applyAndCalculateJson)]
     pub fn apply_and_calculate_json(&self, envelope_json: &str) -> String {
         match &self.session {
@@ -124,6 +132,41 @@ impl BrowserWorkbook {
                 self.commands.apply_and_calculate(session, envelope_json)
             }
         }
+    }
+
+    /// As `applyAndCalculateJson`, for `{"envelope":{...},"command":{"source",
+    /// "univer"}}` so the log records where the intent came from.
+    #[wasm_bindgen(js_name = submitJson)]
+    pub fn submit_json(&self, request_json: &str) -> String {
+        match &self.session {
+            WorkbookSession::Imported(workbook) => self.commands.submit(workbook, request_json),
+            WorkbookSession::Authored(session) => self.commands.submit(session, request_json),
+        }
+    }
+
+    /// Write the log's `session.opened` event (once per workbook). `engine_json`
+    /// is merged into the engine info, e.g. `{"wasm_sha256":"..."}`.
+    #[wasm_bindgen(js_name = startLog)]
+    pub fn start_log(&self, name: &str, engine_json: &str) {
+        let engine = serde_json::from_str(engine_json).unwrap_or(serde_json::Value::Null);
+        let name = (!name.is_empty()).then_some(name);
+        self.commands.start_log(name, engine, self.revision());
+    }
+
+    /// `{"events":[...],"next_seq":N,"total":T}`: events from `from_seq`.
+    #[wasm_bindgen(js_name = logJson)]
+    pub fn log_json(&self, from_seq: u32, limit: u32) -> String {
+        self.commands
+            .log_page(from_seq as usize, limit as usize)
+            .to_string()
+    }
+
+    /// Append `session.exported` (with the exported bytes' sha256) and return
+    /// the whole log as NDJSON.
+    #[wasm_bindgen(js_name = exportLogNdjson)]
+    pub fn export_log_ndjson(&self, xlsx_sha256: &str) -> String {
+        let sha = (!xlsx_sha256.is_empty()).then_some(xlsx_sha256);
+        self.commands.export_log_ndjson(self.revision(), sha)
     }
 
     /// Calculate the current workbook and return the existing report contract.
@@ -139,60 +182,16 @@ impl BrowserWorkbook {
     }
 }
 
-fn apply_authored_edits_envelope(
-    session: &Session,
-    edits_json: &str,
-    expected_revision: &str,
-) -> String {
-    use crate::browser_contract::{ContractError, error_json, parse_revision};
-
-    let failure = |error: ContractError| error_json(&error);
-    if edits_json.len() > crate::agent::MAX_REQUEST_BYTES {
-        return failure(ContractError::new(
-            "invalid_request",
-            "edit payload exceeds 1 MiB",
-        ));
-    }
-    let expected = match parse_revision(expected_revision) {
-        Ok(revision) => revision,
-        Err(error) => return failure(error),
-    };
-    if let Err(error) = crate::model::screen_json_text(edits_json) {
-        return failure(ContractError::new("invalid_request", error.to_string()));
-    }
-    let edits: Vec<Edit> = match serde_json::from_str(edits_json) {
-        Ok(edits) => edits,
-        Err(error) => return failure(ContractError::new("invalid_request", error.to_string())),
-    };
-    let current = session.snapshot().revision;
-    if current != expected {
-        let mut error = ContractError::new("revision_conflict", "expected revision does not match");
-        error.expected_revision = Some(expected.to_string());
-        error.current_revision = Some(current.to_string());
-        return failure(error);
-    }
-    match session.apply(edits, Some(expected)) {
-        Ok(revision) => {
-            serde_json::json!({"ok": true, "revision": revision.to_string()}).to_string()
-        }
-        Err(error) => {
-            let current = session.snapshot().revision;
-            let mut contract_error = ContractError::new(error.code, error.message);
-            contract_error.expected_revision = Some(expected.to_string());
-            contract_error.current_revision = Some(current.to_string());
-            failure(contract_error)
-        }
-    }
-}
-
 /// Open caller-selected `.xlsx` bytes without uploading or retaining a path.
 #[wasm_bindgen(js_name = openXlsx)]
 pub fn open_xlsx(bytes: &[u8]) -> Result<BrowserWorkbook, JsValue> {
     let imported =
         xlsx::import_xlsx_bytes(bytes, BTreeMap::new(), BTreeMap::new()).map_err(js_error)?;
+    let commands = crate::browser_contract::CommandSession::new();
+    commands.set_baseline(Baseline::xlsx("workbook.xlsx", bytes));
     Ok(BrowserWorkbook {
         session: WorkbookSession::Imported(imported),
-        commands: crate::browser_contract::CommandSession::new(),
+        commands,
     })
 }
 
@@ -202,10 +201,27 @@ pub fn create_blank_workbook(sheet_name: &str) -> Result<BrowserWorkbook, JsValu
     let mut model = WorkbookModel::default();
     model.sheets.push(Sheet::new(sheet_name));
     let session = Session::new(model).map_err(js_error)?;
+    let commands = crate::browser_contract::CommandSession::new();
+    commands.set_baseline(Baseline::blank(sheet_name));
     Ok(BrowserWorkbook {
         session: WorkbookSession::Authored(session),
-        commands: crate::browser_contract::CommandSession::new(),
+        commands,
     })
+}
+
+/// Lowercase hex SHA-256 of `bytes` (baseline and export hashes).
+#[wasm_bindgen(js_name = sha256Hex)]
+pub fn sha256_hex(bytes: &[u8]) -> String {
+    crate::event_log::sha256_hex(bytes)
+}
+
+/// `replay(baselineBytes, events)`: verify the baseline sha256, reapply every
+/// applied intent in seq order and check every calc event's deltas. `events`
+/// is NDJSON or a JSON array. Returns `{"ok":true,"revision","snapshot",
+/// "values","calc_events",...}` or `{"ok":false,"error":{...}}`; never throws.
+#[wasm_bindgen(js_name = replayJson)]
+pub fn replay_json(bytes: &[u8], events: &str) -> String {
+    crate::event_log::replay_json(bytes, events)
 }
 
 #[cfg(test)]

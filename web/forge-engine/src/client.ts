@@ -3,7 +3,10 @@
 
 import type {
   CommandEnvelope,
+  CommandMeta,
   Edit,
+  EventMessage,
+  LogEvent,
   CommandName,
   Commands,
   PatchEvent,
@@ -28,6 +31,7 @@ export class ForgeClient {
   private nextId = 1;
   private pending = new Map<number, (response: ResponseMessage) => void>();
   private patchListeners = new Set<(patch: PatchEvent) => void>();
+  private eventListeners = new Set<(event: LogEvent) => void>();
   /** Every command sent and how it ended; hosts may audit it. */
   readonly log: CommandLogEntry[] = [];
 
@@ -35,10 +39,14 @@ export class ForgeClient {
 
   constructor(port: Port) {
     this.port = port;
-    port.addEventListener('message', (event: MessageEvent<ResponseMessage | PatchEvent>) => {
+    port.addEventListener('message', (event: MessageEvent<ResponseMessage | PatchEvent | EventMessage>) => {
       const data = event.data;
       if ('type' in data && data.type === 'patch') {
         for (const listener of this.patchListeners) listener(data);
+        return;
+      }
+      if ('type' in data && data.type === 'event') {
+        for (const listener of this.eventListeners) listener(data.event);
         return;
       }
       const response = data as ResponseMessage;
@@ -64,9 +72,9 @@ export class ForgeClient {
   }
 
   /** Open .xlsx bytes. The bytes are copied, so the caller keeps its buffer. */
-  open(bytes: Uint8Array) {
+  open(bytes: Uint8Array, name?: string) {
     const copy = bytes.slice();
-    return this.send('open', { bytes: copy }, [copy.buffer]);
+    return this.send('open', name === undefined ? { bytes: copy } : { bytes: copy, name }, [copy.buffer]);
   }
   newWorkbook(sheetName = 'Sheet1') {
     return this.send('newWorkbook', { sheetName });
@@ -80,12 +88,31 @@ export class ForgeClient {
   calculate() {
     return this.send('calculate', {});
   }
-  export() {
-    return this.send('export', {});
+  /** Export the Forge XLSX; with includeLog also the session log as NDJSON. */
+  export(options: { includeLog?: boolean } = {}) {
+    return this.send('export', options.includeLog ? { includeLog: true } : {});
   }
-  /** Apply one command envelope and calculate; answers with the delta. */
-  applyAndCalculate(envelope: CommandEnvelope) {
-    return this.send('applyAndCalculate', { envelope });
+  /** Apply one command envelope and calculate; answers with the delta. Logged. */
+  applyAndCalculate(envelope: CommandEnvelope, command?: CommandMeta) {
+    return this.send('applyAndCalculate', command ? { envelope, command } : { envelope });
+  }
+  /** Read the session event log from fromSeq. */
+  readLog(fromSeq = 0, limit = 1000) {
+    return this.send('log', { fromSeq, limit });
+  }
+  /** Stream every new log event to onEvent listeners (events:true). */
+  subscribe(options: { events: boolean }) {
+    return this.send('subscribe', { events: options.events });
+  }
+  /** Replay a log onto its baseline bytes (sha256-checked); a mismatch is an error. */
+  replay(baseline: Uint8Array, events: string | LogEvent[]) {
+    const copy = baseline.slice();
+    return this.send('replay', { baseline: copy, events }, [copy.buffer]);
+  }
+  /** Log events, after subscribe({events:true}). */
+  onEvent(listener: (event: LogEvent) => void): () => void {
+    this.eventListeners.add(listener);
+    return () => this.eventListeners.delete(listener);
   }
   /** Subscribe to patches the worker broadcasts after each applied command. */
   onPatch(listener: (patch: PatchEvent) => void): () => void {

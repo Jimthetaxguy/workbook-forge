@@ -7,8 +7,11 @@
 // open() still pulls a full snapshot + calculation; each edit after that is one
 // envelope round-trip that answers with only the cells that changed.
 //
-// Undo/redo never replays Univer mutations: the adapter keeps its own history
-// of Forge edits and applies the inverse edits at the expected revision.
+// Undo/redo never replays Univer mutations and keeps no history here: Ctrl+Z
+// sends an `undo` intent to the worker, which reverts this actor's latest
+// applied, not-undone intent from its event log (or refuses with
+// undo_conflict when someone changed those cells since). Revisions only move
+// forward.
 
 import {
   CellValueType,
@@ -27,7 +30,9 @@ import type {
   CalculatedValue,
   ChangedCell,
   CommandEnvelope,
+  CommandMeta,
   Edit,
+  HistoryOp,
   PatchEvent,
   Scalar,
   ForgeClient,
@@ -78,12 +83,6 @@ export interface Audit {
   routed: string[];
   /** Recent command/operation ids (debug trace, capped). */
   trace: string[];
-}
-
-interface HistoryEntry {
-  label: string;
-  forward: Edit[];
-  inverse: Edit[];
 }
 
 type Projected = { value: Scalar; f?: string };
@@ -140,10 +139,11 @@ export class ForgeUniverAdapter {
   /** One per tab; client_seq counts this tab's envelopes. */
   readonly clientId: string = crypto.randomUUID();
   private clientSeq = 0;
-  private undoStack: HistoryEntry[] = [];
-  private redoStack: HistoryEntry[] = [];
+  /** performance.now() when Univer last committed a cell edit (routed to Forge). */
+  lastCommitAt = 0;
+  /** performance.now() when the last Forge response was written into Univer. */
+  lastPaintAt = 0;
   private projected = new Map<string, Projected>();
-  private snapshotCells = new Map<string, { value: Scalar; formula?: string }>();
   private sheetIds = new Map<string, string>();
   private projecting = false;
   private queue: Promise<unknown> = Promise.resolve();
@@ -169,7 +169,7 @@ export class ForgeUniverAdapter {
 
   /** Open .xlsx bytes in Forge and project them into a fresh Univer workbook. */
   async open(bytes: Uint8Array, name = 'Workbook'): Promise<void> {
-    const opened = await this.client.open(bytes);
+    const opened = await this.client.open(bytes, name);
     if (!opened.ok) throw new Error(`${opened.error.code}: ${opened.error.message}`);
     await this.projectCurrentWorkbook(name);
   }
@@ -185,8 +185,6 @@ export class ForgeUniverAdapter {
     const snapshot = await this.client.snapshot();
     if (!snapshot.ok) throw new Error(`${snapshot.error.code}: ${snapshot.error.message}`);
     this.revision = snapshot.value.revision;
-    this.undoStack = [];
-    this.redoStack = [];
     this.projected.clear();
     this.sheetIds.clear();
     const calculated = await this.client.calculate();
@@ -226,7 +224,6 @@ export class ForgeUniverAdapter {
     } finally {
       this.projecting = false;
     }
-    this.remember(snapshot.value);
   }
 
   /** Export the Forge workbook. Univer's model is never serialized. */
@@ -237,42 +234,24 @@ export class ForgeUniverAdapter {
     return result.value.bytes;
   }
 
-  get canUndo() {
-    return this.undoStack.length > 0;
-  }
-
   /** Wait until every routed edit has been applied and projected. */
   idle(): Promise<unknown> {
     return this.queue;
   }
 
+  /** Undo this tab's latest applied, not-undone intent (worker-side history). */
   undo() {
-    return this.enqueue(async () => {
-      const entry = this.undoStack.pop();
-      if (!entry) return this.notice('Nothing to undo.');
-      if (await this.applyToForge(entry.inverse, `undo ${entry.label}`)) this.redoStack.push(entry);
-      else this.undoStack.push(entry);
-    });
+    return this.enqueue(() => this.history('undo'));
   }
 
+  /** Redo this tab's latest undo (worker-side history). */
   redo() {
-    return this.enqueue(async () => {
-      const entry = this.redoStack.pop();
-      if (!entry) return this.notice('Nothing to redo.');
-      if (await this.applyToForge(entry.forward, `redo ${entry.label}`)) this.undoStack.push(entry);
-      else this.redoStack.push(entry);
-    });
+    return this.enqueue(() => this.history('redo'));
   }
 
   /** Route user edits (sheet name + A1) through Forge. */
-  edit(edits: Edit[], label = 'edit') {
-    return this.enqueue(async () => {
-      const inverse = edits.map((edit) => this.inverseOf(edit));
-      if (await this.applyToForge(edits, label)) {
-        this.undoStack.push({ label, forward: edits, inverse });
-        this.redoStack = [];
-      }
-    });
+  edit(edits: Edit[], label = 'edit', command: CommandMeta = { source: 'api' }) {
+    return this.enqueue(() => this.applyToForge({ type: 'set_cells', edits }, label, command));
   }
 
   /** Cells whose Univer value or formula differs from the last projection. */
@@ -343,13 +322,11 @@ export class ForgeUniverAdapter {
     this.onNotice(text);
   }
 
-  private inverseOf(edit: Edit): Edit {
-    const prior = this.snapshotCells.get(`${edit.sheet}!${edit.address}`);
-    if (prior?.formula !== undefined) return { sheet: edit.sheet, address: edit.address, formula: prior.formula };
-    return { sheet: edit.sheet, address: edit.address, value: prior?.value ?? null };
+  private async history(type: HistoryOp['type']) {
+    await this.applyToForge({ type, target: null }, type, { source: 'history', univer: `univer.command.${type}` });
   }
 
-  private envelope(edits: Edit[]): CommandEnvelope {
+  private envelope(op: CommandEnvelope['op']): CommandEnvelope {
     this.clientSeq += 1;
     return {
       v: 1,
@@ -361,14 +338,16 @@ export class ForgeUniverAdapter {
       base_revision: this.revision,
       mode: 'strict',
       preconditions: [],
-      op: { type: 'set_cells', edits },
+      op,
     };
   }
 
-  private async applyToForge(edits: Edit[], label: string): Promise<boolean> {
-    const result = await this.client.applyAndCalculate(this.envelope(edits));
+  private async applyToForge(op: CommandEnvelope['op'], label: string, command: CommandMeta): Promise<boolean> {
+    const result = await this.client.applyAndCalculate(this.envelope(op), command);
     if (!result.ok) {
       const e = result.error;
+      if (e.code === 'nothing_to_undo') return (this.notice('Nothing to undo.'), false);
+      if (e.code === 'nothing_to_redo') return (this.notice('Nothing to redo.'), false);
       const revisions = e.current_revision ? ` (expected r${e.expected_revision}, Forge at r${e.current_revision})` : '';
       this.notice(`Forge rejected ${label}: ${e.code}: ${e.message}${revisions}`);
       this.reprojectAll();
@@ -377,7 +356,9 @@ export class ForgeUniverAdapter {
     this.revision = result.value.revision;
     // Repaint the delta, plus the edited cells so any editor residue in Univer
     // is overwritten even when Forge reports no change for them.
-    this.applyChanged(result.value.changed, edits.map((edit) => `${edit.sheet}!${edit.address}`));
+    const edited = op.type === 'set_cells' ? op.edits.map((edit) => `${edit.sheet}!${edit.address}`) : [];
+    this.applyChanged(result.value.changed, edited);
+    this.lastPaintAt = performance.now();
     return true;
   }
 
@@ -411,7 +392,6 @@ export class ForgeUniverAdapter {
       const value = scalar(cell.value);
       const data = toCellData(value, formula);
       this.projected.set(key, { value, f: formula });
-      this.snapshotCells.set(key, formula !== undefined ? { value: null, formula } : { value });
       repaint.delete(key);
       put(cell.sheet, cell.address, data);
     }
@@ -434,17 +414,9 @@ export class ForgeUniverAdapter {
     return [snapshot.value, calc.value.values];
   }
 
-  private remember(snapshot: Snapshot) {
-    this.snapshotCells.clear();
-    for (const sheet of snapshot.sheets) {
-      for (const [address, cell] of Object.entries(sheet.cells)) this.snapshotCells.set(`${sheet.name}!${address}`, cell);
-    }
-  }
-
   /** Pull Forge's state and write every changed cell into Univer. */
   private async refresh() {
     const [snapshot, calc] = await this.read();
-    this.remember(snapshot);
     const bySheet = new Map<string, Record<number, Record<number, ICellData>>>();
     const diverged = new Set(this.divergenceEntries().map(({ key }) => key));
     for (const sheet of snapshot.sheets) {
@@ -527,7 +499,8 @@ export class ForgeUniverAdapter {
         this.block(id, edits);
       }
       this.audit.routed.push(id);
-      void this.edit(edits, 'cell edit');
+      this.lastCommitAt = performance.now();
+      void this.edit(edits, 'cell edit', { source: 'editor', univer: id });
       throw new CustomCommandExecutionError(`${id} routed to Forge`);
     }
     if (VIEW_COMMANDS.has(id)) return;
