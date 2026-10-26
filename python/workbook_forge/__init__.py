@@ -3264,7 +3264,7 @@ def _function(
             floored = math.floor(float(serial))
         except (OverflowError, ValueError):
             return ErrorValue("#NUM!", "date serial is outside supported range")
-        # Excel displays serial 0 as 1900-01-00, a non-existent date.
+        # Engine's serial-0 profile (MONTH 1, DAY 0, YEAR 1900), not an Excel observation.
         if floored == 0:
             return {"MONTH": 1, "DAY": 0, "YEAR": 1900}[name]
         try:

@@ -28,7 +28,6 @@ from .toolkit import WorkbookModel
 from .xlsx import export_xlsx, import_xlsx
 from .workbook import WorkbookError
 
-VERSION = 2
 FUNCTIONS_BY_VERSION = {
     2: ("SUM",),
     3: ("SUM", "IF", "IFERROR"),
@@ -37,7 +36,6 @@ FUNCTIONS_BY_VERSION = {
     6: ("SUM", "IF", "IFERROR", "AVERAGE", "XLOOKUP"),
 }
 SOURCE_FUNCTIONS = FUNCTIONS_BY_VERSION[6]
-CURRENT_VERSION = 6
 MAX_SOURCE_BYTES = MAX_ARTIFACT_BYTES
 MAX_EDGES = 100000
 ERRORS = {"#DIV/0!", "#VALUE!", "#REF!", "#NAME?", "#NUM!", "#N/A", "#CALC!", "#NULL!", "#SPILL!"}
@@ -97,21 +95,6 @@ def scalar_value(node):
     if node.kind == "error":
         return {"error": node.value}
     return node.value
-
-
-def ref_parts(value, sheet):
-    if "!" in value:
-        prefix, address = value.rsplit("!", 1)
-        name = prefix[1:-1].replace("''", "'") if prefix.startswith("'") and prefix.endswith("'") else prefix
-        if name != sheet:
-            fail("unsupported_reference", "cross-sheet/external references need a later source profile")
-    else:
-        address = value
-    try:
-        ref = CellReference.parse(address)
-    except ValueError as error:
-        raise SourceDiagnostic("invalid_reference", str(error)) from error
-    return ref
 
 
 def sheet_prefix(name):
@@ -194,7 +177,7 @@ def validate(program):
         WorkbookModel(sheets=list(program.sheets) if program.sheets else [program.sheet])
     except ValueError as error:
         raise SourceDiagnostic("invalid_reference", "invalid worksheet name") from error
-    if program.version not in {2, 3, 4, 5, 6} or (program.version == 2 and program.sheets):
+    if program.version == 2 and program.sheets:
         fail("unsupported_version", "unknown source profile/sheet contract")
     if program.version >= 3 and (not program.sheets or program.sheet != program.sheets[0]):
         fail("invalid_reference", "profile v3 requires ordered worksheet identities")
@@ -356,12 +339,8 @@ def from_excel(node, sheet, depth=1, version=2):
         if name == "SUM":
             return Node("sum_values", args=children())
         if name == "AVERAGE":
-            if version < 5:
-                fail("unsupported_formula", "AVERAGE requires source profile v5")
             return Node("average_values", args=children())
         if name == "XLOOKUP":
-            if version < 6:
-                fail("unsupported_formula", "XLOOKUP requires source profile v6")
             args = children()
             if not 3 <= len(args) <= 6:
                 fail("unsupported_formula", "XLOOKUP requires three through six positional arguments")
@@ -373,7 +352,7 @@ def from_excel(node, sheet, depth=1, version=2):
             if name == "IFERROR" and len(args)==2:
                 return Node("if_error", args=args)
             fail("unsupported_formula", "invalid lazy selection arity")
-    fail("unsupported_formula", f"source profile v2 cannot lower {node.kind}:{node.value}")
+    fail("unsupported_formula", f"source profile v{version} cannot lower {node.kind}:{node.value}")
 
 
 def quote(value):
