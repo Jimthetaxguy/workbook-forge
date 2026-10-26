@@ -26,15 +26,31 @@ web/forge-engine/   headless package: Forge WASM in a Web Worker behind a typed
   build-wasm.sh     cargo build --target wasm32 + wasm-bindgen (version pinned
                     to rust/Cargo.lock)
 web/univer-spike/   Univer adapter and demo, using only the command API
-  src/adapter.ts    command interception, projection, Forge-backed undo/redo,
-                    and an audit of Univer calculation and writes
+  src/adapter.ts    command interception, projection, undo/redo sent to the
+                    worker as intents, and an audit of Univer calculation
+                    and writes
   src/univer-host.ts / formula-plugins.ts   the configurations compared below
   tests/acceptance.spec.ts                  Playwright acceptance suite
 fixtures/univer-spike-chain.xlsx            A1 = 10 and five dependent formulas
-rust/examples/univer_spike_fixture.rs       writes that fixture
+fixtures/realtime-chain.xlsx                event-log fixture: as above, but B1 = 0 literal
+rust/examples/univer_spike_fixture.rs       writes both fixtures (--realtime for the second)
+rust/src/event_log.rs                       session event log v1, log-based undo/redo, replay
 tests/fixtures/sales-bang-boolean.xlsx       legal `!` sheet name and Boolean recovery case
 rust/examples/univer_edge_fixture.rs        writes that recovery fixture
 ```
+
+**Event log (v1).** The worker session keeps an append-only, memory-only log
+(`rust/src/event_log.rs`, sequenced under the same lock that assigns
+revisions): `session.opened` (baseline name, sha256, bytes, engine), one
+`intent` per command (actor, base, `applied`/`rejected` with the error code,
+revision, per-cell `before`/`after`) and one `calc` per applied intent
+(`[key, before, after]` deltas for formula cells). The command API adds `log
+{fromSeq}`, `subscribe {events:true}`, `export {includeLog:true}` (NDJSON
+ending in `session.exported`) and `replay(baseline, events)`, which checks the
+baseline sha256 and that every recorded delta is reproduced. Undo/redo are
+intents too: Ctrl+Z undoes this actor's own latest applied, not-undone intent
+and is refused with `undo_conflict` (naming the cells and the overwriting
+event) if those cells changed since.
 
 The demo keeps no workbook session on Railway. The blank-workbook author/edit/
 calculate/export/reopen path uses only static GET requests with no request

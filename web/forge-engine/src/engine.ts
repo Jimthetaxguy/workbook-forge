@@ -2,11 +2,21 @@
 // worker.ts; a WebView shell or a test can call it in-process. It owns at most
 // one BrowserWorkbook (one stateless session); nothing is persisted and no
 // network call is made.
+//
+// The session's event log (schema v1) lives in Rust next to the revision
+// counter (rust/src/event_log.rs), so log order = revision order = patch
+// order. This class only reads it out: `log`, `subscribe {events:true}` and
+// `export {includeLog:true}`.
 
 import type {
   CalculatedValue,
   Calculation,
+  CommandMeta,
   Edit,
+  EventMessage,
+  LogEvent,
+  LogPage,
+  ReplayResult,
   Scalar,
   CommandEnvelope,
   CommandName,
@@ -25,6 +35,8 @@ import type {
 export interface ForgeWasm {
   openXlsx(bytes: Uint8Array): ForgeWorkbook;
   createBlankWorkbook(sheetName: string): ForgeWorkbook;
+  sha256Hex?(bytes: Uint8Array): string;
+  replayJson?(bytes: Uint8Array, events: string): string;
 }
 
 export interface ForgeWorkbook {
@@ -32,9 +44,18 @@ export interface ForgeWorkbook {
   revisionString(): string;
   applyEditsResultJson(editsJson: string, expectedRevision: string): string;
   applyAndCalculateJson(envelopeJson: string): string;
+  submitJson(requestJson: string): string;
+  startLog(name: string, engineJson: string): void;
+  logJson(fromSeq: number, limit: number): string;
+  exportLogNdjson(xlsxSha256: string): string;
   calculateJson(): string;
   exportXlsx(): Uint8Array;
   free(): void;
+}
+
+export interface EngineOptions {
+  /** sha256 of the loaded .wasm, recorded in session.opened. */
+  wasmSha256?: string | null;
 }
 
 const fail = (code: string, message: string, extra: Partial<EngineError> = {}): Result<never> => ({
@@ -61,13 +82,28 @@ function toRustEdits(edits: Edit[]) {
   });
 }
 
+/** Forge model JSON -> protocol snapshot sheets. */
+function toSheets(raw: { sheets: { name: string; cells?: Record<string, never> }[] }): SnapshotSheet[] {
+  return raw.sheets.map((sheet) => ({
+    name: sheet.name,
+    cells: Object.fromEntries(Object.entries(sheet.cells ?? {}).map(([a, c]) => [a, toCell(c)])),
+  }));
+}
+
 export class ForgeEngine {
   private workbook: ForgeWorkbook | null = null;
+  private workbookName = 'workbook';
   private patches: PatchEvent[] = [];
+  private events: EventMessage[] = [];
+  private eventsSubscribed = false;
+  /** Next log seq not yet streamed to subscribers. */
+  private streamedSeq = 0;
   private readonly wasm: ForgeWasm;
+  private readonly options: EngineOptions;
 
-  constructor(wasm: ForgeWasm) {
+  constructor(wasm: ForgeWasm, options: EngineOptions = {}) {
     this.wasm = wasm;
+    this.options = options;
   }
 
   handle<K extends CommandName>(request: RequestMessage<K>): ResponseMessage<K> {
@@ -77,13 +113,46 @@ export class ForgeEngine {
     } catch (error) {
       result = fail('engine_error', messageOf(error));
     }
+    if (this.eventsSubscribed) this.collectEvents();
     return { id: request.id, command: request.command, result } as ResponseMessage<K>;
+  }
+
+  /**
+   * Log events appended since the last drain, for clients that subscribed with
+   * events:true. The transport posts them after the response and patches.
+   */
+  drainEvents(): EventMessage[] {
+    const out = this.events;
+    this.events = [];
+    return out;
+  }
+
+  private collectEvents() {
+    const wb = this.workbook;
+    if (!wb) return;
+    for (;;) {
+      const page = JSON.parse(wb.logJson(this.streamedSeq, 1000)) as { events: LogEvent[]; next_seq: number };
+      for (const event of page.events) this.events.push({ type: 'event', event });
+      if (page.next_seq === this.streamedSeq) return;
+      this.streamedSeq = page.next_seq;
+    }
+  }
+
+  /** A new workbook starts a new log at seq 0. */
+  private adopt(next: ForgeWorkbook, name: string) {
+    this.workbook?.free();
+    this.workbook = next;
+    this.workbookName = name;
+    this.streamedSeq = 0;
+    next.startLog(name, JSON.stringify({ wasm_sha256: this.options.wasmSha256 ?? null }));
   }
 
   private dispatch(command: CommandName, args: unknown): Result<unknown> {
     switch (command) {
-      case 'open':
-        return this.open((args as Commands['open']['args']).bytes);
+      case 'open': {
+        const { bytes, name } = args as Commands['open']['args'];
+        return this.open(bytes, name);
+      }
       case 'newWorkbook':
         return this.newWorkbook((args as Commands['newWorkbook']['args']).sheetName);
       case 'snapshot':
@@ -94,11 +163,27 @@ export class ForgeEngine {
       }
       case 'calculate':
         return this.withWorkbook((wb) => this.calculate(wb));
-      case 'export':
-        return this.withWorkbook((wb) => ({ ok: true, value: { bytes: wb.exportXlsx() } }));
+      case 'export': {
+        const includeLog = Boolean((args as Commands['export']['args'] | undefined)?.includeLog);
+        return this.withWorkbook((wb) => this.exportWorkbook(wb, includeLog));
+      }
       case 'applyAndCalculate': {
-        const { envelope } = args as Commands['applyAndCalculate']['args'];
-        return this.withWorkbook((wb) => this.applyAndCalculate(wb, envelope));
+        const { envelope, command } = args as Commands['applyAndCalculate']['args'];
+        return this.withWorkbook((wb) => this.applyAndCalculate(wb, envelope, command));
+      }
+      case 'log': {
+        const { fromSeq, limit } = args as Commands['log']['args'];
+        return this.withWorkbook((wb) => this.readLog(wb, fromSeq, limit));
+      }
+      case 'subscribe': {
+        const { events } = args as Commands['subscribe']['args'];
+        if (events && !this.eventsSubscribed) this.streamedSeq = 0;
+        this.eventsSubscribed = Boolean(events);
+        return { ok: true, value: { events: this.eventsSubscribed } };
+      }
+      case 'replay': {
+        const { baseline, events } = args as Commands['replay']['args'];
+        return this.replay(baseline, events);
       }
       default:
         return fail('unknown_command', `unknown command ${String(command)}`);
@@ -109,7 +194,7 @@ export class ForgeEngine {
     return this.workbook ? fn(this.workbook) : fail('no_workbook', 'open a workbook first');
   }
 
-  private open(bytes: Uint8Array): Result<Commands['open']['result']> {
+  private open(bytes: Uint8Array, name = 'workbook.xlsx'): Result<Commands['open']['result']> {
     if (!(bytes instanceof Uint8Array)) return fail('invalid_request', 'open needs Uint8Array bytes');
     let next: ForgeWorkbook;
     try {
@@ -117,8 +202,7 @@ export class ForgeEngine {
     } catch (error) {
       return fail('open_failed', messageOf(error));
     }
-    this.workbook?.free();
-    this.workbook = next;
+    this.adopt(next, typeof name === 'string' && name ? name : 'workbook.xlsx');
     const snapshot = this.snapshot(next);
     return { ok: true, value: { revision: next.revisionString(), sheets: snapshot.value.sheets.map((s) => s.name) } };
   }
@@ -133,19 +217,49 @@ export class ForgeEngine {
     } catch (error) {
       return fail('create_failed', messageOf(error));
     }
-    this.workbook?.free();
-    this.workbook = next;
+    this.adopt(next, sheetName);
     const snapshot = this.snapshot(next);
     return { ok: true, value: { revision: next.revisionString(), sheets: snapshot.value.sheets.map((s) => s.name) } };
   }
 
   private snapshot(wb: ForgeWorkbook): { ok: true; value: Snapshot } {
     const raw = JSON.parse(wb.snapshotJson()) as { sheets: { name: string; cells: Record<string, never> }[] };
-    const sheets: SnapshotSheet[] = raw.sheets.map((sheet) => ({
-      name: sheet.name,
-      cells: Object.fromEntries(Object.entries(sheet.cells ?? {}).map(([a, c]) => [a, toCell(c)])),
-    }));
-    return { ok: true, value: { revision: wb.revisionString(), sheets } };
+    return { ok: true, value: { revision: wb.revisionString(), sheets: toSheets(raw) } };
+  }
+
+  private exportWorkbook(wb: ForgeWorkbook, includeLog: boolean): Result<Commands['export']['result']> {
+    const bytes = wb.exportXlsx();
+    if (!includeLog) return { ok: true, value: { bytes } };
+    const sha = this.wasm.sha256Hex ? this.wasm.sha256Hex(bytes) : '';
+    const log = wb.exportLogNdjson(sha);
+    const base = this.workbookName.replace(/\.xlsx$/i, '') || 'workbook';
+    return { ok: true, value: { bytes, log, logName: `${base}.forge-log.ndjson` } };
+  }
+
+  private readLog(wb: ForgeWorkbook, fromSeq: number, limit = 1000): Result<LogPage> {
+    if (!Number.isInteger(fromSeq) || fromSeq < 0) return fail('invalid_request', 'fromSeq must be a non-negative integer');
+    if (!Number.isInteger(limit) || limit < 1) return fail('invalid_request', 'limit must be a positive integer');
+    const page = JSON.parse(wb.logJson(fromSeq, Math.min(limit, 100_000))) as { events: LogEvent[]; next_seq: number; total: number };
+    return { ok: true, value: { events: page.events, nextSeq: page.next_seq, total: page.total } };
+  }
+
+  private replay(baseline: Uint8Array, events: string | LogEvent[]): Result<ReplayResult> {
+    if (!this.wasm.replayJson) return fail('unsupported', 'this WASM build has no replayJson');
+    if (!(baseline instanceof Uint8Array)) return fail('invalid_request', 'replay needs Uint8Array baseline bytes');
+    const text = typeof events === 'string' ? events : JSON.stringify(events);
+    const out = JSON.parse(this.wasm.replayJson(baseline, text));
+    if (!out.ok) return { ok: false, error: out.error };
+    return {
+      ok: true,
+      value: {
+        revision: out.revision,
+        intentsApplied: out.intents_applied,
+        calcsChecked: out.calcs_checked,
+        calcEvents: out.calc_events,
+        snapshot: { revision: out.revision, sheets: toSheets(out.snapshot) },
+        values: out.values,
+      },
+    };
   }
 
   private applyEdits(wb: ForgeWorkbook, edits: Edit[], expectedRevision: string): Result<{ revision: string }> {
@@ -165,13 +279,20 @@ export class ForgeEngine {
     return out;
   }
 
-  private applyAndCalculate(wb: ForgeWorkbook, envelope: CommandEnvelope): Result<CommandResponse> {
-    const ops = envelope?.op;
-    if (!ops || !Array.isArray(ops.edits)) return fail('invalid_request', 'envelope.op.edits must be an array');
-    const wire = { ...envelope, op: { ...ops, edits: toRustEdits(ops.edits) } };
-    const response = JSON.parse(wb.applyAndCalculateJson(JSON.stringify(wire))) as CommandResponse;
+  private applyAndCalculate(wb: ForgeWorkbook, envelope: CommandEnvelope, command?: CommandMeta): Result<CommandResponse> {
+    const op = envelope?.op;
+    if (!op) return fail('invalid_request', 'envelope.op is required');
+    let wireOp: unknown = op;
+    if (op.type === 'set_cells') {
+      if (!Array.isArray(op.edits)) return fail('invalid_request', 'envelope.op.edits must be an array');
+      wireOp = { ...op, edits: toRustEdits(op.edits) };
+    }
+    const wire = { ...envelope, op: wireOp };
+    const request = command ? { envelope: wire, command } : { envelope: wire };
+    const response = JSON.parse(wb.submitJson(JSON.stringify(request))) as CommandResponse;
     if (response.status !== 'applied') {
-      return { ok: false, error: response.error ?? { code: 'engine_error', message: 'command rejected' } };
+      const error = response.error ?? { code: 'engine_error', message: 'command rejected' };
+      return { ok: false, error: response.event_id ? { ...error, event_id: response.event_id } : error };
     }
     if (!response.duplicate) {
       this.patches.push({

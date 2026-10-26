@@ -7,6 +7,7 @@
 //   A1=10: B1=A1*2=20, C1=B1+5=25, D1=C1*3=75, E1=D1-B1=55, F1=SUM(A1:E1)=185
 //   A1=20: 40, 45, 135, 95, 335
 //   C1=B1+100 (A1=20): C1=140, D1=420, E1=380, F1=20+40+140+420+380=1000
+import { readFileSync } from 'node:fs';
 import { expect, test, type Page } from '@playwright/test';
 
 const ADDRESSES = ['A1', 'B1', 'C1', 'D1', 'E1', 'F1'] as const;
@@ -426,3 +427,136 @@ for (const mode of ['engine-only', 'no-formula-plugins']) {
     expectUniverNeverCalculated(v);
   });
 }
+
+// Event log v1 and log-based undo (realtime design section 4, PR 2).
+// Fixture fixtures/realtime-chain.xlsx: A1 = 10, B1 = 0 (literal placeholder),
+// C1 = B1+5, D1 = C1*3, E1 = D1-B1, F1 = SUM(A1:E1). Independent arithmetic:
+//   start:             10, 0, 5, 15, 15, 45
+//   B1 = A1*2:         10, 20, 25, 75, 55, 185
+//   A1 = 20:           20, 40, 45, 135, 95, 335
+// B1 starts as a literal so typing =A1*2 is a real change: Univer's editor
+// skips the set-range-values command when the committed cell equals the raw one.
+const REALTIME_FIXTURE = '../../fixtures/realtime-chain.xlsx';
+const RT_START = [10, 0, 5, 15, 15, 45];
+const RT_FORMULA = [10, 20, 25, 75, 55, 185];
+const RT_INPUT = [20, 40, 45, 135, 95, 335];
+const REPAINT_GATE_MS = 100;
+
+test('event log: typed edits are logged human intents with exact deltas, Ctrl+Z is an undo intent, and the log replays', async ({ page }) => {
+  const errors = await boot(page, 'not-execute');
+  await page.locator('#file').setInputFiles(REALTIME_FIXTURE);
+  await expect.poll(() => page.evaluate(() =>
+    (window as any).__spike.then((s: any) => [s.adapter.cell('Sheet1', 'B1').raw, s.adapter.cell('Sheet1', 'C1').raw]),
+  )).toEqual([0, 5]);
+  let v = await view(page);
+  expect(v.revision).toBe('0');
+  expectDisplayed(v, RT_START);
+  // Stream log events into the page, as a log panel would.
+  await page.evaluate(() => (window as any).__spike.then(async (s: any) => {
+    (window as any).__events = [];
+    s.client.onEvent((event: unknown) => (window as any).__events.push(event));
+    await s.client.subscribe({ events: true });
+  }));
+  await clickCell(page, 'H5');
+  await page.waitForTimeout(400);
+
+  // 1. =A1*2 into B1 through the real cell editor.
+  await typeInto(page, 'B1', '=A1*2');
+  v = await view(page);
+  expect(v.revision).toBe('1');
+  expectDisplayed(v, RT_FORMULA);
+  expect(v.cells.B1.formula).toBe('=A1*2');
+
+  // 2. 20 into A1; B1 must repaint 40 within the gate of the commit. A frame
+  // watcher in the page records when Univer first shows B1 = 40.
+  await clickCell(page, 'A1');
+  await page.waitForTimeout(150);
+  await page.keyboard.type('20', { delay: 15 });
+  await page.evaluate(() => (window as any).__spike.then((s: any) => {
+    const w = window as any;
+    w.__b1At = null;
+    const tick = () => {
+      if (s.adapter.cell('Sheet1', 'B1').displayed === 40) w.__b1At = performance.now();
+      else requestAnimationFrame(tick);
+    };
+    tick();
+  }));
+  await page.keyboard.press('Enter');
+  await settle(page);
+  const timing = await page.evaluate(() => (window as any).__spike.then((s: any) => ({
+    commitAt: s.adapter.lastCommitAt as number,
+    paintAt: s.adapter.lastPaintAt as number,
+    seenAt: (window as any).__b1At as number | null,
+  })));
+  expect(timing.seenAt, 'B1 never showed 40').not.toBeNull();
+  const repaintMs = (timing.seenAt as number) - timing.commitAt;
+  test.info().annotations.push({ type: 'b1-repaint-ms', description: repaintMs.toFixed(1) });
+  test.info().annotations.push({ type: 'forge-response-paint-ms', description: (timing.paintAt - timing.commitAt).toFixed(1) });
+  console.log(`event-log: B1 repainted 40 ${repaintMs.toFixed(1)} ms after the A1 commit (Forge response painted at ${(timing.paintAt - timing.commitAt).toFixed(1)} ms)`);
+  expect(repaintMs).toBeGreaterThanOrEqual(0);
+  expect(repaintMs).toBeLessThan(REPAINT_GATE_MS);
+  v = await view(page);
+  expect(v.revision).toBe('2');
+  expectDisplayed(v, RT_INPUT);
+
+  // 3. Exactly two human intents at revisions 1 and 2, and their calc deltas.
+  const readLog = () => page.evaluate(() => (window as any).__spike.then((s: any) => s.client.readLog(0).then((r: any) => r.value.events)));
+  let log = await readLog();
+  expect(log[0]).toMatchObject({ kind: 'session', op: 'opened', seq: 0, revision: '0', baseline: { kind: 'xlsx', name: 'realtime-chain.xlsx' } });
+  let intents = log.filter((e: any) => e.kind === 'intent');
+  expect(intents).toHaveLength(2);
+  expect(intents.map((e: any) => [e.actor.type, e.status, e.revision])).toEqual([['human', 'applied', '1'], ['human', 'applied', '2']]);
+  expect(intents[0].command).toMatchObject({ name: 'edits', source: 'editor', univer: 'sheet.command.set-range-values' });
+  expect(intents[0].inputs).toEqual([{ sheet: 'Sheet1', address: 'B1', before: { value: 0 }, after: { formula: 'A1*2' } }]);
+  expect(intents[1].inputs).toEqual([{ sheet: 'Sheet1', address: 'A1', before: { value: 10 }, after: { value: 20 } }]);
+  const calcs = log.filter((e: any) => e.kind === 'calc');
+  expect(calcs.map((e: any) => e.caused_by)).toEqual([[intents[0].id], [intents[1].id]]);
+  expect(calcs.map((e: any) => e.revision)).toEqual(['1', '2']);
+  expect(calcs.map((e: any) => e.deltas)).toEqual([
+    [['Sheet1!B1', 0, 20], ['Sheet1!C1', 5, 25], ['Sheet1!D1', 15, 75], ['Sheet1!E1', 15, 55], ['Sheet1!F1', 45, 185]],
+    [['Sheet1!B1', 20, 40], ['Sheet1!C1', 25, 45], ['Sheet1!D1', 75, 135], ['Sheet1!E1', 55, 95], ['Sheet1!F1', 185, 335]],
+  ]);
+
+  // 4. Ctrl+Z: a third intent, undo of the A1 event, revision 3, B1 back to 20.
+  await page.keyboard.press(process.platform === 'darwin' ? 'Meta+z' : 'Control+z');
+  await settle(page);
+  v = await view(page);
+  expect(v.audit.routed).toContain('univer.command.undo');
+  expect(v.revision).toBe('3');
+  expect(v.cells.B1.displayed).toBe(20);
+  expectDisplayed(v, RT_FORMULA);
+  log = await readLog();
+  intents = log.filter((e: any) => e.kind === 'intent');
+  expect(intents).toHaveLength(3);
+  expect(intents[2]).toMatchObject({
+    actor: { type: 'human' },
+    status: 'applied',
+    revision: '3',
+    command: { name: 'undo', target: intents[1].id },
+    inputs: [{ sheet: 'Sheet1', address: 'A1', before: { value: 20 }, after: { value: 10 } }],
+  });
+  expect(log.at(-1)).toMatchObject({ kind: 'calc', caused_by: [intents[2].id], revision: '3' });
+  // subscribe {events:true} streamed the same events, in order.
+  const streamed = await page.evaluate(() => (window as any).__events);
+  expect(streamed).toEqual(log);
+
+  // 5. Export with the log and replay it in a fresh worker onto the fixture.
+  const fixtureBytes = [...readFileSync(REALTIME_FIXTURE)];
+  const replayed = await page.evaluate(async (bytes) => {
+    const s = await (window as any).__spike;
+    const exported = await s.client.export({ includeLog: true });
+    const { client, worker } = s.startForgeWorker();
+    const result = await client.replay(new Uint8Array(bytes), exported.value.log);
+    worker.terminate();
+    return { logName: exported.value.logName, last: JSON.parse(exported.value.log.trim().split('\n').at(-1)), result };
+  }, fixtureBytes);
+  expect(replayed.logName).toBe('realtime-chain.forge-log.ndjson');
+  expect(replayed.last).toMatchObject({ kind: 'session', op: 'exported', revision: '3' });
+  expect(replayed.result.ok, JSON.stringify(replayed.result.error)).toBe(true);
+  expect(replayed.result.value.revision).toBe('3');
+  expect(replayed.result.value.calcEvents.map((c: any) => c.deltas)).toEqual(log.filter((e: any) => e.kind === 'calc').map((e: any) => e.deltas));
+  ADDRESSES.forEach((address, i) => expect(replayed.result.value.values[`Sheet1!${address}`]).toBe(RT_FORMULA[i]));
+
+  expectUniverNeverCalculated(v);
+  expect(errors).toEqual([]);
+});

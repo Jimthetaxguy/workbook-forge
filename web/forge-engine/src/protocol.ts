@@ -35,6 +35,15 @@ export interface EngineError {
   message: string;
   expected_revision?: Revision;
   current_revision?: Revision;
+  /** The log event that recorded this rejection, when the command was logged. */
+  event_id?: string;
+  /** undo_conflict / redo_conflict: the event being undone or redone. */
+  target?: string;
+  /** undo_conflict / redo_conflict: each cell whose input changed since. */
+  cells?: { sheet: string; address: string; expected: LogInput; current: LogInput; overwritten_by: string | null }[];
+  /** undo_conflict / redo_conflict: the events that overwrote those cells. */
+  overwritten_by?: string[];
+  [detail: string]: unknown;
 }
 
 export type Result<T> = { ok: true; value: T } | { ok: false; error: EngineError };
@@ -74,6 +83,10 @@ export interface ApplyResult {
 
 export interface ExportResult {
   bytes: Uint8Array;
+  /** With includeLog: the session log as NDJSON, ending in session.exported. */
+  log?: string;
+  /** With includeLog: suggested file name, `<name>.forge-log.ndjson`. */
+  logName?: string;
 }
 
 // ---- Command envelope (multi-user contract section 6.1) -------------------
@@ -93,6 +106,25 @@ export interface SetCellsOp {
   edits: Edit[];
 }
 
+/**
+ * Undo/redo as intents. Without a target, undo reverts the actor's own latest
+ * applied, not-undone intent and redo reverts the actor's latest undo. The
+ * worker refuses with undo_conflict (redo_conflict) when a target cell's
+ * input changed since that event.
+ */
+export interface HistoryOp {
+  type: 'undo' | 'redo';
+  /** An event id (`ev_0003`); undo: an edits/redo intent, redo: an undo intent. */
+  target?: string | null;
+}
+
+/** Where an intent came from; logged as command.source / command.univer. */
+export interface CommandMeta {
+  source: 'editor' | 'formula-bar' | 'paste' | 'fill' | 'clear' | 'api' | 'agent' | 'history';
+  /** The Univer command id that produced it, when there is one. */
+  univer?: string;
+}
+
 export interface CommandEnvelope {
   v: 1;
   /** Globally unique, client-generated (crypto.randomUUID()). The dedupe key. */
@@ -107,7 +139,7 @@ export interface CommandEnvelope {
   base_revision: Revision;
   mode: 'strict' | 'rebase';
   preconditions: unknown[];
-  op: SetCellsOp;
+  op: SetCellsOp | HistoryOp;
 }
 
 /** A cell whose calculated value or input changed in a command. */
@@ -130,7 +162,109 @@ export interface CommandResponse {
   diagnostics: unknown[];
   /** True when this is the remembered response to an earlier, identical id. */
   duplicate: boolean;
+  /** The intent event that recorded this command. */
+  event_id?: string;
+  /** The calc event of an applied command. */
+  calc_event_id?: string;
   error?: EngineError;
+}
+
+// ---- Event log (schema v1, realtime design section 4.2) -----------------
+
+/** A logged cell input: a literal value, or a formula without the "=". */
+export type LogInput = { value: Scalar } | { formula: string };
+
+export interface LogActor {
+  type: 'human' | 'agent';
+  id: string;
+  on_behalf_of?: string;
+}
+
+interface LogEventBase {
+  v: 1;
+  seq: number;
+  /** `ev_0000`, `ev_0001`, ... */
+  id: string;
+  session: string;
+}
+
+export interface SessionOpenedEvent extends LogEventBase {
+  kind: 'session';
+  op: 'opened';
+  ts: string;
+  revision: Revision;
+  baseline: { kind: 'xlsx' | 'blank'; name: string; sha256: string | null; bytes: number; sheet?: string };
+  engine: { forge: string; commit: string | null; wasm_sha256: string | null };
+}
+
+export interface SessionExportedEvent extends LogEventBase {
+  kind: 'session';
+  op: 'exported';
+  ts: string;
+  revision: Revision;
+  xlsx_sha256: string | null;
+}
+
+export interface IntentEvent extends LogEventBase {
+  kind: 'intent';
+  ts: string;
+  mono_ms: number;
+  actor: LogActor | null;
+  command: {
+    name: 'edits' | 'undo' | 'redo';
+    source: string;
+    univer?: string;
+    /** undo / redo: the edit intent acted on. */
+    target?: string;
+    /** redo: the undo event it reverses. */
+    undo_event?: string;
+    command_id?: string;
+  };
+  base: { mode: 'strict'; expectedRevision: Revision } | { mode: 'cells' | 'rebase'; baseRevision: Revision } | null;
+  status: 'applied' | 'rejected';
+  /** Applied: the new revision. Rejected: the revision it was refused at. */
+  revision: Revision;
+  /** Applied: before and after per cell. Rejected: what was asked (after only). */
+  inputs: { sheet: string; address: string; before?: LogInput; after: LogInput }[];
+  error: EngineError | null;
+}
+
+export interface CalcEvent extends LogEventBase {
+  kind: 'calc';
+  caused_by: string[];
+  revision: Revision;
+  reason: 'inputs';
+  evaluated: number;
+  changed: number;
+  calc_ms: number;
+  /** `[key, before, after]` for every formula cell whose value changed. */
+  deltas: [key: string, before: CalculatedValue, after: CalculatedValue][];
+  diagnostics: unknown[];
+}
+
+export type LogEvent = SessionOpenedEvent | SessionExportedEvent | IntentEvent | CalcEvent;
+
+export interface LogPage {
+  events: LogEvent[];
+  /** Pass as fromSeq to continue. */
+  nextSeq: number;
+  total: number;
+}
+
+/** Posted to clients that subscribed with events:true, after patches. */
+export interface EventMessage {
+  type: 'event';
+  event: LogEvent;
+}
+
+export interface ReplayResult {
+  revision: Revision;
+  intentsApplied: number;
+  calcsChecked: number;
+  /** Recomputed calc events; each equals the logged one. */
+  calcEvents: { caused_by: string[]; revision: Revision; deltas: CalcEvent['deltas'] }[];
+  snapshot: Snapshot;
+  values: Record<string, CalculatedValue>;
 }
 
 /**
@@ -150,14 +284,21 @@ export interface PatchEvent {
 
 /** Requests, keyed by command name. */
 export interface Commands {
-  open: { args: { bytes: Uint8Array }; result: OpenResult };
+  /** `name` is recorded as the log baseline's name. */
+  open: { args: { bytes: Uint8Array; name?: string }; result: OpenResult };
   newWorkbook: { args: { sheetName: string }; result: OpenResult };
   snapshot: { args: Record<string, never>; result: Snapshot };
   applyEdits: { args: { edits: Edit[]; expectedRevision: Revision }; result: ApplyResult };
   calculate: { args: Record<string, never>; result: Calculation };
-  export: { args: Record<string, never>; result: ExportResult };
-  /** Apply + calculate in one call; ok:true only for status "applied". */
-  applyAndCalculate: { args: { envelope: CommandEnvelope }; result: CommandResponse };
+  export: { args: { includeLog?: boolean }; result: ExportResult };
+  /** Apply + calculate in one call; ok:true only for status "applied". Logged. */
+  applyAndCalculate: { args: { envelope: CommandEnvelope; command?: CommandMeta }; result: CommandResponse };
+  /** Read the session log from fromSeq (default limit 1000). */
+  log: { args: { fromSeq: number; limit?: number }; result: LogPage };
+  /** events:true streams every new log event as an EventMessage. */
+  subscribe: { args: { events: boolean }; result: { events: boolean } };
+  /** Replay a log onto its baseline bytes; any mismatch is an error. */
+  replay: { args: { baseline: Uint8Array; events: string | LogEvent[] }; result: ReplayResult };
 }
 
 export type CommandName = keyof Commands;
@@ -174,4 +315,15 @@ export interface ResponseMessage<K extends CommandName = CommandName> {
   result: Result<Commands[K]['result']>;
 }
 
-export const COMMANDS: readonly CommandName[] = ['open', 'newWorkbook', 'snapshot', 'applyEdits', 'calculate', 'export', 'applyAndCalculate'];
+export const COMMANDS: readonly CommandName[] = [
+  'open',
+  'newWorkbook',
+  'snapshot',
+  'applyEdits',
+  'calculate',
+  'export',
+  'applyAndCalculate',
+  'log',
+  'subscribe',
+  'replay',
+];
