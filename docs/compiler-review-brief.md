@@ -4,6 +4,9 @@ Merged as #19. These notes are the review invariants of that merged checkpoint,
 for a separate reading of the compiler rather than another feature
 implementation. Base commit: `6cc7b7625d89cbcb1fd0d1dfdf8eb4d8a66991a3`.
 
+Note (2026-10-26): profile 6 (XLOOKUP, CLI default graph-v6) came later.
+See [source profile 6](source-graph-v6.md).
+
 ## Interfaces and ownership
 
 | Boundary | Exact path / entry | Review invariant |

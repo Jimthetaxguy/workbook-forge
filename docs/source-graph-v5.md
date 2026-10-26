@@ -1,8 +1,9 @@
 # Source graph profile 5: AVERAGE and standalone compiler packaging
 
 The wheel now ships the compiler CLI as `workbook-forge-compile` and
-`python -m workbook_forge.source_cli`, defaulting to graph-v5. The repository
-compatibility launcher `tools/source_compiler.py` keeps numeric-v1 as its default;
+`python -m workbook_forge.source_cli`, defaulting to graph-v5. The packaged
+CLI default moved to graph-v6 in profile 6; see [source profile 6](source-graph-v6.md).
+The repository compatibility launcher `tools/source_compiler.py` keeps numeric-v1 as its default;
 the library `compile_workbook` keeps graph-v2 unless `version=5` is supplied.
 Existing source artifacts/templates remain supported. No UI, agent, Tauri or
 server is required; generated programs require only their language standard
