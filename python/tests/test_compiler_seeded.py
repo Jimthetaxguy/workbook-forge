@@ -2,20 +2,16 @@
 
 from dataclasses import replace
 import json
-import os
-from pathlib import Path
 import random
 import shutil
-import subprocess
 
 import pytest
 
+from test_compiler_benchmark import compiler_binary  # noqa: F401
 from workbook_forge import source_graph as g
 from workbook_forge.source_contract import SourceDiagnostic
 from workbook_forge.toolkit import WorkbookModel
 from workbook_forge.xlsx import export_xlsx, import_xlsx
-
-ROOT = Path(__file__).resolve().parents[2]
 
 
 def seeded_case(seed, edited=False):
@@ -81,27 +77,10 @@ def seeded_case(seed, edited=False):
 
 
 @pytest.fixture(scope="module")
-def seed_writer():
+def seed_writer(request):
     if not shutil.which("rustc"):
         pytest.skip("Rust toolchain unavailable; seeded routes not executed")
-    subprocess.run(
-        [
-            "cargo",
-            "build",
-            "--manifest-path",
-            str(ROOT / "rust/Cargo.toml"),
-            "--locked",
-            "--offline",
-            "--release",
-            "--example",
-            "compiler_roundtrip",
-        ],
-        env={**os.environ, "CARGO_TARGET_DIR": str(ROOT / "rust/target")},
-        check=True,
-        capture_output=True,
-        timeout=180,
-    )
-    return ROOT / "rust/target/release/examples/compiler_roundtrip"
+    return request.getfixturevalue("compiler_binary")
 
 
 @pytest.mark.parametrize("seed", [7, 31, 2026])
