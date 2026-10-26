@@ -2,46 +2,26 @@
 
 import json
 import math
-import os
-from pathlib import Path
 import shutil
-import subprocess
 import xml.etree.ElementTree as ET
 import zipfile
 
 import pytest
 
+from test_compiler_benchmark import compiler_binary  # noqa: F401
 from workbook_forge import source_cli as cli, source_graph as g
 from workbook_forge.source_contract import SourceDiagnostic
 from workbook_forge.toolkit import WorkbookModel
 from workbook_forge.xlsx import export_xlsx, import_xlsx
 
 NS = "{http://schemas.openxmlformats.org/spreadsheetml/2006/main}"
-ROOT = Path(__file__).resolve().parents[2]
 
 
 @pytest.fixture(scope="module")
-def compiler_roundtrip():
+def compiler_roundtrip(request):
     if not shutil.which("rustc"):
         pytest.skip("Rust toolchain unavailable")
-    subprocess.run(
-        [
-            "cargo",
-            "build",
-            "--manifest-path",
-            str(ROOT / "rust/Cargo.toml"),
-            "--locked",
-            "--offline",
-            "--release",
-            "--example",
-            "compiler_roundtrip",
-        ],
-        env={**os.environ, "CARGO_TARGET_DIR": str(ROOT / "rust/target")},
-        check=True,
-        capture_output=True,
-        timeout=180,
-    )
-    return ROOT / "rust/target/release/examples/compiler_roundtrip"
+    return request.getfixturevalue("compiler_binary")
 
 
 def workbook(path, formula="=A1*2"):

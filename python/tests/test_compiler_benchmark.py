@@ -15,6 +15,33 @@ from workbook_forge.workbook import WorkbookError
 ROOT = Path(__file__).resolve().parents[2]
 
 
+@pytest.fixture(scope="module")
+def compiler_binary():
+    """Build the release compiler_roundtrip example.
+
+    Does not skip when rustc is missing. Callers that skip must do so before
+    requesting this fixture.
+    """
+    target = ROOT / "rust/target"
+    subprocess.run(
+        [
+            "cargo",
+            "build",
+            "--release",
+            "--locked",
+            "--offline",
+            "--manifest-path",
+            str(ROOT / "rust/Cargo.toml"),
+            "--example",
+            "compiler_roundtrip",
+        ],
+        env={**os.environ, "CARGO_TARGET_DIR": str(target)},
+        check=True,
+        timeout=180,
+    )
+    return target / "release/examples/compiler_roundtrip"
+
+
 def tool(name):
     spec = importlib.util.spec_from_file_location(name, ROOT / "tools" / f"{name}.py")
     module = importlib.util.module_from_spec(spec)
@@ -22,16 +49,9 @@ def tool(name):
     return module
 
 
-@pytest.fixture(scope="module")
-def compiler_binary():
-    target = ROOT / "rust/target"
-    subprocess.run(["cargo", "build", "--release", "--locked", "--offline", "--manifest-path",
-                    str(ROOT / "rust/Cargo.toml"), "--example", "compiler_roundtrip"],
-                   env={**os.environ, "CARGO_TARGET_DIR": str(target)}, check=True, timeout=180)
-    return target / "release/examples/compiler_roundtrip"
-
-
-def test_four_routes_use_edited_ir_and_recalculate(tmp_path, compiler_binary):
+def test_four_routes_receipt_records_source_translation_not_implemented_and_excel_recalculation_not_run(
+    tmp_path, compiler_binary
+):
     receipt = tool("compiler_benchmark").run(compiler_binary, tmp_path / "run", repeats=1)
     assert len(receipt["routes"]) == 4
     assert all(r["source_translation"] == "not_implemented" for r in receipt["routes"])
