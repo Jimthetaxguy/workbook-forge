@@ -252,7 +252,7 @@ def audit_formula_profile(client: JevClient, formula_name: str, proposed_fixture
                 },
                 "artificial_local_profile": {
                     "what": "A behavioral choice introduced by local engine design that conflicts with Excel Desktop.",
-                    "examples": ["=0.1+0.2=0.3 returning FALSE", "LEN('😀') returning 1"],
+                    "examples": ["=0.1+0.2=0.3 returning FALSE"],
                     "not_for": "Documented Excel error behaviors."
                 },
                 "syntax_or_spill_boundary": {

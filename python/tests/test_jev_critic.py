@@ -635,8 +635,12 @@ def test_the_shipped_benchmark_is_laid_out_in_pairs():
         fixture = case["state"]["fixture"]
         by_fixture.setdefault(fixture["formula"], []).append(case["is_false_control"])
     assert excluded == [
+        "case-blank-arithmetic-pos",
+        "case-blank-arithmetic-neg",
         "case-collation-text-number-pos",
         "case-collation-text-number-neg",
+        "case-utf16-surrogate-pos",
+        "case-utf16-surrogate-neg",
     ]
     assert all(sorted(pair) == [False, True] for pair in by_fixture.values()), by_fixture
 

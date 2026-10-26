@@ -1,8 +1,10 @@
 [
   {
     "id": "case-blank-arithmetic-pos",
+    "excluded": true,
+    "exclusion_reason": "No documented Microsoft example and no committed Excel receipt are cited for =A1+10 with a blank A1. Labeling the result 10 as excel_canonical_behavior is unverified. This pair is not Excel ground truth, and run_benchmark_eval does not score it.",
     "is_false_control": false,
-    "ground_truth": "excel_canonical_behavior",
+    "ground_truth": "unverified",
     "state": {
       "formula": "ADDITION",
       "fixture": {
@@ -32,8 +34,10 @@
   },
   {
     "id": "case-blank-arithmetic-neg",
+    "excluded": true,
+    "exclusion_reason": "No documented Microsoft example and no committed Excel receipt are cited for =A1+10 with a blank A1. Labeling #VALUE! as artificial_local_profile would claim it conflicts with Excel Desktop, which is also unverified. This pair is not Excel ground truth, and run_benchmark_eval does not score it.",
     "is_false_control": true,
-    "ground_truth": "artificial_local_profile",
+    "ground_truth": "unverified",
     "state": {
       "formula": "ADDITION",
       "fixture": {
@@ -127,8 +131,10 @@
   },
   {
     "id": "case-utf16-surrogate-pos",
+    "excluded": true,
+    "exclusion_reason": "No documented Microsoft example and no Excel receipt are cited for =LEN(\"😀\"). Both engines return 1. Labeling 2 as excel_canonical_behavior is unverified. This pair is not Excel ground truth, and run_benchmark_eval does not score it.",
     "is_false_control": false,
-    "ground_truth": "excel_canonical_behavior",
+    "ground_truth": "unverified",
     "state": {
       "formula": "LEN",
       "fixture": {
@@ -157,8 +163,10 @@
   },
   {
     "id": "case-utf16-surrogate-neg",
+    "excluded": true,
+    "exclusion_reason": "No documented Microsoft example and no Excel receipt are cited for =LEN(\"😀\"). Both engines return 1. Labeling 1 as artificial_local_profile would claim it conflicts with Excel Desktop, which is also unverified. This pair is not Excel ground truth, and run_benchmark_eval does not score it.",
     "is_false_control": true,
-    "ground_truth": "artificial_local_profile",
+    "ground_truth": "unverified",
     "state": {
       "formula": "LEN",
       "fixture": {

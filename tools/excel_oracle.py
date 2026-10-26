@@ -840,11 +840,8 @@ def _formula_text(value: Any) -> str | None:
     return value if value.startswith("=") else "=" + value
 
 
-def _excel_can_open_formula(formula: str) -> bool:
-    """True when the formula is syntax Excel can load without a repair dialog.
-
-    ``display alerts`` false cancels that dialog, so the workbook never opens.
-    """
+def _forge_parses_formula(formula: str) -> bool:
+    """True when Forge's analyze_formula accepts the formula."""
     from workbook_forge import analyze_formula
 
     try:
@@ -861,12 +858,12 @@ _CELL_ELEMENT = re.compile(
 _CELL_FORMULA = re.compile(r"<f\b[^>]*>([^<]*)</f>")
 
 
-def omit_formulas_excel_will_not_open(path: Path, *, protected: set[str] | None = None) -> list[str]:
-    """Remove syntax Excel will not open from a scratch workbook.
+def omit_formulas_forge_cannot_parse(path: Path, *, protected: set[str] | None = None) -> list[str]:
+    """Remove formulas Forge's analyze_formula cannot parse from a scratch workbook.
 
     The bytes outside those cells stay put. Contract checks are protected, so a
-    scenario formula is never removed to make the open succeed. The returned
-    keys name the cells that were removed.
+    scenario formula is never removed. The returned keys name the cells that
+    were removed because Forge could not parse them.
     """
     kept = protected or set()
     with zipfile.ZipFile(path) as archive:
@@ -886,7 +883,7 @@ def omit_formulas_excel_will_not_open(path: Path, *, protected: set[str] | None 
         for match in _CELL_ELEMENT.finditer(text):
             formula = _CELL_FORMULA.search(match.group(0))
             key = f"{name}!{match.group(1)}"
-            if formula is None or key in kept or _excel_can_open_formula(xml.sax.saxutils.unescape(formula.group(1))):
+            if formula is None or key in kept or _forge_parses_formula(xml.sax.saxutils.unescape(formula.group(1))):
                 continue
             pieces.append(text[cursor:match.start()])
             cursor = match.end()
@@ -1309,10 +1306,10 @@ def _fixture_coverage(contract: dict[str, Any]) -> list[dict[str, Any]]:
 def _compare_roundtrip(
     before: dict[str, dict[str, Any]], after: dict[str, dict[str, Any]],
     contract: dict[str, Any], metadata: dict[str, str],
-    omitted_unopenable: set[str] | None = None,
+    omitted_unparseable: set[str] | None = None,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[str]]:
     checks_by_key = _contract_check_map(contract)
-    unopenable = omitted_unopenable or set()
+    unparseable = omitted_unparseable or set()
     formula_diffs = []
     all_formula_keys = sorted(
         key for key in set(before) | set(after)
@@ -1329,13 +1326,13 @@ def _compare_roundtrip(
             allowed = _formula_is_accepted(
                 current, check["expected_formula"], _formula_allowlist(contract, check["id"]),
             )
-        # Excel cancels the open, with alerts suppressed, when a formula has no
-        # syntax. Those cells are removed before open. Their absence is the
-        # removal, not an Excel rewrite of a scenario formula.
-        excel_unopenable = key in unopenable and current is None and prior is not None
+        # Forge's analyze_formula could not parse the formula, so the cell was
+        # removed before Excel was asked to open the workbook. The absence is
+        # that removal.
+        forge_unparseable = key in unparseable and current is None and prior is not None
         item = {"cell": key, "before": prior, "after": current, "allowlisted": allowed}
-        if excel_unopenable:
-            item["excel_unopenable"] = True
+        if forge_unparseable:
+            item["forge_unparseable"] = True
         formula_diffs.append(item)
 
     outcomes = []
@@ -1409,7 +1406,7 @@ def _compare_roundtrip(
         outcomes.append(outcome)
         mismatches.extend(f"{check['id']}: {message}" for message in local_mismatches)
     for item in formula_diffs:
-        if not item["allowlisted"] and not item.get("excel_unopenable"):
+        if not item["allowlisted"] and not item.get("forge_unparseable"):
             mismatches.append(f"{item['cell']}: formula changed outside the exact allowlist")
     return outcomes, formula_diffs, mismatches
 
@@ -1467,9 +1464,9 @@ def run_roundtrip(
         else:
             shutil.copyfile(source, working_copy)
             protected = {f"{check['sheet']}!{check['address']}" for check in contract["checks"]}
-            unopenable = omit_formulas_excel_will_not_open(working_copy, protected=protected)
-            if unopenable:
-                receipt["excel_unopenable_formulas"] = unopenable
+            unparseable = omit_formulas_forge_cannot_parse(working_copy, protected=protected)
+            if unparseable:
+                receipt["forge_unparseable_formulas"] = unparseable
             script_path = directory / "roundtrip.applescript"
             script_path.write_text(build_roundtrip_applescript(contract, timeout=timeout), encoding="utf-8")
             receipt["working_copy"] = working_copy.name
@@ -1496,7 +1493,7 @@ def run_roundtrip(
                 receipt["formula_count_after"] = sum(item["formula"] is not None for item in after.values())
                 receipt["date_system_after"] = "1904" if saved_uses_1904 else "1900"
                 outcomes, formula_diffs, mismatches = _compare_roundtrip(
-                    before, after, contract, metadata, set(unopenable),
+                    before, after, contract, metadata, set(unparseable),
                 )
                 receipt["observations"] = outcomes
                 receipt["formula_diffs"] = formula_diffs
