@@ -8,6 +8,7 @@ from pathlib import Path
 import resource
 import statistics
 import subprocess
+import sys
 import time
 
 from compiler_benchmark import rust
@@ -90,14 +91,16 @@ def run(folder: Path, binary: Path, repeats: int) -> dict:
                             "end_to_end_rust_only":False},
                         "formula_caches_in_manifest": False, "edited_source_and_input_result": 38,
                         "independent_expected_result": "7*5+3=38", "excel_observation": "not_run"})
+    rss = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+    child = resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss
     return {"benchmark_version": 1, "source_subset_version": 1,
             "workload": "same two-cell workbook; source multiplier 2->5; input 2->7; both programs executed; both backends reimport exported values/formulas/style",
             "dependencies": {"generated_python": "Python standard library", "generated_rust": "Rust standard library; rustc to build",
                              "compiler": "Workbook Forge Python library and independent Rust export adapter; no UI, server or agent"},
             "timing_scope": "warmup excluded; rustc compilation and process startup included; validation reimports excluded; phases measured on identical workbook/edit workload",
-            "memory": {"parent_peak_rss_bytes": resource.getrusage(resource.RUSAGE_SELF).ru_maxrss,
-                       "largest_child_peak_rss_bytes": resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss,
-                       "scope": "macOS process-lifetime high-water marks including rustc; not per-route runtime allocations"},
+            "memory": {"parent_peak_rss_bytes": rss if sys.platform == "darwin" else rss * 1024,
+                       "largest_child_peak_rss_bytes": child if sys.platform == "darwin" else child * 1024,
+                       "scope": "process-lifetime high-water marks in bytes including rustc; not per-route runtime allocations"},
             "routes": results}
 
 
