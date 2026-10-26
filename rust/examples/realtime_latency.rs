@@ -1,4 +1,4 @@
-//! Per-keystroke latency bench through the same calls the WASM BrowserWorkbook makes:
+//! Per-keystroke latency bench for the legacy apply-then-calculate path:
 //! apply_edits_envelope (applyEditsResultJson) -> ImportedWorkbook::calculate(1)
 //! (calculateJson) -> serde_json::to_string(report). Release build only.
 use std::collections::BTreeMap;
@@ -155,7 +155,7 @@ fn run(c: Case) {
         i += 1;
     }
     println!(
-        "| {} | {} | {} | {:.2}/{:.2} | {:.2}/{:.2} | {:.2}/{:.2} | **{:.1}/{:.1}** | {:.1} | {:.1} | {} KB | {} KB | {:.1}-{:.1} |",
+        "| {} | {} | {} | {:.2}/{:.2} | {:.2}/{:.2} | {:.2}/{:.2} | **{:.1}/{:.1}** | {:.1} | {:.1} | {} KB | {} KB |",
         c.name,
         cells,
         evaluated,
@@ -171,8 +171,6 @@ fn run(c: Case) {
         cold_ms,
         out_bytes / 1024,
         snap.len() / 1024,
-        pct(&mut tot.clone(), 0.5) * 1.2,
-        pct(&mut tot, 0.5) * 2.0,
     );
     eprintln!("{} snapshotJson {:.1} ms, iters {}", c.name, snap_ms, i);
 }
@@ -189,9 +187,9 @@ impl Rev for workbook_forge::xlsx::ImportedWorkbook {
 fn main() {
     let only: Option<String> = std::env::args().nth(1);
     println!(
-        "| workload | cells | evaluated/edit | apply p50/p95 ms | recalc p50/p95 | serialize p50/p95 | total p50/p95 | no-op recalc ms | cold full calc ms | response | snapshotJson | est. WASM p50 ms (1.2-2x) |"
+        "| workload | cells | evaluated/edit | apply p50/p95 ms | recalc p50/p95 | serialize p50/p95 | total p50/p95 | no-op recalc ms | cold full calc ms | response | snapshotJson |"
     );
-    println!("|---|---|---|---|---|---|---|---|---|---|---|---|");
+    println!("|---|---|---|---|---|---|---|---|---|---|---|");
     let mut cases = vec![];
     for n in [100, 1_000, 2_500, 5_000, 10_000, 50_000] {
         cases.push(Case {

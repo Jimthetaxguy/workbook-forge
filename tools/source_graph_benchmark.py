@@ -6,6 +6,7 @@ from pathlib import Path
 import resource
 import statistics
 import subprocess
+import sys
 import time
 
 from workbook_forge import source_graph as graph
@@ -127,6 +128,8 @@ def run(output, binary, repeats, version=2):
                 "orchestrator":"python","python_required_for":"reader, translator/lowering, validation and checked-emission calculation",
                 "standalone_rust_program_requires_python":False,"end_to_end_rust_only":False},
             "excel_observed":False})
+    rss=resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+    child=resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss
     return {"benchmark_version":version,"source_profile":version,"fixture_sha256":hashlib.sha256(fixture_bytes).hexdigest(),
         "comparison_operators":list(graph.COMPARISONS) if version>=4 else [],
         "comparison_evidence":"explicit Excel-targeted type/blank and ordinal collation profile; not Excel-observed" if version>=4 else "not source-compiled",
@@ -135,16 +138,16 @@ def run(output, binary, repeats, version=2):
         "count_note":"runtime registry membership is separate from source-compilation coverage and Excel observation",
         "timing_scope":"one warmup excluded; same workbook/edits; all Rust builds and process startup included; checked emission executes target program again; final reimports excluded",
         "comparison_note":"feature/cost checkpoint, not a speedup versus the two-cell v1 workload or another library",
-        "memory":{"parent_peak_rss_bytes":resource.getrusage(resource.RUSAGE_SELF).ru_maxrss,
-            "largest_child_peak_rss_bytes":resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss,
-            "scope":"macOS process-lifetime peaks including rustc and compiler-driver validation; not per-route runtime allocation"},
+        "memory":{"parent_peak_rss_bytes":rss if sys.platform=="darwin" else rss*1024,
+            "largest_child_peak_rss_bytes":child if sys.platform=="darwin" else child*1024,
+            "scope":"process-lifetime peaks in bytes including rustc and compiler-driver validation; not per-route runtime allocation"},
         "routes":rows}
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("output",type=Path)
-    parser.add_argument("--profile",type=int,choices=[2,3,4,5,6],default=2)
+    parser.add_argument("--profile",type=int,choices=[2,3,4,5],default=2)
     parser.add_argument("--repeats",type=int,default=3)
     parser.add_argument("--rust-binary",type=Path,default=ROOT/"rust/target/release/examples/compiler_roundtrip")
     args = parser.parse_args()

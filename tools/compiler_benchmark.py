@@ -201,12 +201,14 @@ def run(binary: Path, folder: Path, repeats: int = 3) -> dict:
                          "native_reader_evaluator_writer_rust_only":front==back=="rust"},
                      "excel_recalculation": "not_run", "source_translation": "not_implemented"})
     assert hashlib.sha256(source.read_bytes()).hexdigest() == fingerprint
+    rss = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+    child = resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss
     return {"benchmark_version": 1, "fixture_version": 1, "source_sha256": fingerprint,
             "workload": "same 13 stored cells, 8 formulas, changed input and expression; baseline required for preservation",
             "timing_scope": "front import, IR mutation/serialization, target baseline import/calculation/export; excludes validation reimports",
-            "memory": {"parent_peak_rss_bytes": resource.getrusage(resource.RUSAGE_SELF).ru_maxrss,
-                       "largest_child_peak_rss_bytes": resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss,
-                       "scope": "process-lifetime high-water marks, macOS bytes; not per-route allocation or comparable Rust/Python memory"},
+            "memory": {"parent_peak_rss_bytes": rss if sys.platform == "darwin" else rss * 1024,
+                       "largest_child_peak_rss_bytes": child if sys.platform == "darwin" else child * 1024,
+                       "scope": "process-lifetime high-water marks in bytes; not per-route allocation or comparable Rust/Python memory"},
             "conventional_library_overlap": {"library": "Python zipfile + ElementTree", "median_ms": statistics.median(overlap_timings),
                 "samples_ms": overlap_timings, "work": "same package/input/formula edits and preservation, all formula caches removed",
                 "formula_execution": False, "dependency_calculation": False, "source_translation": False,
