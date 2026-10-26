@@ -425,7 +425,7 @@ def test_volatile_predicate_checks_type_and_domain_not_identical_value():
     assert not oracle.roundtrip_result_matches({'type': 'number', 'value': float('nan')}, expected)
 
 
-def test_parse_error_formula_is_removed_before_excel_can_open_it(tmp_path):
+def test_unparseable_formula_is_removed_when_forge_cannot_parse_it(tmp_path):
     from workbook_forge.canonical_xlsx import export_canonical
     from workbook_forge.model import hydrate
 
@@ -434,7 +434,7 @@ def test_parse_error_formula_is_removed_before_excel_can_open_it(tmp_path):
     original = source.read_bytes()
     working = tmp_path / 'roundtrip.xlsx'
     working.write_bytes(original)
-    omitted = oracle.omit_formulas_excel_will_not_open(working)
+    omitted = oracle.omit_formulas_forge_cannot_parse(working)
     assert omitted == ['Forecast!J2']
     assert source.read_bytes() == original
     cells, _ = oracle._model_view(working)
@@ -444,7 +444,7 @@ def test_parse_error_formula_is_removed_before_excel_can_open_it(tmp_path):
     assert cells['Forecast!F5']['formula'] == '=1/0'
     protected = tmp_path / 'protected.xlsx'
     protected.write_bytes(original)
-    assert oracle.omit_formulas_excel_will_not_open(protected, protected={'Forecast!J2'}) == []
+    assert oracle.omit_formulas_forge_cannot_parse(protected, protected={'Forecast!J2'}) == []
 
 
 def test_removed_parse_error_is_not_a_scenario_mismatch():
@@ -456,7 +456,7 @@ def test_removed_parse_error_is_not_a_scenario_mismatch():
     assert mismatches == []
     assert diffs == [{
         'cell': 'Main!Z9', 'before': '=1+', 'after': None,
-        'allowlisted': False, 'excel_unopenable': True,
+        'allowlisted': False, 'forge_unparseable': True,
     }]
     _, _, flagged = oracle._compare_roundtrip(before, after, contract, {})
     assert any(item.startswith('Main!Z9') for item in flagged)

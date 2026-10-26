@@ -187,55 +187,55 @@
       "check_id": "period-1-revenue",
       "field": "formula",
       "accepted_values": ["=(B2*Assumptions!$B$1)"],
-      "reason": "Excel 16.113.2 removed optional quotes around the simple sheet name Assumptions in this formula; both exact forms are retained."
+      "reason": "Excel 16.113.2 removed optional quotes around the simple sheet name Assumptions in this formula; both exact forms are retained. This is an unreceipted observation note (see docs/excel-observations.md), not an observation of this package."
     },
     {
       "check_id": "period-2-revenue",
       "field": "formula",
       "accepted_values": ["=(B3*Assumptions!$B$1)"],
-      "reason": "Excel 16.113.2 removed optional quotes around the simple sheet name Assumptions in this formula; both exact forms are retained."
+      "reason": "Excel 16.113.2 removed optional quotes around the simple sheet name Assumptions in this formula; both exact forms are retained. This is an unreceipted observation note (see docs/excel-observations.md), not an observation of this package."
     },
     {
       "check_id": "period-3-revenue",
       "field": "formula",
       "accepted_values": ["=(B4*Assumptions!$B$1)"],
-      "reason": "Excel 16.113.2 removed optional quotes around the simple sheet name Assumptions in this formula; both exact forms are retained."
+      "reason": "Excel 16.113.2 removed optional quotes around the simple sheet name Assumptions in this formula; both exact forms are retained. This is an unreceipted observation note (see docs/excel-observations.md), not an observation of this package."
     },
     {
       "check_id": "period-1-variable-cost",
       "field": "formula",
       "accepted_values": ["=(B2*Assumptions!$B$2)"],
-      "reason": "Excel 16.113.2 removed optional quotes around the simple sheet name Assumptions in this formula; both exact forms are retained."
+      "reason": "Excel 16.113.2 removed optional quotes around the simple sheet name Assumptions in this formula; both exact forms are retained. This is an unreceipted observation note (see docs/excel-observations.md), not an observation of this package."
     },
     {
       "check_id": "period-2-variable-cost",
       "field": "formula",
       "accepted_values": ["=(B3*Assumptions!$B$2)"],
-      "reason": "Excel 16.113.2 removed optional quotes around the simple sheet name Assumptions in this formula; both exact forms are retained."
+      "reason": "Excel 16.113.2 removed optional quotes around the simple sheet name Assumptions in this formula; both exact forms are retained. This is an unreceipted observation note (see docs/excel-observations.md), not an observation of this package."
     },
     {
       "check_id": "period-3-variable-cost",
       "field": "formula",
       "accepted_values": ["=(B4*Assumptions!$B$2)"],
-      "reason": "Excel 16.113.2 removed optional quotes around the simple sheet name Assumptions in this formula; both exact forms are retained."
+      "reason": "Excel 16.113.2 removed optional quotes around the simple sheet name Assumptions in this formula; both exact forms are retained. This is an unreceipted observation note (see docs/excel-observations.md), not an observation of this package."
     },
     {
       "check_id": "period-1-profit",
       "field": "formula",
       "accepted_values": ["=((C2-D2)-Assumptions!$B$3)"],
-      "reason": "Excel 16.113.2 removed optional quotes around the simple sheet name Assumptions in this formula; both exact forms are retained."
+      "reason": "Excel 16.113.2 removed optional quotes around the simple sheet name Assumptions in this formula; both exact forms are retained. This is an unreceipted observation note (see docs/excel-observations.md), not an observation of this package."
     },
     {
       "check_id": "period-2-profit",
       "field": "formula",
       "accepted_values": ["=((C3-D3)-Assumptions!$B$3)"],
-      "reason": "Excel 16.113.2 removed optional quotes around the simple sheet name Assumptions in this formula on the repeated live run; both exact forms are retained."
+      "reason": "Excel 16.113.2 removed optional quotes around the simple sheet name Assumptions in this formula on the repeated live run; both exact forms are retained. This is an unreceipted observation note (see docs/excel-observations.md), not an observation of this package."
     },
     {
       "check_id": "period-3-profit",
       "field": "formula",
       "accepted_values": ["=((C4-D4)-Assumptions!$B$3)"],
-      "reason": "Excel 16.113.2 removed optional quotes around the simple sheet name Assumptions in this formula; both exact forms are retained."
+      "reason": "Excel 16.113.2 removed optional quotes around the simple sheet name Assumptions in this formula; both exact forms are retained. This is an unreceipted observation note (see docs/excel-observations.md), not an observation of this package."
     }
   ]
 }
