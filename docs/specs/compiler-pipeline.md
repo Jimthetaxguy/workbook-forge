@@ -76,7 +76,7 @@ source into Python. A supported calculation is represented by the canonical
 model and declared operations; each engine implements that contract
 independently. The bounded standalone compiler now supplies a source-code
 subset with its own limits and checks. It is separate from this canonical-model
-path. See [source profile 5](../source-graph-v5.md).
+path. See [source profile 6](../source-graph-v6.md).
 
 When we say “code to XML,” the actual target is an `.xlsx` OOXML package: a ZIP
 container with related XML parts, relationships, content types and sometimes

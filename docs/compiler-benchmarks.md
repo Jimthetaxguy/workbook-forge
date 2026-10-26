@@ -14,7 +14,7 @@ version 1 does not describe the newer source bundle version.
 
 | Product | Adoption boundary | Present foundation | Missing acceptance |
 | --- | --- | --- | --- |
-| Standalone compiler CLI/library | Workbook to executable Rust/Python to workbook, including source-language translation; no UI/server/agent required | OOXML adapters, typed models, intake CLI; older numeric-v1 lane; graph profiles 2-5 source-translating SUM, IF, IFERROR and AVERAGE across all four source routes; packaged `workbook-forge-compile` defaults to graph-v5 | General function coverage beyond those four profiles, and wider receipts |
+| Standalone compiler CLI/library | Workbook to executable Rust/Python to workbook, including source-language translation; no UI/server/agent required | OOXML adapters, typed models, intake CLI; older numeric-v1 lane; graph profiles 2-6 source-translating SUM, IF, IFERROR, AVERAGE and XLOOKUP across all four source routes; packaged `workbook-forge-compile` defaults to graph-v6 | General function coverage beyond those five profiles, and wider receipts |
 | Embeddable runtime engine | Independent Rust crate or Python library with versioned values, errors, shapes, dependency edits and diagnostics | Native independent evaluators and toolkit sessions, JSON-lines operations | Full language coverage, canonical/toolkit convergence, wider fidelity and conformance evidence |
 | TypeScript integration and optional spreadsheet UI | A typed client/runtime interface over either engine | Existing [operation contract](agent-protocol.md) with request IDs, revisions, pagination and limits, and the typed client in [typescript/](../typescript/README.md) | Transport adapters beyond the Node JSON-lines process, and equivalent visible/edit/export acceptance tests |
 
@@ -104,10 +104,10 @@ and cryptographic binding of IR to its baseline are future work.
 These toolkit IR routes are an older lane. Passing them alone cannot close the
 code-translation acceptance gate. The IR receipt's `source_translation: not_implemented`
 means that route does not perform source translation; it does not describe the
-separate source compiler. Graph profiles 2-5 source-translate inventoried calls:
-SUM on profile 2, IF and IFERROR on profile 3 (retained on profile 4), and
-AVERAGE on profile 5. The packaged command `workbook-forge-compile` defaults to
-graph-v5. See [source profile 5](source-graph-v5.md).
+separate source compiler. Graph profiles 2-6 source-translate inventoried calls:
+SUM on profile 2, IF and IFERROR on profile 3 (retained on profile 4),
+AVERAGE on profile 5, and XLOOKUP on profile 6. The packaged command
+`workbook-forge-compile` defaults to graph-v6. See [source profile 6](source-graph-v6.md).
 
 ## Older lane: numeric-v1 executable-source slice
 
@@ -119,8 +119,8 @@ numeric A1 input, a B1 expression, numeric literals, unary signs, and `+`,
 numeric profile, not an Excel precision/conformance claim. This lane rejects
 calls, division, powers, extra references, unsupported workbook shapes, metadata
 outside its representable profile and edits outside the versioned source
-scaffold. Those refusals belong to numeric-v1. Graph profiles 2-5 are the
-later lane above: they add division, multi-cell references, and the four
+scaffold. Those refusals belong to numeric-v1. Graph profiles 2-6 are the
+later lane above: they add division, multi-cell references, and the five
 inventoried calls.
 
 All four **actual source** paths are exercised:
