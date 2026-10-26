@@ -76,7 +76,7 @@ agent operations. None of these counts implies complete Excel support.
 | Support an agent task | Discovery, focused reads, previews, edits, calculation, explanation and export work through real SDK operations | The live consumer exercise covers one synthetic task; it is not a general agent reliability benchmark |
 | Support an application interface | Native values and inspectable expressions can serve application code | No spreadsheet grid, forms application or automatic script-equivalence detector is implemented |
 
-That row records the 2026-09-28 checkpoint. Merged #24 later added the view-only [Univer spike](specs/univer-spike.md) over the WASM facade, and that spike is not a product decision.
+That row records the 2026-09-28 checkpoint. Merged #24 later added the view-only [Univer spike](specs/univer-spike.md) over the WASM facade. Merged #25 added blank-workbook authoring and a calculating grid. The spike is not a product decision.
 
 ### What the implementation teaches us
 
@@ -366,16 +366,16 @@ acceptance criterion has not passed. Current Excel evidence is in
 | CLI | `workbook-forge scenario`, `inspect`, `run`, `capabilities` |
 | Capability report | `workbook_forge.catalog.workbook_capabilities()` |
 
-The WASM facade is a library boundary, not a browser UI or MCP endpoint. It
-accepts caller-selected workbook bytes and exposes the versioned model snapshot,
-revision-checked existing-cell edits, calculation report, and XLSX export bytes.
-It has no filesystem-path or network operations, so the browser caller owns file
-selection and saving. The import and preservation limits remain those of the
-Rust XLSX adapter: edits to cells absent from an imported workbook are rejected.
-The WASM API does not yet construct a blank workbook. Merged #24 adds
-`web/univer-spike`, a view-only page over this facade: Univer presents the
-sheet and Forge WASM calculates. That page is not a product decision. Its
-limits are in the [Univer spike note](specs/univer-spike.md).
+The WASM facade is a library boundary, not an MCP endpoint. It accepts
+caller-selected workbook bytes, constructs a blank workbook, and exposes the
+versioned model snapshot, revision-checked edits, calculation report, and XLSX
+export bytes. It has no filesystem-path or network operations, so the browser
+caller owns file selection and saving. The import and preservation limits remain
+those of the Rust XLSX adapter: edits to cells absent from an imported workbook
+are rejected. Merged #24 added `web/univer-spike` as a view-only page over this
+facade. Merged #25 added blank-workbook authoring and a calculating grid on
+that page: Univer presents the sheet and Forge WASM calculates. That page is
+not a product decision. Its limits are in the [Univer spike note](specs/univer-spike.md).
 
 Each engine owns its revisions and mutations. Shared interchange data and
 differential tests establish parity without reusing executable implementations.
