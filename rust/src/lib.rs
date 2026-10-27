@@ -162,7 +162,7 @@ pub fn evaluate_result(
         primitive_value_profile: false,
     };
     match eval(&expression, &env)? {
-        CalcValue::Scalar(value) => {
+        CalcValue::Scalar(value) | CalcValue::Referenced(value) => {
             validate_text_value(&value)?;
             match value {
                 Value::Error(error) => Err(error),
@@ -214,8 +214,20 @@ enum Expr {
 #[derive(Clone, Debug, PartialEq)]
 enum CalcValue {
     Scalar(Value),
+    /// A scalar Excel still treats as a one-cell reference.
+    ///
+    /// COUNT, AND and OR ignore text and logicals inside it. Value contexts
+    /// unwrap it. A scalar XLOOKUP `if_not_found` literal is never this variant.
+    Referenced(Value),
     Range(Vec<Vec<Value>>),
     Array(ArrayValue),
+}
+
+fn dereference(value: CalcValue) -> CalcValue {
+    match value {
+        CalcValue::Referenced(value) => CalcValue::Scalar(value),
+        other => other,
+    }
 }
 
 struct Environment<'a> {
@@ -736,6 +748,7 @@ fn eval(expr: &Expr, env: &Environment<'_>) -> Result<CalcValue, FormulaError> {
                 "SORT" => sort_call(args, env),
                 "UNIQUE" => unique_call(args, env),
                 "IF" | "IFERROR" | "IFNA" | "IFS" | "SWITCH" => selection_call(name, args, env),
+                "XLOOKUP" | "XMATCH" => xlookup_family(name, args, env),
                 "INDEX" => {
                     let values: Vec<CalcValue> = args
                         .iter()
@@ -786,7 +799,7 @@ fn scalar(value: Value) -> CalcValue {
 
 fn calc_value_shape(value: &CalcValue) -> Option<(usize, usize)> {
     match value {
-        CalcValue::Scalar(_) => None,
+        CalcValue::Scalar(_) | CalcValue::Referenced(_) => None,
         CalcValue::Range(rows) => Some((rows.len(), rows.first().map_or(0, Vec::len))),
         CalcValue::Array(array) => Some((array.row_count(), array.column_count())),
     }
@@ -794,7 +807,7 @@ fn calc_value_shape(value: &CalcValue) -> Option<(usize, usize)> {
 
 fn calc_value_matrix(value: CalcValue) -> Vec<Vec<Value>> {
     match value {
-        CalcValue::Scalar(value) => vec![vec![value]],
+        CalcValue::Scalar(value) | CalcValue::Referenced(value) => vec![vec![value]],
         CalcValue::Range(rows) => rows,
         CalcValue::Array(array) => array.rows,
     }
@@ -829,8 +842,10 @@ fn optional_scalar_argument(
         return Ok(None);
     }
     match eval(expression, env)? {
-        CalcValue::Scalar(Value::Error(error)) => Err(error),
-        CalcValue::Scalar(value) => Ok(Some(value)),
+        CalcValue::Scalar(Value::Error(error)) | CalcValue::Referenced(Value::Error(error)) => {
+            Err(error)
+        }
+        CalcValue::Scalar(value) | CalcValue::Referenced(value) => Ok(Some(value)),
         CalcValue::Range(_) | CalcValue::Array(_) => Err(FormulaError::Value),
     }
 }
@@ -1054,6 +1069,8 @@ fn apply_binary_values(
     right: CalcValue,
     worksheet: bool,
 ) -> Result<CalcValue, FormulaError> {
+    let left = dereference(left);
+    let right = dereference(right);
     let left_shape = calc_value_shape(&left);
     let right_shape = calc_value_shape(&right);
     if left_shape.is_none() && right_shape.is_none() {
@@ -1154,7 +1171,7 @@ fn filter_call(args: &[Expr], env: &Environment<'_>) -> Result<CalcValue, Formul
 
 fn eval_scalar(expr: &Expr, env: &Environment<'_>) -> Result<Value, FormulaError> {
     match eval(expr, env)? {
-        CalcValue::Scalar(v) => Ok(v),
+        CalcValue::Scalar(v) | CalcValue::Referenced(v) => Ok(v),
         CalcValue::Range(_) | CalcValue::Array(_) => Err(FormulaError::Value),
     }
 }
@@ -1193,7 +1210,9 @@ fn sequence_call(args: &[Expr], env: &Environment<'_>) -> Result<ArrayValue, For
     for value in evaluated {
         let number = match value {
             None => None,
-            Some(CalcValue::Scalar(value)) => Some(to_number(&value)?),
+            Some(CalcValue::Scalar(value) | CalcValue::Referenced(value)) => {
+                Some(to_number(&value)?)
+            }
             Some(CalcValue::Range(_) | CalcValue::Array(_)) => unreachable!(),
         };
         if number.is_some_and(|number| !number.is_finite()) {
@@ -2284,7 +2303,7 @@ fn integer_formula_call(
             Err(error) => return Err(error),
         };
         match evaluated {
-            CalcValue::Scalar(value) => values.push(value),
+            CalcValue::Scalar(value) | CalcValue::Referenced(value) => values.push(value),
             CalcValue::Range(_) | CalcValue::Array(_) => has_range = true,
         }
     }
@@ -2733,15 +2752,34 @@ fn substitute_all_bounded(
     check_text_units(result_units, limit)?;
     Ok(text.replace(old, new))
 }
-/// Whether a scalar argument still came from a cell reference. A cell
-/// reference and INDEX over a range both return references in Excel, so
-/// COUNT, AND and OR treat their selected cell like a one-cell range.
+/// Whether this expression always returns a reference in Excel.
+///
+/// A cell reference and INDEX over a range do. XLOOKUP and the IF family do
+/// not: a hit or a selected reference does, and a scalar fallback does not.
+/// That distinction travels on the value as [`CalcValue::Referenced`].
 fn returns_reference(expr: &Expr) -> bool {
     match expr {
         Expr::Ref(_, _) => true,
         Expr::Call(name, _) => canonical_function_name(name) == "INDEX",
         _ => false,
     }
+}
+
+fn retain_reference(expr: &Expr, value: CalcValue) -> CalcValue {
+    match value {
+        CalcValue::Referenced(_) | CalcValue::Range(_) | CalcValue::Array(_) => value,
+        CalcValue::Scalar(Value::Blank | Value::Error(_)) => value,
+        CalcValue::Scalar(scalar) if returns_reference(expr) => CalcValue::Referenced(scalar),
+        other => other,
+    }
+}
+
+fn keeps_reference(expr: &Expr, evaluated: &CalcValue) -> bool {
+    returns_reference(expr)
+        || matches!(
+            evaluated,
+            CalcValue::Referenced(_) | CalcValue::Range(_) | CalcValue::Array(_)
+        )
 }
 
 fn truthy(v: &Value) -> Result<bool, FormulaError> {
@@ -2885,7 +2923,7 @@ fn eval_call(name: &str, args: &[Expr], env: &Environment<'_>) -> Result<Value, 
             let evaluated = eval(&args[0], env)?;
             let value = match evaluated {
                 CalcValue::Range(_) | CalcValue::Array(_) => return Err(FormulaError::Value),
-                CalcValue::Scalar(value) => value,
+                CalcValue::Scalar(value) | CalcValue::Referenced(value) => value,
             };
             if matches!(name, "EVEN" | "ODD") {
                 let number = to_number(&value)?;
@@ -2898,7 +2936,6 @@ fn eval_call(name: &str, args: &[Expr], env: &Environment<'_>) -> Result<Value, 
             };
             return Ok(Value::Bool(test_integer_parity(number, name == "ISODD")?));
         }
-        "XLOOKUP" | "XMATCH" => return xlookup_family(name, args, env),
         "TEXTBEFORE" | "TEXTAFTER" => return text_extract(name, args, env),
         "ISBLANK" | "ISNUMBER" | "ISTEXT" | "ISLOGICAL" | "ISERR" | "ISERROR" | "ISNA" => {
             arity(name, args, 1, 1)?;
@@ -2911,7 +2948,7 @@ fn eval_call(name: &str, args: &[Expr], env: &Environment<'_>) -> Result<Value, 
             };
             let value = match evaluated {
                 CalcValue::Range(_) | CalcValue::Array(_) => return Err(FormulaError::Value),
-                CalcValue::Scalar(value) => value,
+                CalcValue::Scalar(value) | CalcValue::Referenced(value) => value,
             };
             if matches!(name, "ISERR" | "ISERROR" | "ISNA") {
                 return Ok(Value::Bool(match value {
@@ -2934,8 +2971,11 @@ fn eval_call(name: &str, args: &[Expr], env: &Environment<'_>) -> Result<Value, 
             let cells = match evaluated {
                 CalcValue::Range(rows) => rows.into_iter().flatten().collect::<Vec<_>>(),
                 CalcValue::Array(array) => array.rows.into_iter().flatten().collect::<Vec<_>>(),
-                CalcValue::Scalar(Value::Error(error)) => return Err(error),
-                CalcValue::Scalar(value) => vec![value],
+                CalcValue::Scalar(Value::Error(error))
+                | CalcValue::Referenced(Value::Error(error)) => {
+                    return Err(error);
+                }
+                CalcValue::Scalar(value) | CalcValue::Referenced(value) => vec![value],
             };
             let count = cells
                 .iter()
@@ -2954,8 +2994,7 @@ fn eval_call(name: &str, args: &[Expr], env: &Environment<'_>) -> Result<Value, 
             let mut tested = false;
             for arg in args {
                 let evaluated = eval(arg, env)?;
-                let referenced = returns_reference(arg)
-                    || matches!(evaluated, CalcValue::Range(_) | CalcValue::Array(_));
+                let referenced = keeps_reference(arg, &evaluated);
                 for value in flatten(evaluated) {
                     if referenced && matches!(value, Value::Text(_) | Value::Blank) {
                         continue;
@@ -2983,9 +3022,8 @@ fn eval_call(name: &str, args: &[Expr], env: &Environment<'_>) -> Result<Value, 
             let mut count = 0usize;
             for argument in args {
                 let evaluated = eval(argument, env)?;
-                let referenced = env.primitive_value_profile
-                    || returns_reference(argument)
-                    || matches!(evaluated, CalcValue::Range(_) | CalcValue::Array(_));
+                let referenced =
+                    env.primitive_value_profile || keeps_reference(argument, &evaluated);
                 for value in flatten(evaluated) {
                     count += match value {
                         Value::Number(_) => 1,
@@ -3403,7 +3441,7 @@ fn eval_call(name: &str, args: &[Expr], env: &Environment<'_>) -> Result<Value, 
         "MATCH" => return match_fn(args, &values, name, &env.wildcard_work_remaining),
         "INDEX" => {
             return match index_fn(args, &values, name)? {
-                CalcValue::Scalar(value) => Ok(value),
+                CalcValue::Scalar(value) | CalcValue::Referenced(value) => Ok(value),
                 CalcValue::Range(_) | CalcValue::Array(_) => Err(FormulaError::Value),
             };
         }
@@ -5002,25 +5040,30 @@ fn selection_call(
             arity(name, args, 2, 3)?;
             let condition = truthy(&eval_scalar(&args[0], env)?)?;
             if condition {
-                eval(&args[1], env)
+                eval(&args[1], env).map(|value| retain_reference(&args[1], value))
             } else if args.len() == 3 {
-                eval(&args[2], env)
+                eval(&args[2], env).map(|value| retain_reference(&args[2], value))
             } else {
                 Ok(scalar(Value::Bool(false)))
             }
         }
         "IFERROR" => {
             arity(name, args, 2, 2)?;
-            let value = match eval(&args[0], env) {
+            let (chosen, value) = match eval(&args[0], env) {
                 Ok(CalcValue::Scalar(Value::Error(error))) if error.excel_code().is_some() => {
-                    eval(&args[1], env)
+                    (1, eval(&args[1], env)?)
                 }
-                Err(error) if error.excel_code().is_some() => eval(&args[1], env),
-                Err(error) => Err(error),
-                Ok(value) => Ok(value),
-            }?;
+                Err(error) if error.excel_code().is_some() => (1, eval(&args[1], env)?),
+                Err(error) => return Err(error),
+                Ok(value) => (0, value),
+            };
+            let value = retain_reference(&args[chosen], value);
+            // A blank result is an empty string in this evaluator's IFERROR
+            // profile. That replacement is a direct value, not a reference.
             Ok(match value {
-                CalcValue::Scalar(Value::Blank) if !env.primitive_value_profile => {
+                CalcValue::Scalar(Value::Blank) | CalcValue::Referenced(Value::Blank)
+                    if !env.primitive_value_profile =>
+                {
                     scalar(Value::Text(String::new()))
                 }
                 value => value,
@@ -5030,9 +5073,9 @@ fn selection_call(
             arity(name, args, 2, 2)?;
             match eval(&args[0], env) {
                 Ok(CalcValue::Scalar(Value::Error(FormulaError::NA))) | Err(FormulaError::NA) => {
-                    eval(&args[1], env)
+                    eval(&args[1], env).map(|value| retain_reference(&args[1], value))
                 }
-                Ok(value) => Ok(value),
+                Ok(value) => Ok(retain_reference(&args[0], value)),
                 Err(error) => Err(error),
             }
         }
@@ -5050,7 +5093,10 @@ fn ifs_call(args: &[Expr], env: &Environment<'_>) -> Result<CalcValue, FormulaEr
     }
     for pair in pairs {
         match eval_scalar(&pair[0], env)? {
-            Value::Bool(true) => return eval_selected_result(&pair[1], env),
+            Value::Bool(true) => {
+                return eval_selected_result(&pair[1], env)
+                    .map(|value| retain_reference(&pair[1], value));
+            }
             Value::Bool(false) => {}
             Value::Error(error) => return Err(error),
             _ => return Err(FormulaError::Value),
@@ -5068,11 +5114,13 @@ fn switch_call(args: &[Expr], env: &Environment<'_>) -> Result<CalcValue, Formul
     for offset in (0..pair_argument_count).step_by(2) {
         let match_value = eval_scalar(&args[1 + offset], env)?;
         if switch_equal(&expression, &match_value)? {
-            return eval_selected_result(&args[2 + offset], env);
+            return eval_selected_result(&args[2 + offset], env)
+                .map(|value| retain_reference(&args[2 + offset], value));
         }
     }
     if has_default {
-        return eval_selected_result(args.last().expect("default is the final argument"), env);
+        let default = args.last().expect("default is the final argument");
+        return eval_selected_result(default, env).map(|value| retain_reference(default, value));
     }
     Ok(scalar(Value::Error(FormulaError::NA)))
 }
@@ -5264,7 +5312,11 @@ fn arity(name: &str, args: &[Expr], min: usize, max: usize) -> Result<(), Formul
     }
 }
 
-fn xlookup_family(name: &str, args: &[Expr], env: &Environment<'_>) -> Result<Value, FormulaError> {
+fn xlookup_family(
+    name: &str,
+    args: &[Expr],
+    env: &Environment<'_>,
+) -> Result<CalcValue, FormulaError> {
     let (min, max) = if name == "XLOOKUP" { (3, 6) } else { (2, 4) };
     arity(name, args, min, max)?;
 
@@ -5278,14 +5330,19 @@ fn xlookup_family(name: &str, args: &[Expr], env: &Environment<'_>) -> Result<Va
     propagate_value_error(&lookup)?;
     let lookup_values = as_vector(eval(&args[1], env)?)?;
 
-    let return_values = if name == "XLOOKUP" {
-        let values = as_vector(eval(&args[2], env)?)?;
+    let (return_values, return_is_reference) = if name == "XLOOKUP" {
+        let evaluated = eval(&args[2], env)?;
+        // A range, a cell, INDEX, or a value that already came from a reference
+        // makes a hit a reference. A scalar literal return array does not.
+        let is_reference = returns_reference(&args[2])
+            || matches!(evaluated, CalcValue::Range(_) | CalcValue::Referenced(_));
+        let values = as_vector(evaluated)?;
         if values.len() != lookup_values.len() {
             return Err(FormulaError::Value);
         }
-        Some(values)
+        (Some(values), is_reference)
     } else {
-        None
+        (None, false)
     };
 
     let (match_index, search_index) = if name == "XLOOKUP" { (4, 5) } else { (2, 3) };
@@ -5335,11 +5392,15 @@ fn xlookup_family(name: &str, args: &[Expr], env: &Environment<'_>) -> Result<Va
     }
     if let Some(index) = found {
         return if name == "XMATCH" {
-            Ok(Value::Number((index + 1) as f64))
+            Ok(scalar(Value::Number((index + 1) as f64)))
         } else {
             let value = return_values.expect("XLOOKUP return array was validated")[index].clone();
             propagate_value_error(&value)?;
-            Ok(value)
+            Ok(if return_is_reference {
+                CalcValue::Referenced(value)
+            } else {
+                scalar(value)
+            })
         };
     }
 
@@ -5347,16 +5408,26 @@ fn xlookup_family(name: &str, args: &[Expr], env: &Environment<'_>) -> Result<Va
         && let Some(argument) = args.get(3)
         && !matches!(argument, Expr::Missing)
     {
-        let value = eval_scalar(argument, env)?;
-        propagate_value_error(&value)?;
-        return Ok(value);
+        // The fallback keeps its own provenance. A scalar literal stays a
+        // direct value; a cell or INDEX fallback stays a reference.
+        return match eval(argument, env)? {
+            CalcValue::Referenced(value) => {
+                propagate_value_error(&value)?;
+                Ok(CalcValue::Referenced(value))
+            }
+            CalcValue::Scalar(value) => {
+                propagate_value_error(&value)?;
+                Ok(retain_reference(argument, scalar(value)))
+            }
+            CalcValue::Range(_) | CalcValue::Array(_) => Err(FormulaError::Value),
+        };
     }
     Err(FormulaError::NA)
 }
 
 fn as_vector(value: CalcValue) -> Result<Vec<Value>, FormulaError> {
     match value {
-        CalcValue::Scalar(value) => Ok(vec![value]),
+        CalcValue::Scalar(value) | CalcValue::Referenced(value) => Ok(vec![value]),
         CalcValue::Range(rows) if rows.len() == 1 => Ok(rows.into_iter().next().unwrap()),
         CalcValue::Range(rows) if rows.iter().all(|row| row.len() == 1) => Ok(rows
             .into_iter()
@@ -5425,7 +5496,7 @@ fn excel_casefold(text: &str) -> String {
 }
 fn flatten(v: CalcValue) -> Vec<Value> {
     match v {
-        CalcValue::Scalar(v) => vec![v],
+        CalcValue::Scalar(v) | CalcValue::Referenced(v) => vec![v],
         CalcValue::Range(rows) => rows.into_iter().flatten().collect(),
         CalcValue::Array(array) => array.rows.into_iter().flatten().collect(),
     }
@@ -5620,6 +5691,13 @@ fn criteria_grid(value: &CalcValue, expression: &Expr) -> Result<CriteriaGrid, F
                 _ => Err(FormulaError::Value),
             };
         }
+        CalcValue::Referenced(value) => {
+            return Ok(CriteriaGrid {
+                rows: 1,
+                columns: 1,
+                cells: vec![value.clone()],
+            });
+        }
     };
     if rows.is_empty() || rows[0].is_empty() || rows.iter().any(|row| row.len() != rows[0].len()) {
         return Err(FormulaError::Value);
@@ -5642,8 +5720,9 @@ fn ensure_same_shape(a: &CriteriaGrid, b: &CriteriaGrid) -> Result<(), FormulaEr
 }
 
 fn parse_criteria(value: &CalcValue) -> Result<Criteria, FormulaError> {
-    let CalcValue::Scalar(value) = value else {
-        return Err(FormulaError::Value);
+    let value = match value {
+        CalcValue::Scalar(value) | CalcValue::Referenced(value) => value,
+        CalcValue::Range(_) | CalcValue::Array(_) => return Err(FormulaError::Value),
     };
     if let Value::Error(error) = value {
         // An error as the criterion selects cells holding that error; it is
@@ -6032,7 +6111,7 @@ fn index_fn(args: &[Expr], values: &[CalcValue], name: &str) -> Result<CalcValue
     let rows = match &values[0] {
         CalcValue::Range(rows) => rows.clone(),
         CalcValue::Array(_) => return Err(FormulaError::Value),
-        CalcValue::Scalar(v) => vec![vec![v.clone()]],
+        CalcValue::Scalar(v) | CalcValue::Referenced(v) => vec![vec![v.clone()]],
     };
     let position = |value: &CalcValue| -> Result<usize, FormulaError> {
         let number = to_number(&flatten(value.clone())[0])?;
@@ -6092,7 +6171,7 @@ fn vlookup_fn(
     let table = match &values[1] {
         CalcValue::Range(rows) => rows.clone(),
         CalcValue::Array(_) => return Err(FormulaError::Value),
-        CalcValue::Scalar(v) => vec![vec![v.clone()]],
+        CalcValue::Scalar(v) | CalcValue::Referenced(v) => vec![vec![v.clone()]],
     };
     let col = to_number(&flatten(values[2].clone())[0])? as usize;
     if col == 0 {
@@ -6320,7 +6399,7 @@ fn workday_holidays(
 ) -> Result<HashSet<i64>, FormulaError> {
     let evaluated = eval(expression, env)?;
     let (values, is_range) = match evaluated {
-        CalcValue::Scalar(value) => (vec![value], false),
+        CalcValue::Scalar(value) | CalcValue::Referenced(value) => (vec![value], false),
         CalcValue::Range(rows) => (rows.into_iter().flatten().collect(), true),
         CalcValue::Array(_) => return Err(FormulaError::Value),
     };
@@ -8034,6 +8113,85 @@ mod tests {
         assert_eq!(eval("=SUM(INDEX(D1:E2,0,0))"), Ok(Value::Number(100.0)));
         assert_eq!(eval("=INDEX(D1:E2,2,2)"), Ok(Value::Number(40.0)));
         assert_eq!(eval("=INDEX(D1:E2,-1,1)"), Err(FormulaError::Value));
+        // A successful XLOOKUP over a referenced return array is a reference.
+        // A scalar if_not_found fallback stays a direct value.
+        assert_eq!(
+            eval("=COUNT(XLOOKUP(1,A1:A1,A2:A2))"),
+            Ok(Value::Number(0.0))
+        );
+        assert_eq!(
+            eval("=COUNT(XLOOKUP(1,A1:A1,B1:B1))"),
+            Ok(Value::Number(0.0))
+        );
+        assert_eq!(
+            eval("=COUNT(XLOOKUP(1,A1:A1,D1:D1))"),
+            Ok(Value::Number(1.0))
+        );
+        assert_eq!(
+            eval("=COUNT(XLOOKUP(9,A1:A1,A2:A2,TRUE))"),
+            Ok(Value::Number(1.0))
+        );
+        assert_eq!(
+            eval("=COUNT(XLOOKUP(9,A1:A1,B1:B1,\"2\"))"),
+            Ok(Value::Number(1.0))
+        );
+        assert_eq!(
+            eval("=COUNT(XLOOKUP(9,A1:A1,D1:D1,A2))"),
+            Ok(Value::Number(0.0))
+        );
+        assert_eq!(eval("=XLOOKUP(1,A1:A1,A2:A2)"), Ok(Value::Bool(true)));
+        assert_eq!(eval("=XLOOKUP(9,A1:A1,A2:A2,TRUE)"), Ok(Value::Bool(true)));
+        assert_eq!(eval("=XLOOKUP(1,A1:A1,D1:D1)+1"), Ok(Value::Number(11.0)));
+        assert_eq!(
+            eval("=AND(XLOOKUP(1,A1:A1,A3:A3))"),
+            Err(FormulaError::Value)
+        );
+        assert_eq!(
+            eval("=OR(XLOOKUP(1,A1:A1,A3:A3))"),
+            Err(FormulaError::Value)
+        );
+        assert_eq!(
+            eval("=AND(TRUE,XLOOKUP(1,A1:A1,A3:A3))"),
+            Ok(Value::Bool(true))
+        );
+        assert_eq!(
+            eval("=OR(TRUE,XLOOKUP(1,A1:A1,A3:A3))"),
+            Ok(Value::Bool(true))
+        );
+        assert_eq!(
+            eval("=OR(FALSE,XLOOKUP(1,A1:A1,A3:A3))"),
+            Ok(Value::Bool(false))
+        );
+        // IF and the other selection functions pass the chosen branch's
+        // reference through. A scalar branch stays a direct value.
+        assert_eq!(eval("=COUNT(IF(TRUE,A2))"), Ok(Value::Number(0.0)));
+        assert_eq!(eval("=COUNT(IF(FALSE,A2,TRUE))"), Ok(Value::Number(1.0)));
+        assert_eq!(eval("=COUNT(IF(TRUE,A1:A3))"), Ok(Value::Number(1.0)));
+        assert_eq!(
+            eval("=COUNT(IF(TRUE,XLOOKUP(1,A1:A1,A2:A2)))"),
+            Ok(Value::Number(0.0))
+        );
+        assert_eq!(
+            eval("=COUNT(IF(FALSE,XLOOKUP(1,A1:A1,A2:A2),TRUE))"),
+            Ok(Value::Number(1.0))
+        );
+        assert_eq!(eval("=COUNT(IFERROR(A2,0))"), Ok(Value::Number(0.0)));
+        assert_eq!(eval("=COUNT(IFERROR(1/0,TRUE))"), Ok(Value::Number(1.0)));
+        assert_eq!(
+            eval("=COUNT(IFERROR(XLOOKUP(1,A1:A1,B1:B1),0))"),
+            Ok(Value::Number(0.0))
+        );
+        assert_eq!(eval("=COUNT(IFNA(A2,0))"), Ok(Value::Number(0.0)));
+        assert_eq!(eval("=COUNT(IFNA(NA(),TRUE))"), Ok(Value::Number(1.0)));
+        assert_eq!(eval("=COUNT(IFS(TRUE,A2))"), Ok(Value::Number(0.0)));
+        assert_eq!(
+            eval("=COUNT(IFS(FALSE,A2,TRUE,TRUE))"),
+            Ok(Value::Number(1.0))
+        );
+        assert_eq!(eval("=COUNT(SWITCH(1,1,A2))"), Ok(Value::Number(0.0)));
+        assert_eq!(eval("=COUNT(SWITCH(1,2,A2,TRUE))"), Ok(Value::Number(1.0)));
+        assert_eq!(eval("=AND(TRUE,IF(TRUE,A3))"), Ok(Value::Bool(true)));
+        assert_eq!(eval("=OR(IF(TRUE,A3))"), Err(FormulaError::Value));
         // XLOOKUP over an empty or text-only lookup range is #N/A.
         assert_eq!(eval("=XLOOKUP(1,F1:F2,D1:D2)"), Err(FormulaError::NA));
         assert_eq!(eval("=XLOOKUP(1,G1:G2,D1:D2)"), Err(FormulaError::NA));

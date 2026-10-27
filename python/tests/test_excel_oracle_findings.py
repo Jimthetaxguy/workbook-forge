@@ -64,6 +64,87 @@ def test_and_or_without_a_logical_value_is_value_error(formula):
 @pytest.mark.parametrize(
     ("formula", "expected"),
     [
+        # A successful XLOOKUP over a referenced return array is a reference.
+        ("=COUNT(XLOOKUP(1,A1:A1,A2:A2))", 0),
+        ("=COUNT(XLOOKUP(1,A1:A1,B1:B1))", 0),
+        ("=COUNT(XLOOKUP(1,A1:A1,D1:D1))", 1),
+        # A scalar if_not_found fallback is a direct value, so logicals and
+        # numeric text count. A cell used as the fallback stays a reference.
+        ("=COUNT(XLOOKUP(9,A1:A1,A2:A2,TRUE))", 1),
+        ('=COUNT(XLOOKUP(9,A1:A1,B1:B1,"2"))', 1),
+        ("=COUNT(XLOOKUP(9,A1:A1,D1:D1,A2))", 0),
+        # The looked-up value itself is unchanged when nothing inspects provenance.
+        ("=XLOOKUP(1,A1:A1,A2:A2)", True),
+        ("=XLOOKUP(9,A1:A1,A2:A2,TRUE)", True),
+        ("=XLOOKUP(1,A1:A1,D1:D1)+1", 11),
+    ],
+)
+def test_count_over_xlookup_distinguishes_reference_hits_from_scalar_fallbacks(
+    formula, expected
+):
+    assert evaluate(formula, CELLS) == expected
+
+
+@pytest.mark.parametrize(
+    "formula",
+    [
+        "=AND(XLOOKUP(1,A1:A1,A3:A3))",
+        "=OR(XLOOKUP(1,A1:A1,A3:A3))",
+    ],
+)
+def test_and_or_over_xlookup_text_reference_is_value_error(formula):
+    result = evaluate(formula, CELLS)
+    assert isinstance(result, ErrorValue)
+    assert result.code == "#VALUE!"
+
+
+@pytest.mark.parametrize(
+    ("formula", "expected"),
+    [
+        ("=AND(TRUE,XLOOKUP(1,A1:A1,A3:A3))", True),
+        ("=OR(TRUE,XLOOKUP(1,A1:A1,A3:A3))", True),
+        ("=OR(FALSE,XLOOKUP(1,A1:A1,A3:A3))", False),
+    ],
+)
+def test_and_or_ignore_text_from_an_xlookup_hit(formula, expected):
+    assert evaluate(formula, CELLS) is expected
+
+
+@pytest.mark.parametrize(
+    ("formula", "expected"),
+    [
+        # IF, IFERROR, IFNA, IFS and SWITCH pass the chosen branch's reference
+        # through. A scalar branch stays a direct value.
+        ("=COUNT(IF(TRUE,A2))", 0),
+        ("=COUNT(IF(FALSE,A2,TRUE))", 1),
+        ("=COUNT(IF(TRUE,A1:A3))", 1),
+        ("=COUNT(IF(TRUE,XLOOKUP(1,A1:A1,A2:A2)))", 0),
+        ("=COUNT(IF(FALSE,XLOOKUP(1,A1:A1,A2:A2),TRUE))", 1),
+        ("=COUNT(IFERROR(A2,0))", 0),
+        ("=COUNT(IFERROR(1/0,TRUE))", 1),
+        ("=COUNT(IFERROR(XLOOKUP(1,A1:A1,B1:B1),0))", 0),
+        ("=COUNT(IFNA(A2,0))", 0),
+        ("=COUNT(IFNA(NA(),TRUE))", 1),
+        ("=COUNT(IFS(TRUE,A2))", 0),
+        ("=COUNT(IFS(FALSE,A2,TRUE,TRUE))", 1),
+        ("=COUNT(SWITCH(1,1,A2))", 0),
+        ("=COUNT(SWITCH(1,2,A2,TRUE))", 1),
+        ("=AND(TRUE,IF(TRUE,A3))", True),
+        ("=OR(IF(TRUE,A3))", None),
+    ],
+)
+def test_selection_functions_keep_reference_provenance(formula, expected):
+    result = evaluate(formula, CELLS)
+    if expected is None:
+        assert isinstance(result, ErrorValue)
+        assert result.code == "#VALUE!"
+    else:
+        assert result == expected
+
+
+@pytest.mark.parametrize(
+    ("formula", "expected"),
+    [
         ('=SEARCH("*","a*b")', 1),
         ('=SEARCH("b?d","abcd")', 2),
         ('=SEARCH("C*E","abcde")', 3),

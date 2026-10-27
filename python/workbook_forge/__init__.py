@@ -97,6 +97,26 @@ class _Range:
 
 
 @dataclass(frozen=True, slots=True)
+class _Referenced:
+    """A scalar Excel still treats as a one-cell reference.
+
+    Successful XLOOKUP over a referenced return array, and a branch that IF,
+    IFERROR, IFNA, IFS or SWITCH selects from a reference, keep this marker.
+    COUNT, AND and OR honor it. Value contexts unwrap it. A scalar
+    ``if_not_found`` literal never receives the marker.
+    """
+
+    value: Scalar
+
+
+def _dereference(value: object) -> object:
+    """Drop reference provenance where Excel would read the cell's value."""
+    if isinstance(value, _Referenced):
+        return value.value
+    return value
+
+
+@dataclass(frozen=True, slots=True)
 class _Criterion:
     operator: str
     expected: object
@@ -530,6 +550,8 @@ def _apply_binary_values(
 def _apply_binary_scalar(
     op: str, left: object, right: object, *, worksheet: bool = False
 ) -> Scalar | ErrorValue:
+    left = _dereference(left)
+    right = _dereference(right)
     if isinstance(left, ErrorValue):
         return left
     if worksheet and op in ("=", "<>", "<", "<=", ">", ">="):
@@ -625,6 +647,7 @@ def _apply_binary_scalar(
 
 
 def _number(value: object) -> float | int | ErrorValue:
+    value = _dereference(value)
     if isinstance(value, ErrorValue):
         return value
     if value is None:
@@ -816,7 +839,7 @@ def _filter_matrix(value: object) -> tuple[tuple[Scalar, ...], ...]:
             value.values[offset : offset + value.columns]
             for offset in range(0, value.rows * value.columns, value.columns)
         )
-    return ((value,),)  # type: ignore[return-value]
+    return ((_dereference(value),),)  # type: ignore[return-value]
 
 
 def _sort_text_key(value: str) -> str:
@@ -859,7 +882,7 @@ def _sort_call(
     def optional(index: int, default: object) -> object | ErrorValue:
         if index >= len(arguments) or arguments[index].kind == "missing":
             return default
-        value = _eval(arguments[index], cells, sheet_name, budget)
+        value = _dereference(_eval(arguments[index], cells, sheet_name, budget))
         if isinstance(value, ErrorValue):
             return value
         if isinstance(value, (_Range, ArrayValue)):
@@ -1093,6 +1116,8 @@ def _filter_call(
 
 def _switch_equal(left: object, right: object) -> bool | ErrorValue:
     """Compare scalar SWITCH values under the evaluator's explicit type profile."""
+    left = _dereference(left)
+    right = _dereference(right)
     if isinstance(left, ErrorValue):
         return left
     if isinstance(right, ErrorValue):
@@ -1282,6 +1307,7 @@ def _trunc_call(
 
 
 def _text(value: object) -> str | ErrorValue:
+    value = _dereference(value)
     if value is None:
         return ""
     if isinstance(value, bool):
@@ -1374,6 +1400,7 @@ def _substitute_bounded(
 
 
 def _truth(value: object) -> bool | ErrorValue:
+    value = _dereference(value)
     if isinstance(value, ErrorValue):
         return value
     if value is None:
@@ -2314,43 +2341,49 @@ def _eval(
                 if condition
                 else (node.children[2] if len(node.children) == 3 else _Node("literal", False))
             )
-            return _eval(branch, cells, sheet_name, budget)
+            return _with_reference(branch, _eval(branch, cells, sheet_name, budget))
         if name == "IFERROR":
             if len(node.children) != 2:
                 return _arity(name, "2", len(node.children))
             value = _eval(node.children[0], cells, sheet_name, budget)
-            result = (
-                _eval(node.children[1], cells, sheet_name, budget)
-                if isinstance(value, ErrorValue)
-                else value
-            )
-            return "" if result is None and cells is not None else result
+            if isinstance(value, ErrorValue):
+                chosen = node.children[1]
+                result = _eval(chosen, cells, sheet_name, budget)
+            else:
+                chosen = node.children[0]
+                result = value
+            result = _with_reference(chosen, result)
+            # A blank result is an empty string in this evaluator's IFERROR
+            # profile. That replacement is a direct value, not a reference.
+            return "" if _dereference(result) is None and cells is not None else result
         if name == "IFNA":
             if len(node.children) != 2:
                 return _arity(name, "2", len(node.children))
             value = _eval(node.children[0], cells, sheet_name, budget)
             if isinstance(value, ErrorValue) and value.code in {"#N/A", "#N/A!"}:
-                return _eval(node.children[1], cells, sheet_name, budget)
-            return value
+                return _with_reference(
+                    node.children[1], _eval(node.children[1], cells, sheet_name, budget)
+                )
+            return _with_reference(node.children[0], value)
         if name == "IFS":
             if not 2 <= len(node.children) <= 254 or len(node.children) % 2:
                 return _arity(name, "2 through 254 even-numbered arguments", len(node.children))
             for index in range(0, len(node.children), 2):
-                condition = _eval(node.children[index], cells, sheet_name, budget)
+                condition = _dereference(_eval(node.children[index], cells, sheet_name, budget))
                 if isinstance(condition, ErrorValue):
                     return condition
                 if not isinstance(condition, bool):
                     return ErrorValue("#VALUE!", "IFS logical tests must evaluate to TRUE or FALSE")
                 if condition:
                     result = node.children[index + 1]
-                    return (
-                        0 if result.kind == "missing" else _eval(result, cells, sheet_name, budget)
-                    )
+                    if result.kind == "missing":
+                        return 0
+                    return _with_reference(result, _eval(result, cells, sheet_name, budget))
             return ErrorValue("#N/A", "IFS found no TRUE logical test")
         if name == "SWITCH":
             if not 3 <= len(node.children) <= 254:
                 return _arity(name, "3 through 254", len(node.children))
-            expression = _eval(node.children[0], cells, sheet_name, budget)
+            expression = _dereference(_eval(node.children[0], cells, sheet_name, budget))
             if isinstance(expression, ErrorValue):
                 return expression
             if isinstance(expression, (_Range, ArrayValue)):
@@ -2365,12 +2398,14 @@ def _eval(
                     return equal
                 if equal:
                     result = node.children[2 + offset]
-                    return (
-                        0 if result.kind == "missing" else _eval(result, cells, sheet_name, budget)
-                    )
+                    if result.kind == "missing":
+                        return 0
+                    return _with_reference(result, _eval(result, cells, sheet_name, budget))
             if has_default:
                 default = node.children[-1]
-                return 0 if default.kind == "missing" else _eval(default, cells, sheet_name, budget)
+                if default.kind == "missing":
+                    return 0
+                return _with_reference(default, _eval(default, cells, sheet_name, budget))
             return ErrorValue("#N/A", "SWITCH found no matching value and has no default")
         if name == "XLOOKUP":
             if not 3 <= len(node.children) <= 6:
@@ -2401,14 +2436,21 @@ def _eval(
             if isinstance(result, ErrorValue):
                 return result
             if found:
-                return result
+                if isinstance(result, ErrorValue):
+                    return result
+                # return_array is a cell range, so the selected cell is a reference.
+                return _Referenced(result)
             if len(node.children) >= 4 and node.children[3].kind != "missing":
-                fallback = _eval(node.children[3], cells, sheet_name, budget)
-                if isinstance(fallback, (_Range, ArrayValue)):
+                fallback = node.children[3]
+                fallback_value = _eval(fallback, cells, sheet_name, budget)
+                if isinstance(fallback_value, (_Range, ArrayValue)):
                     return ErrorValue(
                         "#VALUE!", "XLOOKUP if_not_found must be scalar in this evaluator"
                     )
-                return fallback
+                # A scalar literal stays a direct value. A fallback that is
+                # itself a reference, such as a cell or INDEX, keeps that
+                # provenance instead of inheriting it from the XLOOKUP call.
+                return _with_reference(fallback, fallback_value)
             return ErrorValue("#N/A", "XLOOKUP value not found")
         args = tuple(
             _OPTIONAL_OMITTED
@@ -2455,19 +2497,14 @@ def _eval(
             # reference. The primitive API keeps its documented legacy
             # profile, where every argument is coerced like a reference.
             args = tuple(
-                _Range((value,), 1, 1)
-                if (_returns_reference(child) or cells is None)
-                and not isinstance(value, (_Range, ArrayValue))
-                else value
+                _as_reference_argument(child, value, primitive=cells is None)
                 for child, value in zip(node.children, args)
             )
         elif name in {"AND", "OR"}:
             # Microsoft: text and empty cells in an array or reference
             # argument are ignored; a single-cell reference is a reference.
             args = tuple(
-                _Range((value,), 1, 1)
-                if _returns_reference(child) and not isinstance(value, (_Range, ArrayValue))
-                else value
+                _as_reference_argument(child, value, primitive=False)
                 for child, value in zip(node.children, args)
             )
         return _function(name, args, budget)
@@ -2475,15 +2512,40 @@ def _eval(
 
 
 def _returns_reference(node: _Node) -> bool:
-    """Whether a scalar argument still came from a cell reference.
+    """Whether this expression always returns a reference in Excel.
 
-    A cell reference and INDEX over a range both return references in Excel,
-    so functions with reference-specific coercion (COUNT, AND, OR) must treat
-    their single selected cell like a one-cell range.
+    A cell reference and INDEX over a range do. XLOOKUP and the IF family do
+    not: a hit or a selected reference does, and a scalar fallback does not.
+    That distinction travels on the value as :class:`_Referenced`.
     """
     return node.kind == "cell" or (
         node.kind == "call" and _canonical_function_name(str(node.value)) == "INDEX"
     )
+
+
+def _with_reference(node: _Node, value: object) -> object:
+    """Attach reference provenance when `node` returns a reference.
+
+    Ranges, arrays, errors, blanks and values that already carry the marker
+    pass through. A blank stays blank so IFERROR can keep its empty-string
+    replacement, which is a direct value rather than a reference.
+    """
+    if isinstance(value, (_Referenced, _Range, ArrayValue, ErrorValue)) or value is None:
+        return value
+    if _returns_reference(node):
+        return _Referenced(value)
+    return value
+
+
+def _as_reference_argument(child: _Node, value: object, *, primitive: bool) -> object:
+    """Present one COUNT, AND or OR argument with Excel's reference rules."""
+    if isinstance(value, _Referenced):
+        return _Range((value.value,), 1, 1)
+    if isinstance(value, (_Range, ArrayValue)):
+        return value
+    if primitive or _returns_reference(child):
+        return _Range((value,), 1, 1)
+    return value
 
 
 def _text_extract(
@@ -2650,6 +2712,8 @@ def _arity(name: str, expected: str, actual: int) -> ErrorValue:
 
 
 def _is_lookup_match(candidate: object, lookup_value: object) -> bool:
+    candidate = _dereference(candidate)
+    lookup_value = _dereference(lookup_value)
     if isinstance(candidate, str) and isinstance(lookup_value, str):
         return candidate.casefold() == lookup_value.casefold()
     return candidate == lookup_value
@@ -2970,6 +3034,9 @@ def _function(
     args: tuple[object, ...],
     budget: _WildcardBudget,
 ) -> object:
+    # COUNT, AND and OR have already turned reference provenance into ranges.
+    # Every other function reads the underlying value.
+    args = tuple(_dereference(arg) for arg in args)
     fixed = {
         "ABS": (1, 1),
         "EVEN": (1, 1),
@@ -4789,7 +4856,7 @@ def evaluate_result(
         return ErrorValue("#VALUE!", "formula is empty")
     try:
         budget = _WildcardBudget()
-        value = _eval(_Parser(source).parse(), normalized, sheet_name, budget)
+        value = _dereference(_eval(_Parser(source).parse(), normalized, sheet_name, budget))
         if isinstance(value, ArrayValue):
             return _check_text_result(value)
         if isinstance(value, _Range):
