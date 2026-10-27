@@ -2449,6 +2449,27 @@ def _eval(
                 else value
                 for child, value in zip(node.children, args)
             )
+        elif name == "COUNT":
+            # Microsoft: COUNT counts logical values and numeric text typed
+            # directly into the argument list, but only numbers held in a
+            # reference. The primitive API keeps its documented legacy
+            # profile, where every argument is coerced like a reference.
+            args = tuple(
+                _Range((value,), 1, 1)
+                if (child.kind == "cell" or cells is None)
+                and not isinstance(value, (_Range, ArrayValue))
+                else value
+                for child, value in zip(node.children, args)
+            )
+        elif name in {"AND", "OR"}:
+            # Microsoft: text and empty cells in an array or reference
+            # argument are ignored; a single-cell reference is a reference.
+            args = tuple(
+                _Range((value,), 1, 1)
+                if child.kind == "cell" and not isinstance(value, (_Range, ArrayValue))
+                else value
+                for child, value in zip(node.children, args)
+            )
         return _function(name, args, budget)
     return ErrorValue("#VALUE!", f"unsupported syntax node {node.kind!r}")
 
@@ -2620,6 +2641,46 @@ def _is_lookup_match(candidate: object, lookup_value: object) -> bool:
     if isinstance(candidate, str) and isinstance(lookup_value, str):
         return candidate.casefold() == lookup_value.casefold()
     return candidate == lookup_value
+
+
+def _wildcard_search(
+    pattern: _WildcardPattern,
+    text: str,
+    start: int,
+    budget: _WildcardBudget,
+) -> int | None | ErrorValue:
+    """Return the earliest offset at or after start where pattern matches a prefix."""
+    width = len(text)
+    cost = (len(pattern.tokens) + 1) * (width + 1)
+    if not budget.consume(cost):
+        return ErrorValue(
+            "#VALUE!",
+            f"wildcard work exceeds the Workbook Forge {MAX_WILDCARD_WORK}-step limit",
+        )
+    # previous[offset] holds the earliest start whose match of the tokens so
+    # far ends at offset, or None when no start reaches it.
+    previous: list[int | None] = [
+        offset if offset >= start else None for offset in range(width + 1)
+    ]
+    for token in pattern.tokens:
+        current: list[int | None] = [None] * (width + 1)
+        if token.kind == "many":
+            current[0] = previous[0]
+            for offset in range(1, width + 1):
+                candidates = [
+                    value for value in (previous[offset], current[offset - 1]) if value is not None
+                ]
+                current[offset] = min(candidates) if candidates else None
+        elif token.kind == "one":
+            for offset in range(1, width + 1):
+                current[offset] = previous[offset - 1]
+        else:
+            for offset in range(1, width + 1):
+                if text[offset - 1].lower() == token.literal:
+                    current[offset] = previous[offset - 1]
+        previous = current
+    reached = [value for value in previous if value is not None]
+    return min(reached) if reached else None
 
 
 def _wildcard_lookup_match(
@@ -3168,10 +3229,26 @@ def _function(
         )
     flat = _flatten(args)
     if name == "COUNT":
-        # Microsoft: arguments that are error values are not counted.
-        return sum(
-            isinstance(value, (int, float)) and not isinstance(value, bool) for value in flat
-        )
+        # Microsoft: error values and text that cannot be read as a number are
+        # not counted. Inside a reference or array only numbers count; typed
+        # directly, logical values and numeric text count too, so
+        # COUNT(1,TRUE) is 2 while COUNT(A1:A2) over 1 and TRUE is 1.
+        count = 0
+        for argument in args:
+            if isinstance(argument, (_Range, ArrayValue)):
+                count += sum(
+                    isinstance(value, (int, float)) and not isinstance(value, bool)
+                    for value in _flatten((argument,))
+                )
+            elif isinstance(argument, (bool, int, float)):
+                count += 1
+            elif (
+                isinstance(argument, str)
+                and argument.strip() != ""
+                and not isinstance(_number(argument), ErrorValue)
+            ):
+                count += 1
+        return count
     if name == "COUNTA":
         # Microsoft: COUNTA counts any type of information, including error values.
         return sum(value is not None for value in flat)
@@ -3197,9 +3274,22 @@ def _function(
             return 0
         return min(numbers) if name == "MIN" else max(numbers)
     if name in {"AND", "OR"}:
-        truth_values = [_truth(value) for value in flat if value is not None]
+        # Microsoft: text and empty cells inside an array or reference are
+        # ignored; with no logical value left the result is #VALUE!.
+        truth_values: list[bool | ErrorValue] = []
+        for argument in args:
+            if isinstance(argument, (_Range, ArrayValue)):
+                truth_values.extend(
+                    _truth(value)
+                    for value in _flatten((argument,))
+                    if value is not None and not isinstance(value, str)
+                )
+            elif argument is not None:
+                truth_values.append(_truth(argument))
         if any(isinstance(value, ErrorValue) for value in truth_values):
             return next(value for value in truth_values if isinstance(value, ErrorValue))
+        if not truth_values:
+            return ErrorValue("#VALUE!", f"{name} has no logical values to test")
         return all(truth_values) if name == "AND" else any(truth_values)
     if name == "NOT":
         result = _truth(args[0])
@@ -3517,7 +3607,20 @@ def _function(
                 "#VALUE!", f"{name} start_num must be from 1 through text length plus 1"
             )
         if name == "SEARCH":
-            # Wildcards are deliberately treated as ordinary characters here.
+            # Microsoft: SEARCH accepts ? (one character), * (any run) and ~
+            # to escape either; the result is where the earliest match starts.
+            pattern = _wildcard_pattern(needle)
+            if isinstance(pattern, ErrorValue):
+                return pattern
+            if pattern is not None:
+                found = _wildcard_search(pattern, haystack, start - 1, budget)
+                if isinstance(found, ErrorValue):
+                    return found
+                return (
+                    found + 1
+                    if found is not None
+                    else ErrorValue("#VALUE!", "SEARCH text was not found")
+                )
             needle, haystack = needle.casefold(), haystack.casefold()
         found = haystack.find(needle, start - 1)
         return found + 1 if found >= 0 else ErrorValue("#VALUE!", f"{name} text was not found")
@@ -3675,10 +3778,22 @@ def _function(
             return ErrorValue(
                 "#REF!", "INDEX supports only area_num=1 for a single rectangular reference"
             )
-        if not isinstance(row, int) or not isinstance(column, int) or row < 1 or column < 1:
-            return ErrorValue("#VALUE!", "INDEX row and column numbers must be positive integers")
+        if not isinstance(row, int) or not isinstance(column, int) or row < 0 or column < 0:
+            return ErrorValue(
+                "#VALUE!", "INDEX row and column numbers must be non-negative integers"
+            )
         if row > array.rows or column > array.columns:
             return ErrorValue("#REF!", "INDEX row or column is outside the array")
+        # Microsoft: row_num 0 returns the whole column and column_num 0 the
+        # whole row; both 0 return the whole reference.
+        if row == 0 or column == 0:
+            rows = range(array.rows) if row == 0 else (row - 1,)
+            columns = range(array.columns) if column == 0 else (column - 1,)
+            return _Range(
+                tuple(array.values[r * array.columns + c] for r in rows for c in columns),
+                len(rows),
+                len(columns),
+            )
         return array.values[(row - 1) * array.columns + column - 1]
     return ErrorValue("#NAME?", f"unsupported function {name}")
 
