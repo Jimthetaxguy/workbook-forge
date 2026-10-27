@@ -350,7 +350,7 @@ export class ForgeUniverAdapter {
       if (e.code === 'nothing_to_redo') return (this.notice('Nothing to redo.'), false);
       const revisions = e.current_revision ? ` (expected r${e.expected_revision}, Forge at r${e.current_revision})` : '';
       this.notice(`Forge rejected ${label}: ${e.code}: ${e.message}${revisions}`);
-      this.reprojectAll();
+      this.reprojectAll(op.type === 'set_cells' ? op.edits.map((edit) => `${edit.sheet}!${edit.address}`) : []);
       return false;
     }
     this.revision = result.value.revision;
@@ -419,9 +419,11 @@ export class ForgeUniverAdapter {
     const [snapshot, calc] = await this.read();
     const bySheet = new Map<string, Record<number, Record<number, ICellData>>>();
     const diverged = new Set(this.divergenceEntries().map(({ key }) => key));
+    const present = new Set<string>();
     for (const sheet of snapshot.sheets) {
       for (const [address, cell] of Object.entries(sheet.cells)) {
         const key = `${sheet.name}!${address}`;
+        present.add(key);
         const value = cell.formula !== undefined ? scalar(calc[key]) : cell.value;
         const data = toCellData(value, cell.formula);
         const next: Projected = { value, f: cell.formula };
@@ -439,18 +441,47 @@ export class ForgeUniverAdapter {
         bySheet.set(sheet.name, matrix);
       }
     }
-    this.write(bySheet);
-  }
-
-  /** Restore Univer to the last projection, e.g. after a rejected edit. */
-  private reprojectAll() {
-    const bySheet = new Map<string, Record<number, Record<number, ICellData>>>();
-    for (const [key, cell] of this.projected) {
+    // A cell Forge no longer holds (an undone insertion) is absent: blank it.
+    for (const key of [...this.projected.keys()]) {
+      if (present.has(key)) continue;
+      this.projected.delete(key);
       const { sheetName, address } = splitCellKey(key);
       const { row, col } = fromA1(address);
       const matrix = bySheet.get(sheetName) ?? {};
-      (matrix[row] ??= {})[col] = toCellData(cell.value, cell.f);
+      (matrix[row] ??= {})[col] = toCellData(null);
       bySheet.set(sheetName, matrix);
+    }
+    this.write(bySheet);
+  }
+
+  /**
+   * Restore Univer to the last projection, e.g. after a rejected edit.
+   * `alsoClear` names cells the rejected edit typed into that Forge does not
+   * hold (for example an out-of-bounds insertion), so their editor text is
+   * wiped instead of lingering in the view.
+   */
+  private reprojectAll(alsoClear: string[] = []) {
+    const bySheet = new Map<string, Record<number, Record<number, ICellData>>>();
+    const put = (key: string, data: ICellData) => {
+      const { sheetName, address } = splitCellKey(key);
+      const { row, col } = fromA1(address);
+      const matrix = bySheet.get(sheetName) ?? {};
+      (matrix[row] ??= {})[col] = data;
+      bySheet.set(sheetName, matrix);
+    };
+    for (const [key, cell] of this.projected) put(key, toCellData(cell.value, cell.f));
+    for (const key of alsoClear) {
+      if (this.projected.has(key)) continue;
+      let sheetName: string, row: number, col: number;
+      try {
+        ({ sheetName } = splitCellKey(key));
+        ({ row, col } = fromA1(splitCellKey(key).address));
+      } catch {
+        continue; // not an address Univer could have shown
+      }
+      const sheet = this.workbook()?.getSheetBySheetId(this.sheetIds.get(sheetName) ?? '');
+      if (!sheet || row >= sheet.getRowCount() || col >= sheet.getColumnCount()) continue;
+      put(key, toCellData(null));
     }
     this.write(bySheet);
   }

@@ -614,6 +614,8 @@ struct Decoded {
     model: WorkbookModel,
     workbook_part: String,
     sheet_parts: BTreeMap<String, String>,
+    /// Sheet name -> merged ranges `(c1, r1, c2, r2)` from `<mergeCells>`.
+    merged: BTreeMap<String, Vec<(u32, u32, u32, u32)>>,
     date1904: bool,
     capabilities: Json,
 }
@@ -696,6 +698,7 @@ fn decode_mode(
         ..WorkbookModel::default()
     };
     let mut sheet_parts = BTreeMap::new();
+    let mut merged = BTreeMap::new();
     let mut region_work = 0;
     let mut cell_work = 0;
     let mut width_work = 0;
@@ -943,6 +946,15 @@ fn decode_mode(
         if sheet_parts.values().any(|existing| existing == &part) {
             return Err(err("worksheets cannot share the same package part"));
         }
+        let mut ranges = Vec::new();
+        for merge in xml
+            .child(root, "mergeCells")
+            .into_iter()
+            .flat_map(|n| xml.children(n, MAIN, "mergeCell"))
+        {
+            ranges.push(bounds(attr(merge, "ref")?)?);
+        }
+        merged.insert(name.to_string(), ranges);
         sheet_parts.insert(name.into(), part);
         model.sheets.push(sheet);
     }
@@ -956,11 +968,12 @@ fn decode_mode(
         .flat_map(|n| wb.children(n, MAIN, "definedName"))
         .map(|n| json!({"attributes":n.attrs,"expression":n.text}))
         .collect();
-    let capabilities = json!({"backend":"rust-ooxml","date_system":if date1904{"1904"}else{"1900"},"styles":styles.len(),"defined_names":names,"tables":table_metadata,"validation":validation_metadata,"supported":["UTF-8 macro-free transitional XLSX","scalar cells","normal formulas","basic styles","column widths","existing-cell content edits"],"preserved_only":["unknown package parts","unknown worksheet XML","names","tables","imported styles and validation"],"rejected":["macros","external execution","new-cell insertion on import","imported style/layout/validation changes","1904 formula calculation and edits","grouped/table result edits"],"parts":package.parts.keys().collect::<Vec<_>>()});
+    let capabilities = json!({"backend":"rust-ooxml","date_system":if date1904{"1904"}else{"1900"},"styles":styles.len(),"defined_names":names,"tables":table_metadata,"validation":validation_metadata,"supported":["UTF-8 macro-free transitional XLSX","scalar cells","normal formulas","basic styles","column widths","existing-cell content edits","absent-cell value/formula insertion within the session grid bound"],"preserved_only":["unknown package parts","unknown worksheet XML","names","tables","imported styles and validation"],"rejected":["macros","external execution","insertion into merged non-anchor cells or outside the session grid bound","imported style/layout/validation changes","1904 formula calculation and edits","grouped/table result edits"],"parts":package.parts.keys().collect::<Vec<_>>()});
     Ok(Decoded {
         model,
         workbook_part,
         sheet_parts,
+        merged,
         date1904,
         capabilities,
     })
@@ -1033,8 +1046,42 @@ pub struct ImportedWorkbook {
     session: Session,
     workbook_part: String,
     sheet_parts: BTreeMap<String, String>,
+    /// Sheet name -> merged ranges `(c1, r1, c2, r2)`; their non-anchor cells
+    /// never receive inserted cells.
+    merged: BTreeMap<String, Vec<(u32, u32, u32, u32)>>,
+    /// `(rows, columns)`: the largest row and column an absent cell may be
+    /// inserted at. Excel's grid unless the session declared a smaller one.
+    insertion_bound: (u32, u32),
     date1904: bool,
     capabilities: Json,
+}
+/// Excel's last row (1,048,576).
+pub const EXCEL_MAX_ROWS: u32 = 1_048_576;
+/// Excel's last column (16,384, `XFD`).
+pub const EXCEL_MAX_COLUMNS: u32 = 16_384;
+/// Whether a syntactically A1-shaped address lies beyond Excel's grid.
+/// Malformed addresses return `false` and are reported by the resolver.
+fn outside_excel_grid(address: &str) -> bool {
+    let plain = address.replace('$', "");
+    let letters = plain.bytes().take_while(u8::is_ascii_alphabetic).count();
+    let (column, row) = plain.split_at(letters);
+    if column.is_empty()
+        || row.is_empty()
+        || !row.bytes().all(|b| b.is_ascii_digit())
+        || row.starts_with('0')
+    {
+        return false;
+    }
+    let column = column.bytes().try_fold(0u64, |acc, b| {
+        acc.checked_mul(26)?
+            .checked_add(u64::from(b.to_ascii_uppercase() - b'A' + 1))
+    });
+    match (column, row.parse::<u64>()) {
+        (Some(column), Ok(row)) => {
+            column > u64::from(EXCEL_MAX_COLUMNS) || row > u64::from(EXCEL_MAX_ROWS)
+        }
+        _ => true,
+    }
 }
 pub fn import_xlsx(
     path: impl AsRef<Path>,
@@ -1074,6 +1121,8 @@ fn import_package(
         session: Session::new(decoded.model)?,
         workbook_part: decoded.workbook_part,
         sheet_parts: decoded.sheet_parts,
+        merged: decoded.merged,
+        insertion_bound: (EXCEL_MAX_ROWS, EXCEL_MAX_COLUMNS),
         date1904: decoded.date1904,
         capabilities: decoded.capabilities,
     })
@@ -1089,7 +1138,10 @@ impl ImportedWorkbook {
                 .sheets
                 .iter()
                 .zip(&model.sheets)
-                .any(|(before, after)| before.cells.keys().ne(after.cells.keys()))
+                .any(|(before, after)| {
+                    before.name != after.name
+                        || before.cells.keys().any(|a| !after.cells.contains_key(a))
+                })
         {
             return Err(err(
                 "transferred snapshot must retain all source cell addresses",
@@ -1103,6 +1155,18 @@ impl ImportedWorkbook {
                     ));
                 }
             }
+            // Cells the source did not hold are insertions: the same bound
+            // and merge guards as a live edit apply.
+            for (address, cell) in &after.cells {
+                if before.cells.contains_key(address) {
+                    continue;
+                }
+                if cell.blocked_reason.is_some() {
+                    return Err(err("transferred snapshot cannot add preserved-only guards"));
+                }
+                let (col, row) = coordinate(address)?;
+                self.check_insertion(&after.name, col, row)?;
+            }
         }
         Self {
             source: self.source.clone(),
@@ -1111,6 +1175,8 @@ impl ImportedWorkbook {
             session: Session::new(model)?,
             workbook_part: self.workbook_part.clone(),
             sheet_parts: self.sheet_parts.clone(),
+            merged: self.merged.clone(),
+            insertion_bound: self.insertion_bound,
             date1904: self.date1904,
             capabilities: self.capabilities.clone(),
         }
@@ -1138,7 +1204,48 @@ impl ImportedWorkbook {
     pub fn calculate(&self, workers: usize) -> CalculationReport {
         self.session.calculate(workers)
     }
+    /// Declare a smaller grid for this session: absent cells may only be
+    /// inserted at rows `1..=rows` and columns `1..=columns`. Cells the
+    /// workbook already holds stay editable wherever they are.
+    pub fn with_insertion_bound(mut self, rows: u32, columns: u32) -> Result<Self> {
+        if !(1..=EXCEL_MAX_ROWS).contains(&rows) || !(1..=EXCEL_MAX_COLUMNS).contains(&columns) {
+            return Err(err(format!(
+                "invalid_bound: insertion bound must be within 1..={EXCEL_MAX_ROWS} rows and 1..={EXCEL_MAX_COLUMNS} columns"
+            )));
+        }
+        self.insertion_bound = (rows, columns);
+        Ok(self)
+    }
+    /// `(rows, columns)` an absent cell may be inserted within.
+    pub fn insertion_bound(&self) -> (u32, u32) {
+        self.insertion_bound
+    }
+    /// May a cell absent from `sheet` be inserted at `(col, row)`?
+    fn check_insertion(&self, sheet: &str, col: u32, row: u32) -> Result<()> {
+        let (rows, columns) = self.insertion_bound;
+        if row > rows || col > columns {
+            return Err(err(format!(
+                "out_of_bounds: {sheet}!{} is outside this session's grid of {rows} rows x {columns} columns",
+                address(col, row)
+            )));
+        }
+        if self.merged.get(sheet).is_some_and(|ranges| {
+            ranges.iter().any(|&(c1, r1, c2, r2)| {
+                (c1..=c2).contains(&col) && (r1..=r2).contains(&row) && (col, row) != (c1, r1)
+            })
+        }) {
+            return Err(err(format!(
+                "unsupported_edit: {sheet}!{} is inside a merged range; only its top-left cell can hold content",
+                address(col, row)
+            )));
+        }
+        Ok(())
+    }
+    /// Check edits against the session's current model (not the import):
+    /// a cell an earlier edit inserted is an existing cell now, and a cell
+    /// an undo made absent again is an insertion again.
     pub(crate) fn validate_edits(&self, edits: &[Edit]) -> Result<()> {
+        let mut keys = Vec::with_capacity(edits.len());
         for edit in edits {
             if self.date1904 && edit.formula.is_some() {
                 return Err(err("1904 formula edits are unsupported"));
@@ -1146,15 +1253,42 @@ impl ImportedWorkbook {
             if edit.style.is_some() {
                 return Err(err("imported style edits are unsupported"));
             }
-            let sheet = self
+            if !self
                 .original
                 .sheets
                 .iter()
-                .find(|s| s.name.eq_ignore_ascii_case(&edit.sheet))
-                .ok_or_else(|| err("unknown worksheet"))?;
-            let (col, row) = coordinate(&edit.address)?;
-            if !sheet.cells.contains_key(&address(col, row)) {
-                return Err(err("new-cell insertion on import is unsupported"));
+                .any(|s| s.name.eq_ignore_ascii_case(&edit.sheet))
+            {
+                return Err(err("unknown worksheet"));
+            }
+            if outside_excel_grid(&edit.address) {
+                return Err(err(format!(
+                    "out_of_bounds: {}!{} is outside the Excel grid of {EXCEL_MAX_ROWS} rows x {EXCEL_MAX_COLUMNS} columns",
+                    edit.sheet, edit.address
+                )));
+            }
+            keys.push(self.session.resolve_key(&edit.sheet, &edit.address)?);
+        }
+        let current = self.session.read_cells(&keys);
+        for ((edit, key), cell) in edits.iter().zip(&keys).zip(&current) {
+            let (sheet, reference) = key.rsplit_once('!').unwrap_or(("", key));
+            if edit.restore_absent {
+                let source = self
+                    .original
+                    .sheets
+                    .iter()
+                    .find(|s| s.name == sheet)
+                    .is_some_and(|s| s.cells.contains_key(reference));
+                if source {
+                    return Err(err(format!(
+                        "unsupported_edit: {key} is a source cell and cannot be made absent"
+                    )));
+                }
+                continue;
+            }
+            if cell.is_none() {
+                let (col, row) = coordinate(reference)?;
+                self.check_insertion(sheet, col, row)?;
             }
         }
         Ok(())
@@ -1377,10 +1511,16 @@ fn cell_xml(
     cache: Option<&CellValue>,
     original: Option<(&Xml, &Node)>,
     style: Option<usize>,
+    default_prefix: &str,
 ) -> Result<String> {
-    let prefix = original
-        .and_then(|(_, n)| n.name.rsplit_once(':').map(|(p, _)| format!("{p}:")))
-        .unwrap_or_default();
+    let prefix = match original {
+        Some((_, n)) => n
+            .name
+            .rsplit_once(':')
+            .map(|(p, _)| format!("{p}:"))
+            .unwrap_or_default(),
+        None => default_prefix.to_string(),
+    };
     let mut attributes = original
         .map(|(_, n)| {
             n.attrs
@@ -1606,7 +1746,7 @@ fn fresh(model: &WorkbookModel, report: &CalculationReport) -> Result<Package> {
                         .unwrap(),
                 )
                 .copied();
-            xml.push_str(&cell_xml(reference, cell, cache.as_ref(), None, style)?);
+            xml.push_str(&cell_xml(reference, cell, cache.as_ref(), None, style, "")?);
             if xml.len() > MAX_XML {
                 return Err(err("worksheet XML exceeds 32 MiB"));
             }
@@ -1822,6 +1962,278 @@ fn recalc(package: &mut Package, workbook_part: &str) -> Result<()> {
     );
     Ok(())
 }
+/// `prefix:` of a qualified element name, or the empty string.
+fn element_prefix(node: &Node) -> String {
+    node.name
+        .rsplit_once(':')
+        .map(|(p, _)| format!("{p}:"))
+        .unwrap_or_default()
+}
+/// The start tag of `node` (`<row r="1" spans="1:3">`), written as an open
+/// tag even when the element was self-closing (`<row r="1"/>`).
+fn open_tag(xml: &Xml, node: &Node) -> Result<String> {
+    let bytes = &xml.bytes[node.start..node.end];
+    let mut quote = None;
+    for (i, &b) in bytes.iter().enumerate() {
+        match quote {
+            Some(q) if b == q => quote = None,
+            Some(_) => {}
+            None if b == b'"' || b == b'\'' => quote = Some(b),
+            None if b == b'>' => {
+                let tag = std::str::from_utf8(&bytes[..=i])
+                    .map_err(|_| err("only UTF-8 OOXML is supported"))?;
+                return Ok(match tag.strip_suffix("/>") {
+                    Some(open) => format!("{}>", open.trim_end()),
+                    None => tag.to_string(),
+                });
+            }
+            None => {}
+        }
+    }
+    Err(err("unterminated XML start tag"))
+}
+/// Replace (or leave absent) one attribute's value inside a start tag.
+fn set_tag_attribute(tag: &str, name: &str, value: &str) -> String {
+    let bytes = tag.as_bytes();
+    let mut at = 0;
+    while let Some(found) = tag[at..].find(name) {
+        let index = at + found;
+        let after = index + name.len();
+        let boundary = index > 0 && bytes[index - 1].is_ascii_whitespace();
+        let rest = tag[after..].trim_start();
+        if boundary && rest.starts_with('=') {
+            let eq = tag.len() - rest.len();
+            let value_part = tag[eq + 1..].trim_start();
+            let quote_at = tag.len() - value_part.len();
+            if let Some(quote) = value_part
+                .chars()
+                .next()
+                .filter(|c| *c == '"' || *c == '\'')
+                && let Some(close) = tag[quote_at + 1..].find(quote)
+            {
+                let close = quote_at + 1 + close;
+                return format!("{}{value}{}", &tag[..quote_at + 1], &tag[close..]);
+            }
+        }
+        at = after;
+    }
+    tag.to_string()
+}
+/// `min:max` over every `a:b` range in a row's `spans`.
+fn parse_spans(spans: &str) -> Option<(u32, u32)> {
+    let mut out: Option<(u32, u32)> = None;
+    for part in spans.split_whitespace() {
+        let (a, b) = part.split_once(':')?;
+        let (a, b) = (a.parse().ok()?, b.parse().ok()?);
+        out = Some(out.map_or((a, b), |(lo, hi): (u32, u32)| (lo.min(a), hi.max(b))));
+    }
+    out
+}
+/// The style index Excel gives a cell typed into an empty position: the
+/// row's style when the row is custom-formatted, else its column's style.
+fn inherited_style(xml: &Xml, root: &Node, row: Option<&Node>, col: u32) -> Result<Option<usize>> {
+    if let Some(row) = row
+        && row
+            .attrs
+            .get("customFormat")
+            .is_some_and(|v| boolean(v).unwrap_or(false))
+        && let Some(s) = row.attrs.get("s")
+    {
+        return Ok(Some(integer(s)?));
+    }
+    for node in xml
+        .child(root, "cols")
+        .into_iter()
+        .flat_map(|n| xml.children(n, MAIN, "col"))
+    {
+        let (min, max) = (integer(attr(node, "min")?)?, integer(attr(node, "max")?)?);
+        if (min..=max).contains(&(col as usize))
+            && let Some(style) = node.attrs.get("style")
+        {
+            return Ok(Some(integer(style)?));
+        }
+    }
+    Ok(None)
+}
+/// Byte patches for one worksheet: changed source cells in place, and
+/// inserted cells merged into their rows in column order (a missing `<row>`
+/// is created in row order). A row that receives a cell is rewritten whole,
+/// so its changed source cells are written inside it, its `spans` widen to
+/// cover the new columns, and the `<dimension>` ref grows to cover them.
+fn sheet_patches(
+    xml: &Xml,
+    root: &Node,
+    data: &Node,
+    replaced: &BTreeMap<String, String>,
+    inserted: &BTreeMap<u32, BTreeMap<u32, (&String, &Cell)>>,
+    sheet: &str,
+    report: &CalculationReport,
+) -> Result<Vec<(usize, usize, Vec<u8>)>> {
+    let prefix = element_prefix(data);
+    let rows: Vec<&Node> = xml.children(data, MAIN, "row").collect();
+    let mut by_number: BTreeMap<u32, &Node> = BTreeMap::new();
+    for row in &rows {
+        let number = integer(attr(row, "r")?)?;
+        by_number.entry(number as u32).or_insert(row);
+    }
+    let any_spans = rows.iter().any(|row| row.attrs.contains_key("spans"));
+    let new_cell = |row: Option<&Node>, col: u32, reference: &str, cell: &Cell| -> Result<String> {
+        let cache = if cell.formula.is_some() {
+            formula_cache(report, sheet, reference)?
+        } else {
+            None
+        };
+        let style = inherited_style(xml, root, row, col)?;
+        cell_xml(reference, cell, cache.as_ref(), None, style, &prefix)
+    };
+    let mut patches = Vec::new();
+    let mut used = 0usize;
+    for row in &rows {
+        let number = integer(attr(row, "r")?)? as u32;
+        let additions = inserted.get(&number).filter(|_| {
+            by_number
+                .get(&number)
+                .is_some_and(|first| std::ptr::eq(*first, *row))
+        });
+        let Some(additions) = additions else {
+            for node in xml.children(row, MAIN, "c") {
+                if let Some(text) = replaced.get(attr(node, "r")?) {
+                    used += 1;
+                    patches.push((node.start, node.end, text.clone().into_bytes()));
+                }
+            }
+            continue;
+        };
+        let mut pending = additions.iter().peekable();
+        let mut body = String::new();
+        let (mut lo, mut hi) = (u32::MAX, 0u32);
+        for child in &row.children {
+            let child = &xml.nodes[*child];
+            if child.ns == MAIN && child.local == "c" {
+                let reference = attr(child, "r")?;
+                let (col, _) = coordinate(reference)?;
+                while let Some(&(&new_col, &(new_ref, cell))) = pending.peek() {
+                    if new_col >= col {
+                        break;
+                    }
+                    body.push_str(&new_cell(Some(row), new_col, new_ref, cell)?);
+                    pending.next();
+                }
+                (lo, hi) = (lo.min(col), hi.max(col));
+                match replaced.get(reference) {
+                    Some(text) => {
+                        used += 1;
+                        body.push_str(text);
+                    }
+                    None => body.push_str(
+                        std::str::from_utf8(xml.raw(child))
+                            .map_err(|_| err("only UTF-8 OOXML is supported"))?,
+                    ),
+                }
+            } else {
+                for (&new_col, &(new_ref, cell)) in pending.by_ref() {
+                    body.push_str(&new_cell(Some(row), new_col, new_ref, cell)?);
+                }
+                body.push_str(
+                    std::str::from_utf8(xml.raw(child))
+                        .map_err(|_| err("only UTF-8 OOXML is supported"))?,
+                );
+            }
+        }
+        for (&new_col, &(new_ref, cell)) in pending {
+            body.push_str(&new_cell(Some(row), new_col, new_ref, cell)?);
+        }
+        for &col in additions.keys() {
+            (lo, hi) = (lo.min(col), hi.max(col));
+        }
+        let mut tag = open_tag(xml, row)?;
+        if let Some((a, b)) = row.attrs.get("spans").and_then(|s| parse_spans(s)) {
+            tag = set_tag_attribute(&tag, "spans", &format!("{}:{}", a.min(lo), b.max(hi)));
+        }
+        patches.push((
+            row.start,
+            row.end,
+            format!("{tag}{body}</{}>", row.name).into_bytes(),
+        ));
+    }
+    if used != replaced.len() {
+        return Err(err("missing imported cell XML"));
+    }
+    // Rows that do not exist yet, each placed before the first row after it.
+    let mut created: BTreeMap<usize, String> = BTreeMap::new();
+    let self_closing = data.close_start == data.end;
+    for (&number, additions) in inserted {
+        if by_number.contains_key(&number) {
+            continue;
+        }
+        let offset = rows
+            .iter()
+            .find(|row| {
+                attr(row, "r")
+                    .ok()
+                    .and_then(|r| r.parse::<u32>().ok())
+                    .is_some_and(|r| r > number)
+            })
+            .map(|row| row.start)
+            .unwrap_or(data.close_start);
+        let spans = if any_spans {
+            let lo = additions.keys().next().copied().unwrap_or(1);
+            let hi = additions.keys().last().copied().unwrap_or(1);
+            format!(" spans=\"{lo}:{hi}\"")
+        } else {
+            String::new()
+        };
+        let mut text = format!("<{prefix}row r=\"{number}\"{spans}>");
+        for (&col, &(reference, cell)) in additions {
+            text.push_str(&new_cell(None, col, reference, cell)?);
+        }
+        text.push_str(&format!("</{prefix}row>"));
+        created.entry(offset).or_default().push_str(&text);
+    }
+    if self_closing && !created.is_empty() {
+        let rows_xml: String = created.into_values().collect();
+        patches.push((
+            data.start,
+            data.end,
+            format!("{}{rows_xml}</{}>", open_tag(xml, data)?, data.name).into_bytes(),
+        ));
+    } else {
+        for (offset, text) in created {
+            patches.push((offset, offset, text.into_bytes()));
+        }
+    }
+    // Grow <dimension ref> to cover every inserted cell.
+    if !inserted.is_empty()
+        && let Some(dimension) = xml.child(root, "dimension")
+        && let Some(reference) = dimension.attrs.get("ref")
+    {
+        let (mut c1, mut r1, mut c2, mut r2) = bounds(reference)?;
+        for (&row, additions) in inserted {
+            for &col in additions.keys() {
+                (c1, r1, c2, r2) = (c1.min(col), r1.min(row), c2.max(col), r2.max(row));
+            }
+        }
+        let grown = if (c1, r1) == (c2, r2) {
+            address(c1, r1)
+        } else {
+            format!("{}:{}", address(c1, r1), address(c2, r2))
+        };
+        if grown != *reference {
+            let tag = open_tag(xml, dimension)?;
+            let tag = set_tag_attribute(&tag, "ref", &grown);
+            let text = match dimension.close_start == dimension.end {
+                true => format!("{}/>", tag.trim_end_matches('>')),
+                false => format!(
+                    "{tag}{}",
+                    std::str::from_utf8(&xml.bytes[dimension.close_start..dimension.end])
+                        .map_err(|_| err("only UTF-8 OOXML is supported"))?
+                ),
+            };
+            patches.push((dimension.start, dimension.end, text.into_bytes()));
+        }
+    }
+    Ok(patches)
+}
 fn patch(
     package: &mut Package,
     original: &WorkbookModel,
@@ -1845,20 +2257,48 @@ fn patch(
         let part = &sheet_parts[&after.name];
         let xml = Xml::parse(package.get(part)?)?;
         verify_validation(&xml, model, &after.name)?;
+        let root = xml.root(MAIN, "worksheet")?;
         let data = xml
-            .child(xml.root(MAIN, "worksheet")?, "sheetData")
+            .child(root, "sheetData")
             .ok_or_else(|| err("missing sheetData"))?;
         let cells: BTreeMap<_, _> = xml
             .children(data, MAIN, "row")
             .flat_map(|row| xml.children(row, MAIN, "c"))
             .map(|n| Ok((attr(n, "r")?.to_string(), n)))
             .collect::<Result<_>>()?;
-        let mut patches = Vec::new();
+        if let Some(missing) = before.cells.keys().find(|a| !after.cells.contains_key(*a)) {
+            return Err(err(format!(
+                "imported source cell {}!{missing} cannot be removed",
+                after.name
+            )));
+        }
+        // Rewritten XML for source cells whose content changed, by reference.
+        let mut replaced: BTreeMap<String, String> = BTreeMap::new();
+        // Cells the source did not hold: row -> column -> (reference, cell).
+        let mut inserted: BTreeMap<u32, BTreeMap<u32, (&String, &Cell)>> = BTreeMap::new();
         for (reference, cell) in &after.cells {
-            let old = before
-                .cells
-                .get(reference)
-                .ok_or_else(|| err("new-cell insertion is unsupported"))?;
+            let Some(old) = before.cells.get(reference) else {
+                if cell.blocked_reason.is_some() {
+                    return Err(err("cannot insert preserved-only cell"));
+                }
+                if cell.style.is_some() {
+                    return Err(err("imported style edits are unsupported"));
+                }
+                // A new cell with no content is absent on disk (see
+                // docs/specs/univer-spike.md, "Absent, blank and cleared").
+                if cell.formula.is_none() && cell.value == CellValue::Blank {
+                    continue;
+                }
+                if date1904 && cell.formula.is_some() {
+                    return Err(err("1904 formula edits/caches are unsupported"));
+                }
+                let (col, row) = coordinate(reference)?;
+                inserted
+                    .entry(row)
+                    .or_default()
+                    .insert(col, (reference, cell));
+                continue;
+            };
             if old.style != cell.style {
                 return Err(err("imported style edits are unsupported"));
             }
@@ -1888,12 +2328,19 @@ fn patch(
             let node = cells
                 .get(reference)
                 .ok_or_else(|| err("missing imported cell XML"))?;
-            patches.push((
-                node.start,
-                node.end,
-                cell_xml(reference, cell, cache.as_ref(), Some((&xml, node)), None)?.into_bytes(),
-            ));
+            replaced.insert(
+                reference.clone(),
+                cell_xml(
+                    reference,
+                    cell,
+                    cache.as_ref(),
+                    Some((&xml, node)),
+                    None,
+                    "",
+                )?,
+            );
         }
+        let patches = sheet_patches(&xml, root, data, &replaced, &inserted, &after.name, report)?;
         if !patches.is_empty() {
             package
                 .parts
@@ -2143,7 +2590,7 @@ mod tests {
         let before = imported.snapshot();
         let edits = vec![
             Edit::value("Assumptions", "B1", CellValue::Number(30.0)),
-            Edit::formula("Forecast", "Z100", "=1"),
+            Edit::formula("Forecast", "XFE100", "=1"),
         ];
         assert!(imported.apply(edits, None).is_err());
         assert_eq!(imported.snapshot(), before);
@@ -2158,7 +2605,8 @@ mod tests {
                         style: Some(Style {
                             bold: Some(true),
                             ..Style::default()
-                        })
+                        }),
+                        restore_absent: false,
                     }],
                     None
                 )

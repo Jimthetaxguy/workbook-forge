@@ -110,9 +110,12 @@ formula cannot appear together. The discovery schema requires formula to be a
 string and style to be an object: null-only formula/style edits are not supported.
 Use value:null to clear cell content; an empty style object resets an authored
 cell's supported style. Return previous_revision, revision and changed_cells
-with the submitted fields. The common agent import profile permits only existing
-original-cell value/formula changes. Imported style edits, new
-cells, grouped/table results and 1904 formulas are rejected before mutation.
+with the submitted fields. The common agent import profile permits value/formula
+changes to cells the workbook holds and to absent cells inside Excel's grid,
+which are inserted (validated against the session's current model, and written
+into the worksheet XML in row/column order on export). Imported style edits,
+grouped/table results, preserved-only cells, addresses past the grid and 1904
+formulas are rejected before mutation.
 These restrictions also apply to set_inputs and preview_inputs. The lower-level
 Python adapter may support additional edits outside this shared agent profile.
 The response is a compact receipt; read or preview to retrieve values.

@@ -71,8 +71,9 @@ impl BrowserWorkbook {
         serde_json::to_string(&self.session.snapshot()).map_err(js_error)
     }
 
-    /// Apply a bounded JSON edit array at an expected revision. Imported files
-    /// keep their source-cell guard; authored workbooks may add new cells.
+    /// Apply a bounded JSON edit array at an expected revision. Both imported
+    /// and authored workbooks may add cells; imported files refuse insertions
+    /// outside Excel's grid (`out_of_bounds`) and merged non-anchor cells.
     /// Logged as an `edits` intent from source `api`.
     #[wasm_bindgen(js_name = applyEditsJson)]
     pub fn apply_edits_json(

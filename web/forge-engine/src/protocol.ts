@@ -172,7 +172,12 @@ export interface CommandResponse {
 // ---- Event log (schema v1, realtime design section 4.2) -----------------
 
 /** A logged cell input: a literal value, or a formula without the "=". */
-export type LogInput = { value: Scalar } | { formula: string };
+/**
+ * A logged cell input. `{ absent: true }` is a cell the workbook did not hold
+ * (an insertion's `before`, or an undone insertion's `after`); it differs from
+ * `{ value: null }`, a blank or cleared cell the workbook holds.
+ */
+export type LogInput = { value: Scalar } | { formula: string } | { absent: true };
 
 export interface LogActor {
   type: 'human' | 'agent';

@@ -24,8 +24,8 @@ test('open, edit, calculate, conflict, export, reopen', () => {
   const stale = call(engine, 'applyEdits', { edits: [{ sheet: 'Sheet1', address: 'A1', value: 1 }], expectedRevision: '0' });
   assert.equal(stale.error.code, 'revision_conflict');
   assert.equal(stale.error.current_revision, '1');
-  const absent = call(engine, 'applyEdits', { edits: [{ sheet: 'Sheet1', address: 'Z99', value: 1 }], expectedRevision: '1' });
-  assert.equal(absent.error.code, 'absent_cell');
+  const outside = call(engine, 'applyEdits', { edits: [{ sheet: 'Sheet1', address: 'XFE99', value: 1 }], expectedRevision: '1' });
+  assert.equal(outside.error.code, 'out_of_bounds');
   assert.equal(call(engine, 'applyEdits', { edits: [{ sheet: 'Sheet1', address: 'C1', formula: 'B1+100' }], expectedRevision: '1' }).value.revision, '2');
   const calc = call(engine, 'calculate').value;
   assert.equal(calc.revision, '2');
@@ -248,4 +248,45 @@ test('event log: undo_conflict names the cells and the event that overwrote them
   assert.equal(call(engine, 'snapshot').value.revision, '2');
   const nothing = call(engine, 'applyAndCalculate', { envelope: human('hr', '2', { type: 'redo' }) });
   assert.equal(nothing.error.code, 'nothing_to_redo');
+});
+
+// Absent-cell authoring on an imported workbook (fixtures/univer-spike-chain.xlsx:
+// A1 = 10 and formulas B1..F1; nothing below row 1). Independent arithmetic:
+//   H1 = SUM(A1:A3) over A1 = 10 and blanks: 10
+//   A2 = 5 (inserted inside that range):     H1 = 15
+test('imported workbook: insert into absent cells, recalc the range, undo to absence, export and reopen', () => {
+  const engine = new ForgeEngine({ openXlsx, createBlankWorkbook, sha256Hex, replayJson });
+  call(engine, 'open', { bytes: new Uint8Array(fixture), name: 'univer-spike-chain.xlsx' });
+  const sum = call(engine, 'applyAndCalculate', { envelope: human('a1', '0', setCells({ address: 'H1', formula: 'SUM(A1:A3)' })) });
+  assert.equal(sum.value.status, 'applied');
+  assert.equal(byKey(sum.value.changed)['Sheet1!H1'], 10);
+  const typed = call(engine, 'applyAndCalculate', { envelope: human('a2', '1', setCells({ address: 'A2', value: 5 })) });
+  assert.equal(typed.value.status, 'applied');
+  assert.deepEqual(byKey(typed.value.changed), { 'Sheet1!A2': 5, 'Sheet1!H1': 15 });
+  const log = call(engine, 'log', { fromSeq: 0, limit: 100 }).value.events;
+  const intent = log.find((e) => e.id === typed.value.event_id);
+  assert.deepEqual(intent.inputs, [{ sheet: 'Sheet1', address: 'A2', before: { absent: true }, after: { value: 5 } }]);
+  const calc = log.find((e) => e.kind === 'calc' && e.caused_by[0] === typed.value.event_id);
+  assert.deepEqual(calc.deltas, [['Sheet1!H1', 10, 15]]);
+
+  // Undo removes A2 again (absent, not blank) and H1 repaints to 10.
+  const undo = call(engine, 'applyAndCalculate', { envelope: human('u1', '2', { type: 'undo', target: null }) });
+  assert.equal(undo.value.status, 'applied');
+  assert.deepEqual(byKey(undo.value.changed), { 'Sheet1!A2': null, 'Sheet1!H1': 10 });
+  assert.equal('A2' in call(engine, 'snapshot').value.sheets[0].cells, false);
+
+  // Out-of-grid insertions are refused with a structured code.
+  const outside = call(engine, 'applyAndCalculate', { envelope: human('o1', '3', setCells({ address: 'A1048577', value: 1 })) });
+  assert.equal(outside.ok, false);
+  assert.equal(outside.error.code, 'out_of_bounds');
+
+  const redo = call(engine, 'applyAndCalculate', { envelope: human('r1', '3', { type: 'redo', target: null }) });
+  assert.equal(byKey(redo.value.changed)['Sheet1!H1'], 15);
+  const bytes = call(engine, 'export').value.bytes;
+  const reopened = new ForgeEngine({ openXlsx, createBlankWorkbook });
+  call(reopened, 'open', { bytes });
+  const cells = call(reopened, 'snapshot').value.sheets[0].cells;
+  assert.equal(cells.A2.value, 5);
+  assert.equal(cells.H1.formula, 'SUM(A1:A3)');
+  assert.equal(call(reopened, 'calculate').value.values['Sheet1!H1'], 15);
 });

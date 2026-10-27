@@ -469,6 +469,34 @@ def test_public_backend_scenario_and_xlsx_roundtrip(backend, tmp_path):
 
 
 @pytest.mark.parametrize("backend", ["python", "rust"])
+def test_imported_absent_cell_insertion_round_trips_like_the_rust_importer(backend, tmp_path):
+    """Parity with rust/tests/absent_cells.rs on the shared spike fixture.
+
+    fixtures/univer-spike-chain.xlsx holds only row 1 (A1 = 10, B1..F1
+    formulas). Independent arithmetic: H1 = SUM(A1:A3) is 10 over the
+    blanks; inserting A2 = 5 makes it 15.
+    """
+    _engine(backend)
+    from workbook_forge.xlsx import export_xlsx, import_xlsx
+
+    model = import_xlsx(ROOT / "fixtures/univer-spike-chain.xlsx", backend=backend)
+    model.set_formula("Sheet1", "H1", "=SUM(A1:A3)")
+    assert model.calculate()["values"]["Sheet1!H1"] == 10
+    model.set_value("Sheet1", "A2", 5)
+    assert model.calculate()["values"]["Sheet1!H1"] == 15
+    output = export_xlsx(model, tmp_path / f"absent-{backend}.xlsx")
+    with zipfile.ZipFile(output) as archive:
+        sheet = archive.read("xl/worksheets/sheet1.xml").decode()
+    # H1 is appended after F1 in row 1; row 2 is created after row 1.
+    assert sheet.index('r="F1"') < sheet.index('r="H1"') < sheet.index('<row r="2"') < sheet.index('r="A2"')
+    reopened = import_xlsx(output, backend=backend)
+    cells = reopened.to_dict()["sheets"][0]["cells"]
+    assert cells["A2"]["value"] == 5
+    assert cells["H1"]["formula"].removeprefix("=") == "SUM(A1:A3)"
+    assert reopened.calculate()["values"]["Sheet1!H1"] == 15
+
+
+@pytest.mark.parametrize("backend", ["python", "rust"])
 def test_imported_1904_preservation_boundary_is_backend_independent(backend, tmp_path):
     _engine(backend)
     from test_workbook import make_xlsx, write_parts

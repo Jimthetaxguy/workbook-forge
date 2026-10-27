@@ -68,8 +68,9 @@ pub fn classify_edit_error(message: &str) -> ContractError {
     {
         return ContractError::new(code, rest);
     }
+    // `absent_cell` is retired: imported workbooks accept edits to absent
+    // cells within the session's grid bound (`out_of_bounds` otherwise).
     let code = match message {
-        "new-cell insertion on import is unsupported" => "absent_cell",
         "unknown worksheet" => "unknown_sheet",
         "imported style edits are unsupported" | "1904 formula edits are unsupported" => {
             "unsupported_edit"
@@ -352,9 +353,15 @@ fn parse_command(text: &str) -> Result<CommandEnvelope, ContractError> {
     Ok(envelope)
 }
 
-/// A cell's input as logged: `{"formula": "A1*2"}` (no leading `=`) or
-/// `{"value": v}` (`null` for blank or absent).
+/// A cell's input as logged: `{"formula": "A1*2"}` (no leading `=`),
+/// `{"value": v}` (`null` for a blank or cleared cell the workbook holds), or
+/// `{"absent": true}` for a cell the workbook does not hold at all. Undoing
+/// an edit whose `before` is absent removes the cell again; undoing one whose
+/// `before` is `{"value": null}` leaves a blank cell.
 pub fn input_json(cell: &Option<crate::toolkit::Cell>) -> Json {
+    if cell.is_none() {
+        return json!({"absent": true});
+    }
     match input_of(cell) {
         (_, Some(formula)) => {
             json!({"formula": formula.strip_prefix('=').unwrap_or(&formula)})
@@ -366,6 +373,12 @@ pub fn input_json(cell: &Option<crate::toolkit::Cell>) -> Json {
 /// The edit that sets a cell to a logged input.
 pub fn edit_from_input(sheet: &str, address: &str, input: &Json) -> Result<Edit, ContractError> {
     let bad = || ContractError::new("invalid_log", format!("bad input for {sheet}!{address}"));
+    if let Some(absent) = input.get("absent") {
+        if absent != &Json::Bool(true) || input.as_object().is_some_and(|o| o.len() != 1) {
+            return Err(bad());
+        }
+        return Ok(Edit::absent(sheet, address));
+    }
     let (value, formula) = if let Some(formula) = input.get("formula").and_then(Json::as_str) {
         (
             None,
@@ -382,6 +395,7 @@ pub fn edit_from_input(sheet: &str, address: &str, input: &Json) -> Result<Edit,
         value,
         formula,
         style: None,
+        restore_absent: false,
     })
 }
 
@@ -734,6 +748,7 @@ fn requested_inputs(edits: &[Edit]) -> Vec<Json> {
                     json!({"formula": formula.strip_prefix('=').unwrap_or(formula)})
                 }
                 (None, Some(value)) => json!({"value": value}),
+                (None, None) if edit.restore_absent => json!({"absent": true}),
                 (None, None) => json!({"value": null}),
             };
             json!({"sheet": edit.sheet, "address": edit.address, "after": after})

@@ -134,9 +134,11 @@ for (const mode of ['not-execute', 'load-only']) {
         (window as any).__spike.then((s: any) => s.adapter.cell('Sales!2026', 'A1').raw),
       )).toBe(7);
 
+      // XFE10 is past Excel's last column, so Forge refuses the insertion
+      // and the adapter recovers by reprojecting the new workbook only.
       const afterRejectedEdit = await page.evaluate(async () => {
         const s = await (window as any).__spike;
-        await s.adapter.edit([{ sheet: 'Sales!2026', address: 'H10', value: 7 }], 'new workbook recovery');
+        await s.adapter.edit([{ sheet: 'Sales!2026', address: 'XFE10', value: 7 }], 'new workbook recovery');
         const snapshot = await s.client.snapshot();
         return {
           visibleOldCells: ['B1', 'C1', 'D1', 'E1', 'F1'].map((address) => s.adapter.cell('Sheet1', address).raw),
@@ -152,7 +154,7 @@ for (const mode of ['not-execute', 'load-only']) {
       expect(afterRejectedEdit.boolean.raw).toBe(true);
       expect(afterRejectedEdit.visibleOldCells).toEqual([null, null, null, null, null]);
       expect(afterRejectedEdit.divergence).toEqual([]);
-      expect(afterRejectedEdit.notice).toContain('absent_cell');
+      expect(afterRejectedEdit.notice).toContain('out_of_bounds');
       expect(errors).toEqual([]);
     });
 
@@ -289,17 +291,86 @@ for (const mode of ['not-execute', 'load-only']) {
       );
       expect(shape).toEqual({ sheets: 1, rows: 20, cols: 10 });
       expectDisplayed(after, INITIAL);
+      expectUniverNeverCalculated(after);
+    });
 
-      // An edit to a cell Forge does not hold is rejected by Forge, not
-      // translated, and Univer keeps showing nothing there.
-      await typeInto(page, 'H10', '7');
-      const rejected = await view(page);
-      expect(rejected.revision).toBe('0');
-      expect(rejected.notices.at(-1)).toMatch(/Forge rejected cell edit: absent_cell/);
-      await expect(page.locator('#notices')).toContainText('absent_cell');
-      expect(rejected.cells.H10.raw).toBeNull();
-      expectDisplayed(rejected, INITIAL);
-      expectUniverNeverCalculated(rejected);
+    // Usable-demo acceptance step 3: enter data into an initially absent cell
+    // of an imported workbook. univer-spike-chain.xlsx holds only row 1, so
+    // H1 and A2 are absent. Independent arithmetic: H1 = SUM(A1:A3) over
+    // A1 = 10 and two blanks is 10; typing A2 = 5 makes it 15.
+    test('typing into an absent cell inside a SUM range repaints, undoes to absence, exports and reopens', async ({ page }) => {
+      const errors = await boot(page, mode);
+      const read = () =>
+        page.evaluate(async () => {
+          const s = await (window as any).__spike;
+          const snapshot = await s.client.snapshot();
+          return {
+            revision: s.adapter.revision as string,
+            h1: s.adapter.cell('Sheet1', 'H1'),
+            a2: s.adapter.cell('Sheet1', 'A2'),
+            forgeCells: Object.keys(snapshot.value.sheets[0].cells),
+            divergence: s.adapter.divergence() as string[],
+            notices: s.adapter.notices as string[],
+          };
+        });
+      const reopen = () =>
+        page.evaluate(async () => {
+          const s = await (window as any).__spike;
+          const bytes: Uint8Array = await s.adapter.exportXlsx();
+          const { client, worker } = s.startForgeWorker();
+          const opened = await client.open(bytes);
+          const [snapshot, calc] = await Promise.all([client.snapshot(), client.calculate()]);
+          worker.terminate();
+          return { opened, cells: snapshot.value.sheets[0].cells, values: calc.value.values };
+        });
+
+      // A formula typed into absent H1 over a range that is mostly blank.
+      await typeInto(page, 'H1', '=SUM(A1:A3)');
+      let v = await read();
+      expect(v.notices.filter((n) => n.startsWith('Forge rejected'))).toEqual([]);
+      expect(v.revision).toBe('1');
+      expect(v.h1.displayed).toBe(10);
+      expect(v.h1.formula).toBe('=SUM(A1:A3)');
+
+      // Typing into absent A2, inside the SUM range, repaints the total.
+      await typeInto(page, 'A2', '5');
+      v = await read();
+      expect(v.revision).toBe('2');
+      expect(v.a2.displayed).toBe(5);
+      expect(v.h1.displayed).toBe(15);
+      expect(v.forgeCells).toContain('A2');
+      expect(v.divergence).toEqual([]);
+
+      // Undo (Univer's shortcut, routed to Forge) makes A2 absent again.
+      await page.keyboard.press(process.platform === 'darwin' ? 'Meta+z' : 'Control+z');
+      await settle(page);
+      v = await read();
+      expect(v.revision).toBe('3');
+      expect(v.a2.raw).toBeNull();
+      expect(v.h1.displayed).toBe(10);
+      expect(v.forgeCells).not.toContain('A2');
+      expect(v.divergence).toEqual([]);
+
+      // Export after the undo and reopen: H1 kept, A2 still absent.
+      let reopened = await reopen();
+      expect(reopened.opened.ok).toBe(true);
+      expect(reopened.cells.H1.formula).toBe('SUM(A1:A3)');
+      expect('A2' in reopened.cells).toBe(false);
+      expect(reopened.values['Sheet1!H1']).toBe(10);
+
+      // Redo, export again: the inserted value and the total survive.
+      await page.evaluate(() => (window as any).__spike.then((s: any) => s.adapter.redo().then(() => undefined)));
+      v = await read();
+      expect(v.revision).toBe('4');
+      expect(v.a2.displayed).toBe(5);
+      expect(v.h1.displayed).toBe(15);
+      reopened = await reopen();
+      expect(reopened.cells.A2.value).toBe(5);
+      expect(reopened.values['Sheet1!H1']).toBe(15);
+      expect(reopened.values['Sheet1!F1']).toBe(185);
+
+      expectUniverNeverCalculated(await view(page));
+      expect(errors).toEqual([]);
     });
   });
 }

@@ -88,15 +88,23 @@ fn envelope_reports_structured_conflicts_without_applying() {
 }
 
 #[test]
-fn envelope_rejects_absent_cells_and_bad_input_with_codes() {
+fn envelope_rejects_out_of_grid_cells_and_bad_input_with_codes() {
     let workbook = fixture();
-    let absent = parse_envelope(&apply_edits_envelope(
+    // Absent cells inside Excel's grid are insertions now; past it (column
+    // XFE = 16,385) the edit is refused with a structured code.
+    let outside = parse_envelope(&apply_edits_envelope(
         &workbook,
-        r#"[{"sheet":"Sheet1","address":"G9","value":1}]"#,
+        r#"[{"sheet":"Sheet1","address":"XFE9","value":1}]"#,
         "0",
     ));
-    assert_eq!(absent["error"]["code"], "absent_cell");
-    assert_eq!(absent["error"]["current_revision"], "0");
+    assert_eq!(outside["error"]["code"], "out_of_bounds");
+    assert_eq!(outside["error"]["current_revision"], "0");
+    let rows = parse_envelope(&apply_edits_envelope(
+        &workbook,
+        r#"[{"sheet":"Sheet1","address":"A1048577","value":1}]"#,
+        "0",
+    ));
+    assert_eq!(rows["error"]["code"], "out_of_bounds");
     let sheet = parse_envelope(&apply_edits_envelope(
         &workbook,
         r#"[{"sheet":"Nope","address":"A1","value":1}]"#,

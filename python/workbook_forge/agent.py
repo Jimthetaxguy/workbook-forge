@@ -363,16 +363,16 @@ class AgentWorkbook:
         baseline = self._model._source_baseline
         if baseline is None:
             return
-        original = json.loads(baseline.document_json)
-        original_sheets = {sheet["name"]: sheet for sheet in original["sheets"]}
+        # Validate against the session's current model, not the original
+        # import: an absent cell is an insertion (as in the Rust importer),
+        # and a cell an earlier edit inserted is an existing cell now.
+        current_sheets = {sheet["name"]: sheet for sheet in snapshot["sheets"]}
         for edit in edits:
             sheet, address = _binding(snapshot, edit)
-            previous = original_sheets.get(sheet["name"], {}).get("cells", {}).get(address)
+            previous = current_sheets.get(sheet["name"], {}).get("cells", {}).get(address)
             if "style" in edit:
                 _fail("unsupported_operation", "agent edits to imported styles are unsupported")
-            if previous is None:
-                _fail("unsupported_operation", "agent edits require an original imported cell")
-            if previous.get("blocked_reason") is not None:
+            if previous is not None and previous.get("blocked_reason") is not None:
                 _fail("unsupported_operation", "cannot edit preserved-only imported content")
             if baseline.uses_1904_date_system and edit.get("formula") is not None:
                 _fail("unsupported_operation", "formula edits in imported 1904 workbooks are unsupported")
