@@ -114,6 +114,13 @@ The sealed cell event log records immutable cell events over time. They are
 separate responsibilities; a later `FORGE_EDGE` may connect them without
 creating another model store or repository.
 
+The browser command session keeps a separate append-only event log (schema v1)
+in memory for edit, undo, and redo intents and for replay. It is not durable,
+not this sealed cell-store log, not a third workbook schema, and not an Excel
+observation. Replay of an imported workbook checks the baseline sha256 and byte
+length, and checks that the engine's recomputed calc deltas match the recorded
+ones.
+
 ## How this shapes our work
 
 Each vision point is a build rule. If a change fights a rule, stop and rename
@@ -132,7 +139,7 @@ the goal.
 | Diffusion over linear streaming | Partition independent regions; run parallel workers; merge. Do not require full-sheet serial walks when the graph allows splits. |
 | Repeated-formula collapse | Graph builders detect template + range runs **before** materializing per-cell nodes. |
 | Resilience / plugin detectors | Detectors live behind a plugin interface; failure is local; diagnostics collect; core model remains valid. |
-| Shelf split | Forge owns compute + OOXML; cell-store owns the sealed log. Do not grow a fourth tree for the same responsibilities. |
+| Shelf split | Forge owns compute + OOXML; cell-store owns the sealed log. The browser session event log (schema v1) stays in memory for edit, undo, and redo intents and for replay. It is not durable, not that sealed log, not a third workbook schema, and not an Excel observation. Replay of an imported workbook checks the baseline sha256 and byte length and the engine's own calc deltas. Do not grow a fourth tree for the same responsibilities. |
 
 
 ## Red-flag specs
@@ -192,4 +199,8 @@ broad formula-family expansion, or detector tuning against a single golden
 workbook. Detectors remain optional plugins with an off-switch and diverse
 fixtures (Spec 3). The standing shelf boundary remains: Forge owns compute and
 conservative OOXML; cell-store owns the sealed event log; connect them later
-through `FORGE_EDGE` when that edge is real.
+through `FORGE_EDGE` when that edge is real. The browser session event log
+(schema v1) is separate from that sealed log: it stays in memory for edit,
+undo, and redo intents and for replay. It is not durable, not a third workbook
+schema, and not an Excel observation. Replay of an imported workbook checks the
+baseline sha256 and byte length and the engine's own calc deltas.
