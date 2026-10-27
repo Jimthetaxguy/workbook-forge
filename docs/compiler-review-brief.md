@@ -11,7 +11,7 @@ See [source profile 6](source-graph-v6.md).
 
 | Boundary | Exact path / entry | Review invariant |
 | --- | --- | --- |
-| Packaged compiler CLI | `python/workbook_forge/source_cli.py:main`; `pyproject.toml` | `workbook-forge-compile` and `python -m workbook_forge.source_cli` default to graph-v5; no repository scripts/UI/agent dependency |
+| Packaged compiler CLI | `python/workbook_forge/source_cli.py:main`; `pyproject.toml` | `workbook-forge-compile` and `python -m workbook_forge.source_cli` default to graph-v6; no repository scripts/UI/agent dependency |
 | Compatibility launcher | `tools/source_compiler.py` | Legacy numeric-v1 default retained; implementation delegates to packaged module |
 | Workbook/source compiler | `python/workbook_forge/source_graph.py:compile_workbook`, `translate`, `lower`, `execute`, `emit` | API default stays graph-v2; latest profile selected explicitly; source version is separate from workbook schema/model versions |
 | Typed source AST | `python/workbook_forge/source_graph.py:Node`, `Program`, `validate`, `import_source` | Bounded constructors and exact scaffold; expressions/defaults authoritative; unknown edits/cycles rejected |
@@ -63,8 +63,10 @@ See [source profile 6](source-graph-v6.md).
 - Native primitive scalar filtering/null/comparison behavior is deliberately
   distinct from worksheet semantics; see `test_primitives_contract.py`. Do not
   erase this distinction merely to increase agreement counts.
-- Source function coverage is four partial profiles (SUM, IF, IFERROR, AVERAGE),
-  six comparison operators and documented scalar/reference grammar; SDK catalog
+- Source function coverage through this profile-5 checkpoint is four partial
+  profiles (SUM, IF, IFERROR, AVERAGE). Profile 6 adds partial XLOOKUP; see
+  [source profile 6](source-graph-v6.md). The checkpoint also records six
+  comparison operators and the documented scalar/reference grammar. SDK catalog
   declarations are 115 names, historical inventory 521. Inventory refresh,
   target-build reconciliation, arrays/spills/names/tables/providers/UDFs/iteration
   and complete fidelity are unfinished. The TypeScript client in `typescript/`

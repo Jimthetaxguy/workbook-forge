@@ -79,7 +79,8 @@ Excel-observed. See `catalog/compiler-comparison-evidence.v1.json` and
 an expectation into primary evidence.
 
 The compact cumulative [review brief](compiler-review-brief.md) identifies exact
-interfaces, paths, invariants and unresolved risks for a separate reviewer. No
-further function family was expanded after this stage. Full custom support remains
-the target, with current source support limited to four function profiles and the
-documented grammar. SDK declarations and historical inventory are separate counts.
+interfaces, paths, invariants and unresolved risks for a separate reviewer of
+this profile. This stage's source support is four function profiles (SUM, IF,
+IFERROR, AVERAGE) and the documented grammar. Current compiler state, including
+later function families, is [source profile 6](source-graph-v6.md). SDK
+declarations and historical inventory are separate counts.
