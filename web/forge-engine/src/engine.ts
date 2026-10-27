@@ -82,6 +82,63 @@ function toRustEdits(edits: Edit[]) {
   });
 }
 
+/**
+ * JSON.stringify writes NaN and the infinities as null, and Rust treats a null
+ * edit value as an explicit blank clear. Those numbers are refused first.
+ * Negative zero is finite; JSON.stringify would write it as 0, but serde_json
+ * (float_roundtrip) keeps the sign of -0.0, so -0 is written as -0.0, matching
+ * typescript/src/client.ts stringifyJson. Every other value stays on JSON.stringify.
+ */
+function encodeWireJson(value: unknown): Result<string> {
+  const issue = numberWireIssue(value);
+  if (issue === 'nonfinite') return fail('invalid_request', 'numbers must be finite');
+  return { ok: true, value: issue === 'negzero' ? stringifyJson(value) : JSON.stringify(value) };
+}
+
+function numberWireIssue(value: unknown): 'nonfinite' | 'negzero' | null {
+  let negzero = false;
+  const visit = (item: unknown): boolean => {
+    if (typeof item === 'number') {
+      if (!Number.isFinite(item)) return true;
+      if (Object.is(item, -0)) negzero = true;
+      return false;
+    }
+    if (Array.isArray(item)) {
+      for (const entry of item) if (visit(entry)) return true;
+      return false;
+    }
+    if (item !== null && typeof item === 'object') {
+      for (const entry of Object.values(item)) if (visit(entry)) return true;
+    }
+    return false;
+  };
+  if (visit(value)) return 'nonfinite';
+  return negzero ? 'negzero' : null;
+}
+
+/** Same shape as JSON.stringify, except -0 is the token -0.0. */
+function stringifyJson(value: unknown): string {
+  if (typeof value === 'number') return Object.is(value, -0) ? '-0.0' : JSON.stringify(value);
+  if (value === null || typeof value !== 'object') {
+    const text = JSON.stringify(value);
+    return text === undefined ? 'null' : text;
+  }
+  if (Array.isArray(value)) {
+    const parts: string[] = [];
+    for (let i = 0; i < value.length; i += 1) {
+      parts.push(i in value && value[i] !== undefined ? stringifyJson(value[i]) : 'null');
+    }
+    return `[${parts.join(',')}]`;
+  }
+  const parts: string[] = [];
+  for (const key of Object.keys(value)) {
+    const item = (value as Record<string, unknown>)[key];
+    if (item === undefined) continue;
+    parts.push(`${JSON.stringify(key)}:${stringifyJson(item)}`);
+  }
+  return `{${parts.join(',')}}`;
+}
+
 /** Forge model JSON -> protocol snapshot sheets. */
 function toSheets(raw: { sheets: { name: string; cells?: Record<string, never> }[] }): SnapshotSheet[] {
   return raw.sheets.map((sheet) => ({
@@ -246,7 +303,13 @@ export class ForgeEngine {
   private replay(baseline: Uint8Array, events: string | LogEvent[]): Result<ReplayResult> {
     if (!this.wasm.replayJson) return fail('unsupported', 'this WASM build has no replayJson');
     if (!(baseline instanceof Uint8Array)) return fail('invalid_request', 'replay needs Uint8Array baseline bytes');
-    const text = typeof events === 'string' ? events : JSON.stringify(events);
+    let text: string;
+    if (typeof events === 'string') text = events;
+    else {
+      const encoded = encodeWireJson(events);
+      if (!encoded.ok) return encoded;
+      text = encoded.value;
+    }
     const out = JSON.parse(this.wasm.replayJson(baseline, text));
     if (!out.ok) return { ok: false, error: out.error };
     return {
@@ -264,8 +327,9 @@ export class ForgeEngine {
 
   private applyEdits(wb: ForgeWorkbook, edits: Edit[], expectedRevision: string): Result<{ revision: string }> {
     if (!Array.isArray(edits)) return fail('invalid_request', 'edits must be an array');
-    const payload = toRustEdits(edits);
-    const envelope = JSON.parse(wb.applyEditsResultJson(JSON.stringify(payload), String(expectedRevision)));
+    const encoded = encodeWireJson(toRustEdits(edits));
+    if (!encoded.ok) return encoded;
+    const envelope = JSON.parse(wb.applyEditsResultJson(encoded.value, String(expectedRevision)));
     return envelope.ok ? { ok: true, value: { revision: envelope.revision } } : { ok: false, error: envelope.error };
   }
 
@@ -289,7 +353,9 @@ export class ForgeEngine {
     }
     const wire = { ...envelope, op: wireOp };
     const request = command ? { envelope: wire, command } : { envelope: wire };
-    const response = JSON.parse(wb.submitJson(JSON.stringify(request))) as CommandResponse;
+    const encoded = encodeWireJson(request);
+    if (!encoded.ok) return encoded;
+    const response = JSON.parse(wb.submitJson(encoded.value)) as CommandResponse;
     if (response.status !== 'applied') {
       const error = response.error ?? { code: 'engine_error', message: 'command rejected' };
       return { ok: false, error: response.event_id ? { ...error, event_id: response.event_id } : error };
