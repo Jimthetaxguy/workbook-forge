@@ -105,12 +105,14 @@ form (`A1=n:7.0`). Text uses UTF-8 hex, keeping empty text, arbitrary text and
 line breaks distinct from blank and protocol framing. The wire dialect is an
 internal generated-program interface; it is not the planned TS client protocol.
 
-Current source compilation refuses multiple sheets, external references, names,
-tables, spill/CSE results, implicit intersection, omitted arguments, dates/date
-systems beyond the conservative source package profile, and unmodeled metadata.
-These are implementation backlog, not permanent product exclusions. Unknown
-parts can still be retained through the separate baseline-preserving IR workflow.
-No macro/provider execution is introduced.
+Profile 2 refuses multiple sheets, external references, names, tables,
+spill/CSE results, implicit intersection, omitted arguments, dates/date systems
+beyond the conservative source package profile, and unmodeled metadata.
+Multiple sheets are supported from profile 3 onward, including profile 6.
+Profile 6 supports omitted arguments in XLOOKUP's optional positions. Current
+compiler state is [source profile 6](source-graph-v6.md). Unknown parts can
+still be retained through the separate baseline-preserving IR workflow. No
+macro/provider execution is introduced.
 
 ## Coverage and verification
 
@@ -146,13 +148,12 @@ permission/settings changed. Actual Excel no-repair opening/full recalculation
 was not run. Independent expected cases and cross-backend agreement do not
 replace that oracle.
 
-Next: complete the remaining scalar error variants and multi-sheet addressing,
-then expand source-call families with versioned runtime bindings and the same
-edited-source/no-original acceptance gate. Avoid duplicating ambiguous semantics
-as coverage grows: the shared behavioral fixtures and checked SDK comparison
-remain authoritative boundaries, while the embedded runtime remains explicitly
-versioned. Persistent revisioned/interactive runtime updates and TS/UI adapters
-remain separate work.
+This page describes source profile 2. Later profiles added scalar error
+variants, multi-sheet addressing, and further source-call families, with
+versioned runtime bindings and the same edited-source/no-original acceptance
+gate. Current compiler state is [source profile 6](source-graph-v6.md). Shared
+behavioral fixtures and the checked SDK comparison bound this profile, and the
+embedded runtime stays explicitly versioned.
 
 ## Backend provenance and export contracts
 
