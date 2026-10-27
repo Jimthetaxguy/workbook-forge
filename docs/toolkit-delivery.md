@@ -377,6 +377,14 @@ facade. Merged #25 added blank-workbook authoring and a calculating grid on
 that page: Univer presents the sheet and Forge WASM calculates. That page is
 not a product decision. Its limits are in the [Univer spike note](specs/univer-spike.md).
 
+The browser command session on that facade keeps an append-only event log
+(schema v1) in memory for edit, undo, and redo intents and for replay. `log`,
+`subscribe`, `export` with `includeLog`, and `replay` are the command names.
+The log is not durable, not the sealed cell-store log in the North Star, not a
+third workbook schema, and not an Excel observation. Replay of an imported
+workbook checks the baseline sha256 and byte length, and checks that the
+engine's recomputed calc deltas match the recorded ones.
+
 Each engine owns its revisions and mutations. Shared interchange data and
 differential tests establish parity without reusing executable implementations.
 Python operations work when native imports are blocked; explicitly selecting an
