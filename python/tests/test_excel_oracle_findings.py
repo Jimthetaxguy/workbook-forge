@@ -243,3 +243,18 @@ def test_lookups_do_not_equate_true_with_one():
     result = evaluate("=MATCH(1,A2:A3,0)", CELLS)
     assert isinstance(result, ErrorValue)
     assert result.code == "#N/A"
+
+
+@pytest.mark.parametrize(
+    ("formula", "expected"),
+    [
+        # Specialized argument readers see the plain value of a selected
+        # reference, so a text weekend mask stays a mask.
+        ("=WORKDAY.INTL(45002,1,IF(TRUE,C1))", 45005),
+        ("=WORKDAY.INTL(45002,1,XLOOKUP(1,A1:A1,C1:C1))", 45005),
+        ("=SUM(UNIQUE(D1:D2,IF(TRUE,A2)))", 30),
+    ],
+)
+def test_specialized_readers_unwrap_reference_provenance(formula, expected):
+    cells = {**CELLS, "C1": "0000011"}
+    assert evaluate(formula, cells) == expected

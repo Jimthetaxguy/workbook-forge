@@ -773,7 +773,7 @@ def _sequence_call(
         if argument.kind == "missing":
             evaluated.append(None)
             continue
-        value = _eval(argument, cells, sheet_name, budget)
+        value = _eval_value(argument, cells, sheet_name, budget)
         if isinstance(value, ErrorValue):
             return value
         # Rust rejects a non-finite numeric literal while evaluating that
@@ -874,7 +874,7 @@ def _sort_call(
 ) -> ArrayValue | ErrorValue:
     if not 1 <= len(arguments) <= 4:
         return _arity("SORT", "1 through 4", len(arguments))
-    source = _eval(arguments[0], cells, sheet_name, budget)
+    source = _eval_value(arguments[0], cells, sheet_name, budget)
     if isinstance(source, ErrorValue):
         return source
     matrix = _filter_matrix(source)
@@ -882,7 +882,7 @@ def _sort_call(
     def optional(index: int, default: object) -> object | ErrorValue:
         if index >= len(arguments) or arguments[index].kind == "missing":
             return default
-        value = _dereference(_eval(arguments[index], cells, sheet_name, budget))
+        value = _eval_value(arguments[index], cells, sheet_name, budget)
         if isinstance(value, ErrorValue):
             return value
         if isinstance(value, (_Range, ArrayValue)):
@@ -994,7 +994,7 @@ def _unique_call(
 ) -> ArrayValue | ErrorValue:
     if not 1 <= len(arguments) <= 3:
         return _arity("UNIQUE", "1 through 3", len(arguments))
-    source = _eval(arguments[0], cells, sheet_name, budget)
+    source = _eval_value(arguments[0], cells, sheet_name, budget)
     if isinstance(source, ErrorValue):
         return source
     matrix = _filter_matrix(source)
@@ -1002,7 +1002,7 @@ def _unique_call(
     def optional(index: int, default: bool) -> bool | ErrorValue:
         if index >= len(arguments) or arguments[index].kind == "missing":
             return default
-        value = _eval(arguments[index], cells, sheet_name, budget)
+        value = _eval_value(arguments[index], cells, sheet_name, budget)
         if isinstance(value, ErrorValue):
             return value
         if isinstance(value, (_Range, ArrayValue)) or not isinstance(value, bool):
@@ -1066,10 +1066,10 @@ def _filter_call(
 ) -> object:
     if not 2 <= len(arguments) <= 3:
         return _arity("FILTER", "2 or 3", len(arguments))
-    source = _eval(arguments[0], cells, sheet_name, budget)
+    source = _eval_value(arguments[0], cells, sheet_name, budget)
     if isinstance(source, ErrorValue):
         return source
-    include = _eval(arguments[1], cells, sheet_name, budget)
+    include = _eval_value(arguments[1], cells, sheet_name, budget)
     if isinstance(include, ErrorValue):
         return include
     source_rows = _filter_matrix(source)
@@ -1102,7 +1102,7 @@ def _filter_call(
         fallback = arguments[2]
         if fallback.kind == "missing":
             return None
-        return _eval(fallback, cells, sheet_name, budget)
+        return _eval_value(fallback, cells, sheet_name, budget)
 
     if axis == "rows":
         result = tuple(source_rows[index] for index in selected_indices)
@@ -1293,14 +1293,14 @@ def _trunc_call(
     """Evaluate TRUNC while preserving its omitted optional precision argument."""
     if not 1 <= len(arguments) <= 2:
         return _arity("TRUNC", "1 or 2", len(arguments))
-    number = _number(_eval(arguments[0], cells, sheet_name, budget))
+    number = _number(_eval_value(arguments[0], cells, sheet_name, budget))
     if isinstance(number, ErrorValue):
         return number
     digits: int | ErrorValue
     if len(arguments) == 1 or arguments[1].kind == "missing":
         digits = 0
     else:
-        digits = _decimal_digits(_eval(arguments[1], cells, sheet_name, budget))
+        digits = _decimal_digits(_eval_value(arguments[1], cells, sheet_name, budget))
     if isinstance(digits, ErrorValue):
         return digits
     return _round_to_precision(number, digits, "toward-zero")
@@ -1819,7 +1819,7 @@ def _working_day_call(
     if not 2 <= len(arguments) <= maximum_arity:
         return _arity(name, f"2 or {maximum_arity}", len(arguments))
 
-    start_value = _eval(arguments[0], cells, sheet_name, budget)
+    start_value = _eval_value(arguments[0], cells, sheet_name, budget)
     if isinstance(start_value, ErrorValue):
         return start_value
     if isinstance(start_value, _Range):
@@ -1829,7 +1829,7 @@ def _working_day_call(
     if isinstance(start_day, ErrorValue):
         return start_day
 
-    second_value = _eval(arguments[1], cells, sheet_name, budget)
+    second_value = _eval_value(arguments[1], cells, sheet_name, budget)
     if isinstance(second_value, ErrorValue):
         return second_value
     if isinstance(second_value, _Range):
@@ -1855,7 +1855,7 @@ def _working_day_call(
 
     weekend = _STANDARD_WEEKEND
     if international and len(arguments) >= 3 and arguments[2].kind != "missing":
-        weekend_value = _eval(arguments[2], cells, sheet_name, budget)
+        weekend_value = _eval_value(arguments[2], cells, sheet_name, budget)
         if isinstance(weekend_value, ErrorValue):
             return weekend_value
         weekend_result = _weekend_mask(weekend_value)
@@ -1868,7 +1868,7 @@ def _working_day_call(
     holidays: set[int] = set()
     holiday_index = 3 if international else 2
     if len(arguments) > holiday_index and arguments[holiday_index].kind != "missing":
-        holiday_value = _eval(arguments[holiday_index], cells, sheet_name, budget)
+        holiday_value = _eval_value(arguments[holiday_index], cells, sheet_name, budget)
         holiday_result = _workday_holidays(holiday_value, out_of_range_code=date_range_error)
         if isinstance(holiday_result, ErrorValue):
             return holiday_result
@@ -1895,7 +1895,7 @@ def _week_call(
     elif not 1 <= len(arguments) <= 2:
         return _arity(name, "1 or 2", len(arguments))
 
-    serial = _number(_eval(arguments[0], cells, sheet_name, budget))
+    serial = _number(_eval_value(arguments[0], cells, sheet_name, budget))
     if isinstance(serial, ErrorValue):
         return serial
     try:
@@ -1913,7 +1913,7 @@ def _week_call(
 
     selector: int | ErrorValue = 1
     if len(arguments) == 2 and arguments[1].kind != "missing":
-        selector = _week_selector(_eval(arguments[1], cells, sheet_name, budget))
+        selector = _week_selector(_eval_value(arguments[1], cells, sheet_name, budget))
     if isinstance(selector, ErrorValue):
         return selector
 
@@ -2255,6 +2255,21 @@ def _criteria_aggregate(
     )
 
 
+def _eval_value(
+    node: _Node,
+    cells: Mapping[str, Scalar],
+    sheet_name: str,
+    budget: _WildcardBudget,
+) -> object:
+    """Evaluate an argument whose reader inspects the value, not its provenance.
+
+    Only COUNT, AND, OR and the IF-family/XLOOKUP pass-through read the
+    :class:`_Referenced` marker. Every specialized argument reader (UNIQUE,
+    WORKDAY.INTL masks, XLOOKUP modes and so on) gets the plain value.
+    """
+    return _dereference(_eval(node, cells, sheet_name, budget))
+
+
 def _eval(
     node: _Node,
     cells: Mapping[str, Scalar],
@@ -2413,19 +2428,19 @@ def _eval(
             lookup_value = (
                 None
                 if node.children[0].kind == "missing"
-                else _eval(node.children[0], cells, sheet_name, budget)
+                else _eval_value(node.children[0], cells, sheet_name, budget)
             )
-            lookup_array = _eval(node.children[1], cells, sheet_name, budget)
-            return_array = _eval(node.children[2], cells, sheet_name, budget)
+            lookup_array = _eval_value(node.children[1], cells, sheet_name, budget)
+            return_array = _eval_value(node.children[2], cells, sheet_name, budget)
             match_mode = (
                 0
                 if len(node.children) < 5 or node.children[4].kind == "missing"
-                else _eval(node.children[4], cells, sheet_name, budget)
+                else _eval_value(node.children[4], cells, sheet_name, budget)
             )
             search_mode = (
                 1
                 if len(node.children) < 6 or node.children[5].kind == "missing"
-                else _eval(node.children[5], cells, sheet_name, budget)
+                else _eval_value(node.children[5], cells, sheet_name, budget)
             )
             for value in (lookup_value, lookup_array, return_array, match_mode, search_mode):
                 if isinstance(value, ErrorValue):
@@ -2561,7 +2576,7 @@ def _text_extract(
     def read(index: int) -> tuple[object, bool] | ErrorValue:
         if index >= len(arguments) or arguments[index].kind == "missing":
             return None, False
-        value = _eval(arguments[index], cells, sheet_name, budget)
+        value = _eval_value(arguments[index], cells, sheet_name, budget)
         if isinstance(value, _Range):
             return ErrorValue("#VALUE!", f"{name} arguments must be scalar in this evaluator")
         return value, True
@@ -2661,7 +2676,7 @@ def _text_extract_fallback(
 ) -> object:
     if len(arguments) < 6 or arguments[5].kind == "missing":
         return ErrorValue("#N/A", f"{name} delimiter was not found")
-    fallback = _eval(arguments[5], cells, sheet_name, budget)
+    fallback = _eval_value(arguments[5], cells, sheet_name, budget)
     if isinstance(fallback, _Range):
         return ErrorValue("#VALUE!", f"{name} if_not_found must be scalar in this evaluator")
     return fallback

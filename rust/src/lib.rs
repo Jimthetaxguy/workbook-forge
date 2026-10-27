@@ -8228,5 +8228,26 @@ mod tests {
         assert_eq!(eval("=SUM(INDEX(D1:E2,0.5,1))"), Ok(Value::Number(30.0)));
         assert_eq!(eval("=XLOOKUP(TRUE,A1:A2,D1:D2)"), Ok(Value::Number(20.0)));
         assert_eq!(eval("=MATCH(1,A2:A3,0)"), Err(FormulaError::NA));
+        // Specialized readers see the plain value of a selected reference.
+        let masked = cells(&[
+            ("A1", Value::Number(1.0)),
+            ("A2", Value::Bool(true)),
+            ("C1", Value::Text("0000011".into())),
+            ("D1", Value::Number(10.0)),
+            ("D2", Value::Number(20.0)),
+        ]);
+        let eval_masked = |formula: &str| evaluate(formula, &masked, "S");
+        assert_eq!(
+            eval_masked("=WORKDAY.INTL(45002,1,IF(TRUE,C1))"),
+            Ok(Value::Number(45005.0))
+        );
+        assert_eq!(
+            eval_masked("=WORKDAY.INTL(45002,1,XLOOKUP(1,A1:A1,C1:C1))"),
+            Ok(Value::Number(45005.0))
+        );
+        assert_eq!(
+            eval_masked("=SUM(UNIQUE(D1:D2,IF(TRUE,A2)))"),
+            Ok(Value::Number(30.0))
+        );
     }
 }
