@@ -528,9 +528,12 @@ pub fn replay_json(bytes: &[u8], events_text: &str) -> String {
     }
 }
 
-/// Open the baseline (verifying its sha256), reapply every applied intent in
-/// `seq` order at `revision - 1`, recompute each calc event and compare it
-/// with the recorded deltas. A mismatch is an error (`replay_mismatch`).
+/// Open the baseline, reapply every applied intent in `seq` order at
+/// `revision - 1`, recompute each calc event and compare it with the recorded
+/// deltas. An xlsx baseline must match sha256 and length. A blank baseline
+/// must have `bytes.len() == baseline.bytes` (0 for a blank open) and a known
+/// sheet name. A byte or delta mismatch is `replay_mismatch`. A missing or
+/// unknown blank sheet is `invalid_log`.
 pub fn replay(bytes: &[u8], events_text: &str) -> Result<Json, ContractError> {
     let events = parse_events(events_text)?;
     let opened = events
@@ -567,11 +570,37 @@ pub fn replay(bytes: &[u8], events_text: &str) -> Result<Json, ContractError> {
             Ok(summary)
         }
         Some("blank") => {
-            let sheet = baseline["sheet"].as_str().unwrap_or("Sheet1");
+            if baseline["bytes"].as_u64() != Some(bytes.len() as u64) {
+                let mut error = replay_error(
+                    "replay_mismatch",
+                    "baseline bytes do not match session.opened bytes",
+                );
+                error.details.insert("seq".into(), opened["seq"].clone());
+                error.details.insert("event".into(), opened["id"].clone());
+                error
+                    .details
+                    .insert("expected_bytes".into(), baseline["bytes"].clone());
+                error
+                    .details
+                    .insert("actual_bytes".into(), json!(bytes.len()));
+                return Err(error);
+            }
+            // A missing name used to be invented as "Sheet1".
+            let Some(sheet) = baseline["sheet"].as_str() else {
+                return Err(replay_error(
+                    "invalid_log",
+                    "blank baseline sheet is missing or unknown",
+                ));
+            };
             let mut model = WorkbookModel::default();
             model.sheets.push(Sheet::new(sheet));
-            let session =
-                Session::new(model).map_err(|e| replay_error("open_failed", e.to_string()))?;
+            let session = Session::new(model).map_err(|error| {
+                if error.code == "invalid_sheet" {
+                    replay_error("invalid_log", "blank baseline sheet is missing or unknown")
+                } else {
+                    replay_error("open_failed", error.to_string())
+                }
+            })?;
             let mut summary = replay_on(&session, &events)?;
             summary["snapshot"] = json!(session.snapshot());
             summary["values"] = json!(session.calculate(1).values);
@@ -825,74 +854,14 @@ pub mod clock {
     }
 }
 
-// ---- SHA-256 --------------------------------------------------------------
-
-const K: [u32; 64] = [
-    0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
-    0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
-    0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
-    0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
-    0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
-    0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
-    0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
-    0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2,
-];
-
-/// Lowercase hex SHA-256 (FIPS 180-4). Used for baseline and export hashes;
-/// no crate is added for it.
+/// Lowercase hex SHA-256 (FIPS 180-4). Used for baseline and export hashes.
+/// Formats [`crate::model::sha256`]; no crate is added for it.
 pub fn sha256_hex(data: &[u8]) -> String {
-    let mut h: [u32; 8] = [
-        0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab,
-        0x5be0cd19,
-    ];
-    let mut message = data.to_vec();
-    let bit_len = (data.len() as u64).wrapping_mul(8);
-    message.push(0x80);
-    while message.len() % 64 != 56 {
-        message.push(0);
+    let mut hex = String::with_capacity(64);
+    for byte in crate::model::sha256(data) {
+        hex.push_str(&format!("{byte:02x}"));
     }
-    message.extend_from_slice(&bit_len.to_be_bytes());
-    let mut w = [0u32; 64];
-    let (blocks, _) = message.as_chunks::<64>();
-    for block in blocks {
-        let (words, _) = block.as_chunks::<4>();
-        for (slot, word) in w.iter_mut().zip(words) {
-            *slot = u32::from_be_bytes(*word);
-        }
-        for i in 16..64 {
-            let s0 = w[i - 15].rotate_right(7) ^ w[i - 15].rotate_right(18) ^ (w[i - 15] >> 3);
-            let s1 = w[i - 2].rotate_right(17) ^ w[i - 2].rotate_right(19) ^ (w[i - 2] >> 10);
-            w[i] = w[i - 16]
-                .wrapping_add(s0)
-                .wrapping_add(w[i - 7])
-                .wrapping_add(s1);
-        }
-        let [mut a, mut b, mut c, mut d, mut e, mut f, mut g, mut hh] = h;
-        for i in 0..64 {
-            let s1 = e.rotate_right(6) ^ e.rotate_right(11) ^ e.rotate_right(25);
-            let ch = (e & f) ^ (!e & g);
-            let t1 = hh
-                .wrapping_add(s1)
-                .wrapping_add(ch)
-                .wrapping_add(K[i])
-                .wrapping_add(w[i]);
-            let s0 = a.rotate_right(2) ^ a.rotate_right(13) ^ a.rotate_right(22);
-            let maj = (a & b) ^ (a & c) ^ (b & c);
-            let t2 = s0.wrapping_add(maj);
-            hh = g;
-            g = f;
-            f = e;
-            e = d.wrapping_add(t1);
-            d = c;
-            c = b;
-            b = a;
-            a = t1.wrapping_add(t2);
-        }
-        for (slot, value) in h.iter_mut().zip([a, b, c, d, e, f, g, hh]) {
-            *slot = slot.wrapping_add(value);
-        }
-    }
-    h.iter().map(|word| format!("{word:08x}")).collect()
+    hex
 }
 
 #[cfg(test)]
@@ -913,6 +882,65 @@ mod tests {
             sha256_hex(b"abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq"),
             "248d6a61d20638b8e5c026930c3e6039a33ce45964ff2167f6ecedd419db06c1"
         );
+        // Same digest `content_fingerprint` publishes, plus its prefix.
+        assert_eq!(
+            crate::model::content_fingerprint(b"abc"),
+            format!("sha256:{}", sha256_hex(b"abc"))
+        );
+    }
+
+    fn blank_opened(sheet: Option<Json>, bytes: u64) -> String {
+        let mut baseline = Map::new();
+        baseline.insert("kind".into(), json!("blank"));
+        baseline.insert("name".into(), json!("Blank"));
+        baseline.insert("sha256".into(), Json::Null);
+        baseline.insert("bytes".into(), json!(bytes));
+        if let Some(sheet) = sheet {
+            baseline.insert("sheet".into(), sheet);
+        }
+        json!([{
+            "v": 1,
+            "seq": 0,
+            "id": "ev_0000",
+            "kind": "session",
+            "op": "opened",
+            "revision": "0",
+            "baseline": baseline,
+        }])
+        .to_string()
+    }
+
+    #[test]
+    fn blank_replay_accepts_empty_bytes_for_a_recorded_sheet() {
+        let log = blank_opened(Some(json!("Ledger")), 0);
+        let result = replay(b"", &log).expect("blank replay");
+        assert_eq!(result["ok"], true);
+        assert_eq!(result["revision"], "0");
+        assert_eq!(result["intents_applied"], 0);
+        assert_eq!(result["snapshot"]["sheets"][0]["name"], "Ledger");
+        // The check is equality with the recorded count, not a hard-coded zero.
+        let recorded = blank_opened(Some(json!("Ledger")), 4);
+        let matched = replay(b"abcd", &recorded).expect("matching length");
+        assert_eq!(matched["ok"], true);
+        assert_eq!(matched["snapshot"]["sheets"][0]["name"], "Ledger");
+    }
+
+    #[test]
+    fn blank_replay_rejects_a_different_length_and_a_missing_or_unknown_sheet() {
+        let log = blank_opened(Some(json!("Sheet1")), 0);
+        let error = replay(b"not-empty", &log).unwrap_err();
+        assert_eq!(error.code, "replay_mismatch");
+        assert_eq!(error.details["seq"], json!(0));
+        assert_eq!(error.details["event"], json!("ev_0000"));
+        assert_eq!(error.details["expected_bytes"], json!(0));
+        assert_eq!(error.details["actual_bytes"], json!(9));
+
+        let missing = blank_opened(None, 0);
+        assert_eq!(replay(b"", &missing).unwrap_err().code, "invalid_log");
+        let unknown = blank_opened(Some(json!("Bad:Name")), 0);
+        assert_eq!(replay(b"", &unknown).unwrap_err().code, "invalid_log");
+        let not_a_string = blank_opened(Some(Json::Null), 0);
+        assert_eq!(replay(b"", &not_a_string).unwrap_err().code, "invalid_log");
     }
 
     #[test]
