@@ -6,6 +6,7 @@
 #   - the interpreter is the checkout's own virtual environment
 #   - the Rust examples that the Python tests launch are built first, so a
 #     cold build cannot hit a test's 180 second limit
+#   - the headless browser engine is built for wasm32 and its Node tests run
 #   - a skipped test fails the gate unless tools/gate-allowed-skips.txt names it
 #   - whitespace is checked against HEAD, which covers staged changes too
 #   - the whole run has a time limit
@@ -144,6 +145,32 @@ echo "gate: running tools/verify_toolkit.sh"
 # The suite already ran above with the skip report; running it twice adds
 # time and no evidence.
 WORKBOOK_PYTHON="$PY" WORKBOOK_PYTEST_DONE=1 bash tools/verify_toolkit.sh
+
+echo "gate: building the browser engine and running its Node tests"
+# web/forge-engine is outside Cargo and pytest. Fail before the build when
+# the wasm32 target or a matching wasm-bindgen-cli is missing. The CLI version
+# is the wasm-bindgen pin in rust/Cargo.lock.
+wasm_target="wasm32-unknown-unknown"
+pinned="$(grep -A1 '^name = "wasm-bindgen"$' "$ROOT/rust/Cargo.lock" | sed -n 's/^version = "\(.*\)"/\1/p')"
+if [ -z "$pinned" ]; then
+  echo "GATE FAIL: rust/Cargo.lock does not pin wasm-bindgen"
+  exit 1
+fi
+if ! command -v rustup >/dev/null 2>&1 || ! rustup target list --installed | grep -qx "$wasm_target"; then
+  echo "GATE FAIL: $wasm_target is not installed (rustup target add $wasm_target)"
+  exit 1
+fi
+if ! command -v wasm-bindgen >/dev/null 2>&1; then
+  echo "GATE FAIL: wasm-bindgen-cli is not installed (Cargo.lock pins wasm-bindgen $pinned)"
+  exit 1
+fi
+have="$(wasm-bindgen --version | awk '{print $2}')"
+if [ "$have" != "$pinned" ]; then
+  echo "GATE FAIL: wasm-bindgen-cli $have does not match Cargo.lock $pinned"
+  exit 1
+fi
+bash web/forge-engine/build-wasm.sh
+(cd web/forge-engine && npm test)
 
 echo "gate: checking whitespace against HEAD"
 git diff --check HEAD
