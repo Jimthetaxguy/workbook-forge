@@ -12,6 +12,6 @@
   },
   "scripts": {
     "build:wasm": "bash build-wasm.sh",
-    "test": "node --experimental-strip-types --no-warnings --test test/engine.node.test.mjs"
+    "test": "node --experimental-strip-types --no-warnings --test test/*.node.test.mjs"
   }
 }
