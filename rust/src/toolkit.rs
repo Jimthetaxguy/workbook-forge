@@ -1317,23 +1317,29 @@ impl Graph {
     /// Re-derives the edges of `changed` cells from `model`. On a limit
     /// failure the caller restores those cells and calls `reanalyze` with the
     /// restored model, which puts back exactly the graph it had before.
+    /// Returns every precedent the changed cells gained or released: the
+    /// only cells whose presence in the graph an edit can change.
     fn update(
         &mut self,
         model: &WorkbookModel,
         changed: &BTreeSet<String>,
-    ) -> Result<(), ToolkitError> {
-        self.reanalyze(model, changed);
+    ) -> Result<BTreeSet<String>, ToolkitError> {
+        let touched = self.reanalyze(model, changed);
         self.check_reference_limits()
-            .and_then(|()| self.check_cell_limit())
+            .and_then(|()| self.check_cell_limit())?;
+        Ok(touched)
     }
-    fn reanalyze(&mut self, model: &WorkbookModel, changed: &BTreeSet<String>) {
+    fn reanalyze(&mut self, model: &WorkbookModel, changed: &BTreeSet<String>) -> BTreeSet<String> {
         let mut released = BTreeSet::new();
+        let mut gained = BTreeSet::new();
         for current in changed {
             let (sheet, _) = current.rsplit_once('!').unwrap();
             match model.get_cell(current) {
                 Some(cell) => {
                     released.extend(self.clear_cell(current));
-                    self.set_cell(current.clone(), cell_precedents(model, sheet, cell));
+                    let precedents = cell_precedents(model, sheet, cell);
+                    gained.extend(precedents.deps.iter().cloned());
+                    self.set_cell(current.clone(), precedents);
                 }
                 // Absent before an edit created it: drop it unless referenced.
                 None => {
@@ -1342,15 +1348,17 @@ impl Graph {
                 }
             }
         }
-        for dep in released {
-            let referenced = self.dependents.contains_key(&dep);
+        for dep in &released {
+            let referenced = self.dependents.contains_key(dep);
             if !referenced
-                && model.get_cell(&dep).is_none()
-                && self.dependencies.get(&dep).is_some_and(BTreeSet::is_empty)
+                && model.get_cell(dep).is_none()
+                && self.dependencies.get(dep).is_some_and(BTreeSet::is_empty)
             {
-                self.dependencies.remove(&dep);
+                self.dependencies.remove(dep);
             }
         }
+        released.extend(gained);
+        released
     }
     /// Removes a cell's own edges and returns the precedents it released.
     fn clear_cell(&mut self, current: &str) -> BTreeSet<String> {
@@ -1469,7 +1477,7 @@ fn evaluate_node(
     model: &WorkbookModel,
     graph: &Graph,
     current: &str,
-    values: &BTreeMap<String, CalculatedValue>,
+    values: &Values,
 ) -> Result<CalculatedValue, ToolkitError> {
     if let Some(error) = graph.errors.get(current) {
         return Err(error.clone());
@@ -1526,10 +1534,7 @@ fn reserve_result(
     materialized: &AtomicUsize,
     exhausted: &AtomicBool,
 ) -> Result<(), ToolkitError> {
-    let cells = match value {
-        CalculatedValue::Scalar(_) => 1,
-        CalculatedValue::Array { rows } => rows.iter().map(Vec::len).sum(),
-    };
+    let cells = result_cells(value);
     // Stable rustc deprecates fetch_update in favor of try_update, which is
     // still unstable on rust-version 1.88 (feature atomic_try_update).
     #[allow(deprecated)]
@@ -1547,21 +1552,21 @@ fn reserve_result(
     Ok(())
 }
 pub fn calculate(model: &WorkbookModel, workers: usize) -> CalculationReport {
-    calculate_inner(model, workers, None, &BTreeSet::new())
+    let mut report = CalculationReport::default();
+    full_update(model, workers).apply_to(&mut report, model);
+    report
 }
-fn calculate_inner(
-    model: &WorkbookModel,
-    workers: usize,
-    previous: Option<&CalculationReport>,
-    dirty: &BTreeSet<String>,
-) -> CalculationReport {
+fn full_update(model: &WorkbookModel, workers: usize) -> CalculationUpdate {
     match validate_inputs(model, &BTreeMap::new()).and_then(|_| Graph::build(model)) {
-        Ok(graph) => calculate_with_graph(model, &graph, workers, previous, dirty),
-        Err(error) => CalculationReport {
-            revision: model.revision,
-            diagnostics: vec![Diagnostic::for_key(error, None)],
-            ..CalculationReport::default()
-        },
+        Ok(graph) => calculate_with_graph(
+            model,
+            &graph,
+            workers,
+            None,
+            &BTreeSet::new(),
+            &BTreeSet::new(),
+        ),
+        Err(error) => CalculationUpdate::failed(model.revision, error),
     }
 }
 /// A previous report can seed a calculation only when it covered every
@@ -1573,76 +1578,245 @@ fn reusable(report: &CalculationReport) -> bool {
             && diagnostic.code != "worker_failure"
     })
 }
-/// Evaluates the selected cells that `dirty` invalidated, or that the
-/// previous report never covered, in dependency order. Every other selected
-/// cell keeps its previous value and diagnostics. With no previous report
-/// this is a full calculation.
+fn result_cells(value: &CalculatedValue) -> usize {
+    match value {
+        CalculatedValue::Scalar(_) => 1,
+        CalculatedValue::Array { rows } => rows.iter().map(Vec::len).sum(),
+    }
+}
+fn diagnostic_key(diagnostic: &Diagnostic) -> Option<String> {
+    Some(key(
+        diagnostic.sheet.as_ref()?,
+        diagnostic.address.as_ref()?,
+    ))
+}
+/// A session's last published report, with the result cells it holds so an
+/// incremental calculation can continue the result limit from there.
+#[derive(Clone)]
+struct Published {
+    report: CalculationReport,
+    materialized: usize,
+}
+/// Calculated values visible to a calculation: its own results for the cells
+/// it recalculates, the base report's for every other cell.
+struct Values<'a> {
+    fresh: &'a BTreeMap<String, CalculatedValue>,
+    pending: &'a BTreeSet<String>,
+    base: Option<&'a BTreeMap<String, CalculatedValue>>,
+}
+impl Values<'_> {
+    fn get(&self, key: &str) -> Option<&CalculatedValue> {
+        if self.pending.contains(key) {
+            self.fresh.get(key)
+        } else {
+            self.base?.get(key)
+        }
+    }
+}
+/// One calculation's result, relative to the base report it started from.
+/// Without a base, `pending` holds every selected cell.
+struct CalculationUpdate {
+    revision: u64,
+    incremental: bool,
+    /// Recalculated cells; their base values and diagnostics are replaced.
+    pending: BTreeSet<String>,
+    /// Base cells that are no longer selected.
+    dropped: BTreeSet<String>,
+    values: BTreeMap<String, CalculatedValue>,
+    diagnostics: Vec<Diagnostic>,
+    evaluated_cells: Vec<String>,
+    materialized: usize,
+    /// Stopped before collecting outputs (a workbook error or the result
+    /// limit); the report keeps what was found, in the order it was found.
+    early: bool,
+}
+impl CalculationUpdate {
+    fn failed(revision: u64, error: ToolkitError) -> Self {
+        Self {
+            revision,
+            incremental: false,
+            pending: BTreeSet::new(),
+            dropped: BTreeSet::new(),
+            values: BTreeMap::new(),
+            diagnostics: vec![Diagnostic::for_key(error, None)],
+            evaluated_cells: Vec::new(),
+            materialized: 0,
+            early: true,
+        }
+    }
+    /// The value a cell has once this update is applied to `base`.
+    fn value<'a>(
+        &'a self,
+        base: Option<&'a CalculationReport>,
+        key: &str,
+    ) -> Option<&'a CalculatedValue> {
+        if self.pending.contains(key) || !self.incremental {
+            self.values.get(key)
+        } else if self.dropped.contains(key) {
+            None
+        } else {
+            base?.values.get(key)
+        }
+    }
+    /// Applies the update to `report`: its base when incremental, otherwise
+    /// any report, which is replaced.
+    fn apply_to(self, report: &mut CalculationReport, model: &WorkbookModel) {
+        if self.incremental {
+            for current in self.pending.iter().chain(&self.dropped) {
+                report.values.remove(current);
+            }
+            report.diagnostics.retain(|diagnostic| {
+                diagnostic_key(diagnostic).is_none_or(|current| {
+                    !self.pending.contains(&current) && !self.dropped.contains(&current)
+                })
+            });
+            report.values.extend(self.values);
+            report.diagnostics.extend(self.diagnostics);
+        } else {
+            report.values = self.values;
+            report.diagnostics = self.diagnostics;
+        }
+        report.revision = self.revision;
+        report.stale = false;
+        report.evaluated_cells = self.evaluated_cells;
+        report.outputs = BTreeMap::new();
+        if self.early {
+            return;
+        }
+        let output_materialized = AtomicUsize::new(0);
+        let exhausted = AtomicBool::new(false);
+        for (name, address) in &model.outputs {
+            if let Ok(current) = model.resolve(&address.sheet, &address.address)
+                && let Some(value) = report.values.get(&current)
+            {
+                if let Err(error) = reserve_result(value, &output_materialized, &exhausted) {
+                    report
+                        .diagnostics
+                        .push(Diagnostic::for_key(error, Some(&current)));
+                    break;
+                }
+                report.outputs.insert(name.clone(), value.clone());
+            }
+        }
+        report.evaluated_cells.sort();
+        report.diagnostics.sort_by(|a, b| {
+            (&a.sheet, &a.address, &a.code, &a.message)
+                .cmp(&(&b.sheet, &b.address, &b.code, &b.message))
+        });
+    }
+}
+/// Evaluates, in dependency order, the selected cells that `dirty`
+/// invalidated or that `base` does not cover. Every other selected cell
+/// keeps its base value and diagnostics. With no output bindings the
+/// selection is every graph cell, and only invalidated cells and `touched`
+/// cells (precedents an edit added or released) are examined, so the work
+/// follows the edit rather than the workbook. Without a usable base this is
+/// a full calculation.
 fn calculate_with_graph(
     model: &WorkbookModel,
     graph: &Graph,
     workers: usize,
-    previous: Option<&CalculationReport>,
+    base: Option<&Published>,
     dirty: &BTreeSet<String>,
-) -> CalculationReport {
-    let mut report = CalculationReport {
+    touched: &BTreeSet<String>,
+) -> CalculationUpdate {
+    let mut update = CalculationUpdate {
         revision: model.revision,
-        ..CalculationReport::default()
+        incremental: false,
+        pending: BTreeSet::new(),
+        dropped: BTreeSet::new(),
+        values: BTreeMap::new(),
+        diagnostics: Vec::new(),
+        evaluated_cells: Vec::new(),
+        materialized: 0,
+        early: false,
     };
-    let selected = match graph.closure(model) {
-        Ok(selected) => selected,
-        Err(error) => {
-            report.diagnostics.push(Diagnostic::for_key(error, None));
-            return report;
+    let selected = if model.outputs.is_empty() {
+        None
+    } else {
+        match graph.closure(model) {
+            Ok(selected) => Some(selected),
+            Err(error) => return CalculationUpdate::failed(model.revision, error),
         }
     };
-    let materialized = AtomicUsize::new(0);
-    let exhausted = AtomicBool::new(false);
-    let previous = previous.filter(|old| reusable(old));
-    // Cells the previous report left on a cycle; anything depending on one
-    // that stays clean can never become ready.
+    let is_selected = |current: &str| match &selected {
+        Some(selected) => selected.contains(current),
+        None => graph.dependencies.contains_key(current),
+    };
+    let base = base.filter(|published| reusable(&published.report));
+    // Cells the base left on a cycle; anything depending on one that stays
+    // clean can never become ready.
     let mut blocked = BTreeSet::new();
-    let pending = match previous {
-        None => selected.clone(),
-        Some(old) => {
-            let invalidated = graph.invalidated(dirty);
-            let mut covered: BTreeSet<String> = old.values.keys().cloned().collect();
-            let mut carried: BTreeMap<String, Vec<&Diagnostic>> = BTreeMap::new();
-            for diagnostic in &old.diagnostics {
-                let (Some(sheet), Some(address)) = (&diagnostic.sheet, &diagnostic.address) else {
-                    continue;
-                };
-                let current = key(sheet, address);
-                if diagnostic.code == "dependency_cycle" {
-                    blocked.insert(current.clone());
+    let mut start = 0usize;
+    match base {
+        None => {
+            update.pending = match &selected {
+                Some(selected) => selected.clone(),
+                None => graph.dependencies.keys().cloned().collect(),
+            };
+        }
+        Some(base) => {
+            let report = &base.report;
+            update.incremental = true;
+            let mut diagnosed = BTreeSet::new();
+            for diagnostic in &report.diagnostics {
+                if let Some(current) = diagnostic_key(diagnostic) {
+                    if diagnostic.code == "dependency_cycle" {
+                        blocked.insert(current.clone());
+                    }
+                    diagnosed.insert(current);
                 }
-                carried.entry(current.clone()).or_default().push(diagnostic);
-                covered.insert(current);
             }
-            let pending: BTreeSet<String> = selected
+            let covered =
+                |current: &str| report.values.contains_key(current) || diagnosed.contains(current);
+            let invalidated = graph.invalidated(dirty);
+            update.pending = invalidated
                 .iter()
-                .filter(|current| invalidated.contains(*current) || !covered.contains(*current))
+                .filter(|current| is_selected(current))
+                .chain(
+                    touched
+                        .iter()
+                        .filter(|current| is_selected(current) && !covered(current)),
+                )
                 .cloned()
                 .collect();
-            for current in selected.difference(&pending) {
-                if let Some(value) = old.values.get(current) {
-                    if let Err(error) = reserve_result(value, &materialized, &exhausted) {
-                        report
-                            .diagnostics
-                            .push(Diagnostic::for_key(error, Some(current)));
-                        return report;
-                    }
-                    report.values.insert(current.clone(), value.clone());
+            match &selected {
+                Some(selected) => {
+                    update
+                        .pending
+                        .extend(selected.iter().filter(|current| !covered(current)).cloned());
+                    update.dropped = report
+                        .values
+                        .keys()
+                        .chain(&diagnosed)
+                        .filter(|current| !selected.contains(*current))
+                        .cloned()
+                        .collect();
                 }
-                if let Some(diagnostics) = carried.get(current) {
-                    report
-                        .diagnostics
-                        .extend(diagnostics.iter().map(|diagnostic| (*diagnostic).clone()));
+                // Only an edit's precedents can leave the graph.
+                None => {
+                    update.dropped = touched
+                        .iter()
+                        .filter(|current| !is_selected(current) && covered(current))
+                        .cloned()
+                        .collect();
                 }
             }
-            blocked.retain(|current| !pending.contains(current));
-            pending
+            blocked.retain(|current| !update.pending.contains(current));
+            let replaced: usize = update
+                .pending
+                .iter()
+                .chain(&update.dropped)
+                .filter_map(|current| report.values.get(current))
+                .map(result_cells)
+                .sum();
+            start = base.materialized - replaced;
         }
-    };
+    }
+    let base_values = base.map(|base| &base.report.values);
+    let materialized = AtomicUsize::new(start);
+    let exhausted = AtomicBool::new(false);
+    let pending = std::mem::take(&mut update.pending);
     let mut remaining: BTreeMap<String, usize> = pending
         .iter()
         .map(|current| {
@@ -1661,6 +1835,25 @@ fn calculate_with_graph(
         .collect::<Vec<_>>();
     let mut finished = BTreeSet::new();
     let worker_count = workers.clamp(1, MAX_WORKERS);
+    let mut fresh = BTreeMap::new();
+    let mut diagnostics = Vec::new();
+    let mut evaluated_cells = Vec::new();
+    // An incremental run that reaches the result limit is redone in full, so
+    // which cells a truncated report keeps matches a full calculation.
+    macro_rules! stop_early {
+        () => {{
+            if update.incremental {
+                return calculate_with_graph(model, graph, workers, None, dirty, touched);
+            }
+            update.pending = pending;
+            update.values = fresh;
+            update.diagnostics = diagnostics;
+            update.evaluated_cells = evaluated_cells;
+            update.materialized = materialized.load(Ordering::Relaxed);
+            update.early = true;
+            return update;
+        }};
+    }
     while !ready.is_empty() {
         ready.sort();
         let mut evaluate = Vec::new();
@@ -1672,33 +1865,43 @@ fn calculate_with_graph(
             {
                 evaluate.push(current.clone());
             } else {
-                match evaluate_node(model, graph, current, &report.values) {
+                let result = evaluate_node(
+                    model,
+                    graph,
+                    current,
+                    &Values {
+                        fresh: &fresh,
+                        pending: &pending,
+                        base: base_values,
+                    },
+                );
+                match result {
                     Ok(value) => {
                         if let Err(error) = reserve_result(&value, &materialized, &exhausted) {
-                            report
-                                .diagnostics
-                                .push(Diagnostic::for_key(error, Some(current)));
-                            return report;
+                            diagnostics.push(Diagnostic::for_key(error, Some(current)));
+                            stop_early!();
                         }
-                        report.values.insert(current.clone(), value);
+                        fresh.insert(current.clone(), value);
                     }
-                    Err(error) => report
-                        .diagnostics
-                        .push(Diagnostic::for_key(error, Some(current))),
+                    Err(error) => diagnostics.push(Diagnostic::for_key(error, Some(current))),
                 }
             }
         }
+        let values = Values {
+            fresh: &fresh,
+            pending: &pending,
+            base: base_values,
+        };
         let execute_chunk = |chunk: &[String]| {
             let mut results = Vec::new();
             for current in chunk {
                 if exhausted.load(Ordering::Relaxed) {
                     break;
                 }
-                let result =
-                    evaluate_node(model, graph, current, &report.values).and_then(|value| {
-                        reserve_result(&value, &materialized, &exhausted)?;
-                        Ok(value)
-                    });
+                let result = evaluate_node(model, graph, current, &values).and_then(|value| {
+                    reserve_result(&value, &materialized, &exhausted)?;
+                    Ok(value)
+                });
                 results.push((current.clone(), result));
             }
             results
@@ -1730,20 +1933,18 @@ fn calculate_with_graph(
         };
         for (current, result) in results {
             if !current.is_empty() {
-                report.evaluated_cells.push(current.clone());
+                evaluated_cells.push(current.clone());
             }
             match result {
                 Ok(value) => {
-                    report.values.insert(current, value);
+                    fresh.insert(current, value);
                 }
-                Err(error) => report
-                    .diagnostics
-                    .push(Diagnostic::for_key(error, Some(&current))),
+                Err(error) => diagnostics.push(Diagnostic::for_key(error, Some(&current))),
             }
         }
         if exhausted.load(Ordering::Relaxed) {
-            report.evaluated_cells.sort();
-            return report;
+            evaluated_cells.sort();
+            stop_early!();
         }
         let mut next = Vec::new();
         for current in ready {
@@ -1762,7 +1963,7 @@ fn calculate_with_graph(
         ready = next;
     }
     for current in pending.difference(&finished) {
-        report.diagnostics.push(Diagnostic::for_key(
+        diagnostics.push(Diagnostic::for_key(
             ToolkitError::new(
                 "dependency_cycle",
                 "cell is part of, or depends on, a circular reference",
@@ -1770,28 +1971,13 @@ fn calculate_with_graph(
             Some(current),
         ));
     }
-    let output_materialized = AtomicUsize::new(0);
-    for (name, address) in &model.outputs {
-        if let Ok(current) = model.resolve(&address.sheet, &address.address)
-            && let Some(value) = report.values.get(&current)
-        {
-            if let Err(error) = reserve_result(value, &output_materialized, &exhausted) {
-                report
-                    .diagnostics
-                    .push(Diagnostic::for_key(error, Some(&current)));
-                break;
-            }
-            report.outputs.insert(name.clone(), value.clone());
-        }
-    }
-    report.evaluated_cells.sort();
-    report.diagnostics.sort_by(|a, b| {
-        (&a.sheet, &a.address, &a.code, &a.message)
-            .cmp(&(&b.sheet, &b.address, &b.code, &b.message))
-    });
-    report
+    update.pending = pending;
+    update.values = fresh;
+    update.diagnostics = diagnostics;
+    update.evaluated_cells = evaluated_cells;
+    update.materialized = materialized.load(Ordering::Relaxed);
+    update
 }
-
 /// Applies a batch to `model` in order, recording each edited cell's prior
 /// contents in `undo` before touching it. Stops at the first invalid edit;
 /// the caller restores from `undo`.
@@ -1882,8 +2068,11 @@ struct SessionState {
     /// and the graph limits; it then matches `model` exactly. Edits update it
     /// in place, and calculation shares it through the `Arc` without a copy.
     graph: Option<Arc<Graph>>,
-    published: Option<CalculationReport>,
+    /// Updated in place by each calculation unless a caller still holds it.
+    published: Option<Arc<Published>>,
     dirty: BTreeSet<String>,
+    /// Precedents edits gained or released since the published report.
+    touched: BTreeSet<String>,
 }
 /// Clones share one synchronized transient session. Calculation holds no write
 /// lock while evaluating; publication checks the source revision again.
@@ -1917,6 +2106,7 @@ impl Session {
                 graph,
                 published: None,
                 dirty: BTreeSet::new(),
+                touched: BTreeSet::new(),
             })),
         })
     }
@@ -1944,8 +2134,16 @@ impl Session {
         state
             .published
             .as_ref()
+            .map(|published| &published.report)
             .filter(|report| report.revision == state.model.revision)
             .cloned()
+    }
+    /// Revision of the last published report, whether or not it is current.
+    pub fn published_revision(&self) -> Option<u64> {
+        self.state()
+            .published
+            .as_ref()
+            .map(|published| published.report.revision)
     }
     pub fn apply(
         &self,
@@ -1990,10 +2188,13 @@ impl Session {
                     // Copies the graph only if a calculation is still reading it.
                     Some(graph) => {
                         let graph = Arc::make_mut(graph);
-                        if let Err(error) = graph.update(model, &changed) {
-                            restore(model, undo.drain(..));
-                            graph.reanalyze(model, &changed);
-                            return Err(error);
+                        match graph.update(model, &changed) {
+                            Ok(touched) => state.touched.extend(touched),
+                            Err(error) => {
+                                restore(model, undo.drain(..));
+                                graph.reanalyze(model, &changed);
+                                return Err(error);
+                            }
                         }
                     }
                     None => state.graph = Some(Arc::new(Graph::build(model)?)),
@@ -2024,31 +2225,163 @@ impl Session {
         Ok(self.calculate(workers))
     }
     pub fn calculate(&self, workers: usize) -> CalculationReport {
-        let (model, graph, previous, dirty) = {
+        let run = self.compute(workers);
+        self.publish(run, false).0.unwrap()
+    }
+    /// Calculates like `calculate`, but returns only what changed since the
+    /// report published when it started, so its cost follows the edit
+    /// rather than the workbook. `calculate` copies the whole report.
+    pub fn calculate_changes(&self, workers: usize) -> CalculationChanges {
+        let run = self.compute(workers);
+        self.publish(run, true).1.unwrap()
+    }
+    /// Calculates from a snapshot taken under the lock, without holding it.
+    fn compute(&self, workers: usize) -> Run {
+        let (model, graph, previous, dirty, touched) = {
             let state = self.state();
             (
                 Arc::clone(&state.model),
                 state.graph.clone(),
                 state.published.clone(),
                 state.dirty.clone(),
+                state.touched.clone(),
             )
         };
-        let report = match graph {
-            Some(graph) => calculate_with_graph(&model, &graph, workers, previous.as_ref(), &dirty),
-            None => calculate_inner(&model, workers, previous.as_ref(), &dirty),
+        let update = match &graph {
+            Some(graph) => calculate_with_graph(
+                &model,
+                graph,
+                workers,
+                previous.as_deref(),
+                &dirty,
+                &touched,
+            ),
+            None => full_update(&model, workers),
         };
-        self.publish(report)
-    }
-    fn publish(&self, mut report: CalculationReport) -> CalculationReport {
-        let mut state = self.state();
-        if state.model.revision != report.revision {
-            report.stale = true;
-        } else {
-            state.published = Some(report.clone());
-            state.dirty.clear();
+        Run {
+            model,
+            previous,
+            dirty,
+            update,
         }
-        report
     }
+    /// Publishes a calculation unless an edit landed since its snapshot (the
+    /// result is stale) or another calculation published first.
+    fn publish(
+        &self,
+        run: Run,
+        changes: bool,
+    ) -> (Option<CalculationReport>, Option<CalculationChanges>) {
+        let Run {
+            model,
+            previous,
+            dirty,
+            update,
+        } = run;
+        let base_revision = previous.as_ref().map(|published| published.report.revision);
+        let cells = changes.then(|| {
+            let base = previous.as_ref().map(|published| &published.report);
+            let keys: BTreeSet<&String> = if update.incremental {
+                update
+                    .pending
+                    .iter()
+                    .chain(&update.dropped)
+                    .chain(&dirty)
+                    .collect()
+            } else {
+                base.into_iter()
+                    .flat_map(|report| report.values.keys())
+                    .chain(update.values.keys())
+                    .chain(&dirty)
+                    .collect()
+            };
+            keys.into_iter()
+                .map(|current| {
+                    (
+                        current.clone(),
+                        base.and_then(|report| report.values.get(current)).cloned(),
+                        update.value(base, current).cloned(),
+                    )
+                })
+                .collect::<Vec<_>>()
+        });
+        let summarize = |report: &CalculationReport, cells| CalculationChanges {
+            base_revision,
+            revision: report.revision,
+            stale: report.stale,
+            cells,
+            diagnostics: report.diagnostics.clone(),
+            evaluated_cells: report.evaluated_cells.clone(),
+        };
+        let mut state = self.state();
+        let current = state.model.revision == update.revision;
+        let same_base = match (&state.published, &previous) {
+            (Some(published), Some(base)) => Arc::ptr_eq(published, base),
+            (None, None) => true,
+            _ => false,
+        };
+        if current && same_base {
+            // Release this run's reference so the update lands in place.
+            drop(previous);
+            let materialized = update.materialized;
+            match &mut state.published {
+                Some(published) if update.incremental => {
+                    let published = Arc::make_mut(published);
+                    update.apply_to(&mut published.report, &model);
+                    published.materialized = materialized;
+                }
+                slot => {
+                    let mut report = CalculationReport::default();
+                    update.apply_to(&mut report, &model);
+                    *slot = Some(Arc::new(Published {
+                        report,
+                        materialized,
+                    }));
+                }
+            }
+            state.dirty.clear();
+            state.touched.clear();
+            let report = &state.published.as_ref().unwrap().report;
+            return match cells {
+                Some(cells) => (None, Some(summarize(report, cells))),
+                None => (Some(report.clone()), None),
+            };
+        }
+        drop(state);
+        let mut report = match &previous {
+            Some(base) if update.incremental => base.report.clone(),
+            _ => CalculationReport::default(),
+        };
+        update.apply_to(&mut report, &model);
+        report.stale = !current;
+        match cells {
+            Some(cells) => (None, Some(summarize(&report, cells))),
+            None => (Some(report), None),
+        }
+    }
+}
+
+/// A calculation waiting to be published.
+struct Run {
+    model: Arc<WorkbookModel>,
+    previous: Option<Arc<Published>>,
+    dirty: BTreeSet<String>,
+    update: CalculationUpdate,
+}
+/// What a session calculation changed, relative to the report published
+/// when it started.
+#[derive(Clone, Debug, PartialEq)]
+pub struct CalculationChanges {
+    /// Revision of that published report, or `None` if there was none.
+    pub base_revision: Option<u64>,
+    pub revision: u64,
+    pub stale: bool,
+    /// Every cell whose value may differ from that report, and every cell
+    /// edited since it, as (key, value before, value after). Cells not
+    /// listed have the same value in both.
+    pub cells: Vec<(String, Option<CalculatedValue>, Option<CalculatedValue>)>,
+    pub diagnostics: Vec<Diagnostic>,
+    pub evaluated_cells: Vec<String>,
 }
 
 /// Public-safe operating model: each forecast row incurs the same fixed cost.
@@ -2675,14 +3008,14 @@ mod tests {
     #[test]
     fn obsolete_calculation_cannot_publish_into_new_revision() {
         let session = Session::new(operating_scenario()).unwrap();
-        let old = calculate(&session.snapshot(), 1);
+        let old = session.compute(1);
         session
             .apply(
                 vec![Edit::value("Assumptions", "B1", CellValue::Number(30.0))],
                 None,
             )
             .unwrap();
-        assert!(session.publish(old).stale);
+        assert!(session.publish(old, false).0.unwrap().stale);
         assert!(session.published().is_none());
         let current = session.calculate(2);
         assert!(!current.stale);
@@ -2985,6 +3318,45 @@ mod tests {
         let graph = state.graph.as_ref().expect("session keeps its graph");
         assert_eq!(**graph, Graph::build(&state.model).unwrap());
     }
+    /// `changes` must take every cell from its value in `before` to its value
+    /// in `after`, and list every cell whose value differs.
+    fn assert_changes_between(
+        changes: &CalculationChanges,
+        before: &CalculationReport,
+        after: &CalculationReport,
+        seed: u64,
+        step: usize,
+    ) {
+        assert_eq!(changes.base_revision, Some(before.revision));
+        assert_eq!((changes.revision, changes.stale), (after.revision, false));
+        assert_eq!(changes.diagnostics, after.diagnostics);
+        let listed: BTreeMap<_, _> = changes
+            .cells
+            .iter()
+            .map(|(key, old, new)| (key.clone(), (old.clone(), new.clone())))
+            .collect();
+        for (key, (old, new)) in &listed {
+            assert_eq!(
+                old.as_ref(),
+                before.values.get(key),
+                "seed {seed} step {step} {key}"
+            );
+            assert_eq!(
+                new.as_ref(),
+                after.values.get(key),
+                "seed {seed} step {step} {key}"
+            );
+        }
+        for key in before.values.keys().chain(after.values.keys()) {
+            if !listed.contains_key(key) {
+                assert_eq!(
+                    before.values.get(key),
+                    after.values.get(key),
+                    "seed {seed} step {step}: unlisted {key} changed"
+                );
+            }
+        }
+    }
     #[test]
     fn persistent_graph_and_incremental_reports_match_full_rebuilds() {
         let (mut accepted, mut rejected_invalid, mut cycles) = (0, 0, 0);
@@ -3014,6 +3386,7 @@ mod tests {
             // graph build, as the session did before it kept its graph.
             let reference = Session::new(workbook).unwrap();
             session.calculate(1);
+            let mut last = calculate(&session.snapshot(), 1);
             for step in 0..60 {
                 let edits = (0..1 + rng.below(3))
                     .map(|_| random_edit(&mut rng))
@@ -3030,14 +3403,33 @@ mod tests {
                 }));
                 assert_matches_full_rebuild(&session);
                 if rng.below(3) > 0 {
-                    let incremental = session.calculate(1 + rng.below(3));
                     let full = calculate(&session.snapshot(), 1);
+                    let incremental = if rng.below(2) == 0 {
+                        session.calculate(1 + rng.below(3))
+                    } else {
+                        let changes = session.calculate_changes(1 + rng.below(3));
+                        assert_changes_between(&changes, &last, &full, seed, step);
+                        session.published().unwrap()
+                    };
                     assert_eq!(incremental.values, full.values, "seed {seed} step {step}");
                     assert_eq!(incremental.outputs, full.outputs, "seed {seed} step {step}");
                     assert_eq!(
                         incremental.diagnostics, full.diagnostics,
                         "seed {seed} step {step}"
                     );
+                    last = full.clone();
+                    let state = session.state();
+                    let published = state.published.as_ref().unwrap();
+                    assert_eq!(
+                        published.materialized,
+                        published
+                            .report
+                            .values
+                            .values()
+                            .map(result_cells)
+                            .sum::<usize>()
+                    );
+                    drop(state);
                     cycles += usize::from(
                         full.diagnostics
                             .iter()
@@ -3051,6 +3443,36 @@ mod tests {
             accepted > 1000 && rejected_invalid > 200 && cycles > 50,
             "{accepted} accepted, {rejected_invalid} invalid, {cycles} cyclic"
         );
+    }
+    #[test]
+    fn an_incremental_run_past_the_result_limit_matches_a_full_calculation() {
+        let session = Session::new(model(
+            &[
+                ("A1", Cell::formula("=SEQUENCE(60000)")),
+                ("B1", number(1.0)),
+                ("C1", Cell::formula("=B1+1")),
+            ],
+            &[],
+        ))
+        .unwrap();
+        assert!(session.calculate(1).diagnostics.is_empty());
+        session
+            .apply(vec![Edit::formula("Data", "B1", "=SEQUENCE(50000)")], None)
+            .unwrap();
+        let incremental = session.calculate(1);
+        let full = calculate(&session.snapshot(), 1);
+        assert!(full.diagnostics.iter().any(|d| d.code == "resource_limit"));
+        assert_eq!(incremental, full);
+        // The truncated report is not reused: the next run is full again.
+        session
+            .apply(
+                vec![Edit::value("Data", "B1", CellValue::Number(2.0))],
+                None,
+            )
+            .unwrap();
+        let recovered = session.calculate(1);
+        assert_eq!(recovered.values, calculate(&session.snapshot(), 1).values);
+        assert!(recovered.diagnostics.is_empty());
     }
     #[test]
     fn rewriting_a_formula_releases_unreferenced_placeholders() {
