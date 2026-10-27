@@ -6,7 +6,7 @@ use serde_json::{Value as Json, json};
 use std::collections::BTreeMap;
 use std::time::{Duration, Instant};
 use workbook_forge::browser_contract::CommandSession;
-use workbook_forge::toolkit::{Cell, CellValue, Sheet, WorkbookModel};
+use workbook_forge::toolkit::{Cell, CellValue, Sheet, WorkbookModel, calculate};
 use workbook_forge::xlsx::{export_xlsx_bytes, import_xlsx_bytes};
 
 const COMMANDS: usize = 25;
@@ -133,6 +133,12 @@ fn run(name: &str, model: WorkbookModel, sheet: &str, address: &str) {
             response_bytes = response.len();
         }
     }
+    // The timed path must agree with a fresh full calculation.
+    assert_eq!(
+        workbook.calculate(1).values,
+        calculate(&workbook.snapshot(), 1).values,
+        "{name}"
+    );
     let p50 = percentile(&mut samples, 0.5);
     let p95 = percentile(&mut samples, 0.95);
     println!(

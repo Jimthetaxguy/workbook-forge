@@ -2261,7 +2261,6 @@ impl Session {
         Run {
             model,
             previous,
-            dirty,
             update,
         }
     }
@@ -2275,24 +2274,17 @@ impl Session {
         let Run {
             model,
             previous,
-            dirty,
             update,
         } = run;
         let base_revision = previous.as_ref().map(|published| published.report.revision);
         let cells = changes.then(|| {
             let base = previous.as_ref().map(|published| &published.report);
             let keys: BTreeSet<&String> = if update.incremental {
-                update
-                    .pending
-                    .iter()
-                    .chain(&update.dropped)
-                    .chain(&dirty)
-                    .collect()
+                update.pending.iter().chain(&update.dropped).collect()
             } else {
                 base.into_iter()
                     .flat_map(|report| report.values.keys())
                     .chain(update.values.keys())
-                    .chain(&dirty)
                     .collect()
             };
             keys.into_iter()
@@ -2365,7 +2357,6 @@ impl Session {
 struct Run {
     model: Arc<WorkbookModel>,
     previous: Option<Arc<Published>>,
-    dirty: BTreeSet<String>,
     update: CalculationUpdate,
 }
 /// What a session calculation changed, relative to the report published
@@ -2376,9 +2367,9 @@ pub struct CalculationChanges {
     pub base_revision: Option<u64>,
     pub revision: u64,
     pub stale: bool,
-    /// Every cell whose value may differ from that report, and every cell
-    /// edited since it, as (key, value before, value after). Cells not
-    /// listed have the same value in both.
+    /// Every cell whose value may differ from that report, as (key, value
+    /// before, value after). Edited cells are always among them when they
+    /// are selected. Cells not listed have the same value in both.
     pub cells: Vec<(String, Option<CalculatedValue>, Option<CalculatedValue>)>,
     pub diagnostics: Vec<Diagnostic>,
     pub evaluated_cells: Vec<String>,

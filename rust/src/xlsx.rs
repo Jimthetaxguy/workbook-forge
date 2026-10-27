@@ -1138,6 +1138,14 @@ impl ImportedWorkbook {
     pub fn calculate(&self, workers: usize) -> CalculationReport {
         self.session.calculate(workers)
     }
+    /// See [`toolkit::Session::calculate_changes`].
+    pub fn calculate_changes(&self, workers: usize) -> toolkit::CalculationChanges {
+        self.session.calculate_changes(workers)
+    }
+    /// Revision of the last published calculation, current or not.
+    pub fn published_revision(&self) -> Option<u64> {
+        self.session.published_revision()
+    }
     pub(crate) fn validate_edits(&self, edits: &[Edit]) -> Result<()> {
         for edit in edits {
             if self.date1904 && edit.formula.is_some() {

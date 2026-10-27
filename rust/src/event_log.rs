@@ -674,8 +674,8 @@ pub fn replay_on<W: CommandTarget + ?Sized>(
                     });
                 if has_calc {
                     let base = match cache.take() {
-                        Some((at, values)) if at == expected => values,
-                        _ => workbook.calculate_report().values,
+                        Some((at, values)) if at == expected => Some(values),
+                        _ => None,
                     };
                     let applied = apply_calculate_diff(workbook, base, edits, expected).map_err(
                         |(error, _)| {
@@ -695,8 +695,8 @@ pub fn replay_on<W: CommandTarget + ?Sized>(
                         ));
                     }
                     computed.insert(id, (revision, applied.deltas));
-                    if applied.report.revision == revision && !applied.report.stale {
-                        cache = Some((revision, applied.report.values));
+                    if applied.calculated_revision == revision && !applied.stale {
+                        cache = applied.values.map(|values| (revision, values));
                     }
                 } else {
                     let reached = apply_parsed(workbook, edits, expected).map_err(|error| {

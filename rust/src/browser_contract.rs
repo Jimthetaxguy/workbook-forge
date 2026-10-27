@@ -6,7 +6,9 @@
 //! failures keep a machine-readable `code` instead of a flattened string.
 
 use crate::event_log::{Baseline, EventLog, HistoryKind, HistoryPlan, clock};
-use crate::toolkit::{CalculatedValue, CalculationReport, CellValue, Edit, Session};
+use crate::toolkit::{
+    CalculatedValue, CalculationChanges, CalculationReport, CellValue, Diagnostic, Edit, Session,
+};
 use crate::xlsx::ImportedWorkbook;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value as Json, json};
@@ -118,9 +120,36 @@ pub trait CommandTarget {
     fn apply_edits(&self, edits: Vec<Edit>, expected: u64) -> Result<u64, ContractError>;
     /// Calculate the current revision.
     fn calculate_report(&self) -> CalculationReport;
+    /// The target's incremental calculation, if it has one. Targets without
+    /// it are diffed against a full copy of their previous values.
+    fn reports_changes(&self) -> Option<&dyn ReportsChanges> {
+        None
+    }
+}
+
+/// A target that publishes its calculations and can report only what
+/// changed since the last one.
+pub trait ReportsChanges {
+    /// Revision of the last published calculation, current or not.
+    fn published_revision(&self) -> Option<u64>;
+    /// Calculate the current revision and return only what changed since
+    /// the last published calculation.
+    fn calculate_changes(&self) -> CalculationChanges;
+}
+
+impl ReportsChanges for ImportedWorkbook {
+    fn published_revision(&self) -> Option<u64> {
+        ImportedWorkbook::published_revision(self)
+    }
+    fn calculate_changes(&self) -> CalculationChanges {
+        ImportedWorkbook::calculate_changes(self, 1)
+    }
 }
 
 impl CommandTarget for ImportedWorkbook {
+    fn reports_changes(&self) -> Option<&dyn ReportsChanges> {
+        Some(self)
+    }
     fn revision(&self) -> u64 {
         ImportedWorkbook::revision(self)
     }
@@ -139,7 +168,19 @@ impl CommandTarget for ImportedWorkbook {
     }
 }
 
+impl ReportsChanges for Session {
+    fn published_revision(&self) -> Option<u64> {
+        Session::published_revision(self)
+    }
+    fn calculate_changes(&self) -> CalculationChanges {
+        Session::calculate_changes(self, 1)
+    }
+}
+
 impl CommandTarget for Session {
+    fn reports_changes(&self) -> Option<&dyn ReportsChanges> {
+        Some(self)
+    }
     fn revision(&self) -> u64 {
         Session::revision(self)
     }
@@ -762,11 +803,27 @@ fn logged_inputs(
         .collect()
 }
 
-/// One applied edit batch: the new revision, its calculation, the delta for
-/// patches (`changed`), the calc-event deltas and the logged inputs.
+/// What `apply_calculate_diff` compares the new calculation against.
+enum DiffBase<'a> {
+    /// The target's own published calculation at the expected revision.
+    Published(&'a dyn ReportsChanges),
+    /// A copy of every calculated value at the expected revision.
+    Values(BTreeMap<String, CalculatedValue>),
+}
+
+/// One applied edit batch: the new revision, its calculation summary, the
+/// delta for patches (`changed`), the calc-event deltas and the logged inputs.
 pub struct Applied {
     pub revision: u64,
-    pub report: CalculationReport,
+    /// Revision the calculation describes; it differs from `revision` (and
+    /// `stale` is set) when another edit overtook it.
+    pub calculated_revision: u64,
+    pub stale: bool,
+    pub evaluated_cells: usize,
+    pub diagnostics: Vec<Diagnostic>,
+    /// Every calculated value, for targets that cannot report changes; the
+    /// caller keeps it as the next diff's baseline.
+    pub values: Option<BTreeMap<String, CalculatedValue>>,
     pub changed: Vec<ChangedCell>,
     /// `[key, before, after]` for every formula cell whose value changed.
     pub deltas: Vec<Json>,
@@ -774,41 +831,104 @@ pub struct Applied {
     pub calc_ms: f64,
 }
 
-/// Apply `edits` at `expected`, calculate, and diff against `baseline` (the
-/// calculated values at `expected`). On failure nothing is applied and the
-/// baseline is handed back. Shared by the live command path and replay, so
-/// a replayed calc event is computed exactly as it was recorded.
+/// Apply `edits` at `expected`, calculate, and diff the calculated values at
+/// `expected` against the new ones. Shared by the live command path and
+/// replay, so a replayed calc event is computed exactly as it was recorded.
+///
+/// A target that reports its own changes is diffed against its published
+/// calculation at `expected` (calculated first if needed), so the work
+/// follows the edit. Any other target is diffed against `baseline`, the
+/// caller's copy of the values at `expected`, or a full calculation when
+/// there is none. On failure nothing is applied and the baseline is handed
+/// back.
 // The error hands the (large) baseline map back so the caller can keep
 // reusing it; boxing it would cost an allocation on every rejection instead.
-#[allow(clippy::result_large_err)]
+#[allow(clippy::result_large_err, clippy::type_complexity)]
 pub fn apply_calculate_diff<W: CommandTarget + ?Sized>(
     workbook: &W,
-    baseline: BTreeMap<String, CalculatedValue>,
+    baseline: Option<BTreeMap<String, CalculatedValue>>,
     edits: Vec<Edit>,
     expected: u64,
-) -> Result<Applied, (ContractError, BTreeMap<String, CalculatedValue>)> {
+) -> Result<Applied, (ContractError, Option<BTreeMap<String, CalculatedValue>>)> {
+    let base = match workbook.reports_changes() {
+        Some(target) => {
+            if target.published_revision() != Some(expected) && workbook.revision() == expected {
+                workbook.calculate_report();
+            }
+            DiffBase::Published(target)
+        }
+        None => DiffBase::Values(baseline.unwrap_or_else(|| workbook.calculate_report().values)),
+    };
     // Edited cells, for input-only changes (formula text with the same value).
     let targets = resolve_targets(workbook, &edits);
     let before = workbook.read_cells(&targets);
     let revision = match apply_parsed(workbook, edits, expected) {
         Ok(revision) => revision,
-        Err(error) => return Err((error, baseline)),
+        Err(error) => {
+            let baseline = match base {
+                DiffBase::Values(values) => Some(values),
+                DiffBase::Published(_) => None,
+            };
+            return Err((error, baseline));
+        }
     };
     let started = clock::mono_ms();
-    let report = workbook.calculate_report();
+    // Candidate cells with their values before and after.
+    let mut candidates: BTreeMap<String, (Option<CalculatedValue>, Option<CalculatedValue>)>;
+    let (calculated_revision, stale, evaluated_cells, diagnostics, values) = match base {
+        DiffBase::Published(target) => {
+            let changes = target.calculate_changes();
+            candidates = changes
+                .cells
+                .into_iter()
+                .map(|(key, old, new)| (key, (old, new)))
+                .collect();
+            (
+                changes.revision,
+                changes.stale,
+                changes.evaluated_cells.len(),
+                changes.diagnostics,
+                None,
+            )
+        }
+        DiffBase::Values(baseline) => {
+            let report = workbook.calculate_report();
+            candidates = report
+                .values
+                .iter()
+                .filter(|(key, value)| baseline.get(*key) != Some(*value))
+                .map(|(key, value)| {
+                    (
+                        key.clone(),
+                        (baseline.get(key).cloned(), Some(value.clone())),
+                    )
+                })
+                .collect();
+            for (key, old) in &baseline {
+                if !report.values.contains_key(key) {
+                    candidates.insert(key.clone(), (Some(old.clone()), None));
+                }
+            }
+            for key in &targets {
+                candidates.entry(key.clone()).or_insert_with(|| {
+                    (baseline.get(key).cloned(), report.values.get(key).cloned())
+                });
+            }
+            (
+                report.revision,
+                report.stale,
+                report.evaluated_cells.len(),
+                report.diagnostics,
+                Some(report.values),
+            )
+        }
+    };
     let calc_ms = (clock::mono_ms() - started).max(0.0);
-    let mut keys: BTreeSet<String> = report
-        .values
+    let mut keys: BTreeSet<String> = candidates
         .iter()
-        .filter(|(key, value)| baseline.get(*key) != Some(*value))
+        .filter(|(_, (old, new))| old != new)
         .map(|(key, _)| key.clone())
         .collect();
-    keys.extend(
-        baseline
-            .keys()
-            .filter(|key| !report.values.contains_key(*key))
-            .cloned(),
-    );
     let after = workbook.read_cells(&targets);
     for ((key, old), new) in targets.iter().zip(&before).zip(&after) {
         if input_of(old) != input_of(new) {
@@ -829,8 +949,9 @@ pub fn apply_calculate_diff<W: CommandTarget + ?Sized>(
                 .position(|target| target == key)
                 .map(|i| input_of(&before[i]).1.is_some())
                 .unwrap_or(false);
-            let old = baseline.get(key);
-            let new = report.values.get(key);
+            let (old, new) = candidates
+                .get(key)
+                .map_or((None, None), |(old, new)| (old.as_ref(), new.as_ref()));
             if (formula.is_some() || had_formula) && old != new {
                 let encode = |value: Option<&CalculatedValue>| {
                     value.map_or(Json::Null, |value| json!(value))
@@ -854,7 +975,11 @@ pub fn apply_calculate_diff<W: CommandTarget + ?Sized>(
         .collect();
     Ok(Applied {
         revision,
-        report,
+        calculated_revision,
+        stale,
+        evaluated_cells,
+        diagnostics,
+        values,
         changed,
         deltas,
         inputs: logged_inputs(&targets, &before, &after),
@@ -965,13 +1090,13 @@ fn execute<W: CommandTarget + ?Sized>(
     // Calculated values at the current revision. Reused from the previous
     // command unless another path (applyEditsJson) moved the revision.
     let baseline = match inner.baseline.take() {
-        Some((revision, values)) if revision == current => values,
-        _ => workbook.calculate_report().values,
+        Some((revision, values)) if revision == current => Some(values),
+        _ => None,
     };
     let applied = match apply_calculate_diff(workbook, baseline, edits, expected) {
         Ok(applied) => applied,
         Err((error, baseline)) => {
-            inner.baseline = Some((current, baseline));
+            inner.baseline = baseline.map(|values| (current, values));
             return log_rejection(inner, envelope, command, base, current, requested, error);
         }
     };
@@ -992,10 +1117,10 @@ fn execute<W: CommandTarget + ?Sized>(
     let calc_event = inner.log.record_calc(
         &event_id,
         revision,
-        applied.report.evaluated_cells.len(),
+        applied.evaluated_cells,
         applied.calc_ms,
         applied.deltas,
-        json!(applied.report.diagnostics),
+        json!(applied.diagnostics),
     );
     let response = json!({
         "v": ENVELOPE_VERSION,
@@ -1004,14 +1129,14 @@ fn execute<W: CommandTarget + ?Sized>(
         "revision": revision.to_string(),
         "previous_revision": current.to_string(),
         "changed": applied.changed,
-        "evaluated_cells": applied.report.evaluated_cells.len(),
-        "diagnostics": applied.report.diagnostics,
+        "evaluated_cells": applied.evaluated_cells,
+        "diagnostics": applied.diagnostics,
         "duplicate": false,
         "event_id": event_id,
         "calc_event_id": calc_event,
     });
-    if applied.report.revision == revision && !applied.report.stale {
-        inner.baseline = Some((revision, applied.report.values));
+    if applied.calculated_revision == revision && !applied.stale {
+        inner.baseline = applied.values.map(|values| (revision, values));
     }
     response
 }
