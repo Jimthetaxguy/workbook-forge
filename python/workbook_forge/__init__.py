@@ -2456,7 +2456,7 @@ def _eval(
             # profile, where every argument is coerced like a reference.
             args = tuple(
                 _Range((value,), 1, 1)
-                if (child.kind == "cell" or cells is None)
+                if (_returns_reference(child) or cells is None)
                 and not isinstance(value, (_Range, ArrayValue))
                 else value
                 for child, value in zip(node.children, args)
@@ -2466,12 +2466,24 @@ def _eval(
             # argument are ignored; a single-cell reference is a reference.
             args = tuple(
                 _Range((value,), 1, 1)
-                if child.kind == "cell" and not isinstance(value, (_Range, ArrayValue))
+                if _returns_reference(child) and not isinstance(value, (_Range, ArrayValue))
                 else value
                 for child, value in zip(node.children, args)
             )
         return _function(name, args, budget)
     return ErrorValue("#VALUE!", f"unsupported syntax node {node.kind!r}")
+
+
+def _returns_reference(node: _Node) -> bool:
+    """Whether a scalar argument still came from a cell reference.
+
+    A cell reference and INDEX over a range both return references in Excel,
+    so functions with reference-specific coercion (COUNT, AND, OR) must treat
+    their single selected cell like a one-cell range.
+    """
+    return node.kind == "cell" or (
+        node.kind == "call" and _canonical_function_name(str(node.value)) == "INDEX"
+    )
 
 
 def _text_extract(

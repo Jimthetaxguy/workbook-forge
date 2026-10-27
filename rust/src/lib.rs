@@ -2733,6 +2733,17 @@ fn substitute_all_bounded(
     check_text_units(result_units, limit)?;
     Ok(text.replace(old, new))
 }
+/// Whether a scalar argument still came from a cell reference. A cell
+/// reference and INDEX over a range both return references in Excel, so
+/// COUNT, AND and OR treat their selected cell like a one-cell range.
+fn returns_reference(expr: &Expr) -> bool {
+    match expr {
+        Expr::Ref(_, _) => true,
+        Expr::Call(name, _) => canonical_function_name(name) == "INDEX",
+        _ => false,
+    }
+}
+
 fn truthy(v: &Value) -> Result<bool, FormulaError> {
     match v {
         Value::Bool(b) => Ok(*b),
@@ -2943,7 +2954,7 @@ fn eval_call(name: &str, args: &[Expr], env: &Environment<'_>) -> Result<Value, 
             let mut tested = false;
             for arg in args {
                 let evaluated = eval(arg, env)?;
-                let referenced = matches!(arg, Expr::Ref(_, _))
+                let referenced = returns_reference(arg)
                     || matches!(evaluated, CalcValue::Range(_) | CalcValue::Array(_));
                 for value in flatten(evaluated) {
                     if referenced && matches!(value, Value::Text(_) | Value::Blank) {
@@ -2973,7 +2984,7 @@ fn eval_call(name: &str, args: &[Expr], env: &Environment<'_>) -> Result<Value, 
             for argument in args {
                 let evaluated = eval(argument, env)?;
                 let referenced = env.primitive_value_profile
-                    || matches!(argument, Expr::Ref(_, _))
+                    || returns_reference(argument)
                     || matches!(evaluated, CalcValue::Range(_) | CalcValue::Array(_));
                 for value in flatten(evaluated) {
                     count += match value {
@@ -7998,6 +8009,10 @@ mod tests {
         assert_eq!(eval("=COUNT(A1:A3)"), Ok(Value::Number(1.0)));
         assert_eq!(eval("=COUNT(A2)"), Ok(Value::Number(0.0)));
         assert_eq!(eval("=COUNT(B1)"), Ok(Value::Number(0.0)));
+        // INDEX over a range returns a reference, so its cell is not typed.
+        assert_eq!(eval("=COUNT(INDEX(A1:A2,2,1))"), Ok(Value::Number(0.0)));
+        assert_eq!(eval("=COUNT(INDEX(B1:B1,1,1))"), Ok(Value::Number(0.0)));
+        assert_eq!(eval("=OR(TRUE,INDEX(A1:A3,3,1))"), Ok(Value::Bool(true)));
         // AND/OR ignore text and blanks inside references.
         assert_eq!(eval("=OR(A2:A3)"), Ok(Value::Bool(true)));
         assert_eq!(eval("=AND(A1:A3)"), Ok(Value::Bool(true)));

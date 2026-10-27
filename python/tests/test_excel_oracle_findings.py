@@ -31,6 +31,9 @@ CELLS = {
         ("=COUNT(A1:A3)", 1),
         ("=COUNT(A2)", 0),
         ("=COUNT(B1)", 0),
+        # INDEX over a range returns a reference, so its cell is not typed.
+        ("=COUNT(INDEX(A1:A2,2,1))", 0),
+        ("=COUNT(INDEX(B1:B1,1,1))", 0),
     ],
 )
 def test_count_counts_typed_logicals_but_not_referenced_ones(formula, expected):
@@ -44,6 +47,7 @@ def test_count_counts_typed_logicals_but_not_referenced_ones(formula, expected):
         ("=AND(A1:A3)", True),
         ("=OR(FALSE,A3:A3)", False),
         ("=AND(TRUE,A3)", True),
+        ("=OR(TRUE,INDEX(A1:A3,3,1))", True),
     ],
 )
 def test_and_or_ignore_text_in_references(formula, expected):
