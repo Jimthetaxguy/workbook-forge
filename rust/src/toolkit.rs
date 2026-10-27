@@ -1065,6 +1065,7 @@ pub fn validate_inputs(
                 value: Some(value.clone()),
                 formula: None,
                 style: None,
+                restore_absent: false,
             });
         }
     }
@@ -1085,6 +1086,13 @@ pub struct Edit {
     pub formula: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub style: Option<Style>,
+    /// Remove the cell so it is absent again (no value, formula or style).
+    ///
+    /// Internal only: never read from or written to the wire. The event log
+    /// uses it to undo an edit whose target cell was absent before, which is
+    /// different from clearing a cell to blank (`value: null`).
+    #[serde(skip)]
+    pub restore_absent: bool,
 }
 fn present_value<'de, D: Deserializer<'de>>(
     deserializer: D,
@@ -1099,6 +1107,18 @@ impl Edit {
             value: Some(value),
             formula: None,
             style: None,
+            restore_absent: false,
+        }
+    }
+    /// An edit that makes the cell absent again (see [`Edit::restore_absent`]).
+    pub fn absent(sheet: impl Into<String>, address: impl Into<String>) -> Self {
+        Self {
+            sheet: sheet.into(),
+            address: address.into(),
+            value: None,
+            formula: None,
+            style: None,
+            restore_absent: true,
         }
     }
     pub fn formula(
@@ -1112,6 +1132,7 @@ impl Edit {
             value: None,
             formula: Some(formula.into()),
             style: None,
+            restore_absent: false,
         }
     }
 }
@@ -1697,9 +1718,14 @@ impl Session {
         let mut candidate = state.model.clone();
         let mut changed = BTreeSet::new();
         for edit in edits {
-            if (edit.value.is_some() && edit.formula.is_some())
-                || (edit.value.is_none() && edit.formula.is_none() && edit.style.is_none())
-            {
+            let empty = edit.value.is_none() && edit.formula.is_none() && edit.style.is_none();
+            if edit.restore_absent && !empty {
+                return Err(ToolkitError::new(
+                    "invalid_edit",
+                    "an absent-restoring edit cannot also set a value, formula or style",
+                ));
+            }
+            if (edit.value.is_some() && edit.formula.is_some()) || (empty && !edit.restore_absent) {
                 return Err(ToolkitError::new(
                     "invalid_edit",
                     "edit requires one value or formula, optionally a style, or a style alone",
@@ -1718,6 +1744,18 @@ impl Session {
                 .iter_mut()
                 .find(|sheet| sheet.name == sheet_name)
                 .unwrap();
+            if edit.restore_absent {
+                if let Some(cell) = sheet.cells.get(address)
+                    && cell.blocked_reason.is_some()
+                {
+                    return Err(ToolkitError::new(
+                        "unsupported_edit",
+                        format!("{target} contains preserved-only content"),
+                    ));
+                }
+                sheet.cells.remove(address);
+                continue;
+            }
             let cell = sheet.cells.entry(address.into()).or_default();
             if cell.blocked_reason.is_some() {
                 return Err(ToolkitError::new(
@@ -2450,6 +2488,29 @@ mod tests {
         );
         assert!(
             serde_json::from_str::<Edit>(r#"{"sheet":"Data","address":"A1","valuer":7}"#).is_err()
+        );
+        // Restoring absence is internal (undo); the wire cannot ask for it.
+        assert!(
+            serde_json::from_str::<Edit>(
+                r#"{"sheet":"Data","address":"A1","restore_absent":true}"#
+            )
+            .is_err()
+        );
+        let session = Session::new(model(&[("A1", number(3.0))], &[])).unwrap();
+        session
+            .apply(vec![Edit::absent("Data", "A1")], None)
+            .unwrap();
+        assert!(session.snapshot().sheets[0].cells.is_empty());
+        assert!(
+            session
+                .apply(
+                    vec![Edit {
+                        value: Some(CellValue::Blank),
+                        ..Edit::absent("Data", "A1")
+                    }],
+                    None
+                )
+                .is_err()
         );
     }
     #[test]

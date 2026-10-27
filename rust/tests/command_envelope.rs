@@ -376,8 +376,8 @@ fn invalid_envelopes_are_rejected_with_invalid_request() {
 fn edit_errors_keep_their_codes_inside_the_envelope() {
     let workbook = chain();
     let session = CommandSession::new();
-    let absent = run(&session, &workbook, &envelope("a", "0", set("Z99", 1.0)));
-    assert_eq!(absent["error"]["code"], "absent_cell");
+    let outside = run(&session, &workbook, &envelope("a", "0", set("XFE99", 1.0)));
+    assert_eq!(outside["error"]["code"], "out_of_bounds");
     let sheet = run(
         &session,
         &workbook,

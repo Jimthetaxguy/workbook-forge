@@ -100,9 +100,10 @@ These are additive. The existing methods are unchanged.
   returns `{"ok":true,"revision":"N"}` or
   `{"ok":false,"error":{"code","message","expected_revision","current_revision"}}`.
   It never throws for a rejected edit, and a rejected batch applies nothing.
-  Codes: `revision_conflict`, `absent_cell`, `unknown_sheet`, `unsupported_edit`,
+  Codes: `revision_conflict`, `out_of_bounds`, `unknown_sheet`, `unsupported_edit`,
   `invalid_request`, `invalid_revision`, `edit_rejected`, plus any toolkit
-  `code: message` pass-through such as `parse_error`.
+  `code: message` pass-through such as `parse_error`. (`absent_cell` is
+  retired: see "Absent-cell authoring on imported workbooks" below.)
 
 The logic lives in `rust/src/browser_contract.rs`, which is compiled for every
 target. It is covered natively by `rust/tests/browser_contract.rs` (5 tests)
@@ -191,15 +192,67 @@ Findings:
   `univerAPI.getFormula()` `calculationStart/End/ResultApplied` callbacks are
   all recorded. `divergence()` compares Univer's raw and displayed value and
   formula for every Forge cell against the last projection.
-- **Rejection.** When Forge refuses an edit, for example `absent_cell` for a
-  cell the imported workbook does not hold, the notice names the code and both
-  revisions, and Univer is re-projected from Forge.
+- **Rejection.** When Forge refuses an edit, for example `out_of_bounds` for a
+  cell past the session's grid, the notice names the code and both revisions,
+  and Univer is re-projected from Forge. A rejected cell the projection never
+  held is blanked, so editor text does not linger there.
+
+## Absent-cell authoring on imported workbooks
+
+An imported XLSX only materializes the cells its `<sheetData>` holds. Typing
+into any other cell of an imported workbook inserts that cell: the edit goes
+through the same command envelope as any other, there is no pre-seeding of
+placeholder cells, and the UI has no special path for it.
+
+- **Bounds.** Insertion is allowed at rows 1..=1,048,576 and columns
+  1..=16,384 (A..XFD), or inside a smaller bound a host declares with
+  `ImportedWorkbook::with_insertion_bound(rows, columns)`. Outside it the edit
+  is refused with `out_of_bounds` and applies nothing. Cells the workbook
+  already holds stay editable wherever they are. A non-anchor cell of a
+  `<mergeCell>` range is refused with `unsupported_edit`.
+- **Validation** reads the session's current model, not the original import:
+  a cell an earlier edit inserted is an existing cell afterwards, and a cell an
+  undo made absent again is an insertion again.
+- **Calculation.** The inserted cell is in the session model, so the calc graph
+  is rebuilt with it: formulas whose ranges covered the blank position (for
+  example `SUM(A1:A3)` with A2 absent) recalculate, and the calc event's
+  `deltas` and the response's `changed` show them.
+- **OOXML.** Export keeps the immutable package baseline and patches the
+  worksheet part. An inserted cell is placed in its `<row>` in column order
+  (middle or end); a missing `<row r="N">` is created between its
+  neighbours in row order (inside `<sheetData/>` when the sheet was empty).
+  A row that receives a cell is rewritten whole: its attributes and other
+  cells are kept byte for byte, edited source cells in it are written inside
+  it, and a `spans` attribute widens to cover the new columns. New rows carry
+  `spans` only when the sheet's rows already use it. `<dimension ref>` grows
+  to cover inserted cells. Text is written as an inline string, the existing
+  writer convention; a formula is written with its calculated cache, and the
+  calc chain is dropped with `fullCalcOnLoad` as for every export. The new
+  cell takes the row's style when the row is `customFormat`, else its
+  column's `style`, as Excel does when typing into an empty cell.
+- **Absent, blank and cleared.** These stay distinct:
+  - *absent*: the workbook does not hold the cell. The event log writes it as
+    `{"absent": true}`.
+  - *blank / cleared*: the workbook holds the cell with no value. A source
+    cell cleared with `value: null` stays in the model and in the XML as an
+    empty `<c>` element that keeps its attributes; the log writes it
+    as `{"value": null}`.
+  - Clearing an absent cell creates a blank model cell (logged `before`
+    absent, `after` `{"value": null}`), and export writes nothing for a new
+    cell with no value, formula or style, so on disk it stays absent.
+  - **Undo rule:** undoing an intent whose `before` is absent removes the cell
+    from the model (and so from the export); undoing one whose `before` is
+    `{"value": null}` leaves a blank cell. Redo re-applies the `after`. Replay
+    applies each applied intent's `after`, including `{"absent": true}`, so it
+    reproduces removal exactly. A source cell can never be made absent.
+  - Removal is internal (`Edit::restore_absent`, not on the wire): hosts cannot
+    delete cells, only undo their insertion.
 
 ## Acceptance results
 
 `web/univer-spike/tests/acceptance.spec.ts`, headless Chromium (Playwright
 1.64.1 driving system Chromium 156), production build served statically:
-**12 passed**.
+**15 passed** (2026-10-27, absent-cell authoring branch).
 
 For `not-execute` and `load-only`:
 
@@ -219,8 +272,7 @@ For `not-execute` and `load-only`:
    events. There were no foreign writes and no divergence.
 8. Insert row/column, remove row, insert sheet, auto-fill, paste and clear
    content are all blocked with a visible notice. Sheet shape and revision are
-   unchanged. An edit to absent cell H10 is refused by Forge (`absent_cell`)
-   and nothing is written.
+   unchanged.
 9. A blank workbook can be created in the browser, edited through the cell
    editor, and recalculated by Forge. The test uses mouse range selection for
    `SUM`, then arithmetic, `IF`, `INDEX`/`MATCH`, and XLOOKUP with a custom
@@ -229,9 +281,16 @@ For `not-execute` and `load-only`:
    preserves formulas and values. The observed browser requests were GETs with
    no request bodies.
 10. Switching to an imported workbook whose valid sheet name contains `!`
-    preserves the full sheet name. After Forge rejects an edit to an absent
-    cell, the workbook projection is restored with its Boolean cell still a
-    Boolean, and cells from the previous workbook are gone.
+    preserves the full sheet name. After Forge rejects an edit past Excel's
+    last column (`out_of_bounds`), the workbook projection is restored with
+    its Boolean cell still a Boolean, and cells from the previous workbook are
+    gone.
+12. Imported workbook, absent cells: typing `=SUM(A1:A3)` into absent H1
+    shows 10; typing `5` into absent A2, inside that range, gives revision 2
+    and repaints H1 to 15. Ctrl+Z (routed to Forge) gives revision 3 with A2
+    absent again in Forge and blank in Univer, and H1 back to 10. Export and
+    reopen keep H1's formula with A2 absent; after redo, export and reopen
+    keep A2 = 5 and H1 = 15. Runs in `not-execute` and `load-only`.
 11. Selecting malformed XLSX bytes displays an `open_failed` notice and keeps
     the previous workbook, values, and revision visible. These two recovery
     cases run in both `not-execute` and `load-only` modes.
@@ -268,8 +327,10 @@ tools. Vite 7.3.7 (esbuild/rollup) is used instead.
 
 ## Known limits and next steps
 
-- Imported workbooks still reject edits to absent cells, so typing into an
-  empty cell is refused visibly. Blank-workbook authoring can add cells.
+- Absent-cell insertion on imported workbooks covers values and formulas.
+  Style edits, merged non-anchor cells, and structural edits (insert/delete
+  rows or columns) remain refused. A cell inserted next to a table does not
+  resize the table.
 - XLOOKUP has a bounded subset: exact mode, one-dimensional ranges, scalar
   results, forward/reverse linear search, and optional `if_not_found`. Other
   match/search modes and array spills remain unsupported.

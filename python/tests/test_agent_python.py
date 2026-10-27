@@ -245,7 +245,13 @@ def test_imported_1904_formula_edit_guard_is_retained(tmp_path):
         parts = {name: archive.read(name) for name in archive.namelist()}
     namespace = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
     workbook = ET.fromstring(parts["xl/workbook.xml"])
-    ET.SubElement(workbook, "{" + namespace + "}workbookPr", {"date1904": "1"})
+    # Set the flag on the workbook's own workbookPr: a second, appended one is
+    # ignored by the reader, which used to hide behind the absent-cell guard.
+    properties = workbook.find("{" + namespace + "}workbookPr")
+    if properties is None:
+        properties = ET.Element("{" + namespace + "}workbookPr")
+        workbook.insert(0, properties)
+    properties.set("date1904", "1")
     parts["xl/workbook.xml"] = ET.tostring(workbook)
     dated = tmp_path / "dated.xlsx"
     with zipfile.ZipFile(dated, "w") as archive:
@@ -253,8 +259,11 @@ def test_imported_1904_formula_edit_guard_is_retained(tmp_path):
             archive.writestr(name, content)
     imported = import_xlsx(dated)
     agent = AgentWorkbook(imported, output_dir=tmp_path)
-    response = agent.call("edit", {"edits": [{"sheet": "Forecast", "address": "H1", "formula": "=1+2"}], "expected_revision": 0})
-    assert response["error"]["code"] == "unsupported_operation"
+    assert imported._source_baseline.uses_1904_date_system
+    # Both an absent cell (an insertion) and a held one keep the 1904 guard.
+    for address in ("H1", "B2"):
+        response = agent.call("edit", {"edits": [{"sheet": "Forecast", "address": address, "formula": "=1+2"}], "expected_revision": 0})
+        assert response["error"]["code"] == "unsupported_operation", response
     assert imported.revision == 0
 
 

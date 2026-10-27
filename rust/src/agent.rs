@@ -1135,13 +1135,15 @@ mod tests {
             ),
             "unsupported_operation",
         );
+        // Absent cells inside the grid are insertions now; past Excel's last
+        // column the agent's address check refuses the edit.
         code(
             call(
                 &agent,
                 "edit",
-                json!({"edits":[{"sheet":"Assumptions","address":"Z99","value":1}],"expected_revision":0}),
+                json!({"edits":[{"sheet":"Assumptions","address":"XFE99","value":1}],"expected_revision":0}),
             ),
-            "unsupported_operation",
+            "invalid_reference",
         );
         ok(call(
             &agent,
@@ -1163,16 +1165,15 @@ mod tests {
         )
         .unwrap();
         let agent = AgentWorkbook::from_imported(imported, &root).unwrap();
+        // An input bound to a cell the XLSX does not hold is an absent-cell
+        // insertion: it previews and applies like any other input.
         for operation in ["preview_inputs", "set_inputs"] {
-            code(
-                call(
-                    &agent,
-                    operation,
-                    json!({"values":{"missing":1},"expected_revision":0}),
-                ),
-                "unsupported_operation",
-            );
+            ok(call(
+                &agent,
+                operation,
+                json!({"values":{"missing":1},"expected_revision":0}),
+            ));
         }
-        assert_eq!(call(&agent, "describe", json!({}))["revision"], 0);
+        assert_eq!(call(&agent, "describe", json!({}))["revision"], 1);
     }
 }

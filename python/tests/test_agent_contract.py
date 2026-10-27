@@ -476,24 +476,40 @@ def test_imported_agent_profile_refuses_unexportable_edits_before_commit(agent_f
     document = model.to_dict()
     bindings = {"inputs": document["inputs"], "outputs": document["outputs"]}
     client = agent_factory(source=source, bindings=bindings)
-    for unsupported in (
+    _error(client, "edit", {"edits": [
+        {"sheet": "Assumptions", "address": "B1", "value": 25},
         {"sheet": "Assumptions", "address": "A1", "style": {"bold": True}},
+    ], "expected_revision": 0}, "unsupported_operation")
+    assert _revision(client) == 0
+    # Past Excel's last column an insertion is refused, atomically.
+    _error(client, "edit", {"edits": [
+        {"sheet": "Assumptions", "address": "B1", "value": 25},
+        {"sheet": "Assumptions", "address": "XFE10", "value": 10},
+    ], "expected_revision": 0})
+    assert _revision(client) == 0
+    assert _ok(client, "calculate")["outputs"]["revenue"] == 7400
+    # A cell the XLSX does not hold is inserted, and survives export.
+    _ok(client, "edit", {"edits": [
+        {"sheet": "Assumptions", "address": "B1", "value": 25},
         {"sheet": "Assumptions", "address": "A10", "value": 10},
-    ):
-        _error(client, "edit", {"edits": [
-            {"sheet": "Assumptions", "address": "B1", "value": 25}, unsupported,
-        ], "expected_revision": 0}, "unsupported_operation")
-        assert _revision(client) == 0
-        assert _ok(client, "calculate")["outputs"]["revenue"] == 7400
+    ], "expected_revision": 0})
+    assert _revision(client) == 1
+    receipt = _ok(client, "export", {"filename": "inserted.xlsx", "expected_revision": 1})
+    reopened = import_xlsx(client.output_dir / receipt["filename"], backend="python", **bindings)
+    assert reopened.to_dict()["sheets"][0]["cells"]["A10"]["value"] == 10
+    assert reopened.calculate()["outputs"]["revenue"] == 9250
 
 
 def test_preview_and_set_inputs_share_imported_cell_restrictions(agent_factory, tmp_path):
     model = operating_scenario()
     source = export_xlsx(model, tmp_path / "source.xlsx")
     document = model.to_dict()
+    # An input bound to a cell the XLSX does not hold is an insertion, the
+    # same rule as edit: preview leaves the revision alone, set_inputs moves it.
     document["inputs"]["new_input"] = {"sheet": "Assumptions", "address": "A10", "kind": "number", "required": False}
     client = agent_factory(source=source, bindings={"inputs": document["inputs"], "outputs": document["outputs"]})
-    for operation in ("preview_inputs", "set_inputs"):
-        _error(client, operation, {"values": {"unit_price": 25, "new_input": 7}, "expected_revision": 0}, "unsupported_operation")
-        assert _revision(client) == 0
-        assert _ok(client, "calculate")["outputs"]["revenue"] == 7400
+    _ok(client, "preview_inputs", {"values": {"unit_price": 25, "new_input": 7}, "expected_revision": 0})
+    assert _revision(client) == 0
+    _ok(client, "set_inputs", {"values": {"unit_price": 25, "new_input": 7}, "expected_revision": 0})
+    assert _revision(client) == 1
+    assert _ok(client, "calculate")["outputs"]["revenue"] == 9250

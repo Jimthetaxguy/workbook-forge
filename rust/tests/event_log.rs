@@ -228,12 +228,12 @@ fn rejected_intents_are_logged_with_their_error_code_and_apply_nothing() {
         envelope("c3", AGENT, "1", set("C1", json!({"value": 1}))),
     );
     assert_eq!(stale["status"], "rejected");
-    let absent = submit(
+    let outside = submit(
         &session,
         &workbook,
-        envelope("c4", HUMAN, "2", set("Z99", json!({"value": 1}))),
+        envelope("c4", HUMAN, "2", set("XFE99", json!({"value": 1}))),
     );
-    assert_eq!(absent["error"]["code"], "absent_cell");
+    assert_eq!(outside["error"]["code"], "out_of_bounds");
     let mut bad = envelope("c5", HUMAN, "2", set("A1", json!({"value": 1})));
     bad["v"] = json!(2);
     let invalid = submit(&session, &workbook, bad);
@@ -261,7 +261,7 @@ fn rejected_intents_are_logged_with_their_error_code_and_apply_nothing() {
         json!({"code": "revision_conflict", "message": "expected revision does not match",
                "expected_revision": "1", "current_revision": "2"})
     );
-    assert_eq!(events[6]["error"]["code"], "absent_cell");
+    assert_eq!(events[6]["error"]["code"], "out_of_bounds");
     assert_eq!(events[7]["error"]["code"], "invalid_request");
     // A duplicate replays the stored response and is not logged again.
     let dup = submit(

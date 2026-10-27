@@ -1556,7 +1556,7 @@
     },
     {
       "name": "edit",
-      "description": "Atomically apply bounded cell edits at expected_revision. Authored workbooks support value/formula/style. Imported workbooks permit only existing original-cell value/formula changes; unsupported edits fail before mutation. Formula text is parsed by the SDK, never executed as host code.",
+      "description": "Atomically apply bounded cell edits at expected_revision. Authored workbooks support value/formula/style. Imported workbooks permit value/formula changes to existing cells and to absent cells inside Excel's grid (inserted on export); style edits, grouped/table results and preserved-only cells fail before mutation. Formula text is parsed by the SDK, never executed as host code.",
       "effect": "edit",
       "input_schema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
