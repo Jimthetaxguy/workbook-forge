@@ -1,8 +1,15 @@
-"""Regressions for the Excel oracle findings of 2026-10-25.
+"""Regressions for the Excel oracle findings of 2026-10-25, plus doc-derived cases.
 
-Each expected value is what desktop Excel returns for the same formula and
-cells. The oracle data lives in the private workbook-forge-evals repository;
-only the formulas and results are restated here.
+Only the five findings named by the 2026-10-25 oracle run were observed in
+desktop Excel: COUNT over typed logicals and numeric text, AND/OR ignoring
+text in references, SEARCH wildcards, INDEX with a 0 row or column, and the
+Rust XLOOKUP #N/A on a blank or text lookup range. That oracle data lives in
+the private workbook-forge-evals repository and no receipt is cited here.
+
+Every other case (reference provenance through INDEX, XLOOKUP and the IF
+family, the extra SEARCH and INDEX cases, and the later parity cases) comes
+from Microsoft's function documentation and independent reasoning. Under
+docs/evidence-grades.md those are expected values, not Excel observations.
 """
 
 import pytest
@@ -193,5 +200,46 @@ def test_xlookup_on_blank_lookup_range_is_na():
 def test_xlookup_on_empty_text_lookup_range_is_na():
     cells = {**CELLS, "F1": "", "F2": "x"}
     result = evaluate("=XLOOKUP(1,F1:F2,D1:D2)", cells)
+    assert isinstance(result, ErrorValue)
+    assert result.code == "#N/A"
+
+
+# Parity cases found in review (doc-derived, not Excel observations).
+
+
+@pytest.mark.parametrize(
+    ("formula", "expected"),
+    [
+        # Every AND/OR argument is evaluated, so a later typed text or error
+        # still decides the result after an earlier deciding value.
+        ('=OR(A1:A3,"x")', "#VALUE!"),
+        ("=OR(TRUE,1/0)", "#DIV/0!"),
+        ("=AND(FALSE,1/0)", "#DIV/0!"),
+    ],
+)
+def test_and_or_evaluate_every_argument(formula, expected):
+    result = evaluate(formula, CELLS)
+    assert isinstance(result, ErrorValue)
+    assert result.code == expected
+
+
+def test_count_skips_an_error_argument():
+    assert evaluate("=COUNT(1,1/0)", CELLS) == 1
+
+
+@pytest.mark.parametrize(
+    ("formula", "expected"),
+    [
+        ("=INDEX(D1:E2,1.9,1)", 10),
+        ("=SUM(INDEX(D1:E2,0.5,1))", 30),
+    ],
+)
+def test_index_truncates_fractional_positions(formula, expected):
+    assert evaluate(formula, CELLS) == expected
+
+
+def test_lookups_do_not_equate_true_with_one():
+    assert evaluate("=XLOOKUP(TRUE,A1:A2,D1:D2)", CELLS) == 20
+    result = evaluate("=MATCH(1,A2:A3,0)", CELLS)
     assert isinstance(result, ErrorValue)
     assert result.code == "#N/A"

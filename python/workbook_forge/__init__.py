@@ -2716,6 +2716,9 @@ def _is_lookup_match(candidate: object, lookup_value: object) -> bool:
     lookup_value = _dereference(lookup_value)
     if isinstance(candidate, str) and isinstance(lookup_value, str):
         return candidate.casefold() == lookup_value.casefold()
+    # A logical never equals a number in a lookup; Python's True == 1 must not leak in.
+    if isinstance(candidate, bool) != isinstance(lookup_value, bool):
+        return False
     return candidate == lookup_value
 
 
@@ -3857,10 +3860,11 @@ def _function(
             return ErrorValue(
                 "#REF!", "INDEX supports only area_num=1 for a single rectangular reference"
             )
-        if not isinstance(row, int) or not isinstance(column, int) or row < 0 or column < 0:
-            return ErrorValue(
-                "#VALUE!", "INDEX row and column numbers must be non-negative integers"
-            )
+        # Excel truncates fractional positions, so INDEX(r,1.9,1) is row 1 and
+        # INDEX(r,0.5,1) is the whole column. Negative positions are #VALUE!.
+        if not math.isfinite(row) or not math.isfinite(column) or row < 0 or column < 0:
+            return ErrorValue("#VALUE!", "INDEX row and column numbers must be non-negative")
+        row, column = int(row), int(column)
         if row > array.rows or column > array.columns:
             return ErrorValue("#REF!", "INDEX row or column is outside the array")
         # Microsoft: row_num 0 returns the whole column and column_num 0 the

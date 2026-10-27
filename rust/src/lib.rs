@@ -749,13 +749,7 @@ fn eval(expr: &Expr, env: &Environment<'_>) -> Result<CalcValue, FormulaError> {
                 "UNIQUE" => unique_call(args, env),
                 "IF" | "IFERROR" | "IFNA" | "IFS" | "SWITCH" => selection_call(name, args, env),
                 "XLOOKUP" | "XMATCH" => xlookup_family(name, args, env),
-                "INDEX" => {
-                    let values: Vec<CalcValue> = args
-                        .iter()
-                        .map(|a| eval(a, env))
-                        .collect::<Result<_, _>>()?;
-                    index_fn(args, &values, name)
-                }
+                "INDEX" => index_call(name, args, env),
                 _ => eval_call(name, args, env).map(scalar),
             }
         }
@@ -2782,6 +2776,83 @@ fn keeps_reference(expr: &Expr, evaluated: &CalcValue) -> bool {
         )
 }
 
+// The helpers below sit outside `eval` and `eval_call` and are never inlined,
+// so their locals do not enlarge the frames of that recursive pair. Deeply
+// nested formulas recurse through those frames.
+
+#[inline(never)]
+fn index_call(name: &str, args: &[Expr], env: &Environment<'_>) -> Result<CalcValue, FormulaError> {
+    let values: Vec<CalcValue> = args
+        .iter()
+        .map(|a| eval(a, env))
+        .collect::<Result<_, _>>()?;
+    index_fn(args, &values, name)
+}
+
+#[inline(never)]
+fn and_or_call(name: &str, args: &[Expr], env: &Environment<'_>) -> Result<Value, FormulaError> {
+    arity(name, args, 1, 255)?;
+    let want = name == "AND";
+    // Microsoft: text and empty cells inside an array or reference are
+    // ignored; with no logical value left the result is #VALUE!. Every
+    // argument is evaluated, so a later error or a typed non-logical text
+    // still decides the result after an earlier deciding value.
+    let mut tested = false;
+    let mut decided = false;
+    for arg in args {
+        let evaluated = eval(arg, env)?;
+        let referenced = keeps_reference(arg, &evaluated);
+        for value in flatten(evaluated) {
+            if referenced && matches!(value, Value::Text(_) | Value::Blank) {
+                continue;
+            }
+            tested = true;
+            if truthy(&value)? != want {
+                decided = true;
+            }
+        }
+    }
+    if !tested {
+        return Err(FormulaError::Value);
+    }
+    Ok(Value::Bool(if decided { !want } else { want }))
+}
+
+#[inline(never)]
+fn count_call(name: &str, args: &[Expr], env: &Environment<'_>) -> Result<Value, FormulaError> {
+    arity(name, args, 1, 255)?;
+    // Microsoft: error values and text that cannot be read as a number are
+    // not counted. Inside a reference or array only numbers count; typed
+    // directly, logical values and numeric text count too, so COUNT(1,TRUE)
+    // is 2. The primitive profile keeps its documented legacy rule of
+    // coercing every argument like a reference.
+    let mut count = 0usize;
+    for argument in args {
+        let evaluated = match eval(argument, env) {
+            Ok(evaluated) => evaluated,
+            // An Excel error argument, such as 1/0, is not counted.
+            Err(error) if error.excel_code().is_some() => continue,
+            Err(error) => return Err(error),
+        };
+        let referenced = env.primitive_value_profile || keeps_reference(argument, &evaluated);
+        for value in flatten(evaluated) {
+            count += match value {
+                Value::Number(_) => 1,
+                Value::Bool(_) if !referenced => 1,
+                Value::Text(text)
+                    if !referenced
+                        && !text.trim().is_empty()
+                        && to_number(&Value::Text(text.clone())).is_ok() =>
+                {
+                    1
+                }
+                _ => 0,
+            };
+        }
+    }
+    Ok(Value::Number(count as f64))
+}
+
 fn truthy(v: &Value) -> Result<bool, FormulaError> {
     match v {
         Value::Bool(b) => Ok(*b),
@@ -2986,61 +3057,8 @@ fn eval_call(name: &str, args: &[Expr], env: &Environment<'_>) -> Result<Value, 
                 .count();
             return Ok(Value::Number(count as f64));
         }
-        "AND" | "OR" => {
-            arity(name, args, 1, 255)?;
-            let want = name == "AND";
-            // Microsoft: text and empty cells inside an array or reference
-            // are ignored; with no logical value left the result is #VALUE!.
-            let mut tested = false;
-            for arg in args {
-                let evaluated = eval(arg, env)?;
-                let referenced = keeps_reference(arg, &evaluated);
-                for value in flatten(evaluated) {
-                    if referenced && matches!(value, Value::Text(_) | Value::Blank) {
-                        continue;
-                    }
-                    tested = true;
-                    let b = truthy(&value)?;
-                    if b != want {
-                        return Ok(Value::Bool(!want));
-                    }
-                }
-            }
-            if !tested {
-                return Err(FormulaError::Value);
-            }
-            return Ok(Value::Bool(want));
-        }
-        "COUNT" => {
-            arity(name, args, 1, 255)?;
-            // Microsoft: error values and text that cannot be read as a
-            // number are not counted. Inside a reference or array only numbers
-            // count; typed directly, logical values and numeric text count
-            // too, so COUNT(1,TRUE) is 2. The primitive profile keeps its
-            // documented legacy rule of coercing every argument like a
-            // reference.
-            let mut count = 0usize;
-            for argument in args {
-                let evaluated = eval(argument, env)?;
-                let referenced =
-                    env.primitive_value_profile || keeps_reference(argument, &evaluated);
-                for value in flatten(evaluated) {
-                    count += match value {
-                        Value::Number(_) => 1,
-                        Value::Bool(_) if !referenced => 1,
-                        Value::Text(text)
-                            if !referenced
-                                && !text.trim().is_empty()
-                                && to_number(&Value::Text(text.clone())).is_ok() =>
-                        {
-                            1
-                        }
-                        _ => 0,
-                    };
-                }
-            }
-            return Ok(Value::Number(count as f64));
-        }
+        "AND" | "OR" => return and_or_call(name, args, env),
+        "COUNT" => return count_call(name, args, env),
         _ => {}
     }
     let values: Vec<CalcValue> = args
@@ -5030,6 +5048,7 @@ fn is_gregorian_leap_year(year: i32) -> bool {
     year % 400 == 0 || (year % 4 == 0 && year % 100 != 0)
 }
 
+#[inline(never)]
 fn selection_call(
     name: &str,
     args: &[Expr],
@@ -5312,6 +5331,7 @@ fn arity(name: &str, args: &[Expr], min: usize, max: usize) -> Result<(), Formul
     }
 }
 
+#[inline(never)]
 fn xlookup_family(
     name: &str,
     args: &[Expr],
@@ -8065,8 +8085,10 @@ mod tests {
         assert_eq!(number("=0*-1").to_bits(), (-0.0_f64).to_bits());
     }
 
-    // Excel oracle findings of 2026-10-25. Expected values are what desktop
-    // Excel returns; the oracle data lives in workbook-forge-evals.
+    // Excel oracle findings of 2026-10-25 (COUNT typed values, AND/OR text in
+    // references, SEARCH wildcards, INDEX 0, XLOOKUP #N/A) plus doc-derived
+    // cases. Only those five findings were observed in Excel; the provenance
+    // and extra cases are expected values from Microsoft's documentation.
     #[test]
     fn excel_oracle_findings_2026_10_25() {
         let c = cells(&[
@@ -8196,5 +8218,15 @@ mod tests {
         assert_eq!(eval("=XLOOKUP(1,F1:F2,D1:D2)"), Err(FormulaError::NA));
         assert_eq!(eval("=XLOOKUP(1,G1:G2,D1:D2)"), Err(FormulaError::NA));
         assert_eq!(eval("=XMATCH(1,F1:F2)"), Err(FormulaError::NA));
+        // Review parity cases: every AND/OR argument is evaluated, and COUNT
+        // skips an error argument instead of returning it.
+        assert_eq!(eval("=OR(A1:A3,\"x\")"), Err(FormulaError::Value));
+        assert_eq!(eval("=OR(TRUE,1/0)"), Err(FormulaError::Div0));
+        assert_eq!(eval("=AND(FALSE,1/0)"), Err(FormulaError::Div0));
+        assert_eq!(eval("=COUNT(1,1/0)"), Ok(Value::Number(1.0)));
+        assert_eq!(eval("=INDEX(D1:E2,1.9,1)"), Ok(Value::Number(10.0)));
+        assert_eq!(eval("=SUM(INDEX(D1:E2,0.5,1))"), Ok(Value::Number(30.0)));
+        assert_eq!(eval("=XLOOKUP(TRUE,A1:A2,D1:D2)"), Ok(Value::Number(20.0)));
+        assert_eq!(eval("=MATCH(1,A2:A3,0)"), Err(FormulaError::NA));
     }
 }
