@@ -97,6 +97,26 @@ class _Range:
 
 
 @dataclass(frozen=True, slots=True)
+class _Referenced:
+    """A scalar Excel still treats as a one-cell reference.
+
+    Successful XLOOKUP over a referenced return array, and a branch that IF,
+    IFERROR, IFNA, IFS or SWITCH selects from a reference, keep this marker.
+    COUNT, AND and OR honor it. Value contexts unwrap it. A scalar
+    ``if_not_found`` literal never receives the marker.
+    """
+
+    value: Scalar
+
+
+def _dereference(value: object) -> object:
+    """Drop reference provenance where Excel would read the cell's value."""
+    if isinstance(value, _Referenced):
+        return value.value
+    return value
+
+
+@dataclass(frozen=True, slots=True)
 class _Criterion:
     operator: str
     expected: object
@@ -530,6 +550,8 @@ def _apply_binary_values(
 def _apply_binary_scalar(
     op: str, left: object, right: object, *, worksheet: bool = False
 ) -> Scalar | ErrorValue:
+    left = _dereference(left)
+    right = _dereference(right)
     if isinstance(left, ErrorValue):
         return left
     if worksheet and op in ("=", "<>", "<", "<=", ">", ">="):
@@ -625,6 +647,7 @@ def _apply_binary_scalar(
 
 
 def _number(value: object) -> float | int | ErrorValue:
+    value = _dereference(value)
     if isinstance(value, ErrorValue):
         return value
     if value is None:
@@ -750,7 +773,7 @@ def _sequence_call(
         if argument.kind == "missing":
             evaluated.append(None)
             continue
-        value = _eval(argument, cells, sheet_name, budget)
+        value = _eval_value(argument, cells, sheet_name, budget)
         if isinstance(value, ErrorValue):
             return value
         # Rust rejects a non-finite numeric literal while evaluating that
@@ -816,7 +839,7 @@ def _filter_matrix(value: object) -> tuple[tuple[Scalar, ...], ...]:
             value.values[offset : offset + value.columns]
             for offset in range(0, value.rows * value.columns, value.columns)
         )
-    return ((value,),)  # type: ignore[return-value]
+    return ((_dereference(value),),)  # type: ignore[return-value]
 
 
 def _sort_text_key(value: str) -> str:
@@ -851,7 +874,7 @@ def _sort_call(
 ) -> ArrayValue | ErrorValue:
     if not 1 <= len(arguments) <= 4:
         return _arity("SORT", "1 through 4", len(arguments))
-    source = _eval(arguments[0], cells, sheet_name, budget)
+    source = _eval_value(arguments[0], cells, sheet_name, budget)
     if isinstance(source, ErrorValue):
         return source
     matrix = _filter_matrix(source)
@@ -859,7 +882,7 @@ def _sort_call(
     def optional(index: int, default: object) -> object | ErrorValue:
         if index >= len(arguments) or arguments[index].kind == "missing":
             return default
-        value = _eval(arguments[index], cells, sheet_name, budget)
+        value = _eval_value(arguments[index], cells, sheet_name, budget)
         if isinstance(value, ErrorValue):
             return value
         if isinstance(value, (_Range, ArrayValue)):
@@ -971,7 +994,7 @@ def _unique_call(
 ) -> ArrayValue | ErrorValue:
     if not 1 <= len(arguments) <= 3:
         return _arity("UNIQUE", "1 through 3", len(arguments))
-    source = _eval(arguments[0], cells, sheet_name, budget)
+    source = _eval_value(arguments[0], cells, sheet_name, budget)
     if isinstance(source, ErrorValue):
         return source
     matrix = _filter_matrix(source)
@@ -979,7 +1002,7 @@ def _unique_call(
     def optional(index: int, default: bool) -> bool | ErrorValue:
         if index >= len(arguments) or arguments[index].kind == "missing":
             return default
-        value = _eval(arguments[index], cells, sheet_name, budget)
+        value = _eval_value(arguments[index], cells, sheet_name, budget)
         if isinstance(value, ErrorValue):
             return value
         if isinstance(value, (_Range, ArrayValue)) or not isinstance(value, bool):
@@ -1043,10 +1066,10 @@ def _filter_call(
 ) -> object:
     if not 2 <= len(arguments) <= 3:
         return _arity("FILTER", "2 or 3", len(arguments))
-    source = _eval(arguments[0], cells, sheet_name, budget)
+    source = _eval_value(arguments[0], cells, sheet_name, budget)
     if isinstance(source, ErrorValue):
         return source
-    include = _eval(arguments[1], cells, sheet_name, budget)
+    include = _eval_value(arguments[1], cells, sheet_name, budget)
     if isinstance(include, ErrorValue):
         return include
     source_rows = _filter_matrix(source)
@@ -1079,7 +1102,7 @@ def _filter_call(
         fallback = arguments[2]
         if fallback.kind == "missing":
             return None
-        return _eval(fallback, cells, sheet_name, budget)
+        return _eval_value(fallback, cells, sheet_name, budget)
 
     if axis == "rows":
         result = tuple(source_rows[index] for index in selected_indices)
@@ -1093,6 +1116,8 @@ def _filter_call(
 
 def _switch_equal(left: object, right: object) -> bool | ErrorValue:
     """Compare scalar SWITCH values under the evaluator's explicit type profile."""
+    left = _dereference(left)
+    right = _dereference(right)
     if isinstance(left, ErrorValue):
         return left
     if isinstance(right, ErrorValue):
@@ -1268,20 +1293,21 @@ def _trunc_call(
     """Evaluate TRUNC while preserving its omitted optional precision argument."""
     if not 1 <= len(arguments) <= 2:
         return _arity("TRUNC", "1 or 2", len(arguments))
-    number = _number(_eval(arguments[0], cells, sheet_name, budget))
+    number = _number(_eval_value(arguments[0], cells, sheet_name, budget))
     if isinstance(number, ErrorValue):
         return number
     digits: int | ErrorValue
     if len(arguments) == 1 or arguments[1].kind == "missing":
         digits = 0
     else:
-        digits = _decimal_digits(_eval(arguments[1], cells, sheet_name, budget))
+        digits = _decimal_digits(_eval_value(arguments[1], cells, sheet_name, budget))
     if isinstance(digits, ErrorValue):
         return digits
     return _round_to_precision(number, digits, "toward-zero")
 
 
 def _text(value: object) -> str | ErrorValue:
+    value = _dereference(value)
     if value is None:
         return ""
     if isinstance(value, bool):
@@ -1374,6 +1400,7 @@ def _substitute_bounded(
 
 
 def _truth(value: object) -> bool | ErrorValue:
+    value = _dereference(value)
     if isinstance(value, ErrorValue):
         return value
     if value is None:
@@ -1792,7 +1819,7 @@ def _working_day_call(
     if not 2 <= len(arguments) <= maximum_arity:
         return _arity(name, f"2 or {maximum_arity}", len(arguments))
 
-    start_value = _eval(arguments[0], cells, sheet_name, budget)
+    start_value = _eval_value(arguments[0], cells, sheet_name, budget)
     if isinstance(start_value, ErrorValue):
         return start_value
     if isinstance(start_value, _Range):
@@ -1802,7 +1829,7 @@ def _working_day_call(
     if isinstance(start_day, ErrorValue):
         return start_day
 
-    second_value = _eval(arguments[1], cells, sheet_name, budget)
+    second_value = _eval_value(arguments[1], cells, sheet_name, budget)
     if isinstance(second_value, ErrorValue):
         return second_value
     if isinstance(second_value, _Range):
@@ -1828,7 +1855,7 @@ def _working_day_call(
 
     weekend = _STANDARD_WEEKEND
     if international and len(arguments) >= 3 and arguments[2].kind != "missing":
-        weekend_value = _eval(arguments[2], cells, sheet_name, budget)
+        weekend_value = _eval_value(arguments[2], cells, sheet_name, budget)
         if isinstance(weekend_value, ErrorValue):
             return weekend_value
         weekend_result = _weekend_mask(weekend_value)
@@ -1841,7 +1868,7 @@ def _working_day_call(
     holidays: set[int] = set()
     holiday_index = 3 if international else 2
     if len(arguments) > holiday_index and arguments[holiday_index].kind != "missing":
-        holiday_value = _eval(arguments[holiday_index], cells, sheet_name, budget)
+        holiday_value = _eval_value(arguments[holiday_index], cells, sheet_name, budget)
         holiday_result = _workday_holidays(holiday_value, out_of_range_code=date_range_error)
         if isinstance(holiday_result, ErrorValue):
             return holiday_result
@@ -1868,7 +1895,7 @@ def _week_call(
     elif not 1 <= len(arguments) <= 2:
         return _arity(name, "1 or 2", len(arguments))
 
-    serial = _number(_eval(arguments[0], cells, sheet_name, budget))
+    serial = _number(_eval_value(arguments[0], cells, sheet_name, budget))
     if isinstance(serial, ErrorValue):
         return serial
     try:
@@ -1886,7 +1913,7 @@ def _week_call(
 
     selector: int | ErrorValue = 1
     if len(arguments) == 2 and arguments[1].kind != "missing":
-        selector = _week_selector(_eval(arguments[1], cells, sheet_name, budget))
+        selector = _week_selector(_eval_value(arguments[1], cells, sheet_name, budget))
     if isinstance(selector, ErrorValue):
         return selector
 
@@ -2228,6 +2255,21 @@ def _criteria_aggregate(
     )
 
 
+def _eval_value(
+    node: _Node,
+    cells: Mapping[str, Scalar],
+    sheet_name: str,
+    budget: _WildcardBudget,
+) -> object:
+    """Evaluate an argument whose reader inspects the value, not its provenance.
+
+    Only COUNT, AND, OR and the IF-family/XLOOKUP pass-through read the
+    :class:`_Referenced` marker. Every specialized argument reader (UNIQUE,
+    WORKDAY.INTL masks, XLOOKUP modes and so on) gets the plain value.
+    """
+    return _dereference(_eval(node, cells, sheet_name, budget))
+
+
 def _eval(
     node: _Node,
     cells: Mapping[str, Scalar],
@@ -2314,43 +2356,49 @@ def _eval(
                 if condition
                 else (node.children[2] if len(node.children) == 3 else _Node("literal", False))
             )
-            return _eval(branch, cells, sheet_name, budget)
+            return _with_reference(branch, _eval(branch, cells, sheet_name, budget))
         if name == "IFERROR":
             if len(node.children) != 2:
                 return _arity(name, "2", len(node.children))
             value = _eval(node.children[0], cells, sheet_name, budget)
-            result = (
-                _eval(node.children[1], cells, sheet_name, budget)
-                if isinstance(value, ErrorValue)
-                else value
-            )
-            return "" if result is None and cells is not None else result
+            if isinstance(value, ErrorValue):
+                chosen = node.children[1]
+                result = _eval(chosen, cells, sheet_name, budget)
+            else:
+                chosen = node.children[0]
+                result = value
+            result = _with_reference(chosen, result)
+            # A blank result is an empty string in this evaluator's IFERROR
+            # profile. That replacement is a direct value, not a reference.
+            return "" if _dereference(result) is None and cells is not None else result
         if name == "IFNA":
             if len(node.children) != 2:
                 return _arity(name, "2", len(node.children))
             value = _eval(node.children[0], cells, sheet_name, budget)
             if isinstance(value, ErrorValue) and value.code in {"#N/A", "#N/A!"}:
-                return _eval(node.children[1], cells, sheet_name, budget)
-            return value
+                return _with_reference(
+                    node.children[1], _eval(node.children[1], cells, sheet_name, budget)
+                )
+            return _with_reference(node.children[0], value)
         if name == "IFS":
             if not 2 <= len(node.children) <= 254 or len(node.children) % 2:
                 return _arity(name, "2 through 254 even-numbered arguments", len(node.children))
             for index in range(0, len(node.children), 2):
-                condition = _eval(node.children[index], cells, sheet_name, budget)
+                condition = _dereference(_eval(node.children[index], cells, sheet_name, budget))
                 if isinstance(condition, ErrorValue):
                     return condition
                 if not isinstance(condition, bool):
                     return ErrorValue("#VALUE!", "IFS logical tests must evaluate to TRUE or FALSE")
                 if condition:
                     result = node.children[index + 1]
-                    return (
-                        0 if result.kind == "missing" else _eval(result, cells, sheet_name, budget)
-                    )
+                    if result.kind == "missing":
+                        return 0
+                    return _with_reference(result, _eval(result, cells, sheet_name, budget))
             return ErrorValue("#N/A", "IFS found no TRUE logical test")
         if name == "SWITCH":
             if not 3 <= len(node.children) <= 254:
                 return _arity(name, "3 through 254", len(node.children))
-            expression = _eval(node.children[0], cells, sheet_name, budget)
+            expression = _dereference(_eval(node.children[0], cells, sheet_name, budget))
             if isinstance(expression, ErrorValue):
                 return expression
             if isinstance(expression, (_Range, ArrayValue)):
@@ -2365,12 +2413,14 @@ def _eval(
                     return equal
                 if equal:
                     result = node.children[2 + offset]
-                    return (
-                        0 if result.kind == "missing" else _eval(result, cells, sheet_name, budget)
-                    )
+                    if result.kind == "missing":
+                        return 0
+                    return _with_reference(result, _eval(result, cells, sheet_name, budget))
             if has_default:
                 default = node.children[-1]
-                return 0 if default.kind == "missing" else _eval(default, cells, sheet_name, budget)
+                if default.kind == "missing":
+                    return 0
+                return _with_reference(default, _eval(default, cells, sheet_name, budget))
             return ErrorValue("#N/A", "SWITCH found no matching value and has no default")
         if name == "XLOOKUP":
             if not 3 <= len(node.children) <= 6:
@@ -2378,19 +2428,19 @@ def _eval(
             lookup_value = (
                 None
                 if node.children[0].kind == "missing"
-                else _eval(node.children[0], cells, sheet_name, budget)
+                else _eval_value(node.children[0], cells, sheet_name, budget)
             )
-            lookup_array = _eval(node.children[1], cells, sheet_name, budget)
-            return_array = _eval(node.children[2], cells, sheet_name, budget)
+            lookup_array = _eval_value(node.children[1], cells, sheet_name, budget)
+            return_array = _eval_value(node.children[2], cells, sheet_name, budget)
             match_mode = (
                 0
                 if len(node.children) < 5 or node.children[4].kind == "missing"
-                else _eval(node.children[4], cells, sheet_name, budget)
+                else _eval_value(node.children[4], cells, sheet_name, budget)
             )
             search_mode = (
                 1
                 if len(node.children) < 6 or node.children[5].kind == "missing"
-                else _eval(node.children[5], cells, sheet_name, budget)
+                else _eval_value(node.children[5], cells, sheet_name, budget)
             )
             for value in (lookup_value, lookup_array, return_array, match_mode, search_mode):
                 if isinstance(value, ErrorValue):
@@ -2401,14 +2451,21 @@ def _eval(
             if isinstance(result, ErrorValue):
                 return result
             if found:
-                return result
+                if isinstance(result, ErrorValue):
+                    return result
+                # return_array is a cell range, so the selected cell is a reference.
+                return _Referenced(result)
             if len(node.children) >= 4 and node.children[3].kind != "missing":
-                fallback = _eval(node.children[3], cells, sheet_name, budget)
-                if isinstance(fallback, (_Range, ArrayValue)):
+                fallback = node.children[3]
+                fallback_value = _eval(fallback, cells, sheet_name, budget)
+                if isinstance(fallback_value, (_Range, ArrayValue)):
                     return ErrorValue(
                         "#VALUE!", "XLOOKUP if_not_found must be scalar in this evaluator"
                     )
-                return fallback
+                # A scalar literal stays a direct value. A fallback that is
+                # itself a reference, such as a cell or INDEX, keeps that
+                # provenance instead of inheriting it from the XLOOKUP call.
+                return _with_reference(fallback, fallback_value)
             return ErrorValue("#N/A", "XLOOKUP value not found")
         args = tuple(
             _OPTIONAL_OMITTED
@@ -2449,8 +2506,61 @@ def _eval(
                 else value
                 for child, value in zip(node.children, args)
             )
+        elif name == "COUNT":
+            # Microsoft: COUNT counts logical values and numeric text typed
+            # directly into the argument list, but only numbers held in a
+            # reference. The primitive API keeps its documented legacy
+            # profile, where every argument is coerced like a reference.
+            args = tuple(
+                _as_reference_argument(child, value, primitive=cells is None)
+                for child, value in zip(node.children, args)
+            )
+        elif name in {"AND", "OR"}:
+            # Microsoft: text and empty cells in an array or reference
+            # argument are ignored; a single-cell reference is a reference.
+            args = tuple(
+                _as_reference_argument(child, value, primitive=False)
+                for child, value in zip(node.children, args)
+            )
         return _function(name, args, budget)
     return ErrorValue("#VALUE!", f"unsupported syntax node {node.kind!r}")
+
+
+def _returns_reference(node: _Node) -> bool:
+    """Whether this expression always returns a reference in Excel.
+
+    A cell reference and INDEX over a range do. XLOOKUP and the IF family do
+    not: a hit or a selected reference does, and a scalar fallback does not.
+    That distinction travels on the value as :class:`_Referenced`.
+    """
+    return node.kind == "cell" or (
+        node.kind == "call" and _canonical_function_name(str(node.value)) == "INDEX"
+    )
+
+
+def _with_reference(node: _Node, value: object) -> object:
+    """Attach reference provenance when `node` returns a reference.
+
+    Ranges, arrays, errors, blanks and values that already carry the marker
+    pass through. A blank stays blank so IFERROR can keep its empty-string
+    replacement, which is a direct value rather than a reference.
+    """
+    if isinstance(value, (_Referenced, _Range, ArrayValue, ErrorValue)) or value is None:
+        return value
+    if _returns_reference(node):
+        return _Referenced(value)
+    return value
+
+
+def _as_reference_argument(child: _Node, value: object, *, primitive: bool) -> object:
+    """Present one COUNT, AND or OR argument with Excel's reference rules."""
+    if isinstance(value, _Referenced):
+        return _Range((value.value,), 1, 1)
+    if isinstance(value, (_Range, ArrayValue)):
+        return value
+    if primitive or _returns_reference(child):
+        return _Range((value,), 1, 1)
+    return value
 
 
 def _text_extract(
@@ -2466,7 +2576,7 @@ def _text_extract(
     def read(index: int) -> tuple[object, bool] | ErrorValue:
         if index >= len(arguments) or arguments[index].kind == "missing":
             return None, False
-        value = _eval(arguments[index], cells, sheet_name, budget)
+        value = _eval_value(arguments[index], cells, sheet_name, budget)
         if isinstance(value, _Range):
             return ErrorValue("#VALUE!", f"{name} arguments must be scalar in this evaluator")
         return value, True
@@ -2566,7 +2676,7 @@ def _text_extract_fallback(
 ) -> object:
     if len(arguments) < 6 or arguments[5].kind == "missing":
         return ErrorValue("#N/A", f"{name} delimiter was not found")
-    fallback = _eval(arguments[5], cells, sheet_name, budget)
+    fallback = _eval_value(arguments[5], cells, sheet_name, budget)
     if isinstance(fallback, _Range):
         return ErrorValue("#VALUE!", f"{name} if_not_found must be scalar in this evaluator")
     return fallback
@@ -2617,9 +2727,54 @@ def _arity(name: str, expected: str, actual: int) -> ErrorValue:
 
 
 def _is_lookup_match(candidate: object, lookup_value: object) -> bool:
+    candidate = _dereference(candidate)
+    lookup_value = _dereference(lookup_value)
     if isinstance(candidate, str) and isinstance(lookup_value, str):
         return candidate.casefold() == lookup_value.casefold()
+    # A logical never equals a number in a lookup; Python's True == 1 must not leak in.
+    if isinstance(candidate, bool) != isinstance(lookup_value, bool):
+        return False
     return candidate == lookup_value
+
+
+def _wildcard_search(
+    pattern: _WildcardPattern,
+    text: str,
+    start: int,
+    budget: _WildcardBudget,
+) -> int | None | ErrorValue:
+    """Return the earliest offset at or after start where pattern matches a prefix."""
+    width = len(text)
+    cost = (len(pattern.tokens) + 1) * (width + 1)
+    if not budget.consume(cost):
+        return ErrorValue(
+            "#VALUE!",
+            f"wildcard work exceeds the Workbook Forge {MAX_WILDCARD_WORK}-step limit",
+        )
+    # previous[offset] holds the earliest start whose match of the tokens so
+    # far ends at offset, or None when no start reaches it.
+    previous: list[int | None] = [
+        offset if offset >= start else None for offset in range(width + 1)
+    ]
+    for token in pattern.tokens:
+        current: list[int | None] = [None] * (width + 1)
+        if token.kind == "many":
+            current[0] = previous[0]
+            for offset in range(1, width + 1):
+                candidates = [
+                    value for value in (previous[offset], current[offset - 1]) if value is not None
+                ]
+                current[offset] = min(candidates) if candidates else None
+        elif token.kind == "one":
+            for offset in range(1, width + 1):
+                current[offset] = previous[offset - 1]
+        else:
+            for offset in range(1, width + 1):
+                if text[offset - 1].lower() == token.literal:
+                    current[offset] = previous[offset - 1]
+        previous = current
+    reached = [value for value in previous if value is not None]
+    return min(reached) if reached else None
 
 
 def _wildcard_lookup_match(
@@ -2897,6 +3052,9 @@ def _function(
     args: tuple[object, ...],
     budget: _WildcardBudget,
 ) -> object:
+    # COUNT, AND and OR have already turned reference provenance into ranges.
+    # Every other function reads the underlying value.
+    args = tuple(_dereference(arg) for arg in args)
     fixed = {
         "ABS": (1, 1),
         "EVEN": (1, 1),
@@ -3168,10 +3326,26 @@ def _function(
         )
     flat = _flatten(args)
     if name == "COUNT":
-        # Microsoft: arguments that are error values are not counted.
-        return sum(
-            isinstance(value, (int, float)) and not isinstance(value, bool) for value in flat
-        )
+        # Microsoft: error values and text that cannot be read as a number are
+        # not counted. Inside a reference or array only numbers count; typed
+        # directly, logical values and numeric text count too, so
+        # COUNT(1,TRUE) is 2 while COUNT(A1:A2) over 1 and TRUE is 1.
+        count = 0
+        for argument in args:
+            if isinstance(argument, (_Range, ArrayValue)):
+                count += sum(
+                    isinstance(value, (int, float)) and not isinstance(value, bool)
+                    for value in _flatten((argument,))
+                )
+            elif isinstance(argument, (bool, int, float)):
+                count += 1
+            elif (
+                isinstance(argument, str)
+                and argument.strip() != ""
+                and not isinstance(_number(argument), ErrorValue)
+            ):
+                count += 1
+        return count
     if name == "COUNTA":
         # Microsoft: COUNTA counts any type of information, including error values.
         return sum(value is not None for value in flat)
@@ -3197,9 +3371,22 @@ def _function(
             return 0
         return min(numbers) if name == "MIN" else max(numbers)
     if name in {"AND", "OR"}:
-        truth_values = [_truth(value) for value in flat if value is not None]
+        # Microsoft: text and empty cells inside an array or reference are
+        # ignored; with no logical value left the result is #VALUE!.
+        truth_values: list[bool | ErrorValue] = []
+        for argument in args:
+            if isinstance(argument, (_Range, ArrayValue)):
+                truth_values.extend(
+                    _truth(value)
+                    for value in _flatten((argument,))
+                    if value is not None and not isinstance(value, str)
+                )
+            elif argument is not None:
+                truth_values.append(_truth(argument))
         if any(isinstance(value, ErrorValue) for value in truth_values):
             return next(value for value in truth_values if isinstance(value, ErrorValue))
+        if not truth_values:
+            return ErrorValue("#VALUE!", f"{name} has no logical values to test")
         return all(truth_values) if name == "AND" else any(truth_values)
     if name == "NOT":
         result = _truth(args[0])
@@ -3517,7 +3704,20 @@ def _function(
                 "#VALUE!", f"{name} start_num must be from 1 through text length plus 1"
             )
         if name == "SEARCH":
-            # Wildcards are deliberately treated as ordinary characters here.
+            # Microsoft: SEARCH accepts ? (one character), * (any run) and ~
+            # to escape either; the result is where the earliest match starts.
+            pattern = _wildcard_pattern(needle)
+            if isinstance(pattern, ErrorValue):
+                return pattern
+            if pattern is not None:
+                found = _wildcard_search(pattern, haystack, start - 1, budget)
+                if isinstance(found, ErrorValue):
+                    return found
+                return (
+                    found + 1
+                    if found is not None
+                    else ErrorValue("#VALUE!", "SEARCH text was not found")
+                )
             needle, haystack = needle.casefold(), haystack.casefold()
         found = haystack.find(needle, start - 1)
         return found + 1 if found >= 0 else ErrorValue("#VALUE!", f"{name} text was not found")
@@ -3675,10 +3875,23 @@ def _function(
             return ErrorValue(
                 "#REF!", "INDEX supports only area_num=1 for a single rectangular reference"
             )
-        if not isinstance(row, int) or not isinstance(column, int) or row < 1 or column < 1:
-            return ErrorValue("#VALUE!", "INDEX row and column numbers must be positive integers")
+        # Excel truncates fractional positions, so INDEX(r,1.9,1) is row 1 and
+        # INDEX(r,0.5,1) is the whole column. Negative positions are #VALUE!.
+        if not math.isfinite(row) or not math.isfinite(column) or row < 0 or column < 0:
+            return ErrorValue("#VALUE!", "INDEX row and column numbers must be non-negative")
+        row, column = int(row), int(column)
         if row > array.rows or column > array.columns:
             return ErrorValue("#REF!", "INDEX row or column is outside the array")
+        # Microsoft: row_num 0 returns the whole column and column_num 0 the
+        # whole row; both 0 return the whole reference.
+        if row == 0 or column == 0:
+            rows = range(array.rows) if row == 0 else (row - 1,)
+            columns = range(array.columns) if column == 0 else (column - 1,)
+            return _Range(
+                tuple(array.values[r * array.columns + c] for r in rows for c in columns),
+                len(rows),
+                len(columns),
+            )
         return array.values[(row - 1) * array.columns + column - 1]
     return ErrorValue("#NAME?", f"unsupported function {name}")
 
@@ -4662,7 +4875,7 @@ def evaluate_result(
         return ErrorValue("#VALUE!", "formula is empty")
     try:
         budget = _WildcardBudget()
-        value = _eval(_Parser(source).parse(), normalized, sheet_name, budget)
+        value = _dereference(_eval(_Parser(source).parse(), normalized, sheet_name, budget))
         if isinstance(value, ArrayValue):
             return _check_text_result(value)
         if isinstance(value, _Range):

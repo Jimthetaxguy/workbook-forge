@@ -734,7 +734,9 @@ fn evaluate_ast(expression: &Expr) -> Result<FormulaResult> {
         primitive_value_profile: true,
     };
     match crate::eval(expression, &environment) {
-        Ok(CalcValue::Scalar(value)) => Ok(FormulaResult::Scalar(normalized_scalar(value))),
+        Ok(CalcValue::Scalar(value) | CalcValue::Referenced(value)) => {
+            Ok(FormulaResult::Scalar(normalized_scalar(value)))
+        }
         Ok(CalcValue::Range(rows)) => Ok(FormulaResult::Array(
             ArrayValue::new(
                 rows.into_iter()
