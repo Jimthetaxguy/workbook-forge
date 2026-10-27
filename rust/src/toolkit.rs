@@ -864,33 +864,7 @@ impl WorkbookModel {
                 ));
             }
             for (address, cell) in &sheet.cells {
-                if canonical_address(address)? != *address {
-                    return Err(ToolkitError::new(
-                        "invalid_reference",
-                        "cell map keys must be canonical uppercase unanchored A1 addresses",
-                    ));
-                }
-                cell.value.validate()?;
-                if let Some(value) = &cell.cached_value {
-                    value.validate()?;
-                }
-                if let Some(style) = &cell.style {
-                    style.validate()?;
-                }
-                if let Some(formula) = &cell.formula {
-                    if !matches!(cell.value, CellValue::Blank) {
-                        return Err(ToolkitError::new(
-                            "invalid_cell",
-                            "a formula cell cannot also contain an authored value",
-                        ));
-                    }
-                    if formula.encode_utf16().count() > crate::MAX_FORMULA_LENGTH_UNITS + 1 {
-                        return Err(ToolkitError::new(
-                            "resource_limit",
-                            "formula exceeds 8192 UTF-16 code units",
-                        ));
-                    }
-                }
+                validate_cell(address, cell)?;
             }
             for (column, width) in &sheet.column_widths {
                 if !column.bytes().all(|c| c.is_ascii_uppercase())
@@ -927,15 +901,7 @@ impl WorkbookModel {
                     "multiple inputs cannot bind the same cell",
                 ));
             }
-            if self
-                .get_cell(&address)
-                .is_some_and(|cell| cell.formula.is_some() || cell.blocked_reason.is_some())
-            {
-                return Err(ToolkitError::new(
-                    "invalid_input",
-                    "input cannot bind a formula or unsupported cell",
-                ));
-            }
+            self.check_input_cell(&address)?;
             if input.min.is_some_and(|n| !n.is_finite())
                 || input.max.is_some_and(|n| !n.is_finite())
                 || input.min.zip(input.max).is_some_and(|(a, b)| a > b)
@@ -969,6 +935,55 @@ impl WorkbookModel {
         }
         Ok(())
     }
+    fn check_input_cell(&self, key: &str) -> Result<(), ToolkitError> {
+        if self
+            .get_cell(key)
+            .is_some_and(|cell| cell.formula.is_some() || cell.blocked_reason.is_some())
+        {
+            return Err(ToolkitError::new(
+                "invalid_input",
+                "input cannot bind a formula or unsupported cell",
+            ));
+        }
+        Ok(())
+    }
+    /// Validates a model produced by editing the `changed` cells of a model
+    /// that passed `validate_inputs`. Sheets, bindings and layout are fixed
+    /// under an edit, so only the rules that read an edited cell can newly
+    /// fail: the per-cell rules, the populated-cell limit, and the input
+    /// bindings on edited cells. On a failure the full validation runs, so
+    /// the error is the one a whole-model check reports.
+    fn validate_edited(&self, changed: &BTreeSet<String>) -> Result<(), ToolkitError> {
+        let incremental = (|| {
+            let count = self.sheets.iter().fold(0usize, |count, sheet| {
+                count.saturating_add(sheet.cells.len())
+            });
+            if count > MAX_WORKBOOK_CELLS {
+                return Err(ToolkitError::new("resource_limit", "populated cells"));
+            }
+            for current in changed {
+                let (_, address) = current.rsplit_once('!').unwrap();
+                if let Some(cell) = self.get_cell(current) {
+                    validate_cell(address, cell)?;
+                }
+            }
+            for input in self.inputs.values() {
+                let bound = self.resolve(&input.sheet, &input.address)?;
+                if changed.contains(&bound) {
+                    self.check_input_cell(&bound)?;
+                    let value = self
+                        .get_cell(&bound)
+                        .map_or(&CellValue::Blank, |cell| &cell.value);
+                    validate_input_value(input, value)?;
+                }
+            }
+            Ok(())
+        })();
+        match incremental {
+            Ok(()) => Ok(()),
+            Err(_) => validate_inputs(self, &BTreeMap::new()).map(|_| ()),
+        }
+    }
     fn resolve(&self, sheet: &str, address: &str) -> Result<String, ToolkitError> {
         let actual = self
             .sheets
@@ -987,6 +1002,36 @@ impl WorkbookModel {
             .cells
             .get(address)
     }
+}
+fn validate_cell(address: &str, cell: &Cell) -> Result<(), ToolkitError> {
+    if canonical_address(address)? != address {
+        return Err(ToolkitError::new(
+            "invalid_reference",
+            "cell map keys must be canonical uppercase unanchored A1 addresses",
+        ));
+    }
+    cell.value.validate()?;
+    if let Some(value) = &cell.cached_value {
+        value.validate()?;
+    }
+    if let Some(style) = &cell.style {
+        style.validate()?;
+    }
+    if let Some(formula) = &cell.formula {
+        if !matches!(cell.value, CellValue::Blank) {
+            return Err(ToolkitError::new(
+                "invalid_cell",
+                "a formula cell cannot also contain an authored value",
+            ));
+        }
+        if formula.encode_utf16().count() > crate::MAX_FORMULA_LENGTH_UNITS + 1 {
+            return Err(ToolkitError::new(
+                "resource_limit",
+                "formula exceeds 8192 UTF-16 code units",
+            ));
+        }
+    }
+    Ok(())
 }
 fn validate_input_value(input: &InputBinding, value: &CellValue) -> Result<(), ToolkitError> {
     value.validate()?;
@@ -1038,6 +1083,13 @@ pub fn validate_inputs(
     values: &BTreeMap<String, CellValue>,
 ) -> Result<Vec<Edit>, ToolkitError> {
     model.validate()?;
+    check_input_values(model, values)
+}
+/// The binding checks of `validate_inputs`, for a model already validated.
+fn check_input_values(
+    model: &WorkbookModel,
+    values: &BTreeMap<String, CellValue>,
+) -> Result<Vec<Edit>, ToolkitError> {
     for name in values.keys() {
         if !model.inputs.contains_key(name) {
             return Err(ToolkitError::new(
@@ -1509,10 +1561,7 @@ fn calculate_inner(
     previous: Option<&CalculationReport>,
     dirty: &BTreeSet<String>,
 ) -> CalculationReport {
-    match model.validate().and_then(|()| {
-        validate_inputs(model, &BTreeMap::new())?;
-        Graph::build(model)
-    }) {
+    match validate_inputs(model, &BTreeMap::new()).and_then(|_| Graph::build(model)) {
         Ok(graph) => calculate_with_graph(model, &graph, workers, previous, dirty),
         Err(error) => CalculationReport {
             revision: model.revision,
@@ -1780,7 +1829,7 @@ impl Session {
     pub fn new(model: WorkbookModel) -> Result<Self, ToolkitError> {
         model.validate()?;
         // A model that fails here still opens; calculation reports why.
-        let graph = validate_inputs(&model, &BTreeMap::new())
+        let graph = check_input_values(&model, &BTreeMap::new())
             .and_then(|_| Graph::build(&model))
             .ok()
             .map(Arc::new);
@@ -1887,8 +1936,10 @@ impl Session {
                 cell.style = Some(style);
             }
         }
-        candidate.validate()?;
-        validate_inputs(&candidate, &BTreeMap::new())?;
+        match state.graph {
+            Some(_) => candidate.validate_edited(&changed)?,
+            None => validate_inputs(&candidate, &BTreeMap::new()).map(|_| ())?,
+        }
         let revision = candidate
             .revision
             .checked_add(1)
@@ -2864,8 +2915,11 @@ mod tests {
             7 => format!("=Missing!{x}"),
             _ => format!("=IF({x}>2,{y},0)"),
         };
-        match rng.below(3) {
-            0 => Edit::value(sheet, address, CellValue::Number(rng.below(10) as f64)),
+        match rng.below(6) {
+            0 | 1 => Edit::value(sheet, address, CellValue::Number(rng.below(10) as f64)),
+            // Invalid anywhere, and invalid on the number-bound input cell.
+            2 if rng.below(4) == 0 => Edit::value(sheet, address, CellValue::Number(f64::NAN)),
+            2 => Edit::value(sheet, address, CellValue::Text("t".into())),
             _ => Edit::formula(sheet, address, formula),
         }
     }
@@ -2876,28 +2930,47 @@ mod tests {
     }
     #[test]
     fn persistent_graph_and_incremental_reports_match_full_rebuilds() {
-        let (mut accepted, mut cycles) = (0, 0);
+        let (mut accepted, mut rejected_invalid, mut cycles) = (0, 0, 0);
         for seed in 0..40u64 {
             let mut rng = Lcg(seed);
             let mut workbook = model(
-                &[("A1", number(1.0)), ("B1", Cell::formula("=A1+1"))],
+                &[
+                    ("A1", number(1.0)),
+                    ("A2", number(3.0)),
+                    ("B1", Cell::formula("=A1+1")),
+                ],
                 if seed % 2 == 0 {
                     &[("main", "B1")]
                 } else {
                     &[]
                 },
             );
+            workbook.inputs.insert(
+                "rate".into(),
+                InputBinding::number("Data", "A2", Some(0.0), Some(100.0)),
+            );
             let mut other = Sheet::new("Other");
             other.cells.insert("A1".into(), number(5.0));
             workbook.sheets.push(other);
-            let session = Session::new(workbook).unwrap();
+            let session = Session::new(workbook.clone()).unwrap();
+            // Applies every batch through whole-model validation and a full
+            // graph build, as the session did before it kept its graph.
+            let reference = Session::new(workbook).unwrap();
             session.calculate(1);
             for step in 0..60 {
                 let edits = (0..1 + rng.below(3))
                     .map(|_| random_edit(&mut rng))
                     .collect::<Vec<_>>();
-                // Batches that edit one cell twice are refused; skip them.
-                accepted += usize::from(session.apply(edits, None).is_ok());
+                reference.state().graph = None;
+                let expected = reference.apply(edits.clone(), None);
+                let result = session.apply(edits, None);
+                assert_eq!(result, expected, "seed {seed} step {step}");
+                assert_eq!(session.snapshot(), reference.snapshot());
+                // Batches that edit one cell twice are refused, among others.
+                accepted += usize::from(result.is_ok());
+                rejected_invalid += usize::from(result.as_ref().is_err_and(|error| {
+                    matches!(error.code.as_str(), "invalid_value" | "invalid_input")
+                }));
                 assert_matches_full_rebuild(&session);
                 if rng.below(3) > 0 {
                     let incremental = session.calculate(1 + rng.below(3));
@@ -2918,8 +2991,8 @@ mod tests {
         }
         // Guard against a generator that only produces rejected edits.
         assert!(
-            accepted > 1500 && cycles > 50,
-            "{accepted} accepted, {cycles} cyclic"
+            accepted > 1000 && rejected_invalid > 200 && cycles > 50,
+            "{accepted} accepted, {rejected_invalid} invalid, {cycles} cyclic"
         );
     }
     #[test]
