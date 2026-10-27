@@ -1315,22 +1315,16 @@ impl Graph {
         Ok(graph)
     }
     /// Re-derives the edges of `changed` cells from `model`. On a limit
-    /// failure the graph is restored from `previous`, the model it matched
-    /// before the edit, so a rejected edit leaves it untouched.
+    /// failure the caller restores those cells and calls `reanalyze` with the
+    /// restored model, which puts back exactly the graph it had before.
     fn update(
         &mut self,
-        previous: &WorkbookModel,
         model: &WorkbookModel,
         changed: &BTreeSet<String>,
     ) -> Result<(), ToolkitError> {
         self.reanalyze(model, changed);
-        let checked = self
-            .check_reference_limits()
-            .and_then(|()| self.check_cell_limit());
-        if checked.is_err() {
-            self.reanalyze(previous, changed);
-        }
-        checked
+        self.check_reference_limits()
+            .and_then(|()| self.check_cell_limit())
     }
     fn reanalyze(&mut self, model: &WorkbookModel, changed: &BTreeSet<String>) {
         let mut released = BTreeSet::new();
@@ -1798,8 +1792,92 @@ fn calculate_with_graph(
     report
 }
 
+/// Applies a batch to `model` in order, recording each edited cell's prior
+/// contents in `undo` before touching it. Stops at the first invalid edit;
+/// the caller restores from `undo`.
+fn apply_in_place(
+    model: &mut WorkbookModel,
+    edits: Vec<Edit>,
+    changed: &mut BTreeSet<String>,
+    undo: &mut Vec<(String, Option<Cell>)>,
+) -> Result<(), ToolkitError> {
+    for edit in edits {
+        if (edit.value.is_some() && edit.formula.is_some())
+            || (edit.value.is_none() && edit.formula.is_none() && edit.style.is_none())
+        {
+            return Err(ToolkitError::new(
+                "invalid_edit",
+                "edit requires one value or formula, optionally a style, or a style alone",
+            ));
+        }
+        let target = model.resolve(&edit.sheet, &edit.address)?;
+        if !changed.insert(target.clone()) {
+            return Err(ToolkitError::new(
+                "invalid_edit",
+                "a batch may edit each cell only once",
+            ));
+        }
+        let (sheet_name, address) = target.rsplit_once('!').unwrap();
+        let sheet = model
+            .sheets
+            .iter_mut()
+            .find(|sheet| sheet.name == sheet_name)
+            .unwrap();
+        let previous = sheet.cells.get(address).cloned();
+        if previous
+            .as_ref()
+            .is_some_and(|cell| cell.blocked_reason.is_some())
+        {
+            return Err(ToolkitError::new(
+                "unsupported_edit",
+                format!("{target} contains preserved-only content"),
+            ));
+        }
+        undo.push((target.clone(), previous));
+        let cell = sheet.cells.entry(address.into()).or_default();
+        if let Some(value) = edit.value {
+            cell.value = value;
+            cell.formula = None;
+            cell.cached_value = None;
+        }
+        if let Some(formula) = edit.formula {
+            Expression::parse(&formula)?;
+            cell.value = CellValue::Blank;
+            cell.formula = Some(formula);
+            cell.cached_value = None;
+        }
+        if let Some(style) = edit.style {
+            cell.style = Some(style);
+        }
+    }
+    Ok(())
+}
+/// Puts back the cells recorded by `apply_in_place`, newest first.
+fn restore(
+    model: &mut WorkbookModel,
+    undo: impl DoubleEndedIterator<Item = (String, Option<Cell>)>,
+) {
+    for (target, previous) in undo.rev() {
+        let (sheet_name, address) = target.rsplit_once('!').unwrap();
+        let sheet = model
+            .sheets
+            .iter_mut()
+            .find(|sheet| sheet.name == sheet_name)
+            .unwrap();
+        match previous {
+            Some(cell) => {
+                sheet.cells.insert(address.into(), cell);
+            }
+            None => {
+                sheet.cells.remove(address);
+            }
+        }
+    }
+}
 struct SessionState {
-    model: WorkbookModel,
+    /// Shared with in-flight calculations; `apply` edits it in place and
+    /// copies it only while a calculation still holds a reference.
+    model: Arc<WorkbookModel>,
     /// Present only while `model` has passed validation, input validation
     /// and the graph limits; it then matches `model` exactly. Edits update it
     /// in place, and calculation shares it through the `Arc` without a copy.
@@ -1835,7 +1913,7 @@ impl Session {
             .map(Arc::new);
         Ok(Self {
             state: Arc::new(Mutex::new(SessionState {
-                model,
+                model: Arc::new(model),
                 graph,
                 published: None,
                 dirty: BTreeSet::new(),
@@ -1843,7 +1921,7 @@ impl Session {
         })
     }
     pub fn snapshot(&self) -> WorkbookModel {
-        self.state().model.clone()
+        self.state().model.as_ref().clone()
     }
     /// The current revision, read under the lock without cloning the model.
     pub fn revision(&self) -> u64 {
@@ -1890,70 +1968,49 @@ impl Session {
         if edits.is_empty() {
             return Ok(state.model.revision);
         }
-        let mut candidate = state.model.clone();
-        let mut changed = BTreeSet::new();
-        for edit in edits {
-            if (edit.value.is_some() && edit.formula.is_some())
-                || (edit.value.is_none() && edit.formula.is_none() && edit.style.is_none())
-            {
-                return Err(ToolkitError::new(
-                    "invalid_edit",
-                    "edit requires one value or formula, optionally a style, or a style alone",
-                ));
-            }
-            let target = candidate.resolve(&edit.sheet, &edit.address)?;
-            if !changed.insert(target.clone()) {
-                return Err(ToolkitError::new(
-                    "invalid_edit",
-                    "a batch may edit each cell only once",
-                ));
-            }
-            let (sheet_name, address) = target.rsplit_once('!').unwrap();
-            let sheet = candidate
-                .sheets
-                .iter_mut()
-                .find(|sheet| sheet.name == sheet_name)
-                .unwrap();
-            let cell = sheet.cells.entry(address.into()).or_default();
-            if cell.blocked_reason.is_some() {
-                return Err(ToolkitError::new(
-                    "unsupported_edit",
-                    format!("{target} contains preserved-only content"),
-                ));
-            }
-            if let Some(value) = edit.value {
-                cell.value = value;
-                cell.formula = None;
-                cell.cached_value = None;
-            }
-            if let Some(formula) = edit.formula {
-                Expression::parse(&formula)?;
-                cell.value = CellValue::Blank;
-                cell.formula = Some(formula);
-                cell.cached_value = None;
-            }
-            if let Some(style) = edit.style {
-                cell.style = Some(style);
-            }
-        }
-        match state.graph {
-            Some(_) => candidate.validate_edited(&changed)?,
-            None => validate_inputs(&candidate, &BTreeMap::new()).map(|_| ())?,
-        }
-        let revision = candidate
-            .revision
-            .checked_add(1)
-            .ok_or_else(|| ToolkitError::new("resource_limit", "revision counter exhausted"))?;
         let state = &mut *state;
-        match &mut state.graph {
-            // Copies the graph only if a calculation is still reading it.
-            Some(graph) => Arc::make_mut(graph).update(&state.model, &candidate, &changed)?,
-            None => state.graph = Some(Arc::new(Graph::build(&candidate)?)),
+        let revision = state.model.revision;
+        // Edits go straight into the model; `undo` holds each edited cell's
+        // previous contents so any rejection restores the model exactly.
+        let model = Arc::make_mut(&mut state.model);
+        let mut undo: Vec<(String, Option<Cell>)> = Vec::new();
+        let mut changed = BTreeSet::new();
+        let result = apply_in_place(model, edits, &mut changed, &mut undo)
+            .and_then(|()| match state.graph {
+                Some(_) => model.validate_edited(&changed),
+                None => validate_inputs(model, &BTreeMap::new()).map(|_| ()),
+            })
+            .and_then(|()| {
+                revision.checked_add(1).ok_or_else(|| {
+                    ToolkitError::new("resource_limit", "revision counter exhausted")
+                })
+            })
+            .and_then(|next| {
+                match &mut state.graph {
+                    // Copies the graph only if a calculation is still reading it.
+                    Some(graph) => {
+                        let graph = Arc::make_mut(graph);
+                        if let Err(error) = graph.update(model, &changed) {
+                            restore(model, undo.drain(..));
+                            graph.reanalyze(model, &changed);
+                            return Err(error);
+                        }
+                    }
+                    None => state.graph = Some(Arc::new(Graph::build(model)?)),
+                }
+                Ok(next)
+            });
+        match result {
+            Ok(next) => {
+                model.revision = next;
+                state.dirty.extend(changed);
+                Ok(next)
+            }
+            Err(error) => {
+                restore(model, undo.drain(..));
+                Err(error)
+            }
         }
-        candidate.revision = revision;
-        state.model = candidate;
-        state.dirty.extend(changed);
-        Ok(state.model.revision)
     }
     /// Applies the edits, then recalculates the cells they invalidated. The
     /// report is marked stale if another edit lands before it publishes.
@@ -1970,7 +2027,7 @@ impl Session {
         let (model, graph, previous, dirty) = {
             let state = self.state();
             (
-                state.model.clone(),
+                Arc::clone(&state.model),
                 state.graph.clone(),
                 state.published.clone(),
                 state.dirty.clone(),
@@ -3024,6 +3081,7 @@ mod tests {
         let session =
             Session::new(model(&[("A1", Cell::formula("=SUM(B1:B60000)"))], &[])).unwrap();
         let before = session.state().graph.as_ref().unwrap().as_ref().clone();
+        let model_before = session.snapshot();
         let error = session
             .apply(vec![Edit::formula("Data", "C1", "=SUM(D1:D60000)")], None)
             .unwrap_err();
@@ -3032,7 +3090,7 @@ mod tests {
             "expanded workbook references exceed 100000 cells"
         );
         assert_eq!(**session.state().graph.as_ref().unwrap(), before);
-        assert_eq!(session.snapshot().revision, 0);
+        assert_eq!(session.snapshot(), model_before);
     }
     #[test]
     fn apply_and_calculate_evaluates_only_the_dirty_subgraph() {
