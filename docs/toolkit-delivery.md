@@ -371,11 +371,14 @@ caller-selected workbook bytes, constructs a blank workbook, and exposes the
 versioned model snapshot, revision-checked edits, calculation report, and XLSX
 export bytes. It has no filesystem-path or network operations, so the browser
 caller owns file selection and saving. The import and preservation limits remain
-those of the Rust XLSX adapter: edits to cells absent from an imported workbook
-are rejected. Merged #24 added `web/univer-spike` as a view-only page over this
-facade. Merged #25 added blank-workbook authoring and a calculating grid on
-that page: Univer presents the sheet and Forge WASM calculates. That page is
-not a product decision. Its limits are in the [Univer spike note](specs/univer-spike.md).
+those of the Rust XLSX adapter: absent-cell value/formula insertion within the
+session grid bound is accepted. Insertion into merged non-anchor cells or
+outside that bound (`out_of_bounds`), imported style/layout/validation changes,
+and grouped/table result edits are rejected. Merged #24 added
+`web/univer-spike` as a view-only page over this facade. Merged #25 added
+blank-workbook authoring and a calculating grid on that page: Univer presents
+the sheet and Forge WASM calculates. That page is not a product decision. Its
+limits are in the [Univer spike note](specs/univer-spike.md).
 
 The browser command session on that facade keeps an append-only event log
 (schema v1) in memory for edit, undo, and redo intents and for replay. `log`,
@@ -410,8 +413,11 @@ unavailable Rust bridge raises `NativeUnavailableError`.
   that differ from the retained validation. The 1904 date system remains
   preservation-only for formulas. Export writes a new path and validates caches
   against the selected engine's current calculation.
-- Rust imported edits require existing cells. New-cell insertion, imported
-  style/layout/validation changes, and general structure edits are refused.
+- Rust imported edits accept existing-cell content edits and absent-cell
+  value/formula insertion within the session grid bound. Insertion into merged
+  non-anchor cells or outside that bound (`out_of_bounds`), imported
+  style/layout/validation changes, grouped/table result edits, and general
+  structure edits are refused.
   Its file profile is UTF-8 transitional XLSX, excluding ZIP64, multivolume
   archives and directory entries. Both adapters preserve unsupported content
   within their accepted package profiles; their reports expose narrower limits.
