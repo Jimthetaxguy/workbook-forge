@@ -39,9 +39,6 @@ function recordingWasm() {
       calls.push({ kind: 'applyEdits', json: editsJson, expectedRevision });
       return JSON.stringify({ ok: true, revision: '1' });
     },
-    applyAndCalculateJson: () => {
-      throw new Error('applyAndCalculateJson is unused');
-    },
     submitJson: (requestJson) => {
       calls.push({ kind: 'submit', json: requestJson });
       return JSON.stringify({
@@ -182,7 +179,6 @@ function wrapWorkbook(wb, sent) {
       sent.push({ kind: 'applyEdits', json: editsJson });
       return wb.applyEditsResultJson(editsJson, expectedRevision);
     },
-    applyAndCalculateJson: (envelopeJson) => wb.applyAndCalculateJson(envelopeJson),
     submitJson: (requestJson) => {
       sent.push({ kind: 'submit', json: requestJson });
       return wb.submitJson(requestJson);

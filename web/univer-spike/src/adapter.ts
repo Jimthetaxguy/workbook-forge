@@ -81,8 +81,6 @@ export interface Audit {
   blocked: string[];
   /** Commands routed to Forge. */
   routed: string[];
-  /** Recent command/operation ids (debug trace, capped). */
-  trace: string[];
 }
 
 type Projected = { value: Scalar; f?: string };
@@ -103,8 +101,23 @@ function scalarFromCellData(cell: ICellData | null | undefined | void): Scalar {
   return (cell.v ?? null) as Scalar;
 }
 
+/** A `{ rows }` value is one cell only when it has a single row and a single column. */
+function isSingleCellArray(value: CalculatedValue): boolean {
+  if (!value || typeof value !== 'object' || !('rows' in value) || !Array.isArray(value.rows)) return false;
+  const { rows } = value;
+  return rows.length === 1 && Array.isArray(rows[0]) && rows[0].length === 1;
+}
+
+/**
+ * Project a calculated value onto one cell. A `{ rows }` array is written only
+ * when it is 1×1. Any other shape is left blank: this view does not spill and
+ * does not paint the top-left cell.
+ */
 function scalar(value: CalculatedValue | undefined): Scalar {
-  if (value && typeof value === 'object' && 'rows' in value) return value.rows[0]?.[0] ?? null;
+  if (value && typeof value === 'object' && 'rows' in value) {
+    if (isSingleCellArray(value)) return value.rows[0]?.[0] ?? null;
+    return null;
+  }
   return (value ?? null) as Scalar;
 }
 
@@ -133,7 +146,7 @@ function parseInput(cell: ICellData): { value: Scalar } | { formula: string } | 
 }
 
 export class ForgeUniverAdapter {
-  readonly audit: Audit = { calcRequests: [], calcOutputs: [], facadeEvents: [], foreignWrites: [], blocked: [], routed: [], trace: [] };
+  readonly audit: Audit = { calcRequests: [], calcOutputs: [], facadeEvents: [], foreignWrites: [], blocked: [], routed: [] };
   readonly notices: string[] = [];
   revision: Revision = '0';
   /** One per tab; client_seq counts this tab's envelopes. */
@@ -211,9 +224,10 @@ export class ForgeUniverAdapter {
         const { row, col } = fromA1(address);
         rows = Math.max(rows, row + 5);
         cols = Math.max(cols, col + 5);
-        const value = cell.formula !== undefined ? scalar(calc[`${sheet.name}!${address}`]) : cell.value;
+        const at = `${sheet.name}!${address}`;
+        const value = cell.formula !== undefined ? this.projectScalar(calc[at], at) : cell.value;
         (cellData[row] ??= {})[col] = toCellData(value, cell.formula);
-        this.projected.set(`${sheet.name}!${address}`, { value, f: cell.formula });
+        this.projected.set(at, { value, f: cell.formula });
       }
       data.sheets[id] = { id, name: sheet.name, rowCount: rows, columnCount: cols, cellData };
     });
@@ -322,6 +336,15 @@ export class ForgeUniverAdapter {
     this.onNotice(text);
   }
 
+  /** One-cell projection of a calculated value, with a notice when the array is not 1×1. */
+  private projectScalar(value: CalculatedValue | undefined, where: string): Scalar {
+    if (value && typeof value === 'object' && 'rows' in value && !isSingleCellArray(value)) {
+      const text = `${where}: multi-cell array result is not shown.`;
+      if (this.notices.at(-1) !== text) this.notice(text);
+    }
+    return scalar(value);
+  }
+
   private async history(type: HistoryOp['type']) {
     await this.applyToForge({ type, target: null }, type, { source: 'history', univer: `univer.command.${type}` });
   }
@@ -376,7 +399,7 @@ export class ForgeUniverAdapter {
     });
   }
 
-  /** Write changed cells into the projection, the inverse cache and Univer. */
+  /** Write changed cells into the projection and Univer. */
   private applyChanged(changed: ChangedCell[], alsoRepaint: string[]) {
     const bySheet = new Map<string, Record<number, Record<number, ICellData>>>();
     const repaint = new Set(alsoRepaint);
@@ -389,7 +412,7 @@ export class ForgeUniverAdapter {
     for (const cell of changed) {
       const key = `${cell.sheet}!${cell.address}`;
       const formula = cell.formula ?? undefined;
-      const value = scalar(cell.value);
+      const value = this.projectScalar(cell.value, `${cell.sheet}!${cell.address}`);
       const data = toCellData(value, formula);
       this.projected.set(key, { value, f: formula });
       repaint.delete(key);
@@ -424,7 +447,7 @@ export class ForgeUniverAdapter {
       for (const [address, cell] of Object.entries(sheet.cells)) {
         const key = `${sheet.name}!${address}`;
         present.add(key);
-        const value = cell.formula !== undefined ? scalar(calc[key]) : cell.value;
+        const value = cell.formula !== undefined ? this.projectScalar(calc[key], key) : cell.value;
         const data = toCellData(value, cell.formula);
         const next: Projected = { value, f: cell.formula };
         const prev = this.projected.get(key);
@@ -509,7 +532,6 @@ export class ForgeUniverAdapter {
 
   private intercept(info: Readonly<ICommandInfo>) {
     const id = info.id;
-    if (this.audit.trace.push(`${info.type}:${id}`) > 300) this.audit.trace.shift();
     if (info.type === CommandType.MUTATION) {
       if (CALC_REQUEST.test(id)) this.audit.calcRequests.push(id);
       if (CALC_OUTPUT.test(id)) this.audit.calcOutputs.push(id);

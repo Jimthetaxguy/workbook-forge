@@ -1,4 +1,4 @@
-// Univer as a presentation/editing layer only. Four configurations are built
+// Univer as a presentation/editing layer only. Five modes are built
 // here so the spike can compare them; the adapter is the same in all of them.
 //
 //   univer-default      formula plugins registered, stock config (control:

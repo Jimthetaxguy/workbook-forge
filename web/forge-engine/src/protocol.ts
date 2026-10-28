@@ -24,9 +24,10 @@ export interface Address {
 export type CalculatedValue = Scalar | { rows: Scalar[][] };
 
 /**
- * One existing-cell edit: exactly one of value or formula (formula text with or
- * without the leading "="). PR #19's Edit also allows style edits; imported
- * workbooks reject those, so this subset omits them.
+ * One value or formula edit (formula text with or without the leading "=").
+ * It may update an existing cell or insert an absent cell inside the grid
+ * (#41). PR #19's Edit also allows style edits; imported workbooks reject
+ * those, so this subset omits them.
  */
 export type Edit = Address & ({ value: Scalar; formula?: never } | { formula: string; value?: never });
 
@@ -171,7 +172,6 @@ export interface CommandResponse {
 
 // ---- Event log (schema v1, realtime design section 4.2) -----------------
 
-/** A logged cell input: a literal value, or a formula without the "=". */
 /**
  * A logged cell input. `{ absent: true }` is a cell the workbook did not hold
  * (an insertion's `before`, or an undone insertion's `after`); it differs from
@@ -319,16 +319,3 @@ export interface ResponseMessage<K extends CommandName = CommandName> {
   command: K;
   result: Result<Commands[K]['result']>;
 }
-
-export const COMMANDS: readonly CommandName[] = [
-  'open',
-  'newWorkbook',
-  'snapshot',
-  'applyEdits',
-  'calculate',
-  'export',
-  'applyAndCalculate',
-  'log',
-  'subscribe',
-  'replay',
-];
