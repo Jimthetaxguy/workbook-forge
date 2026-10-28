@@ -18,7 +18,7 @@ from typing import Any
 from .catalog import _catalog_file
 from .toolkit import WorkbookModel
 from .workbook import UnsupportedWorkbook, WorkbookError, _cell_position, _normal_address
-from .xlsx import export_xlsx
+from .xlsx import _check_insertion, export_xlsx
 
 MAX_REQUEST_BYTES = 1024 * 1024
 MAX_RESPONSE_BYTES = 256 * 1024
@@ -376,6 +376,15 @@ class AgentWorkbook:
                 _fail("unsupported_operation", "cannot edit preserved-only imported content")
             if baseline.uses_1904_date_system and edit.get("formula") is not None:
                 _fail("unsupported_operation", "formula edits in imported 1904 workbooks are unsupported")
+            # An absent cell is an insertion. A merged range's non-anchor cells
+            # cannot hold content; the anchor can. Out-of-grid addresses are
+            # already refused by _canonical as invalid_reference.
+            if previous is None:
+                column, row = _cell_position(address)
+                try:
+                    _check_insertion(sheet["name"], column, row, baseline.merged)
+                except UnsupportedWorkbook as error:
+                    _fail("unsupported_operation", str(error))
 
     def _mutate(self, operation: str, arguments: dict, snapshot: dict, request_id: str | None) -> tuple[dict, int]:
         field = "values" if operation == "set_inputs" else "edits"
