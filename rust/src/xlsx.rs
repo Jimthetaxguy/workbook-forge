@@ -2029,8 +2029,9 @@ fn parse_spans(spans: &str) -> Option<(u32, u32)> {
     }
     out
 }
-/// The style index Excel gives a cell typed into an empty position: the
-/// row's style when the row is custom-formatted, else its column's style.
+/// Style index written on a cell inserted into an empty position: the row's
+/// `s` when that row has `customFormat`, otherwise the `style` of the `col`
+/// range that covers the column.
 fn inherited_style(xml: &Xml, root: &Node, row: Option<&Node>, col: u32) -> Result<Option<usize>> {
     if let Some(row) = row
         && row

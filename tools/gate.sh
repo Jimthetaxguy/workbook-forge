@@ -112,11 +112,17 @@ build_examples() {
 build_examples .verification/agent-contract-target agent_workbook
 build_examples .verification/primitives-contract-target primitive_contract
 build_examples .verification/xml-contract-target extract_xlsx agent_workbook
-rust_examples=(xlsx_scenario compiler_roundtrip)
+rust_examples=(xlsx_scenario)
 if [ -f rust/examples/canonical_calc.rs ]; then
   rust_examples+=(canonical_calc)
 fi
 build_examples rust/target "${rust_examples[@]}"
+# The compiler benchmark and the source tools launch
+# rust/target/release/examples/compiler_roundtrip. A debug build does not
+# satisfy that path or the test's 180 second cargo limit.
+CARGO_TARGET_DIR="$ROOT/rust/target" \
+  cargo build --quiet --release --manifest-path rust/Cargo.toml --locked --offline \
+  --example compiler_roundtrip
 
 echo "gate: checking for skipped tests"
 skip_report="$(mktemp)"

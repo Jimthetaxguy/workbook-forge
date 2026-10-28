@@ -214,10 +214,11 @@ enum Expr {
 #[derive(Clone, Debug, PartialEq)]
 enum CalcValue {
     Scalar(Value),
-    /// A scalar Excel still treats as a one-cell reference.
+    /// A scalar kept as a one-cell reference.
     ///
-    /// COUNT, AND and OR ignore text and logicals inside it. Value contexts
-    /// unwrap it. A scalar XLOOKUP `if_not_found` literal is never this variant.
+    /// COUNT ignores logicals inside a reference. AND and OR ignore text and
+    /// blanks but still test logicals. Value contexts unwrap it. A scalar
+    /// XLOOKUP `if_not_found` literal is never this variant.
     Referenced(Value),
     Range(Vec<Vec<Value>>),
     Array(ArrayValue),
@@ -3096,9 +3097,8 @@ fn eval_call(name: &str, args: &[Expr], env: &Environment<'_>) -> Result<Value, 
                     _ => None,
                 })
                 .collect();
-            // Microsoft: COUNT does not count error arguments and COUNTA
-            // counts them as information; neither propagates an error found
-            // in a range. The other aggregates return the first error.
+            // COUNTA counts an error as information and does not propagate
+            // it. MIN and MAX return the first error.
             if name == "COUNTA" {
                 let count = flat.iter().filter(|v| !matches!(v, Value::Blank)).count();
                 return Ok(Value::Number(count as f64));
@@ -3389,7 +3389,7 @@ fn eval_call(name: &str, args: &[Expr], env: &Environment<'_>) -> Result<Value, 
             arity(name, args, 1, 1)?;
             let serial = to_number(&one(name, &flat)?)?;
             let floored = serial.floor();
-            // Excel displays serial 0 as 1900-01-00, a non-existent date.
+            // Serial 0 is an engine profile: MONTH is 1, DAY is 0, YEAR is 1900.
             if floored == 0.0 {
                 let value = match name {
                     "MONTH" => 1,
