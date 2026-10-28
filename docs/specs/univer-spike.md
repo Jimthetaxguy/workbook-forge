@@ -1,8 +1,7 @@
 # Univer engine-handoff spike
 
-Status: prototype, October 24, 2026. Branch `agent/codex-formula-lab`. Not a
-general spreadsheet product; it proves one browser authoring and round-trip
-path over the existing engine.
+Status: prototype, October 24, 2026. Not a general spreadsheet product; it
+proves one browser authoring and round-trip path over the existing engine.
 
 **Question.** Can Univer OSS (Apache-2.0, `@univerjs/*` 1.2.0) act purely as a
 presentation and editing layer while Forge, running as WASM in a Web Worker,
@@ -46,11 +45,13 @@ revisions): `session.opened` (baseline name, sha256, bytes, engine), one
 revision, per-cell `before`/`after`) and one `calc` per applied intent
 (`[key, before, after]` deltas for formula cells). The command API adds `log
 {fromSeq}`, `subscribe {events:true}`, `export {includeLog:true}` (NDJSON
-ending in `session.exported`) and `replay(baseline, events)`, which checks the
-baseline sha256 and that every recorded delta is reproduced. Undo/redo are
-intents too: Ctrl+Z undoes this actor's own latest applied, not-undone intent
-and is refused with `undo_conflict` (naming the cells and the overwriting
-event) if those cells changed since.
+ending in `session.exported`) and `replay(baseline, events)`. Replay of an
+imported workbook checks the baseline sha256 and byte length and that every
+recorded delta is reproduced. A blank workbook has no sha256; replay checks a
+zero-length baseline and a known sheet name, then the same recorded deltas.
+Undo/redo are intents too: Ctrl+Z undoes this actor's own latest applied,
+not-undone intent and is refused with `undo_conflict` (naming the cells and
+the overwriting event) if those cells changed since.
 
 The demo keeps no workbook session on Railway. The blank-workbook author/edit/
 calculate/export/reopen path uses only static GET requests with no request
@@ -61,8 +62,10 @@ served JavaScript remains part of the trust boundary.
 
 ## Command API
 
-`newWorkbook(sheetName)`, `open(bytes)`, `snapshot()`,
-`applyEdits(edits, expectedRevision)`, `calculate()` and `export()`. Each
+`open(bytes)`, `newWorkbook(sheetName)`, `snapshot()`,
+`applyEdits(edits, expectedRevision)`, `calculate()`,
+`export` with optional `includeLog`, `applyAndCalculate(envelope)`,
+`log {fromSeq}`, `subscribe {events}`, and `replay(baseline, events)`. Each
 returns `{ok: true, value}` or
 `{ok: false, error: {code, message, expected_revision?, current_revision?}}`.
 Revisions are decimal strings. Requests and responses are structured-clone
@@ -80,7 +83,7 @@ Where this API differs, and why:
 
 | Topic | PR #19 (agent-workbook-v1 client) | This spike | Why |
 |---|---|---|---|
-| Operations | `discover, describe, read, calculate, explain, preview_inputs, set_inputs, edit, export` over a JSON request/response transport | `open, snapshot, applyEdits, calculate, export` over postMessage | A worker holding the WASM workbook needs byte-level `open` and `export`. `applyEdits` corresponds to `edit` and `snapshot` to a full `read`. |
+| Operations | `discover, describe, read, calculate, explain, preview_inputs, set_inputs, edit, export` over a JSON request/response transport | `open, newWorkbook, snapshot, applyEdits, calculate, export, applyAndCalculate, log, subscribe, replay` over postMessage | A worker holding the WASM workbook needs byte-level `open` and `export`. `applyEdits` corresponds to `edit` and `snapshot` to a full `read`. `log`, `subscribe`, `export` with `includeLog`, and `replay` are the memory-only session event log. |
 | Revision | `number`, a safe integer | decimal `string` | wasm-bindgen passes `u64` as `BigInt`. The string form never loses precision and needs no BigInt in hosts. |
 | Errors | thrown `ClientError(code, message, uncertain)` | returned `{ok:false, error:{code, message, expected_revision, current_revision}}` | Results cross a worker boundary, and conflicts carry both revisions. |
 | `Edit` styles | allowed | omitted | Imported workbooks reject style edits (`validate_edits`). |
@@ -173,10 +176,13 @@ Findings:
   `CustomCommandExecutionError`, which cancels the command:
   - `sheet.command.set-range-values` (the cell editor's and the facade's write
     path) is translated into Forge `Edit`s and is never executed by Univer.
-  - `univer.command.undo` / `redo` (keyboard and toolbar) go to the adapter's
-    Forge history, unless an in-cell text editor has focus. Undo applies the
-    recorded inverse edits at the expected revision, so revisions only move
-    forward: 2 → 3 on undo.
+  - `univer.command.undo` / `redo` (keyboard and toolbar) are sent to the
+    worker as an `undo` or `redo` intent, unless an in-cell text editor has
+    focus. The worker reverts this actor's latest applied, not-undone intent
+    on the session event log, or refuses with `undo_conflict` when those cells
+    changed since. Undoing an intent whose `before` is absent removes the
+    cell; undoing one whose `before` is `{"value": null}` leaves a blank cell.
+    Redo re-applies the `after`. Revisions only move forward: 2 → 3 on undo.
   - Every other `sheet.command.*`, `univer.command.*` and `formula*` command is
     blocked with a notice in the page (`#notices`), except a short allow-list
     of view commands (selection, scroll, zoom, sheet activation, copy). This is
@@ -229,7 +235,7 @@ placeholder cells, and the UI has no special path for it.
   writer convention; a formula is written with its calculated cache, and the
   calc chain is dropped with `fullCalcOnLoad` as for every export. The new
   cell takes the row's style when the row is `customFormat`, else its
-  column's `style`, as Excel does when typing into an empty cell.
+  column's `style`.
 - **Absent, blank and cleared.** These stay distinct:
   - *absent*: the workbook does not hold the cell. The event log writes it as
     `{"absent": true}`.
@@ -252,7 +258,7 @@ placeholder cells, and the UI has no special path for it.
 
 `web/univer-spike/tests/acceptance.spec.ts`, headless Chromium (Playwright
 1.64.1 driving system Chromium 156), production build served statically:
-**15 passed** (2026-10-27, absent-cell authoring branch).
+**15 passed** (2026-10-27).
 
 For `not-execute` and `load-only`:
 

@@ -661,8 +661,6 @@ def test_an_excluded_case_is_not_asked_or_scored(tmp_path):
 
 
 def test_the_blank_cell_case_holds_a_blank_cell_and_not_empty_text():
-    # In Excel an empty cell counts as 0 in arithmetic. A cell holding
-    # zero-length text does not: ="" + 10 is #VALUE!.
     cases = json.loads((ROOT / "catalog" / "behavior_critic_benchmarks.json").read_text())
     blank = [case for case in cases if "blank" in case["id"]]
     assert len(blank) == 2
