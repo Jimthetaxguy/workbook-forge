@@ -36,6 +36,26 @@ impl std::fmt::Display for XlsxError {
     }
 }
 impl std::error::Error for XlsxError {}
+impl XlsxError {
+    /// The refusal's typed code (docs/refusal-codes.md).
+    ///
+    /// A message that starts with a registered `code: ` prefix carries that
+    /// code; [`toolkit::ToolkitError`] conversions keep theirs the same way.
+    /// Any other message is `xlsx_error`, the untyped fallback.
+    pub fn code(&self) -> &str {
+        match self.0.split_once(": ") {
+            Some((code, _))
+                if !code.is_empty()
+                    && code
+                        .bytes()
+                        .all(|b| b.is_ascii_lowercase() || b == b'_' || b.is_ascii_digit()) =>
+            {
+                code
+            }
+            _ => "xlsx_error",
+        }
+    }
+}
 impl From<std::io::Error> for XlsxError {
     fn from(e: std::io::Error) -> Self {
         Self(e.to_string())
@@ -1217,6 +1237,10 @@ impl ImportedWorkbook {
         Ok(self)
     }
     /// `(rows, columns)` an absent cell may be inserted within.
+    /// Merged ranges per sheet as `(c1, r1, c2, r2)`.
+    pub fn merged_ranges(&self) -> BTreeMap<String, Vec<(u32, u32, u32, u32)>> {
+        self.merged.clone()
+    }
     pub fn insertion_bound(&self) -> (u32, u32) {
         self.insertion_bound
     }

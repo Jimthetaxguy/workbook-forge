@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import copy
 import hashlib
+import heapq
 import json
 import math
 import re
@@ -381,17 +382,23 @@ def calculate(workbook: Workbook) -> Workbook:
         key: {item for item in deps if item in formula_keys}
         for key, (deps, _diagnostic) in analyzed.items()
     }
-    ready = sorted(key for key, deps in pending.items() if not deps)
+    # Kahn's algorithm, always taking the smallest ready key, so the order is
+    # the same as re-sorting the ready list after every step. The reverse
+    # index keeps it linear in the number of dependency edges.
+    dependents: dict[str, list[str]] = {}
+    for key, deps in pending.items():
+        for dep in deps:
+            dependents.setdefault(dep, []).append(key)
+    ready = [key for key, deps in pending.items() if not deps]
+    heapq.heapify(ready)
     order: list[str] = []
     while ready:
-        current = ready.pop(0)
+        current = heapq.heappop(ready)
         order.append(current)
-        for key in sorted(pending):
-            if current in pending[key]:
-                pending[key].remove(current)
-                if not pending[key]:
-                    ready.append(key)
-        ready.sort()
+        for key in dependents.get(current, ()):
+            pending[key].discard(current)
+            if not pending[key]:
+                heapq.heappush(ready, key)
     diagnostics = {
         key: diagnostic
         for key, (_deps, diagnostic) in analyzed.items()
@@ -434,7 +441,7 @@ def calculate(workbook: Workbook) -> Workbook:
             continue
         expression = cells[key].formula.expression if cells[key].formula is not None else ""
         _sheet_name, _address = key.rsplit("!", 1)
-        outcome = _evaluate(workbook, _sheet_name, _address, expression, results)
+        outcome = _evaluate(workbook, _sheet_name, _address, expression, results, cells, deps)
         if isinstance(outcome, Diagnostic):
             diagnostics[key] = outcome
         else:
@@ -776,22 +783,29 @@ def _evaluate(
     address: str,
     expression: str,
     results: dict[str, Any],
+    cells: dict[str, Cell],
+    dependencies: tuple[str, ...],
 ) -> Any:
+    # The environment holds only the cells the formula references. Every
+    # reference the evaluator can follow is static, so `_analyze` lists them
+    # all; a cell outside the list would be read as blank either way only if
+    # the workbook does not hold it. Building the whole workbook per formula
+    # made calculation quadratic in the cell count.
     environment: dict[str, Any] = {}
-    # The loop needs its own name: `address` is the cell being evaluated and
-    # is used below to say where a diagnostic belongs.
-    for sheet in workbook.sheets:
-        for other, cell in sheet.cells.items():
-            key = f"{sheet.name}!{other}"
-            if cell.formula is not None:
-                if key not in results:
-                    continue
-                scalar = _engine_scalar(results[key])
-            else:
-                scalar = _engine_scalar(cell.value)
-            environment[f"{sheet.name.casefold()}!{other}"] = scalar
-            if sheet.name == sheet_name:
-                environment[other] = scalar
+    for key in dependencies:
+        cell = cells.get(key)
+        if cell is None:
+            continue
+        if cell.formula is not None:
+            if key not in results:
+                continue
+            scalar = _engine_scalar(results[key])
+        else:
+            scalar = _engine_scalar(cell.value)
+        dep_sheet, other = key.rsplit("!", 1)
+        environment[f"{dep_sheet.casefold()}!{other}"] = scalar
+        if dep_sheet == sheet_name:
+            environment[other] = scalar
     outcome = evaluate_result(expression, environment, sheet_name)
     if isinstance(outcome, ArrayValue):
         return _cell_diagnostic(
