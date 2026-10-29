@@ -4,7 +4,7 @@ Each builder returns a mapping of package part name to bytes. The parts are
 written by ``write_package``. These files exercise shapes the generator
 libraries never produce: missing optional parts, absolute targets, prefixed
 SpreadsheetML, strict OOXML, pivot caches, external links, threaded comments,
-chartsheets, and the quirks of other spreadsheet writers.
+and the quirks of other spreadsheet writers.
 
 All content is synthetic and general-purpose.
 """
@@ -325,26 +325,6 @@ def external_link():
             "xl/externalLinks/_rels/externalLink1.xml.rels": rels([("rId1", f"{REL}/externalLinkPath", "rates.xlsx")], {"rId1"}),
         },
     )
-    return parts
-
-
-def chartsheet():
-    cs_ct = "application/vnd.openxmlformats-officedocument.spreadsheetml.chartsheet+xml"
-    rows = '<row r="1"><c r="A1"><v>1</v></c><c r="B1"><v>4</v></c></row><row r="2"><c r="A2"><v>2</v></c><c r="B2"><v>9</v></c></row>'
-    parts = simple({"Readings": sheet_xml(rows, dimension="A1:B2")}, styles=minimal_styles())
-    wb = workbook_xml(["Readings", "Chart1"])
-    parts["xl/workbook.xml"] = wb
-    wb_rels = [
-        ("rId1", f"{REL}/worksheet", "worksheets/sheet1.xml"),
-        ("rId2", f"{REL}/chartsheet", "chartsheets/sheet1.xml"),
-        ("rId3", f"{REL}/styles", "styles.xml"),
-    ]
-    parts["xl/_rels/workbook.xml.rels"] = rels(wb_rels)
-    parts["[Content_Types].xml"] = content_types({
-        "xl/workbook.xml": WB_CT, "xl/worksheets/sheet1.xml": WS_CT, "xl/styles.xml": STY_CT,
-        "xl/chartsheets/sheet1.xml": cs_ct,
-    })
-    parts["xl/chartsheets/sheet1.xml"] = f'{DECL}<chartsheet xmlns="{MAIN}" xmlns:r="{REL}"><sheetPr/><sheetViews><sheetView workbookViewId="0"/></sheetViews></chartsheet>'
     return parts
 
 

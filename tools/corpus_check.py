@@ -1,14 +1,15 @@
 """Run every corpus workbook through every engine and write a matrix report.
 
-For each file in fixtures/corpus/ and each engine the check runs:
+For each file in fixtures/corpus/ and each engine the check runs open, inspect,
+calculate, export and reimport. The py_toolkit and rust lanes also apply one
+value edit and one absent-cell insert. The py_canonical lane edits an existing
+number and does not insert a cell.
 
-    open -> inspect -> calculate -> one value edit -> one absent-cell insert
-         -> export -> reimport
-
-and then checks that the exported package is a valid ZIP that reopens (in
-openpyxl too, when it is installed), that untouched package parts are
-byte-identical where the preservation contract says so, that every source cell
-value round-trips, and that any refusal carries a typed code.
+The check then confirms that the exported package is a valid ZIP that reopens
+(in openpyxl when it is installed, and in LibreOffice only when --libreoffice
+is passed), that untouched package parts are byte-identical where the
+preservation contract says so, that every source cell value round-trips, and
+that any refusal carries a typed code.
 
 Engines:
   py_toolkit    workbook_forge.xlsx.import_xlsx / export_xlsx (preserving patch writer)
@@ -32,7 +33,8 @@ Outcomes per file and engine:
 
 Usage:
   python tools/corpus_check.py [--report docs/corpus-report.md] [--json out.json]
-         [--engines py_toolkit,py_canonical,rust] [--rust-bin PATH] [FILE ...]
+         [--engines py_toolkit,py_canonical,rust] [--rust-bin PATH]
+         [--libreoffice] [--strict] [FILE ...]
 """
 from __future__ import annotations
 
@@ -223,7 +225,7 @@ def _values(document: dict) -> dict[str, Any]:
     return out
 
 
-def run_toolkit(path: Path, folder: Path) -> dict[str, Any]:
+def run_toolkit(path: Path, folder: Path, *, libreoffice: bool = False) -> dict[str, Any]:
     from workbook_forge.xlsx import export_xlsx, import_xlsx
 
     record: dict[str, Any] = {"stages": []}
@@ -288,7 +290,9 @@ def run_toolkit(path: Path, folder: Path) -> dict[str, Any]:
         part = next(item["part"] for item in model._import_metadata["sheets"] if item["name"] == sheet_name)
         edited_sheet_parts.add(part)
     findings += preservation_findings(source_parts, exported, edited_sheet_parts)
-    reopen = _openpyxl_reopens(target) or _libreoffice_reopens(target)
+    reopen = _openpyxl_reopens(target)
+    if libreoffice:
+        reopen = reopen or _libreoffice_reopens(target)
     corrupt = [item for item in findings if item.startswith("dropped")] + ([reopen] if reopen else [])
     changed = [item for item in findings if item.startswith("changed")]
     after = _values(again.to_dict())
@@ -447,13 +451,18 @@ def corpus_files(selected: list[str]) -> list[Path]:
     return sorted(p for p in CORPUS.iterdir() if p.suffix.lower() in {".xlsx", ".xlsm"})
 
 
-def run_isolated(files: list[Path], engines: list[str], rust_bin: Path) -> dict[str, Any]:
+def run_isolated(
+    files: list[Path], engines: list[str], rust_bin: Path, *, libreoffice: bool = False
+) -> dict[str, Any]:
     """Run each file in its own interpreter so one file's memory or a hard
     crash cannot take the rest of the corpus with it."""
     results: dict[str, dict[str, Any]] = {}
     for path in files:
         command = [sys.executable, str(Path(__file__).resolve()), "--child", "--engines",
-                   ",".join(engines), "--rust-bin", str(rust_bin), str(path)]
+                   ",".join(engines), "--rust-bin", str(rust_bin)]
+        if libreoffice:
+            command.append("--libreoffice")
+        command.append(str(path))
         try:
             done = subprocess.run(command, capture_output=True, text=True, timeout=900)
             row = json.loads(done.stdout.strip().splitlines()[-1]) if done.returncode == 0 else None
@@ -467,7 +476,9 @@ def run_isolated(files: list[Path], engines: list[str], rust_bin: Path) -> dict[
     return results
 
 
-def run(files: list[Path], engines: list[str], rust_bin: Path) -> dict[str, Any]:
+def run(
+    files: list[Path], engines: list[str], rust_bin: Path, *, libreoffice: bool = False
+) -> dict[str, Any]:
     results: dict[str, dict[str, Any]] = {}
     with tempfile.TemporaryDirectory(prefix="corpus-check-") as tmp:
         folder = Path(tmp)
@@ -476,7 +487,7 @@ def run(files: list[Path], engines: list[str], rust_bin: Path) -> dict[str, Any]
             for engine in engines:
                 start = time.perf_counter()
                 if engine == "py_toolkit":
-                    record = run_toolkit(path, folder)
+                    record = run_toolkit(path, folder, libreoffice=libreoffice)
                 elif engine == "py_canonical":
                     record = run_canonical(path, folder)
                 elif engine == "rust":
@@ -501,7 +512,9 @@ def _cell(record: dict[str, Any]) -> str:
     return f"**{outcome}** ({record.get('stage', '?')})"
 
 
-def markdown(results: dict[str, Any], engines: list[str], expectations: dict[str, Any]) -> str:
+def markdown(
+    results: dict[str, Any], engines: list[str], expectations: dict[str, Any], *, strict: bool = False
+) -> str:
     manifest = {}
     manifest_path = CORPUS / "MANIFEST.json"
     if manifest_path.exists():
@@ -511,8 +524,10 @@ def markdown(results: dict[str, Any], engines: list[str], expectations: dict[str
         "",
         "Generated by `python tools/corpus_check.py`. Do not edit by hand.",
         "",
-        "Each corpus workbook goes through open, inspect, calculate, one value edit, one",
-        "absent-cell insert, export and reimport in each engine. `pass` means every stage ran,",
+        "Each corpus workbook goes through open, inspect, calculate, export and reimport in each",
+        "engine. The py_toolkit and rust lanes also apply one value edit and one absent-cell",
+        "insert. The py_canonical lane edits an existing number and does not insert a cell.",
+        "`pass` means every stage ran,",
         "the export reopened, preserved parts came back byte-identical and every source value",
         "round-tripped. `refuse` means a stage stopped with a typed refusal code (see",
         "[refusal codes](refusal-codes.md)); `untyped` means a refusal without a specific code.",
@@ -563,18 +578,21 @@ def markdown(results: dict[str, Any], engines: list[str], expectations: dict[str
         if any(counts):
             lines.append(f"| `{name}` | " + " | ".join(str(c if c is not None else "-") for c in counts) + " |")
     lines.append("")
-    mismatches = expectation_mismatches(results, expectations)
+    mismatches = expectation_mismatches(results, expectations, strict=strict)
     lines += ["## Expectation mismatches", ""]
     lines += [f"- {item}" for item in mismatches] or ["None."]
     lines.append("")
     return "\n".join(lines)
 
 
-def expectation_mismatches(results: dict[str, Any], expectations: dict[str, Any]) -> list[str]:
+def expectation_mismatches(
+    results: dict[str, Any], expectations: dict[str, Any], *, strict: bool = False
+) -> list[str]:
     out = []
     for name, row in results.items():
         for engine, record in row.items():
-            if record.get("outcome") == "not_run":
+            # A missing corpus_roundtrip binary is not a pass. --strict counts it.
+            if record.get("outcome") == "not_run" and not strict:
                 continue
             want = expectations.get(name, {}).get(engine, "pass") if not name.startswith("_") else "pass"
 
@@ -614,7 +632,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--rust-bin", default=os.environ.get("CORPUS_RUST_BIN", str(DEFAULT_RUST_BIN)))
     parser.add_argument("--report")
     parser.add_argument("--json")
-    parser.add_argument("--strict", action="store_true", help="exit 1 on an expectation mismatch")
+    parser.add_argument("--libreoffice", action="store_true",
+                        help="reopen toolkit exports in LibreOffice when soffice is on PATH")
+    parser.add_argument("--strict", action="store_true",
+                        help="exit 1 on an expectation mismatch, including an engine that did not run")
     parser.add_argument("--write-expectations", action="store_true",
                         help="rewrite tools/corpus/expectations.json from this run (whole corpus only)")
     parser.add_argument("--in-process", action="store_true", help="run every file in this interpreter")
@@ -623,10 +644,11 @@ def main(argv: list[str] | None = None) -> int:
     engines = [item for item in args.engines.split(",") if item]
     files = corpus_files(args.files)
     if args.child:
-        print(json.dumps(run(files, engines, Path(args.rust_bin))[files[0].name], ensure_ascii=False))
+        row = run(files, engines, Path(args.rust_bin), libreoffice=args.libreoffice)
+        print(json.dumps(row[files[0].name], ensure_ascii=False))
         return 0
     runner = run if args.in_process else run_isolated
-    results = runner(files, engines, Path(args.rust_bin))
+    results = runner(files, engines, Path(args.rust_bin), libreoffice=args.libreoffice)
     expectations = json.loads(EXPECTATIONS.read_text(encoding="utf-8")) if EXPECTATIONS.exists() else {}
     if args.write_expectations:
         if args.files:
@@ -636,10 +658,12 @@ def main(argv: list[str] | None = None) -> int:
     if args.json:
         Path(args.json).write_text(json.dumps(results, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     if args.report:
-        Path(args.report).write_text(markdown(results, engines, expectations), encoding="utf-8")
+        Path(args.report).write_text(
+            markdown(results, engines, expectations, strict=args.strict), encoding="utf-8"
+        )
     for name, row in results.items():
         print(name.ljust(40), "  ".join(f"{e}={_cell(r)}" for e, r in row.items()))
-    mismatches = expectation_mismatches(results, expectations)
+    mismatches = expectation_mismatches(results, expectations, strict=args.strict)
     for item in mismatches:
         print("MISMATCH", item)
     return 1 if (args.strict and mismatches) else 0
