@@ -200,6 +200,21 @@
         "strict-ooxml"
       ]
     },
+    "hb_text_edge_cases.xlsx": {
+      "writer": "handbuilt",
+      "categories": [
+        "text",
+        "text-format",
+        "quote-prefix",
+        "leading-zeros",
+        "long-strings",
+        "unicode",
+        "rtl",
+        "rich-text",
+        "whitespace",
+        "escaped-chars"
+      ]
+    },
     "hb_threaded_comments.xlsx": {
       "writer": "handbuilt",
       "categories": [

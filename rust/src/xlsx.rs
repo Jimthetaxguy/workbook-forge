@@ -1208,6 +1208,8 @@ pub struct ImportedWorkbook {
     date1904: bool,
     capabilities: Json,
     guard: FeatureGuard,
+    /// (lowercased sheet, address) of Text-formatted (`@`) cells.
+    text_cells: BTreeSet<(String, String)>,
 }
 /// Excel's last row (1,048,576).
 pub const EXCEL_MAX_ROWS: u32 = 1_048_576;
@@ -1268,6 +1270,20 @@ fn import_package(
     outputs: BTreeMap<String, CellAddress>,
 ) -> Result<ImportedWorkbook> {
     let decoded = decode(&package, inputs, outputs)?;
+    let text_cells = decoded
+        .model
+        .sheets
+        .iter()
+        .flat_map(|sheet| {
+            sheet.cells.iter().filter_map(move |(address, cell)| {
+                cell.style
+                    .as_ref()
+                    .and_then(|s| s.number_format.as_deref())
+                    .filter(|f| *f == "@")
+                    .map(|_| (sheet.name.to_lowercase(), address.clone()))
+            })
+        })
+        .collect();
     Ok(ImportedWorkbook {
         source,
         baseline: package,
@@ -1280,6 +1296,7 @@ fn import_package(
         date1904: decoded.date1904,
         capabilities: decoded.capabilities,
         guard: decoded.guard,
+        text_cells,
     })
 }
 impl ImportedWorkbook {
@@ -1372,6 +1389,7 @@ impl ImportedWorkbook {
             date1904: self.date1904,
             capabilities: self.capabilities.clone(),
             guard: self.guard.clone(),
+            text_cells: self.text_cells.clone(),
         }
         .export(path)
     }
@@ -1509,7 +1527,22 @@ impl ImportedWorkbook {
         }
         Ok(())
     }
-    pub fn apply(&self, edits: Vec<Edit>, expected_revision: Option<u64>) -> Result<u64> {
+    pub fn apply(&self, mut edits: Vec<Edit>, expected_revision: Option<u64>) -> Result<u64> {
+        // A number written into a Text-formatted (@) cell is stored as text,
+        // as Excel does.
+        if !self.text_cells.is_empty() {
+            for edit in &mut edits {
+                if edit.formula.is_none()
+                    && let Some(CellValue::Number(n)) = edit.value
+                    && self.text_cells.contains(&(
+                        edit.sheet.to_lowercase(),
+                        edit.address.replace('$', "").to_ascii_uppercase(),
+                    ))
+                {
+                    edit.value = Some(CellValue::Text(features::general_text(n)));
+                }
+            }
+        }
         self.validate_edits(&edits)?;
         Ok(self.session.apply(edits, expected_revision)?)
     }

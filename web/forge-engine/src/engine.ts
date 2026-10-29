@@ -65,9 +65,10 @@ const fail = (code: string, message: string, extra: Partial<EngineError> = {}): 
 const messageOf = (error: unknown): string => (error instanceof Error ? error.message : String(error));
 
 /** Forge model JSON cell -> protocol cell. */
-function toCell(raw: { value?: unknown; formula?: string | null }) {
-  const cell: { value: Scalar; formula?: string } = { value: (raw.value ?? null) as Scalar };
+function toCell(raw: { value?: unknown; formula?: string | null; style?: { number_format?: string } | null }) {
+  const cell: { value: Scalar; formula?: string; text?: true } = { value: (raw.value ?? null) as Scalar };
   if (typeof raw.formula === 'string') cell.formula = raw.formula.replace(/^=/, '');
+  if (raw.style?.number_format === '@') cell.text = true;
   return cell;
 }
 

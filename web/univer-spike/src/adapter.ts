@@ -132,10 +132,24 @@ function toCellData(value: Scalar, formula?: string): ICellData {
   return cell;
 }
 
-function parseInput(cell: ICellData): { value: Scalar } | { formula: string } | null {
-  if (typeof cell.f === 'string' && cell.f.startsWith('=')) return { formula: cell.f.slice(1) };
+/**
+ * Read one typed cell. In a Text-formatted (`@`) cell, or for a force-string
+ * entry (a leading apostrophe), everything typed stays text, as in Excel:
+ * `00123` keeps its zeros and `=A1` is the text "=A1", not a formula. A
+ * leading apostrophe is the entry marker and is not part of the value.
+ */
+export function parseInput(cell: ICellData, textFormat = false): { value: Scalar } | { formula: string } | null {
   let raw: unknown = cell.v;
   if (raw === undefined && cell.p?.body?.dataStream) raw = cell.p.body.dataStream.replace(/\r\n$/, '');
+  const forced = cell.t === CellValueType.FORCE_STRING || (typeof raw === 'string' && raw.startsWith("'"));
+  if (textFormat || forced) {
+    if (raw === undefined && typeof cell.f === 'string') raw = cell.f;
+    if (raw === undefined) return null;
+    if (raw === null || raw === '') return { value: null };
+    const text = typeof raw === 'boolean' ? (raw ? 'TRUE' : 'FALSE') : String(raw);
+    return { value: forced && text.startsWith("'") ? text.slice(1) : text };
+  }
+  if (typeof cell.f === 'string' && cell.f.startsWith('=')) return { formula: cell.f.slice(1) };
   if (raw === undefined || raw === null || raw === '') return raw === undefined ? null : { value: null };
   if (typeof raw === 'number' || typeof raw === 'boolean') return { value: raw };
   const text = String(raw);
@@ -157,6 +171,8 @@ export class ForgeUniverAdapter {
   /** performance.now() when the last Forge response was written into Univer. */
   lastPaintAt = 0;
   private projected = new Map<string, Projected>();
+  /** `Sheet!A1` keys of Text-formatted (`@`) cells: typed input stays text. */
+  private readonly textCells = new Set<string>();
   private sheetIds = new Map<string, string>();
   private projecting = false;
   private queue: Promise<unknown> = Promise.resolve();
@@ -200,6 +216,7 @@ export class ForgeUniverAdapter {
     this.revision = snapshot.value.revision;
     this.projected.clear();
     this.sheetIds.clear();
+    this.textCells.clear();
     const calculated = await this.client.calculate();
     if (!calculated.ok) throw new Error(`${calculated.error.code}: ${calculated.error.message}`);
     if (calculated.value.revision !== snapshot.value.revision) throw new Error('revision drift while opening workbook');
@@ -225,6 +242,7 @@ export class ForgeUniverAdapter {
         rows = Math.max(rows, row + 5);
         cols = Math.max(cols, col + 5);
         const at = `${sheet.name}!${address}`;
+        if (cell.text) this.textCells.add(at);
         const value = cell.formula !== undefined ? this.projectScalar(calc[at], at) : cell.value;
         (cellData[row] ??= {})[col] = toCellData(value, cell.formula);
         this.projected.set(at, { value, f: cell.formula });
@@ -588,7 +606,7 @@ export class ForgeUniverAdapter {
     if (cells.length === 0) return 'no cells';
     const edits: Edit[] = [];
     for (const { row, col, cell } of cells) {
-      const input = parseInput(cell ?? {});
+      const input = parseInput(cell ?? {}, this.textCells.has(`${sheet}!${toA1(row, col)}`));
       if (!input) return 'style-only change is outside the spike scope';
       edits.push({ sheet, address: toA1(row, col), ...input });
     }

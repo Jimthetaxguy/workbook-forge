@@ -54,6 +54,11 @@ export interface SnapshotCell {
   value: Scalar;
   /** Formula without the leading "=", when the cell holds one. */
   formula?: string;
+  /**
+   * True when the cell's number format is Text (`@`). Typed input stays text
+   * there: `00123` keeps its leading zeros and is never read as a number.
+   */
+  text?: true;
 }
 
 export interface SnapshotSheet {
