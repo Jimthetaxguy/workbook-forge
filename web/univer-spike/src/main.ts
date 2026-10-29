@@ -51,8 +51,8 @@ async function boot() {
     const file = input.files?.[0];
     if (file) {
       try {
-        await adapter.open(new Uint8Array(await file.arrayBuffer()), file.name);
         notices.textContent = '';
+        await adapter.open(new Uint8Array(await file.arrayBuffer()), file.name);
       } catch (error) {
         notices.textContent = `Could not open ${file.name}: ${String(error)}`;
       } finally {
