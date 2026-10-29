@@ -1,18 +1,15 @@
 {
   "_note": "Expected non-pass outcomes per corpus file and engine. Anything not listed must pass. refuse:<code> means a typed refusal with that code; untyped means a refusal that carries no specific code yet (a gap tracked in docs/corpus-report.md).",
-  "hb_bom_part.xlsx": {
-    "rust": "refuse:package_damaged"
-  },
   "hb_data_table_formula.xlsx": {
     "py_canonical": "refuse:unsupported_formula_group"
   },
   "hb_dynamic_array_cached.xlsx": {
     "py_canonical": "refuse:array_spill_refused"
   },
-  "hb_errors_as_values.xlsx": {
-    "py_toolkit": "refuse:package_damaged",
-    "py_canonical": "refuse:package_damaged",
-    "rust": "refuse:invalid_value"
+  "hb_errors_newer_values.xlsx": {
+    "py_toolkit": "refuse:unsupported_error_value",
+    "py_canonical": "refuse:unsupported_error_value",
+    "rust": "refuse:unsupported_error_value"
   },
   "hb_macro_content_in_xlsx.xlsx": {
     "py_toolkit": "refuse:macro_content",
@@ -43,11 +40,6 @@
   },
   "xw_array_formula.xlsx": {
     "py_canonical": "refuse:array_spill_refused"
-  },
-  "xw_chartsheet.xlsx": {
-    "py_toolkit": "refuse:unsupported_sheet_type",
-    "py_canonical": "refuse:unsupported_sheet_type",
-    "rust": "refuse:unsupported_package"
   },
   "xw_dynamic_arrays.xlsx": {
     "py_canonical": "refuse:array_spill_refused"

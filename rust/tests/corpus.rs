@@ -30,3 +30,66 @@ fn corpus_imports_or_refuses_without_panicking() {
     }
     assert!(seen >= 50, "corpus has {seen} workbooks");
 }
+
+fn corpus(name: &str) -> Vec<u8> {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../fixtures/corpus")
+        .join(name);
+    std::fs::read(path).expect("corpus file")
+}
+
+#[test]
+fn chartsheets_are_listed_and_preserved_byte_for_byte() {
+    let bytes = corpus("xw_chartsheet.xlsx");
+    let imported = import_xlsx_bytes(&bytes, BTreeMap::new(), BTreeMap::new()).expect("import");
+    let chartsheets = imported.capabilities()["chartsheets"]
+        .as_object()
+        .expect("chartsheets listed");
+    assert_eq!(chartsheets.len(), 1);
+    let part = chartsheets
+        .values()
+        .next()
+        .unwrap()
+        .as_str()
+        .unwrap()
+        .to_string();
+    let exported = imported.export_bytes().expect("export");
+    let read = |data: &[u8]| {
+        let mut archive = zip::ZipArchive::new(std::io::Cursor::new(data.to_vec())).unwrap();
+        let mut file = archive.by_name(&part).unwrap();
+        let mut out = Vec::new();
+        std::io::Read::read_to_end(&mut file, &mut out).unwrap();
+        out
+    };
+    assert_eq!(read(&bytes), read(&exported));
+}
+
+#[test]
+fn newer_error_values_refuse_with_their_code() {
+    let error = import_xlsx_bytes(
+        &corpus("hb_errors_newer_values.xlsx"),
+        BTreeMap::new(),
+        BTreeMap::new(),
+    )
+    .err()
+    .expect("refused");
+    assert_eq!(error.code(), "unsupported_error_value");
+    import_xlsx_bytes(
+        &corpus("hb_errors_as_values.xlsx"),
+        BTreeMap::new(),
+        BTreeMap::new(),
+    )
+    .expect("the v1 error set imports");
+}
+
+#[test]
+fn byte_order_marked_parts_export_valid_xml() {
+    let imported = import_xlsx_bytes(
+        &corpus("hb_bom_part.xlsx"),
+        BTreeMap::new(),
+        BTreeMap::new(),
+    )
+    .expect("import");
+    let exported = imported.export_bytes().expect("export");
+    import_xlsx_bytes(&exported, BTreeMap::new(), BTreeMap::new()).expect("reimport");
+}

@@ -230,10 +230,17 @@ def no_cell_references():
 
 
 def errors_as_values():
-    errors = ["#N/A", "#DIV/0!", "#REF!", "#NAME?", "#NULL!", "#NUM!", "#VALUE!", "#SPILL!", "#CALC!", "#GETTING_DATA"]
+    errors = ["#N/A", "#DIV/0!", "#REF!", "#NAME?", "#NULL!", "#NUM!", "#VALUE!", "#SPILL!", "#CALC!"]
     rows = "".join(f'<row r="{i}"><c r="A{i}" t="e"><v>{e}</v></c><c r="B{i}" t="b"><v>{i % 2}</v></c></row>' for i, e in enumerate(errors, 1))
     rows += f'<row r="{len(errors) + 1}"><c r="A{len(errors) + 1}" t="e"><f>1/0</f><v>#DIV/0!</v></c><c r="B{len(errors) + 1}" t="b"><f>B1</f><v>1</v></c></row>'
     return simple({"Errors": sheet_xml(rows, dimension=f"A1:B{len(errors) + 1}")}, styles=minimal_styles())
+
+
+def newer_error_values():
+    """Error values newer than the v1 error set (data types, linked data, Python in Excel)."""
+    errors = ["#GETTING_DATA", "#FIELD!", "#BLOCKED!", "#CONNECT!", "#BUSY!", "#UNKNOWN!"]
+    rows = "".join(f'<row r="{i}"><c r="A{i}" t="e"><v>{e}</v></c><c r="B{i}"><v>{i}</v></c></row>' for i, e in enumerate(errors, 1))
+    return simple({"Errors": sheet_xml(rows, dimension=f"A1:B{len(errors)}")}, styles=minimal_styles())
 
 
 def far_off_cell():
@@ -554,6 +561,7 @@ BUILDERS = {
     "hb_prefixed_spreadsheetml": (prefixed_spreadsheetml, ["prefixed-namespace", "shared-strings"]),
     "hb_no_cell_references": (no_cell_references, ["no-cell-refs"]),
     "hb_errors_as_values": (errors_as_values, ["errors", "booleans", "cached-values"]),
+    "hb_errors_newer_values": (newer_error_values, ["errors", "newer-errors"]),
     "hb_far_off_cell": (far_off_cell, ["sparse", "xfd1048576"]),
     "hb_threaded_comments": (threaded_comments, ["threaded-comments", "comments", "vml"]),
     "hb_pivot_cache": (pivot_cache, ["pivot"]),

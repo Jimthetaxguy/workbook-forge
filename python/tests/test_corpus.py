@@ -120,3 +120,31 @@ def test_strict_ooxml_is_refused_with_its_code():
     with pytest.raises(UnsupportedWorkbook) as caught:
         import_xlsx(ROOT / "fixtures/corpus/hb_strict_ooxml.xlsx")
     assert caught.value.code == "strict_ooxml"
+
+
+def test_chartsheets_are_listed_and_preserved(tmp_path):
+    import zipfile
+
+    from workbook_forge.workbook import Workbook
+    from workbook_forge.xlsx import export_xlsx, import_xlsx
+
+    source = ROOT / "fixtures/corpus/xw_chartsheet.xlsx"
+    with Workbook.open(source) as workbook:
+        chartsheets = workbook.chartsheets
+        assert len(chartsheets) == 1
+        assert len(workbook.sheet_entry_names) == len(workbook.sheet_names) + 1
+    part = next(iter(chartsheets.values()))
+    target = tmp_path / "out.xlsx"
+    export_xlsx(import_xlsx(source), target)
+    with zipfile.ZipFile(source) as before, zipfile.ZipFile(target) as after:
+        assert before.read(part) == after.read(part)
+
+
+def test_newer_error_values_refuse_with_their_code():
+    from workbook_forge.workbook import UnsupportedWorkbook
+    from workbook_forge.xlsx import import_xlsx
+
+    with pytest.raises(UnsupportedWorkbook) as caught:
+        import_xlsx(ROOT / "fixtures/corpus/hb_errors_newer_values.xlsx")
+    assert caught.value.code == "unsupported_error_value"
+    import_xlsx(ROOT / "fixtures/corpus/hb_errors_as_values.xlsx")

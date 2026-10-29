@@ -263,12 +263,13 @@ def extract_xlsx(path: str | Path, *, patterns: list[str] | None = None,
                     record_sheet = owner
                     if pattern == "defined_name":
                         index = _unsigned(element.attrib.get("localSheetId"), 2**32 - 1)
+                        entries = workbook.sheet_entry_names
                         if "localSheetId" in element.attrib and (
-                            index is None or index >= len(workbook.sheet_names)
+                            index is None or index >= len(entries)
                         ):
                             raise WorkbookError("defined name has an invalid localSheetId")
-                        if index is not None and index < len(workbook.sheet_names):
-                            record_sheet = workbook.sheet_names[index]
+                        if index is not None and index < len(entries):
+                            record_sheet = entries[index]
                     if sheet is not None and record_sheet != sheet:
                         continue
                     total += 1

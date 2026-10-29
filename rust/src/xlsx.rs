@@ -540,10 +540,22 @@ pub(crate) fn stored_value(xml: &Xml, node: &Node, strings: &[String]) -> Result
             Some(v) => CellValue::Boolean(boolean(v)?),
             None => CellValue::Blank,
         }),
-        "e" => Ok(CellValue::Error {
-            error: value.ok_or_else(|| err("empty error cell"))?.into(),
-            message: None,
-        }),
+        "e" => {
+            let code = value.ok_or_else(|| err("empty error cell"))?;
+            if !SUPPORTED_ERRORS.contains(&code) {
+                if NEWER_ERRORS.contains(&code) {
+                    return Err(err(format!(
+                        "unsupported_error_value: stored error value {code} is outside the supported error set ({})",
+                        SUPPORTED_ERRORS.join(", ")
+                    )));
+                }
+                return Err(err("invalid Excel error value"));
+            }
+            Ok(CellValue::Error {
+                error: code.into(),
+                message: None,
+            })
+        }
         "n" => Ok(match value {
             Some("") | None => CellValue::Blank,
             Some(v) => CellValue::Number(number(v)?),
@@ -679,7 +691,27 @@ struct Decoded {
     merged: BTreeMap<String, Vec<(u32, u32, u32, u32)>>,
     date1904: bool,
     capabilities: Json,
+    /// Every `<sheet>` entry in workbook order (worksheets and chartsheets),
+    /// the order `localSheetId` counts.
+    sheet_entries: Vec<String>,
 }
+/// Error values newer Excel versions store that the v1 model does not
+/// represent. They refuse as `unsupported_error_value`; any other unknown
+/// text after `t="e"` is still an invalid error value.
+const NEWER_ERRORS: &[&str] = &[
+    "#GETTING_DATA",
+    "#FIELD!",
+    "#BLOCKED!",
+    "#CONNECT!",
+    "#BUSY!",
+    "#UNKNOWN!",
+    "#EXTERNAL!",
+    "#PYTHON!",
+];
+/// Stored error values the model represents (the v1 error set).
+const SUPPORTED_ERRORS: [&str; 9] = [
+    "#NULL!", "#DIV/0!", "#VALUE!", "#REF!", "#NAME?", "#NUM!", "#N/A", "#SPILL!", "#CALC!",
+];
 fn decode(
     package: &Package,
     inputs: BTreeMap<String, InputBinding>,
@@ -773,6 +805,8 @@ fn decode_mode(
     let mut width_work = 0;
     let mut table_metadata = Vec::new();
     let mut validation_metadata = Vec::new();
+    let mut sheet_entries = Vec::new();
+    let mut chartsheets = BTreeMap::new();
     let _sheets = wb
         .child(wbroot, "sheets")
         .ok_or_else(|| err("workbook has no worksheets"))?;
@@ -782,8 +816,22 @@ fn decode_mode(
         let (kind, target, external) = rels
             .get(rel_id)
             .ok_or_else(|| err("missing worksheet relationship"))?;
+        sheet_entries.push(name.to_string());
+        if kind == &format!("{REL}/chartsheet") {
+            // A chartsheet holds one chart and no cells. It stays in the
+            // package byte-for-byte and is listed, not modeled.
+            if *external {
+                return Err(err("chartsheet relationships must be internal"));
+            }
+            let part = resolve(&workbook_part, target)?;
+            package.get(&part)?;
+            chartsheets.insert(name.to_string(), part);
+            continue;
+        }
         if *external || kind != &format!("{REL}/worksheet") {
-            return Err(err("only internal worksheets supported"));
+            return Err(err(
+                "unsupported_sheet_type: dialog, macro and other non-worksheet sheet types are outside this adapter",
+            ));
         }
         let part = resolve(&workbook_part, target)?;
         if types.get(&part).map(String::as_str) != Some(WS_TYPE) {
@@ -1037,7 +1085,7 @@ fn decode_mode(
         .flat_map(|n| wb.children(n, MAIN, "definedName"))
         .map(|n| json!({"attributes":n.attrs,"expression":n.text}))
         .collect();
-    let capabilities = json!({"backend":"rust-ooxml","date_system":if date1904{"1904"}else{"1900"},"styles":styles.len(),"defined_names":names,"tables":table_metadata,"validation":validation_metadata,"supported":["UTF-8 macro-free transitional XLSX","scalar cells","normal formulas","basic styles","column widths","existing-cell content edits","absent-cell value/formula insertion within the session grid bound"],"preserved_only":["unknown package parts","unknown worksheet XML","names","tables","imported styles and validation"],"rejected":["macros","external execution","insertion into merged non-anchor cells or outside the session grid bound","imported style/layout/validation changes","1904 formula calculation and edits","grouped/table result edits"],"parts":package.parts.keys().collect::<Vec<_>>()});
+    let capabilities = json!({"backend":"rust-ooxml","date_system":if date1904{"1904"}else{"1900"},"styles":styles.len(),"defined_names":names,"tables":table_metadata,"validation":validation_metadata,"chartsheets":chartsheets,"supported":["UTF-8 macro-free transitional XLSX","scalar cells","normal formulas","basic styles","column widths","existing-cell content edits","absent-cell value/formula insertion within the session grid bound"],"preserved_only":["unknown package parts","unknown worksheet XML","names","tables","imported styles and validation"],"rejected":["macros","external execution","insertion into merged non-anchor cells or outside the session grid bound","imported style/layout/validation changes","1904 formula calculation and edits","grouped/table result edits"],"parts":package.parts.keys().collect::<Vec<_>>()});
     Ok(Decoded {
         model,
         workbook_part,
@@ -1045,6 +1093,7 @@ fn decode_mode(
         merged,
         date1904,
         capabilities,
+        sheet_entries,
     })
 }
 
@@ -1097,12 +1146,8 @@ pub(crate) fn extraction_source(path: &Path) -> Result<ExtractionSource> {
         parts: package.parts,
         part_kinds: kinds,
         part_sheets: owners,
-        sheets: decoded
-            .model
-            .sheets
-            .into_iter()
-            .map(|sheet| sheet.name)
-            .collect(),
+        // localSheetId counts every sheet entry, chartsheets included.
+        sheets: decoded.sheet_entries,
         strings,
     })
 }
