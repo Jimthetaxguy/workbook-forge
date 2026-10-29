@@ -16,9 +16,9 @@ Excel observation and does not show Excel equivalence.
 
 | Engine | pass | refuse | untyped | crash | corrupt | lossy |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| py_toolkit | 55 | 5 | 0 | 0 | 0 | 0 |
-| py_canonical | 47 | 13 | 0 | 0 | 0 | 0 |
-| rust | 55 | 5 | 0 | 0 | 0 | 0 |
+| py_toolkit | 57 | 5 | 0 | 0 | 0 | 0 |
+| py_canonical | 49 | 13 | 0 | 0 | 0 | 0 |
+| rust | 57 | 5 | 0 | 0 | 0 | 0 |
 
 ## Matrix
 
@@ -27,6 +27,7 @@ Excel observation and does not show Excel equivalence.
 | `hb_absolute_targets.xlsx` | handbuilt | absolute-targets, missing-parts | pass | pass | pass |
 | `hb_bom_part.xlsx` | handbuilt | xml-bom, stored-zip | pass | pass | pass |
 | `hb_data_table_formula.xlsx` | handbuilt | data-table | pass | refuse `unsupported_formula_group` | pass |
+| `hb_dropdown_rules.xlsx` | handbuilt | data-validation, dropdowns, error-styles, sheet-scoped-names, text-length, custom-validation, formula-list | pass | pass | pass |
 | `hb_dynamic_array_cached.xlsx` | handbuilt | dynamic-array, spill, metadata | pass | refuse `array_spill_refused` | pass |
 | `hb_errors_as_values.xlsx` | handbuilt | errors, booleans, cached-values | pass | pass | pass |
 | `hb_errors_newer_values.xlsx` | handbuilt | errors, newer-errors | refuse `unsupported_error_value` | refuse `unsupported_error_value` | refuse `unsupported_error_value` |
@@ -43,6 +44,7 @@ Excel observation and does not show Excel equivalence.
 | `hb_numbers_like.xlsx` | handbuilt | numbers, absolute-targets, sheet-name-spaces | pass | pass | pass |
 | `hb_odd_part_name.xlsx` | handbuilt | odd-part-names, dot-segments | pass | pass | pass |
 | `hb_pivot_cache.xlsx` | handbuilt | pivot | pass | pass | pass |
+| `hb_pivot_fields.xlsx` | handbuilt | pivot, pivot-fields, page-fields | pass | pass | pass |
 | `hb_prefixed_spreadsheetml.xlsx` | handbuilt | prefixed-namespace, shared-strings | pass | pass | pass |
 | `hb_rich_text_phonetic.xlsx` | handbuilt | rich-text, phonetic, unicode, whitespace | pass | pass | pass |
 | `hb_shared_formulas.xlsx` | handbuilt | shared-formulas, cached-values | pass | refuse `unsupported_formula_group` | pass |

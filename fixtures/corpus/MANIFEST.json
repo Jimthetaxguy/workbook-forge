@@ -20,6 +20,18 @@
         "data-table"
       ]
     },
+    "hb_dropdown_rules.xlsx": {
+      "writer": "handbuilt",
+      "categories": [
+        "data-validation",
+        "dropdowns",
+        "error-styles",
+        "sheet-scoped-names",
+        "text-length",
+        "custom-validation",
+        "formula-list"
+      ]
+    },
     "hb_dynamic_array_cached.xlsx": {
       "writer": "handbuilt",
       "categories": [
@@ -142,6 +154,14 @@
       "writer": "handbuilt",
       "categories": [
         "pivot"
+      ]
+    },
+    "hb_pivot_fields.xlsx": {
+      "writer": "handbuilt",
+      "categories": [
+        "pivot",
+        "pivot-fields",
+        "page-fields"
       ]
     },
     "hb_prefixed_spreadsheetml.xlsx": {

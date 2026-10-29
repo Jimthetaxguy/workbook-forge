@@ -1,0 +1,482 @@
+{
+  "_note": "Cases both engines must agree on (python/tests/test_xlsx_features.py, rust/tests/xlsx_features.rs). writes: one value written into a freshly imported workbook; expect ok or the refusal code. inspect: counts and key fields of inspect output. See docs/xlsx-features.md.",
+  "writes": [
+    {
+      "file": "hb_dropdown_rules.xlsx",
+      "sheet": "Form",
+      "address": "B2",
+      "value": "no",
+      "expect": "ok"
+    },
+    {
+      "file": "hb_dropdown_rules.xlsx",
+      "sheet": "Form",
+      "address": "B2",
+      "value": "Maybe",
+      "expect": "validation_failed"
+    },
+    {
+      "file": "hb_dropdown_rules.xlsx",
+      "sheet": "Form",
+      "address": "B2",
+      "value": true,
+      "expect": "validation_failed"
+    },
+    {
+      "file": "hb_dropdown_rules.xlsx",
+      "sheet": "Form",
+      "address": "B2",
+      "value": null,
+      "expect": "ok"
+    },
+    {
+      "file": "hb_dropdown_rules.xlsx",
+      "sheet": "Form",
+      "address": "B3",
+      "value": "Maybe",
+      "expect": "ok"
+    },
+    {
+      "file": "hb_dropdown_rules.xlsx",
+      "sheet": "Form",
+      "address": "B4",
+      "value": "Maybe",
+      "expect": "ok"
+    },
+    {
+      "file": "hb_dropdown_rules.xlsx",
+      "sheet": "Form",
+      "address": "B5",
+      "value": "beta",
+      "expect": "ok"
+    },
+    {
+      "file": "hb_dropdown_rules.xlsx",
+      "sheet": "Form",
+      "address": "B5",
+      "value": "wrong",
+      "expect": "validation_failed"
+    },
+    {
+      "file": "hb_dropdown_rules.xlsx",
+      "sheet": "Form",
+      "address": "B6",
+      "value": "Small \"S\"",
+      "expect": "ok"
+    },
+    {
+      "file": "hb_dropdown_rules.xlsx",
+      "sheet": "Form",
+      "address": "B6",
+      "value": "Small",
+      "expect": "validation_failed"
+    },
+    {
+      "file": "hb_dropdown_rules.xlsx",
+      "sheet": "Form",
+      "address": "B7",
+      "value": 20,
+      "expect": "ok"
+    },
+    {
+      "file": "hb_dropdown_rules.xlsx",
+      "sheet": "Form",
+      "address": "B7",
+      "value": "20",
+      "expect": "validation_failed"
+    },
+    {
+      "file": "hb_dropdown_rules.xlsx",
+      "sheet": "Form",
+      "address": "B7",
+      "value": 25,
+      "expect": "validation_failed"
+    },
+    {
+      "file": "hb_dropdown_rules.xlsx",
+      "sheet": "Form",
+      "address": "B8",
+      "value": "hello",
+      "expect": "ok"
+    },
+    {
+      "file": "hb_dropdown_rules.xlsx",
+      "sheet": "Form",
+      "address": "B8",
+      "value": "hello!",
+      "expect": "validation_failed"
+    },
+    {
+      "file": "hb_dropdown_rules.xlsx",
+      "sheet": "Form",
+      "address": "B9",
+      "value": "x",
+      "expect": "ok"
+    },
+    {
+      "file": "hb_dropdown_rules.xlsx",
+      "sheet": "Form",
+      "address": "B10",
+      "value": "Gamma",
+      "expect": "ok"
+    },
+    {
+      "file": "hb_dropdown_rules.xlsx",
+      "sheet": "Form",
+      "address": "B11",
+      "value": 0.5,
+      "expect": "validation_failed"
+    },
+    {
+      "file": "hb_dropdown_rules.xlsx",
+      "sheet": "Form",
+      "address": "B11",
+      "value": 2,
+      "expect": "ok"
+    },
+    {
+      "file": "hb_dropdown_rules.xlsx",
+      "sheet": "Form",
+      "address": "E12",
+      "value": -3,
+      "expect": "ok"
+    },
+    {
+      "file": "hb_dropdown_rules.xlsx",
+      "sheet": "Form",
+      "address": "E12",
+      "value": 0,
+      "expect": "validation_failed"
+    },
+    {
+      "file": "hb_dropdown_rules.xlsx",
+      "sheet": "Form",
+      "address": "C2",
+      "value": "anything",
+      "expect": "ok"
+    },
+    {
+      "file": "xw_dropdowns.xlsx",
+      "sheet": "Orders",
+      "address": "B2",
+      "value": "XL",
+      "expect": "ok"
+    },
+    {
+      "file": "xw_dropdowns.xlsx",
+      "sheet": "Orders",
+      "address": "B2",
+      "value": "xl",
+      "expect": "ok"
+    },
+    {
+      "file": "xw_dropdowns.xlsx",
+      "sheet": "Orders",
+      "address": "B2",
+      "value": "XXL",
+      "expect": "validation_failed"
+    },
+    {
+      "file": "xw_dropdowns.xlsx",
+      "sheet": "Orders",
+      "address": "C2",
+      "value": "Purple",
+      "expect": "validation_failed"
+    },
+    {
+      "file": "xw_dropdowns.xlsx",
+      "sheet": "Orders",
+      "address": "C2",
+      "value": "green",
+      "expect": "ok"
+    },
+    {
+      "file": "xw_dropdowns.xlsx",
+      "sheet": "Orders",
+      "address": "D2",
+      "value": 3,
+      "expect": "ok"
+    },
+    {
+      "file": "xw_dropdowns.xlsx",
+      "sheet": "Orders",
+      "address": "D2",
+      "value": 0,
+      "expect": "validation_failed"
+    },
+    {
+      "file": "xw_dropdowns.xlsx",
+      "sheet": "Orders",
+      "address": "D2",
+      "value": 2.5,
+      "expect": "validation_failed"
+    },
+    {
+      "file": "xw_dropdowns.xlsx",
+      "sheet": "Orders",
+      "address": "D2",
+      "value": "two",
+      "expect": "validation_failed"
+    },
+    {
+      "file": "xw_dropdowns.xlsx",
+      "sheet": "Orders",
+      "address": "E2",
+      "value": 45291,
+      "expect": "validation_failed"
+    },
+    {
+      "file": "xw_dropdowns.xlsx",
+      "sheet": "Orders",
+      "address": "E2",
+      "value": 45300,
+      "expect": "ok"
+    },
+    {
+      "file": "xw_dropdowns.xlsx",
+      "sheet": "Orders",
+      "address": "F3",
+      "value": "S",
+      "expect": "ok"
+    },
+    {
+      "file": "xw_dropdowns.xlsx",
+      "sheet": "Orders",
+      "address": "F3",
+      "value": "Q",
+      "expect": "validation_failed"
+    },
+    {
+      "file": "op_dropdowns.xlsx",
+      "sheet": "Tasks",
+      "address": "B2",
+      "value": "Urgent",
+      "expect": "ok"
+    },
+    {
+      "file": "op_dropdowns.xlsx",
+      "sheet": "Tasks",
+      "address": "C2",
+      "value": "Blocked",
+      "expect": "validation_failed"
+    },
+    {
+      "file": "op_dropdowns.xlsx",
+      "sheet": "Tasks",
+      "address": "C2",
+      "value": "done",
+      "expect": "ok"
+    },
+    {
+      "file": "op_dropdowns.xlsx",
+      "sheet": "Tasks",
+      "address": "D2",
+      "value": "Nobody",
+      "expect": "ok"
+    },
+    {
+      "file": "op_dropdowns.xlsx",
+      "sheet": "Tasks",
+      "address": "E2",
+      "value": 99,
+      "expect": "ok"
+    },
+    {
+      "file": "hb_pivot_cache.xlsx",
+      "sheet": "Pivot",
+      "address": "B4",
+      "value": 99,
+      "expect": "pivot_output_protected"
+    },
+    {
+      "file": "hb_pivot_cache.xlsx",
+      "sheet": "Pivot",
+      "address": "A3",
+      "value": "Area",
+      "expect": "pivot_output_protected"
+    },
+    {
+      "file": "hb_pivot_cache.xlsx",
+      "sheet": "Pivot",
+      "address": "C3",
+      "value": 1,
+      "expect": "ok"
+    },
+    {
+      "file": "hb_pivot_cache.xlsx",
+      "sheet": "Pivot",
+      "address": "B6",
+      "value": 1,
+      "expect": "ok"
+    },
+    {
+      "file": "hb_pivot_cache.xlsx",
+      "sheet": "Data",
+      "address": "B2",
+      "value": 99,
+      "expect": "ok"
+    },
+    {
+      "file": "hb_pivot_fields.xlsx",
+      "sheet": "Summary",
+      "address": "C5",
+      "value": 1,
+      "expect": "pivot_output_protected"
+    },
+    {
+      "file": "hb_pivot_fields.xlsx",
+      "sheet": "Summary",
+      "address": "B1",
+      "value": "Web",
+      "expect": "ok"
+    },
+    {
+      "file": "hb_pivot_fields.xlsx",
+      "sheet": "Summary",
+      "address": "D1",
+      "value": 1,
+      "expect": "ok"
+    },
+    {
+      "file": "op_charts.xlsx",
+      "sheet": "Sales",
+      "address": "B2",
+      "value": 123,
+      "expect": "ok"
+    }
+  ],
+  "inspect": {
+    "hb_dropdown_rules.xlsx": {
+      "data_validations": 10,
+      "enforced": 6,
+      "allowed_values": {
+        "B5": [
+          "Alpha",
+          "Beta"
+        ],
+        "B7": [
+          10,
+          20,
+          30
+        ]
+      }
+    },
+    "xw_dropdowns.xlsx": {
+      "data_validations": 5,
+      "enforced": 5,
+      "allowed_values": {
+        "B2:B50": [
+          "S",
+          "M",
+          "L",
+          "XL"
+        ],
+        "C2:C50": [
+          "Red",
+          "Green",
+          "Blue"
+        ]
+      }
+    },
+    "op_dropdowns.xlsx": {
+      "data_validations": 4,
+      "enforced": 1
+    },
+    "hb_pivot_cache.xlsx": {
+      "pivots": [
+        {
+          "sheet": "Pivot",
+          "location": "A3:B5",
+          "source_sheet": "Data",
+          "source_ref": "A1:B4",
+          "row_fields": [
+            "Region"
+          ],
+          "column_fields": [],
+          "page_fields": [],
+          "data_fields": [
+            "Units"
+          ]
+        }
+      ]
+    },
+    "hb_pivot_fields.xlsx": {
+      "pivots": [
+        {
+          "sheet": "Summary",
+          "location": "A3:C5",
+          "source_sheet": "Sales",
+          "source_ref": "A1:E4",
+          "row_fields": [
+            "Region"
+          ],
+          "column_fields": [
+            "Quarter",
+            "Values"
+          ],
+          "page_fields": [
+            "Channel"
+          ],
+          "data_fields": [
+            "Units",
+            "Revenue"
+          ]
+        }
+      ]
+    },
+    "op_charts.xlsx": {
+      "charts": [
+        {
+          "types": [
+            "barChart"
+          ],
+          "series": 2,
+          "anchor": "G2"
+        },
+        {
+          "types": [
+            "lineChart"
+          ],
+          "series": 1,
+          "anchor": "G20"
+        },
+        {
+          "types": [
+            "pieChart"
+          ],
+          "series": 1,
+          "anchor": "P2"
+        }
+      ]
+    },
+    "xw_chart_image.xlsx": {
+      "charts": [
+        {
+          "types": [
+            "lineChart"
+          ],
+          "series": 2,
+          "anchor": "E2:L16"
+        },
+        {
+          "types": [
+            "scatterChart"
+          ],
+          "series": 1,
+          "anchor": "E20:L34"
+        }
+      ]
+    },
+    "xw_chartsheet.xlsx": {
+      "charts": [
+        {
+          "types": [
+            "barChart"
+          ],
+          "series": 1,
+          "anchor": "whole sheet"
+        }
+      ]
+    }
+  }
+}

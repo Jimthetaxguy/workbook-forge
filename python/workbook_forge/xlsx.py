@@ -18,6 +18,7 @@ from typing import Any
 from xml.etree import ElementTree as ET
 
 from . import ErrorValue
+from . import xlsx_features as features
 from .toolkit import WorkbookModel, _digest
 from .workbook import (
     CONTENT_TYPES,
@@ -267,6 +268,8 @@ def import_xlsx(
             "package_parts": list(workbook._parts),
         }
         wb_root = _safe_xml(workbook._parts[workbook._workbook_part], workbook._workbook_part)
+        names = features.defined_names(wb_root, list(workbook.sheet_entry_names))
+        validations: list[dict[str, Any]] = []
         for node in wb_root.findall("m:definedNames/m:definedName", NS):
             metadata["defined_names"].append(
                 {"attributes": dict(node.attrib), "expression": node.text or ""}
@@ -396,6 +399,7 @@ def import_xlsx(
                 {"id": f"sheet-{index}", "name": sheet, "cells": cells, "column_widths": widths}
             )
             merged.append((sheet, _worksheet_merges(root)))
+            validations += features.read_validations(sheet, root, names)
             metadata["sheets"].append(
                 {
                     "name": sheet,
@@ -410,7 +414,37 @@ def import_xlsx(
                     ],
                 }
             )
+        sheet_parts = {name: workbook._sheet_parts[name] for name in workbook.sheet_names}
+        pivots = features.read_pivots(workbook._parts, sheet_parts)
+        charts = features.read_charts(workbook._parts, sheet_parts, workbook.chartsheets)
+        imported_cells = {item["name"].casefold(): item["cells"] for item in document["sheets"]}
+
+        def imported_value(sheet_name: str, address: str) -> Any:
+            cell = imported_cells.get(sheet_name.casefold(), {}).get(address)
+            if cell is None:
+                return None
+            if cell.get("formula") is not None:
+                return cell.get("cached_value", cell.get("value"))
+            return cell.get("value")
+
+        for rule in validations:
+            if rule["source"] and "range" in rule["source"] and "values" not in rule["source"]:
+                rule["allowed_values"] = features.resolve_list_values(rule, imported_value)
+        metadata["data_validations"] = features.public(validations)
+        metadata["pivots"] = features.public(pivots)
+        metadata["charts"] = features.public(charts)
+        metadata["chartsheets"] = workbook.chartsheets
+        metadata["supported"] += [
+            "typed data-validation inspection; enforced (stop) rules refuse out-of-rule values",
+            "pivot table and chart inspection",
+        ]
+        metadata["preserved_only"] += ["pivot tables and caches", "charts and chartsheets"]
+        metadata["rejected"] += [
+            "pivot refresh and writes into pivot output ranges",
+            "structural changes to sheets a chart reads",
+        ]
         model = WorkbookModel(document=document, backend=backend)
+        model._feature_guard = features.FeatureGuard(validations, pivots, charts)
         model._source_baseline = _Baseline(
             workbook.source,
             tuple(workbook._parts.items()),
@@ -776,12 +810,51 @@ def _check_preserved_validation(workbook: Workbook, document: dict[str, Any]) ->
             )
 
 
+def _check_chart_sheets(guard, original: dict[str, Any], current: dict[str, Any]) -> None:
+    """A sheet a chart reads cannot be renamed, removed or reordered."""
+    if guard is None:
+        return
+    before = [sheet["name"] for sheet in original["sheets"]]
+    after = [sheet["name"] for sheet in current["sheets"]]
+    if before == after:
+        return
+    charted = {name.casefold() for name in guard.charted_sheets()}
+    changed = [name for index, name in enumerate(before) if index >= len(after) or after[index] != name]
+    hit = [name for name in changed if name.casefold() in charted]
+    if hit:
+        raise UnsupportedWorkbook(
+            f"chart_reference_protected: renaming, removing or moving sheet {hit[0]!r} "
+            "would break the chart series that read it",
+            code="chart_reference_protected",
+        )
+
+
+def _check_feature_writes(guard, current: dict[str, Any], changes: list[tuple[str, str, dict]]) -> None:
+    """Pivot output and enforced validation hold at export as they do at edit time."""
+    if guard is None or not changes:
+        return
+    cells = {sheet["name"].casefold(): sheet["cells"] for sheet in current["sheets"]}
+
+    def read(sheet: str, address: str):
+        cell = cells.get(sheet.casefold(), {}).get(address)
+        if cell is None:
+            return None
+        return cell.get("value") if cell.get("formula") is None else cell.get("cached_value", cell.get("value"))
+
+    for sheet, address, cell in changes:
+        refusal = guard.check(sheet, address, cell.get("value"), cell.get("formula"), read)
+        if refusal is not None:
+            raise UnsupportedWorkbook(refusal[1], code=refusal[0])
+
+
 def _patch_import(
     workbook: Workbook,
     original: dict[str, Any],
     current: dict[str, Any],
     merged: tuple[tuple[str, tuple[tuple[int, int, int, int], ...]], ...] = (),
+    guard=None,
 ) -> None:
+    _check_chart_sheets(guard, original, current)
     if original["inputs"] != current["inputs"]:
         raise UnsupportedWorkbook(
             "imported input/validation bindings cannot be changed during export"
@@ -793,6 +866,12 @@ def _patch_import(
             "imported workbook structural and column-width edits are unsupported"
         )
     _check_preserved_validation(workbook, current)
+    changes = []
+    for before, after in zip(original["sheets"], current["sheets"], strict=True):
+        for address, cell in after["cells"].items():
+            if _digest(before["cells"].get(address, {})) != _digest(cell):
+                changes.append((after["name"], address, cell))
+    _check_feature_writes(guard, current, changes)
     for before, after in zip(original["sheets"], current["sheets"], strict=True):
         for address in before["cells"].keys() | after["cells"].keys():
             old, new = before["cells"].get(address, {}), after["cells"].get(address, {})
@@ -841,6 +920,7 @@ def export_snapshot(imported: WorkbookModel, document: dict[str, Any], output: s
     original = json.loads(imported._source_baseline.document_json)
     transferred = WorkbookModel(document=document, backend=imported.backend)
     current = transferred.to_dict()
+    _check_chart_sheets(imported._feature_guard, original, current)
     if len(original["sheets"]) != len(current["sheets"]) or any(
         before["name"] != after["name"]
         or any(address not in after["cells"] for address in before["cells"])
@@ -862,6 +942,7 @@ def export_snapshot(imported: WorkbookModel, document: dict[str, Any], output: s
             column, row = _cell_position(address)
             _check_insertion(after["name"], column, row, merged)
     transferred._source_baseline = imported._source_baseline
+    transferred._feature_guard = imported._feature_guard
     return export_xlsx(transferred, output)
 
 
@@ -948,7 +1029,11 @@ def export_xlsx(
         with Workbook.open(seed) as workbook:
             if baseline is not None:
                 _patch_import(
-                    workbook, json.loads(baseline.document_json), document, baseline.merged
+                    workbook,
+                    json.loads(baseline.document_json),
+                    document,
+                    baseline.merged,
+                    getattr(model, "_feature_guard", None),
                 )
             workbook._request_recalculation()
             for (sheet, address), value in cache_values.items():

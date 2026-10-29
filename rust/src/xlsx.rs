@@ -8,6 +8,9 @@ use crate::toolkit::{
     Style, WorkbookModel,
 };
 use crate::xml_patterns::{Node, Xml};
+#[path = "xlsx_features.rs"]
+mod features;
+use features::FeatureGuard;
 use serde_json::{Value as Json, json};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs::{self, OpenOptions};
@@ -694,6 +697,8 @@ struct Decoded {
     /// Every `<sheet>` entry in workbook order (worksheets and chartsheets),
     /// the order `localSheetId` counts.
     sheet_entries: Vec<String>,
+    /// Drop-down, pivot and chart rules (docs/xlsx-features.md).
+    guard: FeatureGuard,
 }
 /// Error values newer Excel versions store that the v1 model does not
 /// represent. They refuse as `unsupported_error_value`; any other unknown
@@ -807,6 +812,12 @@ fn decode_mode(
     let mut validation_metadata = Vec::new();
     let mut sheet_entries = Vec::new();
     let mut chartsheets = BTreeMap::new();
+    let entry_names: Vec<String> = wb
+        .select(MAIN, &["workbook", "sheets", "sheet"])
+        .filter_map(|n| n.attrs.get("name").cloned())
+        .collect();
+    let defined = features::defined_names(&wb, wbroot, &entry_names);
+    let mut rules = Vec::new();
     let _sheets = wb
         .child(wbroot, "sheets")
         .ok_or_else(|| err("workbook has no worksheets"))?;
@@ -973,6 +984,7 @@ fn decode_mode(
                 validation_metadata.push(json!({"sheet":name,"attributes":validation.attrs,"formula":xml.child(validation,"formula1").map(|n|&n.text)}));
             }
         }
+        rules.extend(features::read_validations(name, &xml, root, &defined));
         if let Some(tables) = xml.child(root, "tableParts") {
             let sheet_rels = relationships(package.get(&rel_part(&part))?)?;
             for table in xml.children(tables, MAIN, "tablePart") {
@@ -1079,13 +1091,39 @@ fn decode_mode(
         return Err(err("workbook has no worksheets"));
     }
     model.validate()?;
+    let order: Vec<String> = model.sheets.iter().map(|s| s.name.clone()).collect();
+    let pivots = features::read_pivots(package, &sheet_parts, &order)?;
+    let mut hosts: Vec<(String, String, &'static str)> = order
+        .iter()
+        .map(|name| (name.clone(), sheet_parts[name].clone(), "worksheet"))
+        .collect();
+    for (name, part) in &chartsheets {
+        hosts.push((name.clone(), part.clone(), "chartsheet"));
+    }
+    let charts = features::read_charts(package, &hosts)?;
+    let mut guard = FeatureGuard::new(rules, &pivots, &charts);
+    {
+        let mut read = |sheet: &str, reference: &str| -> Option<CellValue> {
+            let found = model
+                .sheets
+                .iter()
+                .find(|s| s.name.eq_ignore_ascii_case(sheet))?;
+            let cell = found.cells.get(reference)?;
+            Some(match (&cell.formula, &cell.cached_value) {
+                (Some(_), Some(cached)) => cached.clone(),
+                _ => cell.value.clone(),
+            })
+        };
+        guard.resolve_records(&mut read);
+    }
+    let pivot_records: Vec<Json> = pivots.iter().map(|p| p.record.clone()).collect();
     let names: Vec<_> = wb
         .child(wbroot, "definedNames")
         .into_iter()
         .flat_map(|n| wb.children(n, MAIN, "definedName"))
         .map(|n| json!({"attributes":n.attrs,"expression":n.text}))
         .collect();
-    let capabilities = json!({"backend":"rust-ooxml","date_system":if date1904{"1904"}else{"1900"},"styles":styles.len(),"defined_names":names,"tables":table_metadata,"validation":validation_metadata,"chartsheets":chartsheets,"supported":["UTF-8 macro-free transitional XLSX","scalar cells","normal formulas","basic styles","column widths","existing-cell content edits","absent-cell value/formula insertion within the session grid bound"],"preserved_only":["unknown package parts","unknown worksheet XML","names","tables","imported styles and validation"],"rejected":["macros","external execution","insertion into merged non-anchor cells or outside the session grid bound","imported style/layout/validation changes","1904 formula calculation and edits","grouped/table result edits"],"parts":package.parts.keys().collect::<Vec<_>>()});
+    let capabilities = json!({"backend":"rust-ooxml","date_system":if date1904{"1904"}else{"1900"},"styles":styles.len(),"defined_names":names,"tables":table_metadata,"validation":validation_metadata,"data_validations":guard.records(),"pivots":pivot_records,"charts":charts,"chartsheets":chartsheets,"supported":["typed data-validation inspection; enforced (stop) rules refuse out-of-rule values","pivot table and chart inspection","UTF-8 macro-free transitional XLSX","scalar cells","normal formulas","basic styles","column widths","existing-cell content edits","absent-cell value/formula insertion within the session grid bound"],"preserved_only":["pivot tables and caches","charts and chartsheets","unknown package parts","unknown worksheet XML","names","tables","imported styles and validation"],"rejected":["pivot refresh and writes into pivot output ranges","structural changes to sheets a chart reads","macros","external execution","insertion into merged non-anchor cells or outside the session grid bound","imported style/layout/validation changes","1904 formula calculation and edits","grouped/table result edits"],"parts":package.parts.keys().collect::<Vec<_>>()});
     Ok(Decoded {
         model,
         workbook_part,
@@ -1094,6 +1132,7 @@ fn decode_mode(
         date1904,
         capabilities,
         sheet_entries,
+        guard,
     })
 }
 
@@ -1168,6 +1207,7 @@ pub struct ImportedWorkbook {
     insertion_bound: (u32, u32),
     date1904: bool,
     capabilities: Json,
+    guard: FeatureGuard,
 }
 /// Excel's last row (1,048,576).
 pub const EXCEL_MAX_ROWS: u32 = 1_048_576;
@@ -1239,6 +1279,7 @@ fn import_package(
         insertion_bound: (EXCEL_MAX_ROWS, EXCEL_MAX_COLUMNS),
         date1904: decoded.date1904,
         capabilities: decoded.capabilities,
+        guard: decoded.guard,
     })
 }
 impl ImportedWorkbook {
@@ -1246,6 +1287,18 @@ impl ImportedWorkbook {
     /// The ordinary preservation checks still govern layout, styles and blocked
     /// regions. A snapshot cannot silently remove source cells from the package.
     pub fn export_snapshot(&self, model: WorkbookModel, path: impl AsRef<Path>) -> Result<PathBuf> {
+        for (index, before) in self.original.sheets.iter().enumerate() {
+            let kept = model
+                .sheets
+                .get(index)
+                .is_some_and(|after| after.name == before.name);
+            if !kept && self.guard.is_charted(&before.name) {
+                return Err(err(format!(
+                    "chart_reference_protected: renaming, removing or moving sheet '{}' would break the chart series that read it",
+                    before.name
+                )));
+            }
+        }
         if self.original.sheets.len() != model.sheets.len()
             || self
                 .original
@@ -1281,6 +1334,31 @@ impl ImportedWorkbook {
                 let (col, row) = coordinate(address)?;
                 self.check_insertion(&after.name, col, row)?;
             }
+            for (address, cell) in &after.cells {
+                if before.cells.get(address) == Some(cell) {
+                    continue;
+                }
+                let mut read = |sheet: &str, reference: &str| -> Option<CellValue> {
+                    let found = model
+                        .sheets
+                        .iter()
+                        .find(|s| s.name.eq_ignore_ascii_case(sheet))?;
+                    let cell = found.cells.get(reference)?;
+                    Some(match (&cell.formula, &cell.cached_value) {
+                        (Some(_), Some(cached)) => cached.clone(),
+                        _ => cell.value.clone(),
+                    })
+                };
+                self.guard
+                    .check(
+                        &after.name,
+                        address,
+                        Some(&cell.value),
+                        cell.formula.is_some(),
+                        &mut read,
+                    )
+                    .map_err(err)?;
+            }
         }
         Self {
             source: self.source.clone(),
@@ -1293,6 +1371,7 @@ impl ImportedWorkbook {
             insertion_bound: self.insertion_bound,
             date1904: self.date1904,
             capabilities: self.capabilities.clone(),
+            guard: self.guard.clone(),
         }
         .export(path)
     }
@@ -1407,6 +1486,25 @@ impl ImportedWorkbook {
             if cell.is_none() {
                 let (col, row) = coordinate(reference)?;
                 self.check_insertion(sheet, col, row)?;
+            }
+            if edit.value.is_some() || edit.formula.is_some() {
+                let mut read = |s: &str, a: &str| -> Option<CellValue> {
+                    let key = self.session.resolve_key(s, a).ok()?;
+                    let cell = self.session.read_cells(&[key]).pop().flatten()?;
+                    Some(match (cell.formula, cell.cached_value) {
+                        (Some(_), Some(cached)) => cached,
+                        _ => cell.value,
+                    })
+                };
+                self.guard
+                    .check(
+                        sheet,
+                        reference,
+                        edit.value.as_ref(),
+                        edit.formula.is_some(),
+                        &mut read,
+                    )
+                    .map_err(err)?;
             }
         }
         Ok(())
