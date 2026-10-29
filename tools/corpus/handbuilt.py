@@ -243,6 +243,71 @@ def newer_error_values():
     return simple({"Errors": sheet_xml(rows, dimension=f"A1:B{len(errors)}")}, styles=minimal_styles())
 
 
+def dropdown_rules():
+    """Data-validation shapes the libraries rarely write: every error style, a
+    sheet-scoped name, quoted commas, numeric lists, text length, custom and a
+    formula-built list."""
+    rows = '<row r="1"><c r="A1" t="inlineStr"><is><t>Field</t></is></c><c r="B1" t="inlineStr"><is><t>Entry</t></is></c></row>'
+    rows += '<row r="2"><c r="A2" t="inlineStr"><is><t>Stop list</t></is></c><c r="B2" t="inlineStr"><is><t>Yes</t></is></c></row>'
+    lists = '<row r="1"><c r="A1"><v>10</v></c><c r="B1" t="inlineStr"><is><t>Alpha</t></is></c></row>'
+    lists += '<row r="2"><c r="A2"><v>20</v></c><c r="B2" t="inlineStr"><is><t>Beta</t></is></c></row>'
+    lists += '<row r="3"><c r="A3"><v>30</v></c></row>'
+    validations = (
+        '<dataValidations count="10">'
+        '<dataValidation type="list" allowBlank="1" showErrorMessage="1" sqref="B2"><formula1>"Yes,No"</formula1></dataValidation>'
+        '<dataValidation type="list" errorStyle="warning" showErrorMessage="1" sqref="B3"><formula1>"Yes,No"</formula1></dataValidation>'
+        '<dataValidation type="list" errorStyle="information" showErrorMessage="1" sqref="B4"><formula1>"Yes,No"</formula1></dataValidation>'
+        '<dataValidation type="list" showErrorMessage="1" sqref="B5"><formula1>Codes</formula1></dataValidation>'
+        '<dataValidation type="list" showErrorMessage="1" sqref="B6"><formula1>"Small ""S"",Large ""L"""</formula1></dataValidation>'
+        '<dataValidation type="list" showErrorMessage="1" sqref="B7"><formula1>Levels!$A$1:$A$3</formula1></dataValidation>'
+        '<dataValidation type="textLength" operator="lessThanOrEqual" showErrorMessage="1" sqref="B8"><formula1>5</formula1></dataValidation>'
+        '<dataValidation type="custom" showErrorMessage="1" sqref="B9"><formula1>ISNUMBER(B9)</formula1></dataValidation>'
+        '<dataValidation type="list" showErrorMessage="1" sqref="B10"><formula1>OFFSET(Levels!$B$1,0,0,2,1)</formula1></dataValidation>'
+        '<dataValidation type="decimal" operator="notBetween" showErrorMessage="1" sqref="B11 D11:E12"><formula1>-1</formula1><formula2>1</formula2></dataValidation>'
+        '</dataValidations>'
+    )
+    names = ('<definedNames><definedName name="Codes" localSheetId="0">Levels!$B$1:$B$2</definedName>'
+             '<definedName name="Codes">{"wrong","scope"}</definedName></definedNames>')
+    return simple(
+        {"Form": sheet_xml(rows, dimension="A1:B2", after=validations),
+         "Levels": sheet_xml(lists, dimension="A1:B3")},
+        styles=minimal_styles(), wb_extra=names,
+    )
+
+
+def pivot_fields():
+    """A pivot with row, column and page fields and two data fields."""
+    pcd_ct = "application/vnd.openxmlformats-officedocument.spreadsheetml.pivotCacheDefinition+xml"
+    pt_ct = "application/vnd.openxmlformats-officedocument.spreadsheetml.pivotTable+xml"
+    header = ["Region", "Quarter", "Channel", "Units", "Revenue"]
+    data = [("North", "Q1", "Web", 4, 40), ("North", "Q2", "Store", 6, 66), ("South", "Q1", "Web", 3, 27)]
+    rows = '<row r="1">' + "".join(f'<c r="{chr(65 + i)}1" t="inlineStr"><is><t>{h}</t></is></c>' for i, h in enumerate(header)) + "</row>"
+    for r, record in enumerate(data, 2):
+        cells = ""
+        for i, item in enumerate(record):
+            ref = f"{chr(65 + i)}{r}"
+            cells += f'<c r="{ref}"><v>{item}</v></c>' if isinstance(item, int) else f'<c r="{ref}" t="inlineStr"><is><t>{item}</t></is></c>'
+        rows += f'<row r="{r}">{cells}</row>'
+    out = '<row r="1"><c r="A1" t="inlineStr"><is><t>Channel</t></is></c><c r="B1" t="inlineStr"><is><t>(All)</t></is></c></row>'
+    out += '<row r="3"><c r="A3" t="inlineStr"><is><t>Region</t></is></c><c r="B3" t="inlineStr"><is><t>Q1</t></is></c><c r="C3" t="inlineStr"><is><t>Q2</t></is></c></row>'
+    out += '<row r="4"><c r="A4" t="inlineStr"><is><t>North</t></is></c><c r="B4"><v>4</v></c><c r="C4"><v>6</v></c></row>'
+    out += '<row r="5"><c r="A5" t="inlineStr"><is><t>South</t></is></c><c r="B5"><v>3</v></c></row>'
+    fields = "".join(f'<cacheField name="{h}" numFmtId="0"><sharedItems/></cacheField>' for h in header)
+    return simple(
+        {"Sales": sheet_xml(rows, dimension="A1:E4"), "Summary": sheet_xml(out, dimension="A1:C5")},
+        styles=minimal_styles(),
+        wb_extra='<pivotCaches><pivotCache cacheId="3" r:id="rId4"/></pivotCaches>',
+        extra_wb_rels=[(f"{REL}/pivotCacheDefinition", "pivotCache/pivotCacheDefinition1.xml", False)],
+        extra_overrides={"xl/pivotCache/pivotCacheDefinition1.xml": pcd_ct, "xl/pivotTables/pivotTable1.xml": pt_ct},
+        sheet_rels={2: rels([("rId1", f"{REL}/pivotTable", "../pivotTables/pivotTable1.xml")])},
+        extra_parts={
+            "xl/pivotCache/pivotCacheDefinition1.xml": f'{DECL}<pivotCacheDefinition xmlns="{MAIN}" xmlns:r="{REL}" recordCount="3"><cacheSource type="worksheet"><worksheetSource ref="A1:E4" sheet="Sales"/></cacheSource><cacheFields count="5">{fields}</cacheFields></pivotCacheDefinition>',
+            "xl/pivotTables/pivotTable1.xml": f'{DECL}<pivotTableDefinition xmlns="{MAIN}" name="RegionByQuarter" cacheId="3" dataCaption="Values"><location ref="A3:C5" firstHeaderRow="1" firstDataRow="1" firstDataCol="1" rowPageCount="1" colPageCount="1"/><pivotFields count="5"><pivotField axis="axisRow" showAll="0"/><pivotField axis="axisCol" showAll="0"/><pivotField axis="axisPage" showAll="0"/><pivotField dataField="1" showAll="0"/><pivotField dataField="1" showAll="0"/></pivotFields><rowFields count="1"><field x="0"/></rowFields><colFields count="2"><field x="1"/><field x="-2"/></colFields><pageFields count="1"><pageField fld="2" hier="-1"/></pageFields><dataFields count="2"><dataField name="Sum of Units" fld="3" baseField="0" baseItem="0"/><dataField name="Average Revenue" fld="4" subtotal="average" baseField="0" baseItem="0"/></dataFields></pivotTableDefinition>',
+            "xl/pivotTables/_rels/pivotTable1.xml.rels": rels([("rId1", f"{REL}/pivotCacheDefinition", "../pivotCache/pivotCacheDefinition1.xml")]),
+        },
+    )
+
+
 def far_off_cell():
     rows = '<row r="1"><c r="A1"><v>1</v></c></row><row r="1048576"><c r="XFD1048576"><v>42</v></c></row>'
     return simple({"Sparse": sheet_xml(rows, dimension="A1:XFD1048576")}, styles=minimal_styles())
@@ -565,6 +630,8 @@ BUILDERS = {
     "hb_far_off_cell": (far_off_cell, ["sparse", "xfd1048576"]),
     "hb_threaded_comments": (threaded_comments, ["threaded-comments", "comments", "vml"]),
     "hb_pivot_cache": (pivot_cache, ["pivot"]),
+    "hb_pivot_fields": (pivot_fields, ["pivot", "pivot-fields", "page-fields"]),
+    "hb_dropdown_rules": (dropdown_rules, ["data-validation", "dropdowns", "error-styles", "sheet-scoped-names", "text-length", "custom-validation", "formula-list"]),
     "hb_external_link": (external_link, ["external-links"]),
     "hb_macro_content_in_xlsx": (macro_content_in_xlsx, ["vba"]),
     "hb_excel_like_markup": (excel_like_markup, ["excel-markup", "mc-ignorable", "calcchain", "extlst", "docprops"]),

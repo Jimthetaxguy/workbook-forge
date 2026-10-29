@@ -90,6 +90,8 @@ class WorkbookModel:
         self._session = self._engine.Session(_encode(data))
         self._source_baseline = None
         self._import_metadata = None
+        # Imported drop-down, pivot and chart rules (xlsx_features.FeatureGuard).
+        self._feature_guard = None
 
     @property
     def backend(self) -> str:
@@ -116,7 +118,41 @@ class WorkbookModel:
             raise UnsupportedWorkbook(
                 "formula edits in imported 1904 date-system workbooks are unsupported"
             )
+        if self._feature_guard is not None:
+            self._check_features(batch)
         return self._session.apply(_encode(batch), expected_revision)
+
+    def _check_features(self, batch: list[Mapping[str, Any]]) -> None:
+        """Refuse writes into pivot output and out-of-rule drop-down values.
+
+        A batch is checked against the snapshot before it, so a list whose
+        source cells the same batch edits is read as it stood before the batch.
+        """
+        from .workbook import UnsupportedWorkbook
+
+        writes = [edit for edit in batch if "value" in edit or "formula" in edit]
+        if not writes:
+            return
+        cells: dict[str, dict[str, Any]] | None = None
+
+        def read(sheet: str, address: str) -> Any:
+            nonlocal cells
+            if cells is None:
+                cells = {item["name"].casefold(): item["cells"] for item in self.to_dict()["sheets"]}
+            cell = cells.get(sheet.casefold(), {}).get(address)
+            if cell is None:
+                return None
+            if cell.get("formula") is not None:
+                return cell.get("cached_value", cell.get("value"))
+            return cell.get("value")
+
+        for edit in writes:
+            refusal = self._feature_guard.check(
+                str(edit.get("sheet", "")), str(edit.get("address", "")).upper(),
+                edit.get("value"), edit.get("formula"), read,
+            )
+            if refusal is not None:
+                raise UnsupportedWorkbook(refusal[1], code=refusal[0])
 
     def set_value(self, sheet: str, address: str, value: Any) -> int:
         return self.apply([{"sheet": sheet, "address": address, "value": value}])
