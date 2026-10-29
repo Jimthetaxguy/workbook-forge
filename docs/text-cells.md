@@ -30,8 +30,8 @@ sends the typed characters as text, so `00123` is not read as the number 123 and
 is not read as a formula. A leading apostrophe marks a force-text entry in any cell and
 is not part of the stored value.
 
-## Not covered
+## CSV and TSV
 
-CSV and TSV import are not implemented. When they are, decoding failures should refuse
-with `csv_encoding` and syntax errors (an unterminated quoted field) with
-`csv_malformed`; both codes are registered in `catalog/refusal-codes.json`.
+CSV and TSV import keep text-looking values (leading zeros, long digit strings, `TRUE`,
+`=...`) as text; see [CSV and TSV import](csv-import.md). Decoding failures refuse with
+`csv_encoding` and syntax errors with `csv_malformed`.
