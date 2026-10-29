@@ -216,10 +216,12 @@ pub fn sha256_hex(bytes: &[u8]) -> String {
     crate::event_log::sha256_hex(bytes)
 }
 
-/// `replay(baselineBytes, events)`: verify the baseline sha256, reapply every
-/// applied intent in seq order and check every calc event's deltas. `events`
-/// is NDJSON or a JSON array. Returns `{"ok":true,"revision","snapshot",
-/// "values","calc_events",...}` or `{"ok":false,"error":{...}}`; never throws.
+/// `replay(baselineBytes, events)`: reapply every applied intent in seq order
+/// and check every calc event's deltas. An xlsx baseline is checked by
+/// SHA-256 and length (`baseline_mismatch`). A blank baseline has no hash and
+/// is checked by length (`replay_mismatch`). `events` is NDJSON or a JSON
+/// array. Returns `{"ok":true,"revision","snapshot","values","calc_events",...}`
+/// or `{"ok":false,"error":{...}}`; never throws.
 #[wasm_bindgen(js_name = replayJson)]
 pub fn replay_json(bytes: &[u8], events: &str) -> String {
     crate::event_log::replay_json(bytes, events)

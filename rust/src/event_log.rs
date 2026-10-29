@@ -530,10 +530,11 @@ pub fn replay_json(bytes: &[u8], events_text: &str) -> String {
 
 /// Open the baseline, reapply every applied intent in `seq` order at
 /// `revision - 1`, recompute each calc event and compare it with the recorded
-/// deltas. An xlsx baseline must match sha256 and length. A blank baseline
-/// must have `bytes.len() == baseline.bytes` (0 for a blank open) and a known
-/// sheet name. A byte or delta mismatch is `replay_mismatch`. A missing or
-/// unknown blank sheet is `invalid_log`.
+/// deltas. An xlsx baseline is checked by SHA-256 and length
+/// (`baseline_mismatch`). A blank baseline has no hash and is checked by
+/// length (`replay_mismatch`; `bytes.len()` must equal `baseline.bytes`, 0
+/// for a blank open) and must name a known sheet. A delta mismatch is
+/// `replay_mismatch`. A missing or unknown blank sheet is `invalid_log`.
 pub fn replay(bytes: &[u8], events_text: &str) -> Result<Json, ContractError> {
     let events = parse_events(events_text)?;
     let opened = events

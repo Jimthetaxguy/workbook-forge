@@ -213,7 +213,7 @@ fn formula_into_an_absent_cell_round_trips_with_its_value() {
     assert_eq!(number(&workbook, "C2"), 30.0);
     let exported = workbook.export_bytes().unwrap();
     let xml = sheet_xml(&exported);
-    // Column C declares a style, so the new cell takes it as Excel would.
+    // Column C's col range declares style 0, so the inserted cell is written with that index.
     assert!(
         xml.contains(r#"<c r="C2" s="0"><f>A2*3</f><v>30</v></c>"#),
         "{xml}"
