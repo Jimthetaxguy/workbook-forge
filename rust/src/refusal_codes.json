@@ -1,0 +1,231 @@
+{
+  "version": 1,
+  "description": "Typed codes carried by every workbook refusal. Python's WorkbookError.code and Rust's XlsxError::code() read the same table. A refusal raised with an explicit code keeps it; otherwise the first rule whose phrase occurs in the message (case-insensitive) names the code. docs/refusal-codes.md explains each code.",
+  "codes": {
+    "macro_content": "The package holds VBA or macro-enabled content. Workbook Forge refuses it rather than preserve code it cannot inspect.",
+    "strict_ooxml": "The package uses the Strict OOXML namespaces. Only Transitional SpreadsheetML is read.",
+    "not_xlsx": "The file or output name is not an .xlsx workbook (for example .xlsm, .xls or .csv given to the XLSX reader).",
+    "package_limit": "A size, entry-count, cell-count or work limit was exceeded.",
+    "date_1904_unsupported": "Formula calculation, formula edits and formula caches are not supported in a 1904 date-system workbook. Values still read and edit.",
+    "array_spill_unsupported": "The operation would need worksheet array or spill placement, which is not modeled.",
+    "calculation_diagnostics": "Export was asked to write formula caches for cells the engine could not calculate. Bind outputs to the cells you work with so unrelated formulas are preserved unchanged.",
+    "preserved_only_edit": "The edit targets content that is preserved byte-for-byte but not editable (styles, layout, validation rules, grouped or table formula regions).",
+    "pivot_output_protected": "The edit writes into a pivot table's output range. Pivot tables are preserved but not refreshed.",
+    "chart_reference_protected": "The change would break a chart's series references (for example renaming or removing a sheet a chart reads).",
+    "validation_failed": "The value is not allowed by the target cell's data-validation rule (a drop-down list).",
+    "merged_cell": "The edit targets a merged range's non-anchor cell.",
+    "out_of_bounds": "The address is outside the Excel grid or the session's grid bound.",
+    "output_exists": "The output path exists or is the source workbook.",
+    "revision_conflict": "The model changed between the snapshot and the operation.",
+    "formula_unsupported": "A formula uses syntax, a function or a reference the engine does not calculate.",
+    "unsupported_sheet_type": "A sheet type other than a worksheet blocked the operation.",
+    "csv_encoding": "A delimited text file could not be decoded with the requested or detected encoding.",
+    "csv_malformed": "A delimited text file has an unterminated quoted field or another syntax error.",
+    "package_damaged": "The ZIP container, a package relationship, or a part's XML is malformed or inconsistent.",
+    "unsupported_package": "The package is well formed but uses a feature outside the supported profile."
+  },
+  "rules": [
+    {
+      "code": "macro_content",
+      "phrases": [
+        "vba",
+        "macro"
+      ]
+    },
+    {
+      "code": "strict_ooxml",
+      "phrases": [
+        "strict ooxml",
+        "purl.oclc.org"
+      ]
+    },
+    {
+      "code": "not_xlsx",
+      "phrases": [
+        "accepts .xlsx only",
+        "only .xlsx packages",
+        "intake reads .xlsx files",
+        "output must end in .xlsx",
+        "output must use the .xlsx extension"
+      ]
+    },
+    {
+      "code": "package_limit",
+      "phrases": [
+        "size limit",
+        "exceeds 130 mib",
+        "exceeds 128 mib",
+        "exceeds 32 mib",
+        "work limit",
+        "package entries",
+        "too many zip parts",
+        "populated cells",
+        "calculation limit",
+        "-cell calculation",
+        "evaluator limit",
+        "output package limit",
+        "compressed output limit",
+        "xml output limit",
+        "outside the xlsx cell limit",
+        "exceeds 255 utf-16"
+      ]
+    },
+    {
+      "code": "date_1904_unsupported",
+      "phrases": [
+        "1904"
+      ]
+    },
+    {
+      "code": "array_spill_unsupported",
+      "phrases": [
+        "array spill",
+        "array formula results",
+        "spill caches",
+        "array-spill"
+      ]
+    },
+    {
+      "code": "calculation_diagnostics",
+      "phrases": [
+        "cannot export calculation diagnostics",
+        "calculation cannot be exported"
+      ]
+    },
+    {
+      "code": "pivot_output_protected",
+      "phrases": [
+        "pivot table output"
+      ]
+    },
+    {
+      "code": "chart_reference_protected",
+      "phrases": [
+        "chart series"
+      ]
+    },
+    {
+      "code": "validation_failed",
+      "phrases": [
+        "not in the drop-down list",
+        "data-validation list"
+      ]
+    },
+    {
+      "code": "merged_cell",
+      "phrases": [
+        "merged range",
+        "merged non-anchor"
+      ]
+    },
+    {
+      "code": "output_exists",
+      "phrases": [
+        "already exists",
+        "overwrite"
+      ]
+    },
+    {
+      "code": "revision_conflict",
+      "phrases": [
+        "revision conflict",
+        "model changed",
+        "stale calculation",
+        "calculation report is stale"
+      ]
+    },
+    {
+      "code": "preserved_only_edit",
+      "phrases": [
+        "preserved-only",
+        "imported style",
+        "imported layout",
+        "imported structure",
+        "imported validation",
+        "blocked cells"
+      ]
+    },
+    {
+      "code": "unsupported_sheet_type",
+      "phrases": [
+        "chartsheet",
+        "non-worksheet sheet"
+      ]
+    },
+    {
+      "code": "formula_unsupported",
+      "phrases": [
+        "unsupported formula",
+        "not in the workbook forge catalog",
+        "not conformance-tested",
+        "grouped formula",
+        "formula kind",
+        "formula dependency cycle",
+        "unsupported function",
+        "unknown worksheet"
+      ]
+    },
+    {
+      "code": "package_damaged",
+      "phrases": [
+        "zip",
+        "invalid xml",
+        "ill-formed",
+        "unterminated",
+        "is absent",
+        "are absent",
+        "missing",
+        "duplicate",
+        "invalid",
+        "malformed",
+        "not a complete open packaging",
+        "truncated",
+        "escapes package",
+        "out of bounds",
+        "no worksheets",
+        "no sheet collection",
+        "damaged",
+        "not found",
+        "cannot open workbook",
+        "officedocument relationship",
+        "workbook relationship required",
+        "inconsistent",
+        "must be canonical"
+      ]
+    },
+    {
+      "code": "unsupported_package",
+      "phrases": [
+        "unsupported",
+        "not supported",
+        "not accepted",
+        "outside",
+        "only ",
+        "forbidden",
+        "required",
+        "cannot"
+      ]
+    }
+  ],
+  "inherited": {
+    "description": "Codes raised with an explicit code by other error types (canonical-model ModelError and CanonicalPackageError, engine ToolkitError, and existing Rust XlsxError prefixes). They are not produced by the message table.",
+    "codes": [
+      "array_spill_refused",
+      "evidence_insufficient",
+      "invalid_bound",
+      "invalid_formula",
+      "invalid_output",
+      "invalid_reference",
+      "invalid_style",
+      "invalid_value",
+      "out_of_bounds",
+      "parse_error",
+      "resource_limit",
+      "revision_conflict",
+      "unsupported_edit",
+      "unsupported_formula",
+      "unsupported_formula_group",
+      "unsupported_package"
+    ]
+  }
+}

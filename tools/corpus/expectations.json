@@ -1,7 +1,7 @@
 {
   "_note": "Expected non-pass outcomes per corpus file and engine. Anything not listed must pass. refuse:<code> means a typed refusal with that code; untyped means a refusal that carries no specific code yet (a gap tracked in docs/corpus-report.md).",
   "hb_bom_part.xlsx": {
-    "rust": "untyped"
+    "rust": "refuse:package_damaged"
   },
   "hb_data_table_formula.xlsx": {
     "py_canonical": "refuse:unsupported_formula_group"
@@ -10,27 +10,27 @@
     "py_canonical": "refuse:array_spill_refused"
   },
   "hb_errors_as_values.xlsx": {
-    "py_toolkit": "untyped",
-    "py_canonical": "untyped",
+    "py_toolkit": "refuse:package_damaged",
+    "py_canonical": "refuse:package_damaged",
     "rust": "refuse:invalid_value"
   },
   "hb_macro_content_in_xlsx.xlsx": {
-    "py_toolkit": "untyped",
-    "py_canonical": "untyped",
-    "rust": "untyped"
+    "py_toolkit": "refuse:macro_content",
+    "py_canonical": "refuse:macro_content",
+    "rust": "refuse:macro_content"
   },
   "hb_no_cell_references.xlsx": {
-    "py_toolkit": "untyped",
-    "py_canonical": "untyped",
-    "rust": "untyped"
+    "py_toolkit": "refuse:unsupported_package",
+    "py_canonical": "refuse:unsupported_package",
+    "rust": "refuse:package_damaged"
   },
   "hb_shared_formulas.xlsx": {
     "py_canonical": "refuse:unsupported_formula_group"
   },
   "hb_strict_ooxml.xlsx": {
-    "py_toolkit": "untyped",
-    "py_canonical": "untyped",
-    "rust": "untyped"
+    "py_toolkit": "refuse:strict_ooxml",
+    "py_canonical": "refuse:strict_ooxml",
+    "rust": "refuse:strict_ooxml"
   },
   "op_1904_dates.xlsx": {
     "py_canonical": "refuse:unsupported_package"
@@ -45,16 +45,16 @@
     "py_canonical": "refuse:array_spill_refused"
   },
   "xw_chartsheet.xlsx": {
-    "py_toolkit": "untyped",
-    "py_canonical": "untyped",
-    "rust": "untyped"
+    "py_toolkit": "refuse:unsupported_sheet_type",
+    "py_canonical": "refuse:unsupported_sheet_type",
+    "rust": "refuse:unsupported_package"
   },
   "xw_dynamic_arrays.xlsx": {
     "py_canonical": "refuse:array_spill_refused"
   },
   "xw_macro.xlsm": {
-    "py_toolkit": "untyped",
-    "py_canonical": "untyped",
-    "rust": "untyped"
+    "py_toolkit": "refuse:not_xlsx",
+    "py_canonical": "refuse:not_xlsx",
+    "rust": "refuse:macro_content"
   }
 }

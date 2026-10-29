@@ -514,8 +514,9 @@ def markdown(results: dict[str, Any], engines: list[str], expectations: dict[str
         "Each corpus workbook goes through open, inspect, calculate, one value edit, one",
         "absent-cell insert, export and reimport in each engine. `pass` means every stage ran,",
         "the export reopened, preserved parts came back byte-identical and every source value",
-        "round-tripped. `refuse` means a stage stopped with a typed refusal code; `untyped`",
-        "means a refusal without a specific code. Bold outcomes are defects. The `py_canonical`",
+        "round-tripped. `refuse` means a stage stopped with a typed refusal code (see",
+        "[refusal codes](refusal-codes.md)); `untyped` means a refusal without a specific code.",
+        "Bold outcomes are defects. The `py_canonical`",
         "engine writes a fresh package by design, so only carried content is compared there.",
         "This is a robustness check of Workbook Forge's own reader and writers. It is not an",
         "Excel observation and does not show Excel equivalence.",
@@ -586,6 +587,26 @@ def expectation_mismatches(results: dict[str, Any], expectations: dict[str, Any]
     return out
 
 
+def expectations_from(results: dict[str, Any], note: str) -> dict[str, Any]:
+    """The non-pass outcomes of a run, in the expectations.json shape.
+
+    Defects (crash, corrupt, lossy) are never written: the test rejects them
+    whatever the file says, so they must be fixed rather than expected.
+    """
+    out: dict[str, Any] = {"_note": note} if note else {}
+    for name in sorted(results):
+        row = {}
+        for engine, record in results[name].items():
+            got = record.get("outcome")
+            if got == "refuse":
+                row[engine] = f"refuse:{record.get('code')}"
+            elif got == "untyped":
+                row[engine] = "untyped"
+        if row:
+            out[name] = row
+    return out
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("files", nargs="*")
@@ -594,6 +615,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--report")
     parser.add_argument("--json")
     parser.add_argument("--strict", action="store_true", help="exit 1 on an expectation mismatch")
+    parser.add_argument("--write-expectations", action="store_true",
+                        help="rewrite tools/corpus/expectations.json from this run (whole corpus only)")
     parser.add_argument("--in-process", action="store_true", help="run every file in this interpreter")
     parser.add_argument("--child", action="store_true", help=argparse.SUPPRESS)
     args = parser.parse_args(argv)
@@ -605,6 +628,11 @@ def main(argv: list[str] | None = None) -> int:
     runner = run if args.in_process else run_isolated
     results = runner(files, engines, Path(args.rust_bin))
     expectations = json.loads(EXPECTATIONS.read_text(encoding="utf-8")) if EXPECTATIONS.exists() else {}
+    if args.write_expectations:
+        if args.files:
+            parser.error("--write-expectations needs the whole corpus")
+        expectations = expectations_from(results, expectations.get("_note", ""))
+        EXPECTATIONS.write_text(json.dumps(expectations, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     if args.json:
         Path(args.json).write_text(json.dumps(results, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     if args.report:
