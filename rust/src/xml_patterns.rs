@@ -196,6 +196,17 @@ impl Xml {
         if roots != 1 || !stack.is_empty() {
             return Err(err("XML must contain one balanced root"));
         }
+        // quick-xml skips a leading UTF-8 byte-order mark without counting
+        // it, so its positions start after the mark. Patches are spliced into
+        // the original bytes, so shift every recorded offset past it.
+        let bom = if source.starts_with('\u{feff}') { 3 } else { 0 };
+        if bom > 0 {
+            for node in &mut nodes {
+                node.start += bom;
+                node.close_start += bom;
+                node.end += bom;
+            }
+        }
         Ok(Self {
             bytes: bytes.to_vec(),
             nodes,
@@ -325,5 +336,14 @@ mod tests {
         assert!(
             Xml::parse(format!("{}{}", "<r>".repeat(129), "</r>".repeat(129)).as_bytes()).is_err()
         );
+    }
+    #[test]
+    fn byte_order_mark_keeps_raw_offsets_on_the_original_bytes() {
+        let bytes = "\u{feff}<?xml version=\"1.0\"?><r><c>1</c></r>".as_bytes();
+        let xml = Xml::parse(bytes).unwrap();
+        let root = xml.root("", "r").unwrap();
+        assert_eq!(xml.raw(root), b"<r><c>1</c></r>");
+        let cell = xml.children(root, "", "c").next().unwrap();
+        assert_eq!(xml.raw(cell), b"<c>1</c>");
     }
 }

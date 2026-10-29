@@ -34,7 +34,8 @@ Callers should branch on the code, not on the message text, which may change.
 | `output_exists` | The output path exists or is the source workbook. |
 | `revision_conflict` | The model changed between the snapshot and the operation. |
 | `formula_unsupported` | A formula uses syntax, a function or a reference the engine does not calculate. |
-| `unsupported_sheet_type` | A sheet type other than a worksheet blocked the operation. |
+| `unsupported_sheet_type` | A dialog sheet, macro sheet or other non-worksheet sheet type blocked the operation. Chartsheets are read: listed, preserved byte-for-byte, not modeled. |
+| `unsupported_error_value` | A cell stores an error value outside the v1 error set (`#NULL!`, `#DIV/0!`, `#VALUE!`, `#REF!`, `#NAME?`, `#NUM!`, `#N/A`, `#SPILL!`, `#CALC!`), for example `#GETTING_DATA`, `#FIELD!` or `#BLOCKED!`. The model's error enum is fixed for v1; the workbook is refused rather than the value rewritten. |
 | `csv_encoding` | A delimited text file could not be decoded with the requested or detected encoding. |
 | `csv_malformed` | A delimited text file has an unterminated quoted field or another syntax error. |
 | `package_damaged` | The ZIP container, a package relationship, or a part's XML is malformed or inconsistent. |

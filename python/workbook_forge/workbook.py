@@ -44,6 +44,7 @@ PKG_REL = "http://schemas.openxmlformats.org/package/2006/relationships"
 CONTENT_TYPES = "http://schemas.openxmlformats.org/package/2006/content-types"
 OFFICE_DOCUMENT_REL = f"{REL_DOC}/officeDocument"
 WORKSHEET_REL = f"{REL_DOC}/worksheet"
+CHARTSHEET_REL = f"{REL_DOC}/chartsheet"
 TABLE_REL = f"{REL_DOC}/table"
 CALC_CHAIN_REL = f"{REL_DOC}/calcChain"
 WORKBOOK_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"
@@ -80,6 +81,21 @@ EXCEL_ERROR_CODES = frozenset(
         "#N/A!",
         "#SPILL!",
         "#CALC!",
+    }
+)
+# Error values newer Excel versions store that the v1 model does not
+# represent. They refuse with a typed code; any other unknown text after
+# t="e" is still an invalid error value.
+NEWER_EXCEL_ERROR_CODES = frozenset(
+    {
+        "#GETTING_DATA",
+        "#FIELD!",
+        "#BLOCKED!",
+        "#CONNECT!",
+        "#BUSY!",
+        "#UNKNOWN!",
+        "#EXTERNAL!",
+        "#PYTHON!",
     }
 )
 _XML_SERIALIZE_LOCK = threading.RLock()
@@ -614,6 +630,10 @@ class Workbook:
         self._removed_parts: set[str] = set()
         self._calc_chain_checked = False
         self._sheet_parts: dict[str, str] = {}
+        # Every <sheet> entry in workbook order, worksheets and chartsheets;
+        # localSheetId counts these. Chartsheet name -> part.
+        self._sheet_entries: list[str] = []
+        self._chartsheets: dict[str, str] = {}
         self._cells: dict[str, dict[str, ET.Element]] = {}
         self._table_formula_ranges: dict[str, list[tuple[int, int, int, int, str]]] = {}
         self._shared_strings: list[str] = []
@@ -747,7 +767,18 @@ class Workbook:
 
     @property
     def sheet_names(self) -> tuple[str, ...]:
+        """Worksheet names in workbook order (chartsheets are not listed)."""
         return tuple(self._sheet_parts)
+
+    @property
+    def sheet_entry_names(self) -> tuple[str, ...]:
+        """Every sheet entry in workbook order, the order localSheetId counts."""
+        return tuple(self._sheet_entries)
+
+    @property
+    def chartsheets(self) -> dict[str, str]:
+        """Chartsheet name -> package part. Preserved, not modeled."""
+        return dict(self._chartsheets)
 
     def calculate_cells_to(
         self,
@@ -1205,9 +1236,21 @@ class Workbook:
                 raise UnsupportedWorkbook("worksheet names are invalid or duplicated")
             folded_names.add(name.casefold())
             relationship = rels[rid]
+            self._sheet_entries.append(name)
+            if relationship.attrib.get("Type") == CHARTSHEET_REL:
+                # A chartsheet holds one chart and no cells. It stays in the
+                # package byte-for-byte and is listed, not modeled.
+                if relationship.attrib.get("TargetMode") == "External":
+                    raise UnsupportedWorkbook("chartsheet relationships must be internal")
+                part = _resolve_part(self._workbook_part, relationship.attrib.get("Target", ""))
+                if part not in self._parts:
+                    raise WorkbookError(f"chartsheet part is absent: {part}")
+                self._chartsheets[name] = part
+                continue
             if relationship.attrib.get("Type") != WORKSHEET_REL:
                 raise UnsupportedWorkbook(
-                    "chartsheets and non-worksheet sheet types are outside this adapter"
+                    "dialog, macro and other non-worksheet sheet types are outside this adapter",
+                    code="unsupported_sheet_type",
                 )
             if relationship.attrib.get("TargetMode") == "External":
                 raise UnsupportedWorkbook("worksheet relationships must be internal")
@@ -1501,6 +1544,13 @@ class Workbook:
             value = value == "1"
         elif cell_type == "e":
             if value not in EXCEL_ERROR_CODES:
+                if value in NEWER_EXCEL_ERROR_CODES:
+                    raise UnsupportedWorkbook(
+                        f"stored error value {value} at {address} is outside the supported "
+                        "error set (#NULL!, #DIV/0!, #VALUE!, #REF!, #NAME?, #NUM!, #N/A, "
+                        "#SPILL!, #CALC!)",
+                        code="unsupported_error_value",
+                    )
                 raise WorkbookError(f"invalid Excel error value at {address}")
             value = ErrorValue(value)
         elif cell_type in (None, "n") and value is not None:
