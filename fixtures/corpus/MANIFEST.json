@@ -1,0 +1,475 @@
+{
+  "files": {
+    "hb_absolute_targets.xlsx": {
+      "writer": "handbuilt",
+      "categories": [
+        "absolute-targets",
+        "missing-parts"
+      ]
+    },
+    "hb_bom_part.xlsx": {
+      "writer": "handbuilt",
+      "categories": [
+        "xml-bom",
+        "stored-zip"
+      ]
+    },
+    "hb_data_table_formula.xlsx": {
+      "writer": "handbuilt",
+      "categories": [
+        "data-table"
+      ]
+    },
+    "hb_dynamic_array_cached.xlsx": {
+      "writer": "handbuilt",
+      "categories": [
+        "dynamic-array",
+        "spill",
+        "metadata"
+      ]
+    },
+    "hb_errors_as_values.xlsx": {
+      "writer": "handbuilt",
+      "categories": [
+        "errors",
+        "booleans",
+        "cached-values"
+      ]
+    },
+    "hb_escaped_control_chars.xlsx": {
+      "writer": "handbuilt",
+      "categories": [
+        "escaped-chars",
+        "shared-strings"
+      ]
+    },
+    "hb_excel_like_markup.xlsx": {
+      "writer": "handbuilt",
+      "categories": [
+        "excel-markup",
+        "mc-ignorable",
+        "calcchain",
+        "extlst",
+        "docprops"
+      ]
+    },
+    "hb_external_link.xlsx": {
+      "writer": "handbuilt",
+      "categories": [
+        "external-links"
+      ]
+    },
+    "hb_far_off_cell.xlsx": {
+      "writer": "handbuilt",
+      "categories": [
+        "sparse",
+        "xfd1048576"
+      ]
+    },
+    "hb_google_sheets_like.xlsx": {
+      "writer": "handbuilt",
+      "categories": [
+        "google-sheets",
+        "defined-names",
+        "autofilter",
+        "str-formula"
+      ]
+    },
+    "hb_inline_strings_rich.xlsx": {
+      "writer": "handbuilt",
+      "categories": [
+        "inline-strings",
+        "rich-text",
+        "cached-values"
+      ]
+    },
+    "hb_libreoffice_like.xlsx": {
+      "writer": "handbuilt",
+      "categories": [
+        "libreoffice",
+        "number-formats",
+        "dates",
+        "booleans",
+        "empty-string-cache"
+      ]
+    },
+    "hb_macro_content_in_xlsx.xlsx": {
+      "writer": "handbuilt",
+      "categories": [
+        "vba"
+      ]
+    },
+    "hb_minimal_no_optional_parts.xlsx": {
+      "writer": "handbuilt",
+      "categories": [
+        "missing-parts",
+        "no-styles",
+        "no-sst",
+        "no-dimension",
+        "inline-strings",
+        "booleans"
+      ]
+    },
+    "hb_no_cell_references.xlsx": {
+      "writer": "handbuilt",
+      "categories": [
+        "no-cell-refs"
+      ]
+    },
+    "hb_numbers_like.xlsx": {
+      "writer": "handbuilt",
+      "categories": [
+        "numbers",
+        "absolute-targets",
+        "sheet-name-spaces"
+      ]
+    },
+    "hb_odd_part_name.xlsx": {
+      "writer": "handbuilt",
+      "categories": [
+        "odd-part-names",
+        "dot-segments"
+      ]
+    },
+    "hb_pivot_cache.xlsx": {
+      "writer": "handbuilt",
+      "categories": [
+        "pivot"
+      ]
+    },
+    "hb_prefixed_spreadsheetml.xlsx": {
+      "writer": "handbuilt",
+      "categories": [
+        "prefixed-namespace",
+        "shared-strings"
+      ]
+    },
+    "hb_rich_text_phonetic.xlsx": {
+      "writer": "handbuilt",
+      "categories": [
+        "rich-text",
+        "phonetic",
+        "unicode",
+        "whitespace"
+      ]
+    },
+    "hb_shared_formulas.xlsx": {
+      "writer": "handbuilt",
+      "categories": [
+        "shared-formulas",
+        "cached-values"
+      ]
+    },
+    "hb_stale_dimension.xlsx": {
+      "writer": "handbuilt",
+      "categories": [
+        "stale-dimension",
+        "sparse"
+      ]
+    },
+    "hb_strict_ooxml.xlsx": {
+      "writer": "handbuilt",
+      "categories": [
+        "strict-ooxml"
+      ]
+    },
+    "hb_threaded_comments.xlsx": {
+      "writer": "handbuilt",
+      "categories": [
+        "threaded-comments",
+        "comments",
+        "vml"
+      ]
+    },
+    "op_1904_dates.xlsx": {
+      "writer": "openpyxl",
+      "categories": [
+        "date-1904",
+        "dates",
+        "formulas"
+      ]
+    },
+    "op_array_formulas.xlsx": {
+      "writer": "openpyxl",
+      "categories": [
+        "array-formulas",
+        "cse"
+      ]
+    },
+    "op_budget_shared_strings.xlsx": {
+      "writer": "openpyxl",
+      "categories": [
+        "shared-strings",
+        "formulas",
+        "budget"
+      ]
+    },
+    "op_charts.xlsx": {
+      "writer": "openpyxl",
+      "categories": [
+        "charts",
+        "drawings",
+        "bar-chart",
+        "line-chart",
+        "pie-chart"
+      ]
+    },
+    "op_comments_notes.xlsx": {
+      "writer": "openpyxl",
+      "categories": [
+        "comments",
+        "vml"
+      ]
+    },
+    "op_conditional_formatting.xlsx": {
+      "writer": "openpyxl",
+      "categories": [
+        "conditional-formatting",
+        "gradebook"
+      ]
+    },
+    "op_defined_names.xlsx": {
+      "writer": "openpyxl",
+      "categories": [
+        "defined-names",
+        "sheet-scoped-names",
+        "constant-names"
+      ]
+    },
+    "op_dropdowns.xlsx": {
+      "writer": "openpyxl",
+      "categories": [
+        "data-validation",
+        "dropdowns",
+        "inline-list",
+        "range-list",
+        "name-list",
+        "decimal-validation"
+      ]
+    },
+    "op_empty_sheets.xlsx": {
+      "writer": "openpyxl",
+      "categories": [
+        "empty-sheet"
+      ]
+    },
+    "op_errors_booleans.xlsx": {
+      "writer": "openpyxl",
+      "categories": [
+        "errors",
+        "booleans"
+      ]
+    },
+    "op_freeze_filter_print.xlsx": {
+      "writer": "openpyxl",
+      "categories": [
+        "freeze-panes",
+        "autofilter",
+        "hidden-rows",
+        "print-titles"
+      ]
+    },
+    "op_hidden_sheets.xlsx": {
+      "writer": "openpyxl",
+      "categories": [
+        "hidden-sheets",
+        "very-hidden",
+        "cross-sheet"
+      ]
+    },
+    "op_hyperlinks.xlsx": {
+      "writer": "openpyxl",
+      "categories": [
+        "hyperlinks"
+      ]
+    },
+    "op_large_60k.xlsx": {
+      "writer": "openpyxl",
+      "categories": [
+        "large",
+        "perf",
+        "research-data",
+        "formulas"
+      ]
+    },
+    "op_merged_cells.xlsx": {
+      "writer": "openpyxl",
+      "categories": [
+        "merged-cells"
+      ]
+    },
+    "op_rich_text.xlsx": {
+      "writer": "openpyxl",
+      "categories": [
+        "rich-text",
+        "shared-strings"
+      ]
+    },
+    "op_sheet_name_quoting.xlsx": {
+      "writer": "openpyxl",
+      "categories": [
+        "sheet-names",
+        "quoting",
+        "unicode",
+        "apostrophes",
+        "3d-refs"
+      ]
+    },
+    "op_sparse_far_cell.xlsx": {
+      "writer": "openpyxl",
+      "categories": [
+        "sparse",
+        "xfd1048576"
+      ]
+    },
+    "op_styles_number_formats.xlsx": {
+      "writer": "openpyxl",
+      "categories": [
+        "styles",
+        "number-formats",
+        "dates",
+        "percent",
+        "currency",
+        "custom-formats"
+      ]
+    },
+    "op_table_structured_refs.xlsx": {
+      "writer": "openpyxl",
+      "categories": [
+        "tables",
+        "structured-refs"
+      ]
+    },
+    "op_text_cells.xlsx": {
+      "writer": "openpyxl",
+      "categories": [
+        "text",
+        "text-format",
+        "quote-prefix",
+        "leading-zeros",
+        "unicode",
+        "long-strings",
+        "rich-text",
+        "whitespace"
+      ]
+    },
+    "xw_1904_dates.xlsx": {
+      "writer": "xlsxwriter",
+      "categories": [
+        "date-1904",
+        "dates",
+        "cached-values"
+      ]
+    },
+    "xw_array_formula.xlsx": {
+      "writer": "xlsxwriter",
+      "categories": [
+        "array-formulas",
+        "cse",
+        "cached-values"
+      ]
+    },
+    "xw_cached_values.xlsx": {
+      "writer": "xlsxwriter",
+      "categories": [
+        "cached-values",
+        "formulas",
+        "engineering"
+      ]
+    },
+    "xw_chart_image.xlsx": {
+      "writer": "xlsxwriter",
+      "categories": [
+        "charts",
+        "drawings",
+        "images",
+        "line-chart",
+        "scatter-chart",
+        "sheet-names"
+      ]
+    },
+    "xw_chartsheet.xlsx": {
+      "writer": "xlsxwriter",
+      "categories": [
+        "chartsheet",
+        "charts"
+      ]
+    },
+    "xw_comments.xlsx": {
+      "writer": "xlsxwriter",
+      "categories": [
+        "comments",
+        "vml"
+      ]
+    },
+    "xw_conditional_ext.xlsx": {
+      "writer": "xlsxwriter",
+      "categories": [
+        "conditional-formatting",
+        "extlst"
+      ]
+    },
+    "xw_dropdowns.xlsx": {
+      "writer": "xlsxwriter",
+      "categories": [
+        "data-validation",
+        "dropdowns",
+        "inline-list",
+        "name-list",
+        "range-list",
+        "integer-validation",
+        "date-validation"
+      ]
+    },
+    "xw_dynamic_arrays.xlsx": {
+      "writer": "xlsxwriter",
+      "categories": [
+        "dynamic-array",
+        "spill",
+        "metadata"
+      ]
+    },
+    "xw_hyperlinks_names.xlsx": {
+      "writer": "xlsxwriter",
+      "categories": [
+        "hyperlinks",
+        "defined-names",
+        "sheet-scoped-names",
+        "sheet-names"
+      ]
+    },
+    "xw_inline_strings.xlsx": {
+      "writer": "xlsxwriter",
+      "categories": [
+        "inline-strings",
+        "inventory"
+      ]
+    },
+    "xw_macro.xlsm": {
+      "writer": "xlsxwriter",
+      "categories": [
+        "vba",
+        "xlsm"
+      ]
+    },
+    "xw_table_totals.xlsx": {
+      "writer": "xlsxwriter",
+      "categories": [
+        "tables",
+        "structured-refs",
+        "totals-row",
+        "budget"
+      ]
+    },
+    "xw_text_formats.xlsx": {
+      "writer": "xlsxwriter",
+      "categories": [
+        "text",
+        "text-format",
+        "leading-zeros",
+        "rich-text"
+      ]
+    }
+  },
+  "note": "Generated by tools/corpus/generate_corpus.py from synthetic content. Expected outcomes live in tools/corpus/expectations.json."
+}
