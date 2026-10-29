@@ -26,8 +26,9 @@ export type CalculatedValue = Scalar | { rows: Scalar[][] };
 /**
  * One value or formula edit (formula text with or without the leading "=").
  * It may update an existing cell or insert an absent cell inside the grid
- * (#41). PR #19's Edit also allows style edits; imported workbooks reject
- * those, so this subset omits them.
+ * (#41); insertion into a merged range's non-anchor cell is refused. PR #19's
+ * Edit also allows style edits; imported workbooks reject those, so this
+ * subset omits them.
  */
 export type Edit = Address & ({ value: Scalar; formula?: never } | { formula: string; value?: never });
 
