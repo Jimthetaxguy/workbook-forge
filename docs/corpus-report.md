@@ -16,19 +16,20 @@ Excel observation and does not show Excel equivalence.
 
 | Engine | pass | refuse | untyped | crash | corrupt | lossy |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| py_toolkit | 53 | 6 | 0 | 0 | 0 | 0 |
-| py_canonical | 45 | 14 | 0 | 0 | 0 | 0 |
-| rust | 52 | 7 | 0 | 0 | 0 | 0 |
+| py_toolkit | 55 | 5 | 0 | 0 | 0 | 0 |
+| py_canonical | 47 | 13 | 0 | 0 | 0 | 0 |
+| rust | 55 | 5 | 0 | 0 | 0 | 0 |
 
 ## Matrix
 
 | File | Writer | Categories | py_toolkit | py_canonical | rust |
 | --- | --- | --- | --- | --- | --- |
 | `hb_absolute_targets.xlsx` | handbuilt | absolute-targets, missing-parts | pass | pass | pass |
-| `hb_bom_part.xlsx` | handbuilt | xml-bom, stored-zip | pass | pass | refuse `package_damaged` |
+| `hb_bom_part.xlsx` | handbuilt | xml-bom, stored-zip | pass | pass | pass |
 | `hb_data_table_formula.xlsx` | handbuilt | data-table | pass | refuse `unsupported_formula_group` | pass |
 | `hb_dynamic_array_cached.xlsx` | handbuilt | dynamic-array, spill, metadata | pass | refuse `array_spill_refused` | pass |
-| `hb_errors_as_values.xlsx` | handbuilt | errors, booleans, cached-values | refuse `package_damaged` | refuse `package_damaged` | refuse `invalid_value` |
+| `hb_errors_as_values.xlsx` | handbuilt | errors, booleans, cached-values | pass | pass | pass |
+| `hb_errors_newer_values.xlsx` | handbuilt | errors, newer-errors | refuse `unsupported_error_value` | refuse `unsupported_error_value` | refuse `unsupported_error_value` |
 | `hb_escaped_control_chars.xlsx` | handbuilt | escaped-chars, shared-strings | pass | pass | pass |
 | `hb_excel_like_markup.xlsx` | handbuilt | excel-markup, mc-ignorable, calcchain, extlst, docprops | pass | pass | pass |
 | `hb_external_link.xlsx` | handbuilt | external-links | pass | pass | pass |
@@ -73,7 +74,7 @@ Excel observation and does not show Excel equivalence.
 | `xw_array_formula.xlsx` | xlsxwriter | array-formulas, cse, cached-values | pass | refuse `array_spill_refused` | pass |
 | `xw_cached_values.xlsx` | xlsxwriter | cached-values, formulas, engineering | pass | pass | pass |
 | `xw_chart_image.xlsx` | xlsxwriter | charts, drawings, images, line-chart, scatter-chart, sheet-names | pass | pass | pass |
-| `xw_chartsheet.xlsx` | xlsxwriter | chartsheet, charts | refuse `unsupported_sheet_type` | refuse `unsupported_sheet_type` | refuse `unsupported_package` |
+| `xw_chartsheet.xlsx` | xlsxwriter | chartsheet, charts | pass | pass | pass |
 | `xw_comments.xlsx` | xlsxwriter | comments, vml | pass | pass | pass |
 | `xw_conditional_ext.xlsx` | xlsxwriter | conditional-formatting, extlst | pass | pass | pass |
 | `xw_dropdowns.xlsx` | xlsxwriter | data-validation, dropdowns, inline-list, name-list, range-list, integer-validation, date-validation | pass | pass | pass |
@@ -86,10 +87,6 @@ Excel observation and does not show Excel equivalence.
 
 ## Details
 
-`hb_bom_part.xlsx`
-
-- rust: invalid XML: ill-formed document: expected `</<c>`, but `</c>` was found
-
 `hb_data_table_formula.xlsx`
 
 - py_canonical: CanonicalPackageError: unsupported_formula_group: v1 canonical import refuses grouped formulas at WhatIf!B2 (datatable)
@@ -98,11 +95,11 @@ Excel observation and does not show Excel equivalence.
 
 - py_canonical: CanonicalPackageError: array_spill_refused: v1 import refuses worksheet array-spill placement at Ranked!C1 (t="array" ref='C1:C4'); the spill region is not read into the model
 
-`hb_errors_as_values.xlsx`
+`hb_errors_newer_values.xlsx`
 
-- py_toolkit: WorkbookError: invalid Excel error value at A10
-- py_canonical: WorkbookError: invalid Excel error value at A10
-- rust: invalid_value: unknown Excel error code
+- py_toolkit: UnsupportedWorkbook: stored error value #GETTING_DATA at A1 is outside the supported error set (#NULL!, #DIV/0!, #VALUE!, #REF!, #NAME?, #NUM!, #N/A, #SPILL!, #CALC!)
+- py_canonical: UnsupportedWorkbook: stored error value #GETTING_DATA at A1 is outside the supported error set (#NULL!, #DIV/0!, #VALUE!, #REF!, #NAME?, #NUM!, #N/A, #SPILL!, #CALC!)
+- rust: unsupported_error_value: stored error value #GETTING_DATA is outside the supported error set (#NULL!, #DIV/0!, #VALUE!, #REF!, #NAME?, #NUM!, #N/A, #SPILL!, #CALC!)
 
 `hb_macro_content_in_xlsx.xlsx`
 
@@ -141,12 +138,6 @@ Excel observation and does not show Excel equivalence.
 `xw_array_formula.xlsx`
 
 - py_canonical: CanonicalPackageError: array_spill_refused: v1 import refuses worksheet array-spill placement at Matrix!D1 (t="array" ref='D1'); the spill region is not read into the model
-
-`xw_chartsheet.xlsx`
-
-- py_toolkit: UnsupportedWorkbook: chartsheets and non-worksheet sheet types are outside this adapter
-- py_canonical: UnsupportedWorkbook: chartsheets and non-worksheet sheet types are outside this adapter
-- rust: only internal worksheets supported
 
 `xw_dynamic_arrays.xlsx`
 
