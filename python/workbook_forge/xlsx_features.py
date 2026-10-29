@@ -321,6 +321,20 @@ def _list_item_matches(item: Any, value: Any) -> bool:
     return str(item).casefold() == str(value).casefold()
 
 
+def general_text(value: float) -> str:
+    """A number as text with 15 significant digits (``%.15g``, ``E`` exponent).
+
+    Used when a number is written into a Text-formatted (``@``) cell and to
+    measure a number for a text-length rule. Python and Rust share this rule.
+    """
+    text = format(float(value), ".15g")
+    if "e" in text:
+        mantissa, exponent = text.split("e")
+        sign = "-" if exponent.startswith("-") else "+"
+        text = f"{mantissa}E{sign}{exponent.lstrip('+-').rjust(2, '0')}"
+    return "0" if text == "-0" else text
+
+
 def _general(item: Any) -> str:
     if isinstance(item, bool):
         return "TRUE" if item else "FALSE"
@@ -363,7 +377,7 @@ def rule_violation(rule: dict[str, Any], value: Any, read) -> str | None:
         if isinstance(value, bool):
             measured = float(len("TRUE" if value else "FALSE"))
         elif isinstance(value, (int, float)):
-            measured = float(len(format(value, ".15g")))
+            measured = float(len(general_text(value)))
         else:
             measured = float(len(str(value)))
     else:

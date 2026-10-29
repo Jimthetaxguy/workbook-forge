@@ -92,6 +92,8 @@ class WorkbookModel:
         self._import_metadata = None
         # Imported drop-down, pivot and chart rules (xlsx_features.FeatureGuard).
         self._feature_guard = None
+        # (casefolded sheet, address) of imported Text-formatted (@) cells.
+        self._text_cells: frozenset[tuple[str, str]] = frozenset()
 
     @property
     def backend(self) -> str:
@@ -118,9 +120,23 @@ class WorkbookModel:
             raise UnsupportedWorkbook(
                 "formula edits in imported 1904 date-system workbooks are unsupported"
             )
+        if self._text_cells:
+            batch = [self._as_text(edit) for edit in batch]
         if self._feature_guard is not None:
             self._check_features(batch)
         return self._session.apply(_encode(batch), expected_revision)
+
+    def _as_text(self, edit: Mapping[str, Any]) -> Mapping[str, Any]:
+        """A number written into a Text-formatted (@) cell is stored as text, as Excel does."""
+        value = edit.get("value")
+        if "formula" in edit or isinstance(value, bool) or not isinstance(value, (int, float)):
+            return edit
+        key = (str(edit.get("sheet", "")).casefold(), str(edit.get("address", "")).replace("$", "").upper())
+        if key not in self._text_cells:
+            return edit
+        from .xlsx_features import general_text
+
+        return {**edit, "value": general_text(value)}
 
     def _check_features(self, batch: list[Mapping[str, Any]]) -> None:
         """Refuse writes into pivot output and out-of-rule drop-down values.

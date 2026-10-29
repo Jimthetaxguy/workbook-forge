@@ -1,5 +1,5 @@
 {
-  "_note": "Cases both engines must agree on (python/tests/test_xlsx_features.py, rust/tests/xlsx_features.rs). writes: one value written into a freshly imported workbook; expect ok or the refusal code. inspect: counts and key fields of inspect output. See docs/xlsx-features.md.",
+  "_note": "Cases both engines must agree on (python/tests/test_xlsx_features.py, rust/tests/xlsx_features.rs). writes: one value written into a freshly imported workbook; expect ok or the refusal code. inspect: counts and key fields of inspect output. See docs/xlsx-features.md. text_writes: a value written into a Text-formatted (@) cell is stored as text (numbers with 15 significant digits); other cells keep the written type.",
   "writes": [
     {
       "file": "hb_dropdown_rules.xlsx",
@@ -478,5 +478,77 @@
         }
       ]
     }
-  }
+  },
+  "text_writes": [
+    {
+      "file": "hb_text_edge_cases.xlsx",
+      "sheet": "Text",
+      "address": "B1",
+      "value": 123,
+      "stored": "123"
+    },
+    {
+      "file": "hb_text_edge_cases.xlsx",
+      "sheet": "Text",
+      "address": "B1",
+      "value": "00456",
+      "stored": "00456"
+    },
+    {
+      "file": "hb_text_edge_cases.xlsx",
+      "sheet": "Text",
+      "address": "B1",
+      "value": 1.5,
+      "stored": "1.5"
+    },
+    {
+      "file": "hb_text_edge_cases.xlsx",
+      "sheet": "Text",
+      "address": "B1",
+      "value": 1e+20,
+      "stored": "1E+20"
+    },
+    {
+      "file": "hb_text_edge_cases.xlsx",
+      "sheet": "Text",
+      "address": "B1",
+      "value": 0.0001,
+      "stored": "0.0001"
+    },
+    {
+      "file": "hb_text_edge_cases.xlsx",
+      "sheet": "Text",
+      "address": "B1",
+      "value": -1e-05,
+      "stored": "-1E-05"
+    },
+    {
+      "file": "hb_text_edge_cases.xlsx",
+      "sheet": "Text",
+      "address": "C2",
+      "value": 7,
+      "stored": "7"
+    },
+    {
+      "file": "hb_text_edge_cases.xlsx",
+      "sheet": "Text",
+      "address": "C1",
+      "value": 42,
+      "stored": "42"
+    },
+    {
+      "file": "hb_text_edge_cases.xlsx",
+      "sheet": "Text",
+      "address": "A1",
+      "value": 123,
+      "stored": 123
+    },
+    {
+      "file": "hb_text_edge_cases.xlsx",
+      "sheet": "Text",
+      "address": "A1",
+      "value": "00123",
+      "stored": "00123"
+    }
+  ]
 }

@@ -16,9 +16,9 @@ Excel observation and does not show Excel equivalence.
 
 | Engine | pass | refuse | untyped | crash | corrupt | lossy |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| py_toolkit | 57 | 5 | 0 | 0 | 0 | 0 |
-| py_canonical | 49 | 13 | 0 | 0 | 0 | 0 |
-| rust | 57 | 5 | 0 | 0 | 0 | 0 |
+| py_toolkit | 58 | 5 | 0 | 0 | 0 | 0 |
+| py_canonical | 50 | 13 | 0 | 0 | 0 | 0 |
+| rust | 58 | 5 | 0 | 0 | 0 | 0 |
 
 ## Matrix
 
@@ -50,6 +50,7 @@ Excel observation and does not show Excel equivalence.
 | `hb_shared_formulas.xlsx` | handbuilt | shared-formulas, cached-values | pass | refuse `unsupported_formula_group` | pass |
 | `hb_stale_dimension.xlsx` | handbuilt | stale-dimension, sparse | pass | pass | pass |
 | `hb_strict_ooxml.xlsx` | handbuilt | strict-ooxml | refuse `strict_ooxml` | refuse `strict_ooxml` | refuse `strict_ooxml` |
+| `hb_text_edge_cases.xlsx` | handbuilt | text, text-format, quote-prefix, leading-zeros, long-strings, unicode, rtl, rich-text, whitespace, escaped-chars | pass | pass | pass |
 | `hb_threaded_comments.xlsx` | handbuilt | threaded-comments, comments, vml | pass | pass | pass |
 | `op_1904_dates.xlsx` | openpyxl | date-1904, dates, formulas | pass | refuse `unsupported_package` | pass |
 | `op_array_formulas.xlsx` | openpyxl | array-formulas, cse | pass | refuse `array_spill_refused` | pass |

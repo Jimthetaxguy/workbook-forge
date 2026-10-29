@@ -308,6 +308,43 @@ def pivot_fields():
     )
 
 
+def text_edge_cases():
+    """Text cells that must round-trip exactly: Text (@) format, quote prefix,
+    leading zeros, a 32,767-character string, astral and combining characters,
+    right-to-left text, rich runs with edge whitespace, and escaped controls."""
+    styles = (
+        f'{DECL}<styleSheet xmlns="{MAIN}">'
+        '<fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font></fonts>'
+        '<fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills>'
+        '<borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>'
+        '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>'
+        '<cellXfs count="3"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>'
+        '<xf numFmtId="49" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/>'
+        '<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0" quotePrefix="1"/></cellXfs>'
+        "</styleSheet>"
+    )
+    long_text = ("Synthetic long text " * 1700)[:32767]
+    sst = [
+        "00123", "=SUM(1,2)", "1E5", long_text, "Rocket \U0001F680 and e\u0301 and \u05E9\u05DC\u05D5\u05DD",
+        "  padded both ends  ", "line one\nline two", "TRUE",
+    ]
+    rich = ('<si><r><rPr><b/></rPr><t>Bold</t></r><r><t xml:space="preserve"> then plain </t></r>'
+            '<r><rPr><i/></rPr><t>italic</t></r></si>')
+    rows = (
+        '<row r="1"><c r="A1" t="s"><v>0</v></c><c r="B1" s="1" t="s"><v>0</v></c><c r="C1" s="1"><v>42</v></c><c r="D1" s="1" t="s"><v>2</v></c></row>'
+        '<row r="2"><c r="A2" s="2" t="s"><v>1</v></c><c r="B2" s="2" t="s"><v>7</v></c><c r="C2" s="1" t="inlineStr"><is><t>000</t></is></c></row>'
+        '<row r="3"><c r="A3" t="s"><v>3</v></c></row>'
+        '<row r="4"><c r="A4" t="s"><v>4</v></c><c r="B4" t="s"><v>5</v></c><c r="C4" t="s"><v>6</v></c><c r="D4" t="s"><v>8</v></c></row>'
+        '<row r="5"><c r="A5" t="inlineStr"><is><t>tab_x0009_and_x000D_return</t></is></c><c r="B5" s="1" t="s"><v>0</v></c></row>'
+    )
+    parts = simple({"Text": sheet_xml(rows, dimension="A1:D5")}, sst=sst, styles=styles)
+    items = "".join(f'<si><t xml:space="preserve">{_esc(item)}</t></si>' for item in sst) + rich
+    parts["xl/sharedStrings.xml"] = (
+        f'{DECL}<sst xmlns="{MAIN}" count="{len(sst) + 1}" uniqueCount="{len(sst) + 1}">{items}</sst>'
+    )
+    return parts
+
+
 def far_off_cell():
     rows = '<row r="1"><c r="A1"><v>1</v></c></row><row r="1048576"><c r="XFD1048576"><v>42</v></c></row>'
     return simple({"Sparse": sheet_xml(rows, dimension="A1:XFD1048576")}, styles=minimal_styles())
@@ -631,6 +668,7 @@ BUILDERS = {
     "hb_threaded_comments": (threaded_comments, ["threaded-comments", "comments", "vml"]),
     "hb_pivot_cache": (pivot_cache, ["pivot"]),
     "hb_pivot_fields": (pivot_fields, ["pivot", "pivot-fields", "page-fields"]),
+    "hb_text_edge_cases": (text_edge_cases, ["text", "text-format", "quote-prefix", "leading-zeros", "long-strings", "unicode", "rtl", "rich-text", "whitespace", "escaped-chars"]),
     "hb_dropdown_rules": (dropdown_rules, ["data-validation", "dropdowns", "error-styles", "sheet-scoped-names", "text-length", "custom-validation", "formula-list"]),
     "hb_external_link": (external_link, ["external-links"]),
     "hb_macro_content_in_xlsx": (macro_content_in_xlsx, ["vba"]),

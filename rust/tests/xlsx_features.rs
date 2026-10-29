@@ -191,3 +191,81 @@ fn renaming_a_charted_sheet_refuses() {
     assert_eq!(error.code(), "chart_reference_protected");
     let _ = std::fs::remove_dir_all(folder);
 }
+
+#[test]
+fn text_writes_store_the_expected_type() {
+    for case in cases()["text_writes"].as_array().unwrap() {
+        let sheet = case["sheet"].as_str().unwrap();
+        let address = case["address"].as_str().unwrap();
+        let imported = import_xlsx_bytes(
+            &corpus(case["file"].as_str().unwrap()),
+            BTreeMap::new(),
+            BTreeMap::new(),
+        )
+        .unwrap();
+        imported
+            .apply(
+                vec![Edit::value(sheet, address, value(&case["value"]))],
+                None,
+            )
+            .unwrap();
+        let expected = value(&case["stored"]);
+        let check = |model: &workbook_forge::toolkit::WorkbookModel| {
+            let cell = &model.sheets.iter().find(|s| s.name == sheet).unwrap().cells[address];
+            assert_eq!(cell.value, expected, "{address} <- {}", case["value"]);
+        };
+        check(&imported.snapshot());
+        let exported = imported.export_bytes().unwrap();
+        check(
+            &import_xlsx_bytes(&exported, BTreeMap::new(), BTreeMap::new())
+                .unwrap()
+                .snapshot(),
+        );
+    }
+}
+
+#[test]
+fn text_round_trips_exactly() {
+    for name in [
+        "hb_text_edge_cases.xlsx",
+        "op_text_cells.xlsx",
+        "xw_text_formats.xlsx",
+    ] {
+        let first = import_xlsx_bytes(&corpus(name), BTreeMap::new(), BTreeMap::new())
+            .unwrap()
+            .snapshot()
+            .sheets[0]
+            .name
+            .clone();
+        // Bind one cell as the output so formulas the engine does not
+        // calculate are preserved rather than blocking export.
+        let outputs = BTreeMap::from([(
+            "edited".to_string(),
+            workbook_forge::toolkit::CellAddress::new(first.clone(), "A1".to_string()),
+        )]);
+        let imported = import_xlsx_bytes(&corpus(name), BTreeMap::new(), outputs).unwrap();
+        let before = imported.snapshot();
+        imported
+            .apply(
+                vec![Edit::value(&first, "Z99", CellValue::Text("edited".into()))],
+                None,
+            )
+            .unwrap();
+        let after = import_xlsx_bytes(
+            &imported.export_bytes().unwrap(),
+            BTreeMap::new(),
+            BTreeMap::new(),
+        )
+        .unwrap()
+        .snapshot();
+        for (old, new) in before.sheets.iter().zip(&after.sheets) {
+            for (address, cell) in &old.cells {
+                assert_eq!(
+                    new.cells[address].value, cell.value,
+                    "{name} {}!{address}",
+                    old.name
+                );
+            }
+        }
+    }
+}

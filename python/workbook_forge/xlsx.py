@@ -445,6 +445,12 @@ def import_xlsx(
         ]
         model = WorkbookModel(document=document, backend=backend)
         model._feature_guard = features.FeatureGuard(validations, pivots, charts)
+        model._text_cells = frozenset(
+            (item["name"].casefold(), address)
+            for item in document["sheets"]
+            for address, cell in item["cells"].items()
+            if (cell.get("style") or {}).get("number_format") == "@"
+        )
         model._source_baseline = _Baseline(
             workbook.source,
             tuple(workbook._parts.items()),
@@ -943,6 +949,7 @@ def export_snapshot(imported: WorkbookModel, document: dict[str, Any], output: s
             _check_insertion(after["name"], column, row, merged)
     transferred._source_baseline = imported._source_baseline
     transferred._feature_guard = imported._feature_guard
+    transferred._text_cells = imported._text_cells
     return export_xlsx(transferred, output)
 
 
