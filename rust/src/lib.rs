@@ -216,8 +216,8 @@ enum CalcValue {
     Scalar(Value),
     /// A scalar kept as a one-cell reference.
     ///
-    /// COUNT ignores logicals inside a reference. AND and OR ignore text and
-    /// blanks but still test logicals. Value contexts unwrap it. A scalar
+    /// COUNT counts only numbers inside a reference, so text and logicals are
+    /// ignored. AND and OR ignore text and blanks but still test logicals. Value contexts unwrap it. A scalar
     /// XLOOKUP `if_not_found` literal is never this variant.
     Referenced(Value),
     Range(Vec<Vec<Value>>),

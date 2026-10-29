@@ -130,7 +130,9 @@ reverse search can be written `=XLOOKUP("pear",C1:C3,D1:D3,,,-1)`.
 
 The evaluator currently rejects approximate and wildcard match modes (`-1`,
 `1`, `2`), binary search modes (`2`, `-2`), and multi-cell return arrays. It
-does not project dynamic array results into neighboring worksheet cells.
+does not project dynamic array results into neighboring worksheet cells. A
+formula whose result is a multi-cell array is left blank in the grid, with a
+notice; a 1×1 array result is shown as its single value.
 Microsoft documents those broader XLOOKUP behaviors, including a return array
 that can produce multiple columns; this prototype must not imply that full
 compatibility. The official syntax and behavior are described in [Microsoft's
