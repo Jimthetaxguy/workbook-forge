@@ -1798,7 +1798,11 @@ pub fn export_xlsx_bytes(model: &WorkbookModel) -> Result<Vec<u8>> {
 }
 
 fn replace_spans(bytes: &[u8], mut patches: Vec<(usize, usize, Vec<u8>)>) -> Result<Vec<u8>> {
-    patches.sort_by_key(|p| p.0);
+    // A zero-width insertion and a replacement can start at the same offset
+    // (a new row placed just before a row that is rewritten). Ordering by
+    // `(start, end)` writes the insertion first, so it lands before the
+    // rewritten span instead of being reported as an overlap.
+    patches.sort_by_key(|p| (p.0, p.1));
     let mut out = Vec::new();
     let mut cursor = 0;
     for (start, end, replacement) in patches {

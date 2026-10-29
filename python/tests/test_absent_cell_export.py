@@ -25,9 +25,8 @@ ROOT = Path(__file__).resolve().parents[2]
 FIXTURE = ROOT / "fixtures/absent-cell-insertion.xlsx"
 SPIKE = ROOT / "fixtures/univer-spike-chain.xlsx"
 MAIN = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
-# C3 is not in this set: a new row placed immediately before a row that is
-# also rewritten makes the Rust byte patcher report overlapping spans. C5 is
-# a new row after the last source row, which that patcher can emit.
+# C5 is a new row after the last source row. A new row just before a
+# rewritten row (C3 with C4) has its own parity test below.
 INSERTIONS = {"C1": 9, "C4": 7, "C5": 8}
 
 
@@ -285,7 +284,6 @@ def compiler_roundtrip():
     result = subprocess.run(
         [
             cargo,
-            "+stable",
             "build",
             "--manifest-path",
             str(ROOT / "rust/Cargo.toml"),
@@ -318,3 +316,104 @@ def test_python_and_rust_sheet_xml_agree_on_the_same_insertions(tmp_path, compil
     )
     assert completed.returncode == 0, completed.stderr
     assert sheet_view(python_output) == sheet_view(rust_output) == EXPECTED_INSERTION
+
+
+def test_toolkit_insertion_on_merged_non_anchor_is_refused_at_export(tmp_path):
+    # The agent adapter refuses this edit up front. A direct toolkit edit
+    # reaches export, which applies the same guard as the Rust session.
+    imported = import_xlsx(FIXTURE)
+    imported.set_value("Sheet1", "G2", 1)
+    with pytest.raises(UnsupportedWorkbook, match="inside a merged range"):
+        export_xlsx(imported, tmp_path / "merged.xlsx")
+    assert not (tmp_path / "merged.xlsx").exists()
+
+
+def test_snapshot_export_refuses_renamed_sheet_changed_guard_and_out_of_grid(tmp_path):
+    imported = import_xlsx(FIXTURE)
+    renamed = imported.to_dict()
+    renamed["sheets"][0]["name"] = "Renamed"
+    with pytest.raises(UnsupportedWorkbook, match="retain all source cell addresses"):
+        export_snapshot(imported, renamed, tmp_path / "renamed.xlsx")
+    guarded = imported.to_dict()
+    guarded["sheets"][0]["cells"]["A1"]["blocked_reason"] = "changed guard"
+    with pytest.raises(UnsupportedWorkbook, match="cannot change preserved-only guards"):
+        export_snapshot(imported, guarded, tmp_path / "guard.xlsx")
+    outside = _with_cells(imported.to_dict(), {"XFE1": 1})
+    with pytest.raises((UnsupportedWorkbook, ValueError)):
+        export_snapshot(imported, outside, tmp_path / "outside.xlsx")
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_agent_session_insertion_survives_snapshot_handoff_and_reimport(tmp_path):
+    """The reproduced case: a Python agent session edits absent Forecast!Z100,
+    then its snapshot is handed to export_snapshot and the result reimported."""
+    from workbook_forge.toolkit import operating_scenario
+
+    scenario = operating_scenario()
+    source = export_xlsx(scenario, tmp_path / "source.xlsx")
+    bindings = scenario.to_dict()
+    session_model = import_xlsx(source, inputs=bindings["inputs"], outputs=bindings["outputs"])
+    forecast = next(
+        sheet for sheet in session_model.to_dict()["sheets"] if sheet["name"] == "Forecast"
+    )
+    assert "Z100" not in forecast["cells"] and "Z101" not in forecast["cells"]
+    agent = AgentWorkbook(session_model, output_dir=tmp_path / "agent")
+    response = agent.call(
+        "edit",
+        {
+            "edits": [
+                {"sheet": "Forecast", "address": "Z100", "value": 123},
+                {"sheet": "Forecast", "address": "Z101", "formula": "=Z100*2"},
+            ],
+            "expected_revision": 0,
+        },
+    )
+    assert response["ok"], response
+    handoff = import_xlsx(source, inputs=bindings["inputs"], outputs=bindings["outputs"])
+    output = export_snapshot(handoff, session_model.to_dict(), tmp_path / "handoff.xlsx")
+    reopened = import_xlsx(output, inputs=bindings["inputs"], outputs=bindings["outputs"])
+    cells = next(
+        sheet for sheet in reopened.to_dict()["sheets"] if sheet["name"] == "Forecast"
+    )["cells"]
+    assert cells["Z100"]["value"] == 123
+    assert cells["Z101"]["formula"].removeprefix("=") == "Z100*2"
+    # Source cells and outputs are unchanged by the insertion.
+    assert reopened.calculate()["outputs"] == scenario.calculate()["outputs"]
+    # The exported package holds Z101's calculated cache next to its formula.
+    with zipfile.ZipFile(output) as archive:
+        sheets = [
+            ET.fromstring(archive.read(name))
+            for name in archive.namelist()
+            if name.startswith("xl/worksheets/sheet")
+        ]
+    z101 = [
+        cell
+        for root in sheets
+        for cell in root.iter(f"{{{MAIN}}}c")
+        if cell.attrib.get("r") == "Z101"
+    ]
+    assert len(z101) == 1
+    assert z101[0].find(f"{{{MAIN}}}f").text == "Z100*2"
+    # Calculated on reimport from the inserted Z100 value.
+    assert import_xlsx(output).calculate()["values"]["Forecast!Z101"] == 246
+
+
+def test_python_and_rust_agree_on_a_new_row_before_a_rewritten_row(tmp_path, compiler_roundtrip):
+    # C3 creates row 3 just before row 4, which C4 rewrites. Both engines must
+    # place row 3 first (the Rust patcher once reported overlapping patches).
+    imported = import_xlsx(FIXTURE)
+    document = _with_cells(imported.to_dict(), {"C3": 6, "C4": 7})
+    python_output = export_snapshot(imported, document, tmp_path / "python.xlsx")
+    ir = tmp_path / "model.json"
+    ir.write_text(json.dumps(document))
+    rust_output = tmp_path / "rust.xlsx"
+    completed = subprocess.run(
+        [str(compiler_roundtrip), "emit", str(FIXTURE), str(ir), str(rust_output)],
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    assert completed.returncode == 0, completed.stderr
+    python_view, rust_view = sheet_view(python_output), sheet_view(rust_output)
+    assert python_view == rust_view
+    assert [row["r"] for row in python_view["rows"]] == ["1", "3", "4"]

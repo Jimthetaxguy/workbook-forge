@@ -776,7 +776,12 @@ def _check_preserved_validation(workbook: Workbook, document: dict[str, Any]) ->
             )
 
 
-def _patch_import(workbook: Workbook, original: dict[str, Any], current: dict[str, Any]) -> None:
+def _patch_import(
+    workbook: Workbook,
+    original: dict[str, Any],
+    current: dict[str, Any],
+    merged: tuple[tuple[str, tuple[tuple[int, int, int, int], ...]], ...] = (),
+) -> None:
     if original["inputs"] != current["inputs"]:
         raise UnsupportedWorkbook(
             "imported input/validation bindings cannot be changed during export"
@@ -797,6 +802,11 @@ def _patch_import(workbook: Workbook, original: dict[str, Any], current: dict[st
                 raise UnsupportedWorkbook(
                     f"cannot edit preserved-only cell {after['name']}!{address}"
                 )
+            if address not in before["cells"]:
+                # Every path that inserts a cell (agent edit, toolkit edit,
+                # snapshot handoff) meets the same guard as the Rust session.
+                column, row = _cell_position(address)
+                _check_insertion(after["name"], column, row, merged)
             if old.get("style") != new.get("style"):
                 raise UnsupportedWorkbook(
                     "imported style changes require a separately audited style transformer"
@@ -937,7 +947,9 @@ def export_xlsx(
                     archive.writestr(info, parts[info.filename])
         with Workbook.open(seed) as workbook:
             if baseline is not None:
-                _patch_import(workbook, json.loads(baseline.document_json), document)
+                _patch_import(
+                    workbook, json.loads(baseline.document_json), document, baseline.merged
+                )
             workbook._request_recalculation()
             for (sheet, address), value in cache_values.items():
                 workbook._write_formula_cache(sheet, address, value)
