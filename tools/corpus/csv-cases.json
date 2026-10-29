@@ -1,0 +1,334 @@
+{
+  "description": "Shared CSV/TSV import cases (docs/csv-import.md), run by python/tests/test_delimited.py and rust/tests/delimited.rs. Each case gives the input as UTF-8 'text' or raw 'hex' bytes, optional import options, and either the expected cells (absent cells omitted; numbers are JSON numbers, text is JSON strings) or the expected refusal code.",
+  "cases": [
+    {
+      "name": "plain values",
+      "text": "a,b,c\r\n1,2.5,-3\r\n",
+      "cells": {
+        "A1": "a",
+        "B1": "b",
+        "C1": "c",
+        "A2": 1,
+        "B2": 2.5,
+        "C2": -3
+      }
+    },
+    {
+      "name": "lf and final line break optional",
+      "text": "x,y\n10,20",
+      "cells": {
+        "A1": "x",
+        "B1": "y",
+        "A2": 10,
+        "B2": 20
+      }
+    },
+    {
+      "name": "bare cr line endings",
+      "text": "a\rb\r",
+      "cells": {
+        "A1": "a",
+        "A2": "b"
+      }
+    },
+    {
+      "name": "blank middle line is an empty row",
+      "text": "a\n\nb\n",
+      "cells": {
+        "A1": "a",
+        "A3": "b"
+      }
+    },
+    {
+      "name": "empty fields are absent cells",
+      "text": "a,,c\n,,\n",
+      "cells": {
+        "A1": "a",
+        "C1": "c"
+      }
+    },
+    {
+      "name": "quoted delimiter, quote and line break",
+      "text": "\"a,b\",\"say \"\"hi\"\"\",\"two\nlines\"\n",
+      "cells": {
+        "A1": "a,b",
+        "B1": "say \"hi\"",
+        "C1": "two\nlines"
+      }
+    },
+    {
+      "name": "crlf inside a quoted field is kept",
+      "text": "\"one\r\ntwo\",x\r\n",
+      "cells": {
+        "A1": "one\r\ntwo",
+        "B1": "x"
+      }
+    },
+    {
+      "name": "quote inside an unquoted field is literal",
+      "text": "5\" pipe,ok\n",
+      "cells": {
+        "A1": "5\" pipe",
+        "B1": "ok"
+      }
+    },
+    {
+      "name": "empty quoted field is an absent cell",
+      "text": "\"\",x\n",
+      "cells": {
+        "B1": "x"
+      }
+    },
+    {
+      "name": "leading zeros stay text",
+      "text": "00123,0.5,007.0\n",
+      "cells": {
+        "A1": "00123",
+        "B1": 0.5,
+        "C1": "007.0"
+      }
+    },
+    {
+      "name": "long digit strings stay text",
+      "text": "1234567890123456,123456789012345,4111111111111111111\n",
+      "cells": {
+        "A1": "1234567890123456",
+        "B1": 123456789012345,
+        "C1": "4111111111111111111"
+      }
+    },
+    {
+      "name": "exponent numbers",
+      "text": "1E5,1e-3,2.5E+20,1E999\n",
+      "cells": {
+        "A1": 100000,
+        "B1": 0.001,
+        "C1": 2.5e+20,
+        "D1": "1E999"
+      }
+    },
+    {
+      "name": "not plain numbers stay text",
+      "text": "1,234;+5;.5;5.;12 ; 12;1_000;0x1F;-0\n",
+      "options": {
+        "delimiter": ";"
+      },
+      "cells": {
+        "A1": "1,234",
+        "B1": "+5",
+        "C1": ".5",
+        "D1": "5.",
+        "E1": "12 ",
+        "F1": " 12",
+        "G1": "1_000",
+        "H1": "0x1F",
+        "I1": 0
+      }
+    },
+    {
+      "name": "booleans errors and formulas stay text",
+      "text": "TRUE,false,#N/A,=SUM(A1:A2),@x,-1+1\n",
+      "cells": {
+        "A1": "TRUE",
+        "B1": "false",
+        "C1": "#N/A",
+        "D1": "=SUM(A1:A2)",
+        "E1": "@x",
+        "F1": "-1+1"
+      }
+    },
+    {
+      "name": "as_text keeps numbers text",
+      "text": "1,2.50,=1\n",
+      "options": {
+        "as_text": true
+      },
+      "cells": {
+        "A1": "1",
+        "B1": "2.50",
+        "C1": "=1"
+      }
+    },
+    {
+      "name": "tab delimiter",
+      "text": "name\tqty\nbolt\t12\n",
+      "options": {
+        "delimiter": "\t"
+      },
+      "cells": {
+        "A1": "name",
+        "B1": "qty",
+        "A2": "bolt",
+        "B2": 12
+      }
+    },
+    {
+      "name": "pipe delimiter",
+      "text": "a|b\n",
+      "options": {
+        "delimiter": "|"
+      },
+      "cells": {
+        "A1": "a",
+        "B1": "b"
+      }
+    },
+    {
+      "name": "ragged records",
+      "text": "a\nb,c,d\n",
+      "cells": {
+        "A1": "a",
+        "A2": "b",
+        "B2": "c",
+        "C2": "d"
+      }
+    },
+    {
+      "name": "unicode text",
+      "text": "café,日本,👍🏽,عربى\n",
+      "cells": {
+        "A1": "café",
+        "B1": "日本",
+        "C1": "👍🏽",
+        "D1": "عربى"
+      }
+    },
+    {
+      "name": "tabs and spaces kept in text",
+      "text": "  pad  ,a\tb\n",
+      "cells": {
+        "A1": "  pad  ",
+        "B1": "a\tb"
+      }
+    },
+    {
+      "name": "utf-8 bom is dropped",
+      "hex": "efbbbf69642c760a312c780a",
+      "cells": {
+        "A1": "id",
+        "B1": "v",
+        "A2": 1,
+        "B2": "x"
+      }
+    },
+    {
+      "name": "utf-16le bom detected",
+      "hex": "fffe61002c00e9000a00",
+      "cells": {
+        "A1": "a",
+        "B1": "é"
+      }
+    },
+    {
+      "name": "utf-16be bom detected",
+      "hex": "feff0061002c00e9000a",
+      "cells": {
+        "A1": "a",
+        "B1": "é"
+      }
+    },
+    {
+      "name": "explicit utf-16 with bom",
+      "hex": "fffe7a000a00",
+      "options": {
+        "encoding": "utf-16"
+      },
+      "cells": {
+        "A1": "z"
+      }
+    },
+    {
+      "name": "explicit utf-16-le without bom",
+      "hex": "71002c0031000a00",
+      "options": {
+        "encoding": "utf-16-le"
+      },
+      "cells": {
+        "A1": "q",
+        "B1": 1
+      }
+    },
+    {
+      "name": "explicit latin-1",
+      "hex": "636166e92ca30a",
+      "options": {
+        "encoding": "latin-1"
+      },
+      "cells": {
+        "A1": "café",
+        "B1": "£"
+      }
+    },
+    {
+      "name": "explicit utf-8 drops a bom",
+      "hex": "efbbbf780a",
+      "options": {
+        "encoding": "UTF_8"
+      },
+      "cells": {
+        "A1": "x"
+      }
+    },
+    {
+      "name": "empty input is an empty sheet",
+      "text": "",
+      "cells": {}
+    },
+    {
+      "name": "latin-1 bytes are not utf-8",
+      "hex": "636166e90a",
+      "refuse": "csv_encoding"
+    },
+    {
+      "name": "truncated utf-8 sequence",
+      "hex": "6f6b2ce2820a",
+      "refuse": "csv_encoding"
+    },
+    {
+      "name": "utf-16 without a bom",
+      "hex": "61000a00",
+      "options": {
+        "encoding": "utf-16"
+      },
+      "refuse": "csv_encoding"
+    },
+    {
+      "name": "odd utf-16 byte count",
+      "hex": "fffe610062",
+      "refuse": "csv_encoding"
+    },
+    {
+      "name": "unpaired utf-16 surrogate",
+      "hex": "fffe00d86100",
+      "refuse": "csv_encoding"
+    },
+    {
+      "name": "unsupported encoding name",
+      "text": "a\n",
+      "options": {
+        "encoding": "cp1252"
+      },
+      "refuse": "csv_encoding"
+    },
+    {
+      "name": "unterminated quoted field",
+      "text": "a,\"open\nstill open\n",
+      "refuse": "csv_malformed"
+    },
+    {
+      "name": "text after a closing quote",
+      "text": "\"ab\"c,d\n",
+      "refuse": "csv_malformed"
+    },
+    {
+      "name": "nul byte",
+      "hex": "6100620a",
+      "refuse": "csv_malformed"
+    },
+    {
+      "name": "control character in a quoted field",
+      "text": "\"bell\u0007\",x\n",
+      "refuse": "csv_malformed"
+    }
+  ]
+}
