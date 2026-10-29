@@ -114,8 +114,8 @@ with the submitted fields. The common agent import profile permits value/formula
 changes to cells the workbook holds and to absent cells inside Excel's grid,
 which are inserted (validated against the session's current model, and written
 into the worksheet XML in row/column order on export). Imported style edits,
-grouped/table results, preserved-only cells, addresses past the grid and 1904
-formulas are rejected before mutation.
+insertion into merged non-anchor cells, grouped/table results, preserved-only
+cells, addresses past the grid and 1904 formulas are rejected before mutation.
 These restrictions also apply to set_inputs and preview_inputs. The lower-level
 Python adapter may support additional edits outside this shared agent profile.
 The response is a compact receipt; read or preview to retrieve values.

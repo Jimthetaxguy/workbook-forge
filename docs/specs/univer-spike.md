@@ -191,8 +191,8 @@ Findings:
     fail-closed: insert/delete rows and columns, sheet add/remove, paste, the
     fill handle (`auto-fill`), clear content, merge, styling and so on are
     refused, never translated into cell edits.
-- **Projection.** After every accepted edit the adapter reads Forge's
-  `snapshot` and `calculate` at the same revision, then writes changed cells
+- **Projection.** After every accepted edit the adapter applies the `changed`
+  delta returned by `applyAndCalculate`, then writes changed cells
   as `{v, f}` with one `sheet.mutation.set-range-values` per sheet. Only this
   path may write cells.
 - **Audit.** Every mutation is classified. Formula calculation requests and
