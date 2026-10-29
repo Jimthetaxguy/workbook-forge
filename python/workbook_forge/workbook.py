@@ -487,6 +487,48 @@ def _in_range(address: str, reference: str) -> bool:
     return min_column <= column <= max_column and min_row <= row <= max_row
 
 
+def _ooxml_usize(text: str) -> int:
+    if not text or any(char not in "0123456789" for char in text):
+        raise UnsupportedWorkbook("invalid integer metadata")
+    value = int(text)
+    if value > 2**64 - 1:
+        raise UnsupportedWorkbook("invalid integer metadata")
+    return value
+
+
+def _parse_spans(spans: str) -> tuple[int, int] | None:
+    """Min and max over every `a:b` in a row `spans` value, or None if malformed."""
+    found: tuple[int, int] | None = None
+    for part in spans.split():
+        if part.count(":") != 1:
+            return None
+        left, right = part.split(":", 1)
+        if not left or not right:
+            return None
+        if any(char not in "0123456789" for char in left + right):
+            return None
+        start, end = int(left), int(right)
+        if start > 0xFFFFFFFF or end > 0xFFFFFFFF:
+            return None
+        found = (start, end) if found is None else (min(found[0], start), max(found[1], end))
+    return found
+
+
+def _reference_bounds(reference: str) -> tuple[int, int, int, int]:
+    """Column/row bounds of an A1 reference or an inclusive range. Reversed ranges fail."""
+    first, separator, last = reference.partition(":")
+    if not separator:
+        last = first
+    try:
+        first_column, first_row = _cell_position(first)
+        last_column, last_row = _cell_position(last)
+    except (TypeError, ValueError) as error:
+        raise UnsupportedWorkbook(str(error)) from error
+    if first_column > last_column or first_row > last_row:
+        raise UnsupportedWorkbook("reversed result range")
+    return first_column, first_row, last_column, last_row
+
+
 class Workbook:
     """Read, inspect, and patch a conservative subset of `.xlsx` packages.
 
@@ -1501,6 +1543,89 @@ class Workbook:
         cell.insert(following, child)
         return child
 
+    def _inherited_insertion_style(
+        self, root: ET.Element, row: ET.Element | None, column: int
+    ) -> int | None:
+        """Style index of an inserted cell: the row style when customFormat, else the column style."""
+        if (
+            row is not None
+            and row.attrib.get("customFormat") in {"1", "true"}
+            and "s" in row.attrib
+        ):
+            return _ooxml_usize(row.attrib["s"])
+        cols = next((child for child in root if child.tag == _q("cols")), None)
+        if cols is None:
+            return None
+        for node in cols:
+            if node.tag != _q("col"):
+                continue
+            if "min" not in node.attrib or "max" not in node.attrib:
+                missing = "min" if "min" not in node.attrib else "max"
+                raise UnsupportedWorkbook(f"missing {missing} on col")
+            start, end = _ooxml_usize(node.attrib["min"]), _ooxml_usize(node.attrib["max"])
+            if start <= column <= end and "style" in node.attrib:
+                return _ooxml_usize(node.attrib["style"])
+        return None
+
+    def _widen_inserted_spans(
+        self, sheet_data: ET.Element, row: ET.Element, *, created_row: bool
+    ) -> None:
+        columns = [
+            _column_number(item.attrib["r"])
+            for item in row
+            if item.tag == _q("c") and item.attrib.get("r")
+        ]
+        if not columns:
+            return
+        low, high = min(columns), max(columns)
+        if created_row:
+            # A new row gains spans only when some row in the sheet already has them.
+            if any(item.tag == _q("row") and "spans" in item.attrib for item in sheet_data):
+                row.set("spans", f"{low}:{high}")
+            return
+        if "spans" not in row.attrib:
+            return
+        parsed = _parse_spans(row.attrib["spans"])
+        if parsed is None:
+            return
+        start, end = parsed
+        row.set("spans", f"{min(start, low)}:{max(end, high)}")
+
+    def _grow_dimension(self, root: ET.Element, column: int, row_number: int) -> None:
+        dimension = next((child for child in root if child.tag == _q("dimension")), None)
+        if dimension is None or "ref" not in dimension.attrib:
+            return
+        reference = dimension.attrib["ref"]
+        first_column, first_row, last_column, last_row = _reference_bounds(reference)
+        first_column, first_row = min(first_column, column), min(first_row, row_number)
+        last_column, last_row = max(last_column, column), max(last_row, row_number)
+        if (first_column, first_row) == (last_column, last_row):
+            grown = _cell_address(first_column, first_row)
+        else:
+            grown = (
+                f"{_cell_address(first_column, first_row)}:"
+                f"{_cell_address(last_column, last_row)}"
+            )
+        if grown != reference:
+            dimension.set("ref", grown)
+
+    def _note_inserted_cell(
+        self,
+        root: ET.Element,
+        sheet_data: ET.Element,
+        row: ET.Element,
+        cell: ET.Element,
+        column: int,
+        row_number: int,
+        *,
+        created_row: bool,
+    ) -> None:
+        style = self._inherited_insertion_style(root, None if created_row else row, column)
+        if style is not None:
+            cell.set("s", str(style))
+        self._widen_inserted_spans(sheet_data, row, created_row=created_row)
+        self._grow_dimension(root, column, row_number)
+
     def _writable_cell(self, sheet: str, address: str) -> ET.Element:
         if sheet not in self._sheet_parts:
             raise KeyError(f"unknown worksheet: {sheet}")
@@ -1557,7 +1682,8 @@ class Workbook:
             (item for item in sheet_data.findall(_q("row")) if int(item.attrib["r"]) == row_number),
             None,
         )
-        if row is None:
+        created_row = row is None
+        if created_row:
             row = ET.Element(_q("row"), {"r": str(row_number)})
             following = next(
                 (
@@ -1583,6 +1709,9 @@ class Workbook:
             )
         row.insert(following, cell)
         self._cells[sheet][address] = cell
+        self._note_inserted_cell(
+            root, sheet_data, row, cell, column, row_number, created_row=created_row
+        )
         return cell
 
     def _invalidate_calc_chain(self) -> None:
