@@ -123,21 +123,54 @@ _WORKBOOK_ORDER = (
 
 
 @functools.lru_cache(maxsize=1)
-def _refusal_rules() -> tuple[tuple[str, tuple[str, ...]], ...]:
+def _refusal_table() -> tuple[tuple[tuple[str, tuple[str, ...]], ...], frozenset[str]]:
     """The shared refusal-code table (catalog/refusal-codes.json).
 
-    Rust reads the same table (rust/src/refusal_codes.json, kept identical by
-    a test), so both engines give one refusal the same code.
+    Rust reads the same bytes (rust/src/refusal_codes.json, kept identical by
+    a test). A leading registered ``token: `` is that code; otherwise the
+    first matching phrase names it.
     """
     table = json.loads(_catalog_file("refusal-codes.json").read_text(encoding="utf-8"))
-    return tuple(
+    rules = tuple(
         (rule["code"], tuple(phrase.casefold() for phrase in rule["phrases"]))
         for rule in table["rules"]
     )
+    registered = frozenset(table["codes"]) | frozenset(table["inherited"]["codes"])
+    return rules, registered
+
+
+def _refusal_rules() -> tuple[tuple[str, tuple[str, ...]], ...]:
+    return _refusal_table()[0]
+
+
+def _registered_refusal_codes() -> frozenset[str]:
+    return _refusal_table()[1]
+
+
+def _prefixed_refusal_code(message: str) -> str | None:
+    """A leading ``token: `` when ``token`` is a registered code."""
+    token, separator, _rest = message.partition(": ")
+    if not separator or not token:
+        return None
+    if not all(
+        char.isascii() and (char.islower() or char.isdigit() or char == "_") for char in token
+    ):
+        return None
+    if token not in _registered_refusal_codes():
+        return None
+    return token
 
 
 def refusal_code(message: str) -> str | None:
-    """Classify a refusal message with the shared table; ``None`` when no rule matches."""
+    """Classify a refusal message.
+
+    A leading ``token: `` is the code when ``token`` is registered (catalog
+    ``codes`` or ``inherited``). Otherwise the shared phrase table applies.
+    ``None`` when no rule matches.
+    """
+    prefixed = _prefixed_refusal_code(message)
+    if prefixed is not None:
+        return prefixed
     folded = message.casefold()
     for code, phrases in _refusal_rules():
         if any(phrase in folded for phrase in phrases):
@@ -148,9 +181,10 @@ def refusal_code(message: str) -> str | None:
 class WorkbookError(Exception):
     """Base error for unsupported or malformed workbook packages.
 
-    ``code`` is the refusal's typed code (docs/refusal-codes.md). A raise site
-    may name it; otherwise the shared table classifies the message, and a
-    message no rule matches keeps the untyped ``workbook_error``.
+    ``code`` is the refusal's typed code (docs/refusal-codes.md). An explicit
+    ``code=`` wins. Otherwise a leading registered ``token: `` is the code,
+    then the shared phrase table, and a message no rule matches keeps the
+    untyped ``workbook_error``.
     """
 
     default_code = "workbook_error"
@@ -1206,7 +1240,8 @@ class Workbook:
         wb_root = _safe_xml(self._parts[self._workbook_part], self._workbook_part)
         if wb_root.tag != _q("workbook"):
             raise UnsupportedWorkbook(
-                "strict OOXML or non-workbook XML is outside the XLSX adapter profile"
+                "strict OOXML or non-workbook XML is outside the XLSX adapter profile",
+                code="unsupported_package",
             )
         workbook_properties = wb_root.find(_q("workbookPr"))
         date1904 = (
@@ -1262,7 +1297,8 @@ class Workbook:
             worksheet_root = _safe_xml(self._parts[part], part)
             if worksheet_root.tag != _q("worksheet"):
                 raise UnsupportedWorkbook(
-                    "strict OOXML or a non-worksheet part is outside the adapter profile"
+                    "strict OOXML or a non-worksheet part is outside the adapter profile",
+                    code="unsupported_package",
                 )
             self._sheet_parts[name] = part
             self._cells[name] = self._index_cells(worksheet_root)

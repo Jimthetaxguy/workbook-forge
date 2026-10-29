@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "description": "Typed codes carried by every workbook refusal. Python's WorkbookError.code and Rust's XlsxError::code() read the same table. A refusal raised with an explicit code keeps it; otherwise the first rule whose phrase occurs in the message (case-insensitive) names the code. docs/refusal-codes.md explains each code.",
+  "description": "Typed codes carried by every workbook refusal. Python's WorkbookError.code and Rust's XlsxError::code() read the same table. A leading registered token (a name in codes or inherited) followed by ': ' is that code, and an explicit Python code= keeps its value; otherwise the first rule whose phrase occurs in the message (case-insensitive) names the code. docs/refusal-codes.md explains each code.",
   "codes": {
     "macro_content": "The package holds VBA or macro-enabled content. Workbook Forge refuses it rather than preserve code it cannot inspect.",
     "strict_ooxml": "The package uses the Strict OOXML namespaces. Only Transitional SpreadsheetML is read.",
@@ -30,7 +30,8 @@
       "code": "macro_content",
       "phrases": [
         "vba",
-        "macro"
+        "macro-enabled",
+        "macro content"
       ]
     },
     {
@@ -80,7 +81,8 @@
     {
       "code": "date_1904_unsupported",
       "phrases": [
-        "1904"
+        "1904 date",
+        "1904 formula"
       ]
     },
     {
@@ -169,7 +171,7 @@
         "formula kind",
         "formula dependency cycle",
         "unsupported function",
-        "unknown worksheet"
+        "formula references unknown worksheet"
       ]
     },
     {

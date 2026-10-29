@@ -39,17 +39,14 @@ impl std::error::Error for XlsxError {}
 impl XlsxError {
     /// The refusal's typed code (docs/refusal-codes.md).
     ///
-    /// A message that starts with a registered `code: ` prefix carries that
-    /// code; [`toolkit::ToolkitError`] conversions keep theirs the same way.
-    /// Any other message is `xlsx_error`, the untyped fallback.
+    /// A leading `token: ` is that code when `token` is registered in the
+    /// shared table (`codes` or `inherited`). A [`toolkit::ToolkitError`]
+    /// converted through its `code: message` display keeps its code the same
+    /// way when that code is registered. Any other message is classified by
+    /// the shared phrase table, or `xlsx_error` when no rule matches.
     pub fn code(&self) -> &str {
-        if let Some((code, _)) = self.0.split_once(": ")
-            && !code.is_empty()
-            && code
-                .bytes()
-                .all(|b| b.is_ascii_lowercase() || b == b'_' || b.is_ascii_digit())
-        {
-            return code;
+        if let Some(token) = registered_prefix(&self.0) {
+            return token;
         }
         refusal_code(&self.0).unwrap_or("xlsx_error")
     }
@@ -67,14 +64,17 @@ impl From<toolkit::ToolkitError> for XlsxError {
 /// The shared refusal-code table; `catalog/refusal-codes.json` holds the
 /// same bytes (a Python test keeps them identical).
 const REFUSAL_CODES: &str = include_str!("refusal_codes.json");
-static REFUSAL_RULES: std::sync::OnceLock<Vec<(String, Vec<String>)>> = std::sync::OnceLock::new();
 
-/// Classify a refusal message with the shared table, as Python's
-/// `workbook_forge.workbook.refusal_code` does. `None` when no rule matches.
-pub fn refusal_code(message: &str) -> Option<&'static str> {
-    let rules = REFUSAL_RULES.get_or_init(|| {
+struct RefusalTable {
+    rules: Vec<(String, Vec<String>)>,
+    codes: BTreeSet<String>,
+}
+
+fn refusal_table() -> &'static RefusalTable {
+    static TABLE: std::sync::OnceLock<RefusalTable> = std::sync::OnceLock::new();
+    TABLE.get_or_init(|| {
         let table: Json = serde_json::from_str(REFUSAL_CODES).unwrap_or(Json::Null);
-        table["rules"]
+        let rules = table["rules"]
             .as_array()
             .map(|rules| {
                 rules
@@ -95,10 +95,43 @@ pub fn refusal_code(message: &str) -> Option<&'static str> {
                     })
                     .collect()
             })
-            .unwrap_or_default()
-    });
+            .unwrap_or_default();
+        let mut codes = BTreeSet::new();
+        if let Some(object) = table["codes"].as_object() {
+            codes.extend(object.keys().cloned());
+        }
+        if let Some(items) = table["inherited"]["codes"].as_array() {
+            for item in items {
+                if let Some(code) = item.as_str() {
+                    codes.insert(code.to_string());
+                }
+            }
+        }
+        RefusalTable { rules, codes }
+    })
+}
+
+/// A leading `token: ` when `token` is a registered code.
+fn registered_prefix(message: &str) -> Option<&str> {
+    let (token, _) = message.split_once(": ")?;
+    if token.is_empty()
+        || !token
+            .bytes()
+            .all(|b| b.is_ascii_lowercase() || b == b'_' || b.is_ascii_digit())
+    {
+        return None;
+    }
+    refusal_table().codes.contains(token).then_some(token)
+}
+
+/// Classify a refusal message with the shared phrase table.
+///
+/// A leading `token: ` is not special here; [`XlsxError::code`] applies that
+/// rule. `None` when no rule matches.
+fn refusal_code(message: &str) -> Option<&'static str> {
     let folded = message.to_lowercase();
-    rules
+    refusal_table()
+        .rules
         .iter()
         .find(|(_, phrases)| {
             phrases
@@ -1330,11 +1363,11 @@ impl ImportedWorkbook {
         self.insertion_bound = (rows, columns);
         Ok(self)
     }
-    /// `(rows, columns)` an absent cell may be inserted within.
     /// Merged ranges per sheet as `(c1, r1, c2, r2)`.
     pub fn merged_ranges(&self) -> BTreeMap<String, Vec<(u32, u32, u32, u32)>> {
         self.merged.clone()
     }
+    /// `(rows, columns)` an absent cell may be inserted within.
     pub fn insertion_bound(&self) -> (u32, u32) {
         self.insertion_bound
     }
@@ -3058,5 +3091,64 @@ mod refusal_code_tests {
             "package_damaged"
         );
         assert_eq!(XlsxError("zzz".into()).code(), "xlsx_error");
+        assert_eq!(
+            XlsxError(
+                "out_of_bounds: Sheet1!A1 is outside this session's grid of 10 rows x 10 columns"
+                    .into()
+            )
+            .code(),
+            "out_of_bounds"
+        );
+        assert_eq!(
+            XlsxError(
+                "unsupported_edit: Sheet1!B2 is inside a merged range; only its top-left cell can hold content"
+                    .into()
+            )
+            .code(),
+            "unsupported_edit"
+        );
+        assert_eq!(
+            XlsxError(
+                "invalid_bound: insertion bound must be within 1..=1048576 rows and 1..=16384 columns"
+                    .into()
+            )
+            .code(),
+            "invalid_bound"
+        );
+        // An unregistered token is not a code; the phrase table still runs.
+        assert_eq!(
+            XlsxError("not_a_code: the value is invalid".into()).code(),
+            "package_damaged"
+        );
+        assert_eq!(
+            XlsxError("not_a_code: nothing here".into()).code(),
+            "xlsx_error"
+        );
+        assert_eq!(
+            XlsxError("macro-free transitional workbook content type required".into()).code(),
+            "unsupported_package"
+        );
+        assert_eq!(
+            XlsxError("workbook part must use the macro-free XLSX content type".into()).code(),
+            "xlsx_error"
+        );
+        assert_eq!(
+            XlsxError("1904 formula edits are unsupported".into()).code(),
+            "date_1904_unsupported"
+        );
+        assert_eq!(
+            XlsxError("1904 date-system formula caches cannot be calculated or exported".into())
+                .code(),
+            "date_1904_unsupported"
+        );
+        assert_eq!(
+            XlsxError("workbook date1904 setting is not a recognized Boolean".into()).code(),
+            "xlsx_error"
+        );
+        assert_eq!(XlsxError("unknown worksheet".into()).code(), "xlsx_error");
+        assert_eq!(
+            XlsxError("macro content is forbidden".into()).code(),
+            "macro_content"
+        );
     }
 }

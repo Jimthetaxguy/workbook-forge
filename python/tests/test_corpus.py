@@ -148,3 +148,180 @@ def test_newer_error_values_refuse_with_their_code():
         import_xlsx(ROOT / "fixtures/corpus/hb_errors_newer_values.xlsx")
     assert caught.value.code == "unsupported_error_value"
     import_xlsx(ROOT / "fixtures/corpus/hb_errors_as_values.xlsx")
+
+
+# Sentences both engines classify. Rust locks the same pairs in
+# xlsx::refusal_code_tests::prefixed_and_classified_codes.
+_SHARED_REFUSAL_CODES = (
+    (
+        "out_of_bounds: Sheet1!A1 is outside this session's grid of 10 rows x 10 columns",
+        "out_of_bounds",
+    ),
+    (
+        "unsupported_edit: Sheet1!B2 is inside a merged range; only its top-left cell can hold content",
+        "unsupported_edit",
+    ),
+    (
+        "invalid_bound: insertion bound must be within 1..=1048576 rows and 1..=16384 columns",
+        "invalid_bound",
+    ),
+    ("not_a_code: the value is invalid", "package_damaged"),
+    ("VBA content is forbidden", "macro_content"),
+    ("VBA or macro-enabled package content is not accepted", "macro_content"),
+    ("macro-enabled workbook content is not accepted", "macro_content"),
+    ("macro content is forbidden", "macro_content"),
+    ("macro-free transitional workbook content type required", "unsupported_package"),
+    ("1904 formula edits are unsupported", "date_1904_unsupported"),
+    (
+        "1904 date-system formula caches cannot be calculated or exported",
+        "date_1904_unsupported",
+    ),
+    (
+        "formula calculation does not support the workbook's 1904 date system",
+        "date_1904_unsupported",
+    ),
+    (
+        "formula edits in imported 1904 date-system workbooks are unsupported",
+        "date_1904_unsupported",
+    ),
+    (
+        "formula references unknown worksheet 'Other' at Sheet1!A1",
+        "formula_unsupported",
+    ),
+    ("invalid Excel error value at A10", "package_damaged"),
+)
+
+
+@pytest.mark.parametrize(("message", "code"), _SHARED_REFUSAL_CODES)
+def test_prefixed_and_narrowed_refusals_share_one_code(message, code):
+    """Registered prefixes and the narrowed phrases match Rust's XlsxError::code()."""
+    from workbook_forge.workbook import UnsupportedWorkbook, WorkbookError, refusal_code
+
+    assert refusal_code(message) == code
+    assert WorkbookError(message).code == code
+    assert UnsupportedWorkbook(message).code == code
+    assert WorkbookError(message, code="merged_cell").code == "merged_cell"
+
+
+def test_narrowed_phrases_do_not_mislabel_adjacent_messages():
+    from workbook_forge.workbook import UnsupportedWorkbook, WorkbookError, refusal_code
+
+    macro_free = "workbook part must use the macro-free XLSX content type"
+    assert refusal_code(macro_free) is None
+    assert UnsupportedWorkbook(macro_free).code == "unsupported_package"
+    assert "macro_content" != UnsupportedWorkbook(macro_free).code
+
+    date1904 = "workbook date1904 setting is not a recognized Boolean"
+    assert refusal_code(date1904) is None
+    assert UnsupportedWorkbook(date1904).code == "unsupported_package"
+    assert WorkbookError(date1904).code == "workbook_error"
+
+    assert refusal_code("unknown worksheet") is None
+    assert WorkbookError("unknown worksheet").code == "workbook_error"
+
+
+def _package_parts(workbook_xml, worksheet_xml, workbook_type=None):
+    content_type = (
+        workbook_type
+        or "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"
+    )
+    return {
+        "[Content_Types].xml": (
+            '<?xml version="1.0"?>'
+            '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+            '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+            '<Default Extension="xml" ContentType="application/xml"/>'
+            f'<Override PartName="/xl/workbook.xml" ContentType="{content_type}"/>'
+            '<Override PartName="/xl/worksheets/sheet1.xml" '
+            'ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>'
+            "</Types>"
+        ).encode(),
+        "_rels/.rels": (
+            '<?xml version="1.0"?>'
+            '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+            '<Relationship Id="rId1" '
+            'Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" '
+            'Target="xl/workbook.xml"/>'
+            "</Relationships>"
+        ).encode(),
+        "xl/workbook.xml": workbook_xml,
+        "xl/_rels/workbook.xml.rels": (
+            '<?xml version="1.0"?>'
+            '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+            '<Relationship Id="rId1" '
+            'Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" '
+            'Target="worksheets/sheet1.xml"/>'
+            "</Relationships>"
+        ).encode(),
+        "xl/worksheets/sheet1.xml": worksheet_xml,
+    }
+
+
+def _write_package(path, parts):
+    import zipfile
+
+    with zipfile.ZipFile(path, "w") as archive:
+        for name, data in parts.items():
+            archive.writestr(name, data)
+
+
+_WORKBOOK = (
+    b'<?xml version="1.0"?>'
+    b'<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" '
+    b'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
+    b'<sheets><sheet name="Sheet1" sheetId="1" r:id="rId1"/></sheets></workbook>'
+)
+_WORKSHEET = (
+    b'<?xml version="1.0"?>'
+    b'<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+    b'<sheetData><row r="1"><c r="A1"><v>1</v></c></row></sheetData></worksheet>'
+)
+
+
+def test_wrong_roots_and_settings_are_not_strict_or_1904_or_macro(tmp_path):
+    """The phrase table must not stamp these raise sites with a neighboring code."""
+    from workbook_forge.workbook import UnsupportedWorkbook, Workbook
+
+    cases = {
+        "root.xlsx": (
+            _package_parts(
+                _WORKBOOK.replace(b"<workbook ", b"<notWorkbook ").replace(
+                    b"</workbook>", b"</notWorkbook>"
+                ),
+                _WORKSHEET,
+            ),
+            "unsupported_package",
+        ),
+        "part.xlsx": (
+            _package_parts(
+                _WORKBOOK,
+                _WORKSHEET.replace(b"<worksheet ", b"<notWorksheet ").replace(
+                    b"</worksheet>", b"</notWorksheet>"
+                ),
+            ),
+            "unsupported_package",
+        ),
+        "date1904.xlsx": (
+            _package_parts(
+                _WORKBOOK.replace(
+                    b"<sheets>",
+                    b'<workbookPr date1904="maybe"/><sheets>',
+                ),
+                _WORKSHEET,
+            ),
+            "unsupported_package",
+        ),
+        "content-type.xlsx": (
+            _package_parts(_WORKBOOK, _WORKSHEET, workbook_type="application/xml"),
+            "unsupported_package",
+        ),
+    }
+    for name, (parts, code) in cases.items():
+        path = tmp_path / name
+        _write_package(path, parts)
+        with pytest.raises(UnsupportedWorkbook) as caught:
+            Workbook.open(path)
+        assert caught.value.code == code, name
+        assert caught.value.code != "strict_ooxml"
+        assert caught.value.code != "date_1904_unsupported"
+        assert caught.value.code != "macro_content"
