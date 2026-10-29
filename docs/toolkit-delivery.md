@@ -417,7 +417,10 @@ unavailable Rust bridge raises `NativeUnavailableError`.
   value/formula insertion within the session grid bound. Insertion into merged
   non-anchor cells or outside that bound (`out_of_bounds`), imported
   style/layout/validation changes, grouped/table result edits, and general
-  structure edits are refused.
+  structure edits are refused. Python imported export and snapshot handoff
+  apply the same insertion rules against Excel's grid. An inserted cell grows
+  the dimension and row spans only; tables, defined names, merged ranges and
+  validation ranges are not extended to cover it.
   Its file profile is UTF-8 transitional XLSX, excluding ZIP64, multivolume
   archives and directory entries. Both adapters preserve unsupported content
   within their accepted package profiles; their reports expose narrower limits.

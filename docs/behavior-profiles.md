@@ -205,7 +205,7 @@ Both toolkit sessions cap populated workbook cells and dependency edges at
 [agent contract](agent-protocol.md) imposes a smaller limit of 100. Imported
 agent edits permit value/formula changes to existing cells and to absent cells
 inside Excel's grid (inserted on export); style edits, grouped/table results,
-and preserved-only cells fail before mutation. Rust preservation-aware edits
+preserved-only cells, and merged non-anchor cells fail before mutation. Rust preservation-aware edits
 accept existing-cell content edits and absent-cell value/formula insertion
 within the session grid bound, and refuse insertion into merged non-anchor
 cells or outside that bound (`out_of_bounds`), imported style/layout/validation

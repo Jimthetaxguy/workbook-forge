@@ -158,8 +158,8 @@ an explicit input/output JSON file. The host selects the source and export
 directory; tool calls cannot read arbitrary paths. Imported agent edits allow
 value/formula changes to existing cells and to absent cells inside Excel's
 grid (inserted on export). Style edits, grouped or table results,
-preserved-only cells, and addresses outside the grid are rejected before
-committing. Requests are bounded to 1 MiB, responses to 256 KiB, and context
+preserved-only cells, merged non-anchor cells, and addresses outside the grid
+are rejected before committing. Requests are bounded to 1 MiB, responses to 256 KiB, and context
 pages to 100 cells, with explicit continuation and truncation metadata.
 
 `python examples/agent_scenario.py NEW_DIRECTORY` records a deterministic replay
@@ -284,7 +284,12 @@ in either language. Rust's preservation-aware imported editing accepts
 existing-cell content edits and absent-cell value/formula insertion within
 the session grid bound. It refuses insertion into merged non-anchor cells or
 outside that bound (`out_of_bounds`), imported style/layout/validation changes,
-1904 formula calculation and edits, and grouped/table result edits.
+1904 formula calculation and edits, and grouped/table result edits. Python's
+imported export follows the same insertion rules against Excel's grid; its
+agent reports an address outside the grid as `invalid_reference`. An inserted
+cell grows the worksheet dimension and row spans and takes the row or column
+style; it does not extend a table, defined name, merged range, or validation
+range to cover it.
 
 In this older toolkit form, imported packages retain an immutable baseline.
 Supported edits and results are patched into a private reconstruction,
