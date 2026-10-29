@@ -43,6 +43,7 @@ from .workbook import (
     _in_range,
     _normal_address,
     _q,
+    _reference_bounds,
     _safe_xml,
     _rewrite_ooxml_function_markers,
     _string_part_text,
@@ -93,6 +94,55 @@ class _Baseline:
     comment: bytes
     document_json: str
     uses_1904_date_system: bool
+    # Sheet name -> merged ranges (column, row, column, row). Non-anchor cells
+    # inside those ranges cannot receive an inserted cell.
+    merged: tuple[tuple[str, tuple[tuple[int, int, int, int], ...]], ...]
+
+
+_EXCEL_MAX_ROWS = 1_048_576
+_EXCEL_MAX_COLUMNS = 16_384
+
+
+def _worksheet_merges(root: ET.Element) -> tuple[tuple[int, int, int, int], ...]:
+    parent = next((child for child in root if child.tag == _q("mergeCells")), None)
+    if parent is None:
+        return ()
+    ranges = []
+    for node in parent:
+        if node.tag != _q("mergeCell"):
+            continue
+        if "ref" not in node.attrib:
+            raise UnsupportedWorkbook("missing ref on mergeCell")
+        ranges.append(_reference_bounds(node.attrib["ref"]))
+    return tuple(ranges)
+
+
+def _check_insertion(
+    sheet: str,
+    column: int,
+    row: int,
+    merged: tuple[tuple[str, tuple[tuple[int, int, int, int], ...]], ...],
+) -> None:
+    """Refuse an absent-cell insertion outside the grid or on a merged non-anchor."""
+    if row > _EXCEL_MAX_ROWS or column > _EXCEL_MAX_COLUMNS:
+        raise UnsupportedWorkbook(
+            "out_of_bounds: "
+            f"{sheet}!{_cell_address(column, row)} is outside this session's grid "
+            f"of {_EXCEL_MAX_ROWS} rows x {_EXCEL_MAX_COLUMNS} columns"
+        )
+    ranges = next((item for name, item in merged if name == sheet), ())
+    for start_column, start_row, end_column, end_row in ranges:
+        covered = (
+            start_column <= column <= end_column
+            and start_row <= row <= end_row
+            and (column, row) != (start_column, start_row)
+        )
+        if covered:
+            raise UnsupportedWorkbook(
+                "unsupported_edit: "
+                f"{sheet}!{_cell_address(column, row)} is inside a merged range; "
+                "only its top-left cell can hold content"
+            )
 
 
 def _scalar(value: Any) -> Any:
@@ -200,6 +250,7 @@ def import_xlsx(
                 "normal formulas",
                 "basic style inspection",
                 "column widths",
+                "absent-cell value/formula insertion within the session grid bound",
             ],
             "preserved_only": [
                 "unmodeled package parts",
@@ -209,7 +260,7 @@ def import_xlsx(
             ],
             "rejected": [
                 "macros",
-                "structural edits",
+                "insertion into merged non-anchor cells or outside the session grid bound",
                 "imported style or validation edits",
                 "calculation through blocked cells",
             ],
@@ -235,6 +286,7 @@ def import_xlsx(
                 )
         budget = [0]
         width_work = 0
+        merged: list[tuple[str, tuple[tuple[int, int, int, int], ...]]] = []
         for index, sheet in enumerate(workbook.sheet_names, 1):
             cells: dict[str, Any] = {}
             part = workbook._sheet_parts[sheet]
@@ -343,6 +395,7 @@ def import_xlsx(
             document["sheets"].append(
                 {"id": f"sheet-{index}", "name": sheet, "cells": cells, "column_widths": widths}
             )
+            merged.append((sheet, _worksheet_merges(root)))
             metadata["sheets"].append(
                 {
                     "name": sheet,
@@ -365,6 +418,7 @@ def import_xlsx(
             workbook._archive.comment,
             json.dumps(model.to_dict(), allow_nan=False),
             workbook._uses_1904_date_system,
+            tuple(merged),
         )
         model._import_metadata = metadata
         return model
@@ -722,7 +776,12 @@ def _check_preserved_validation(workbook: Workbook, document: dict[str, Any]) ->
             )
 
 
-def _patch_import(workbook: Workbook, original: dict[str, Any], current: dict[str, Any]) -> None:
+def _patch_import(
+    workbook: Workbook,
+    original: dict[str, Any],
+    current: dict[str, Any],
+    merged: tuple[tuple[str, tuple[tuple[int, int, int, int], ...]], ...] = (),
+) -> None:
     if original["inputs"] != current["inputs"]:
         raise UnsupportedWorkbook(
             "imported input/validation bindings cannot be changed during export"
@@ -743,6 +802,11 @@ def _patch_import(workbook: Workbook, original: dict[str, Any], current: dict[st
                 raise UnsupportedWorkbook(
                     f"cannot edit preserved-only cell {after['name']}!{address}"
                 )
+            if address not in before["cells"]:
+                # Every path that inserts a cell (agent edit, toolkit edit,
+                # snapshot handoff) meets the same guard as the Rust session.
+                column, row = _cell_position(address)
+                _check_insertion(after["name"], column, row, merged)
             if old.get("style") != new.get("style"):
                 raise UnsupportedWorkbook(
                     "imported style changes require a separately audited style transformer"
@@ -766,7 +830,9 @@ def export_snapshot(imported: WorkbookModel, document: dict[str, Any], output: s
     """Calculate a transferred toolkit IR using an immutable imported package.
 
     This is an IR handoff, not Rust/Python source generation. Existing export
-    checks retain layout/style/validation and blocked-region protections.
+    checks retain layout/style/validation and blocked-region protections. A
+    snapshot cannot drop a source cell. Cells the source did not hold are
+    insertions and use the same grid-bound and merge guards as a live edit.
     """
     import json
 
@@ -776,16 +842,25 @@ def export_snapshot(imported: WorkbookModel, document: dict[str, Any], output: s
     transferred = WorkbookModel(document=document, backend=imported.backend)
     current = transferred.to_dict()
     if len(original["sheets"]) != len(current["sheets"]) or any(
-        before["cells"].keys() != after["cells"].keys()
+        before["name"] != after["name"]
+        or any(address not in after["cells"] for address in before["cells"])
         for before, after in zip(original["sheets"], current["sheets"], strict=True)
     ):
         raise UnsupportedWorkbook("transferred snapshot must retain all source cell addresses")
+    merged = imported._source_baseline.merged
     for before, after in zip(original["sheets"], current["sheets"], strict=True):
         for address, cell in before["cells"].items():
             if cell.get("blocked_reason") != after["cells"][address].get("blocked_reason"):
                 raise UnsupportedWorkbook(
                     "transferred snapshot cannot change preserved-only guards"
                 )
+        for address, cell in after["cells"].items():
+            if address in before["cells"]:
+                continue
+            if cell.get("blocked_reason") is not None:
+                raise UnsupportedWorkbook("transferred snapshot cannot add preserved-only guards")
+            column, row = _cell_position(address)
+            _check_insertion(after["name"], column, row, merged)
     transferred._source_baseline = imported._source_baseline
     return export_xlsx(transferred, output)
 
@@ -872,7 +947,9 @@ def export_xlsx(
                     archive.writestr(info, parts[info.filename])
         with Workbook.open(seed) as workbook:
             if baseline is not None:
-                _patch_import(workbook, json.loads(baseline.document_json), document)
+                _patch_import(
+                    workbook, json.loads(baseline.document_json), document, baseline.merged
+                )
             workbook._request_recalculation()
             for (sheet, address), value in cache_values.items():
                 workbook._write_formula_cache(sheet, address, value)

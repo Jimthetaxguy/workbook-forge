@@ -174,6 +174,37 @@ fn inserts_in_row_middle_row_end_and_new_rows_in_order() {
 }
 
 #[test]
+fn new_row_just_before_a_rewritten_row_is_placed_before_it() {
+    // A3 creates row 3 at the start offset of row 4, and B4 rewrites row 4.
+    // Both patches start at the same byte; the new row must come first.
+    let bytes = sparse_bytes();
+    let workbook = open(&bytes);
+    workbook
+        .apply(
+            vec![
+                Edit::value("Sheet1", "A3", CellValue::Number(100.0)),
+                Edit::value("Sheet1", "B4", CellValue::Number(7.0)),
+            ],
+            Some(0),
+        )
+        .unwrap();
+    let exported = workbook.export_bytes().unwrap();
+    let xml = sheet_xml(&exported);
+    let row3 = xml.find(r#"<row r="3""#).unwrap_or_else(|| panic!("{xml}"));
+    let row4 = xml.find(r#"<row r="4""#).unwrap_or_else(|| panic!("{xml}"));
+    assert!(row3 < row4, "{xml}");
+    assert!(
+        xml.contains(r#"<row r="3" spans="1:1"><c r="A3"><v>100</v></c></row>"#),
+        "{xml}"
+    );
+    let reopened = open(&exported);
+    let cells = &reopened.snapshot().sheets[0].cells;
+    assert_eq!(cells["A3"].value, CellValue::Number(100.0));
+    assert_eq!(cells["B4"].value, CellValue::Number(7.0));
+    assert_eq!(number(&reopened, "A4"), 111.0);
+}
+
+#[test]
 fn formula_into_an_absent_cell_round_trips_with_its_value() {
     let workbook = open(&sparse_bytes());
     workbook
