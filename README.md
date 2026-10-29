@@ -156,8 +156,10 @@ cargo run --manifest-path rust/Cargo.toml --example agent_workbook -- --scenario
 To load a workbook, replace `--scenario` with its path and add `--bindings` with
 an explicit input/output JSON file. The host selects the source and export
 directory; tool calls cannot read arbitrary paths. Imported agent edits allow
-existing-cell value/formula changes, and reject unsupported changes before
-committing. Requests are bounded to 1 MiB, responses to 256 KiB, and context
+value/formula changes to existing cells and to absent cells inside Excel's
+grid (inserted on export). Style edits, grouped or table results,
+preserved-only cells, merged non-anchor cells, and addresses outside the grid
+are rejected before committing. Requests are bounded to 1 MiB, responses to 256 KiB, and context
 pages to 100 cells, with explicit continuation and truncation metadata.
 
 `python examples/agent_scenario.py NEW_DIRECTORY` records a deterministic replay
@@ -278,9 +280,16 @@ Rust's `workbook_forge::xlsx` module is the same older toolkit form: it generate
 a workbook and applies a preservation-aware patch. It provides its own
 import/export workflow and uses only low-level ZIP/XML libraries. The Rust
 examples run without Python. Fresh generation supports sparse authored models
-in either language. Rust's preservation-aware imported editing currently
-requires existing cells; inserting new cells into imported packages is
-explicitly rejected.
+in either language. Rust's preservation-aware imported editing accepts
+existing-cell content edits and absent-cell value/formula insertion within
+the session grid bound. It refuses insertion into merged non-anchor cells or
+outside that bound (`out_of_bounds`), imported style/layout/validation changes,
+1904 formula calculation and edits, and grouped/table result edits. Python's
+imported export follows the same insertion rules against Excel's grid; its
+agent reports an address outside the grid as `invalid_reference`. An inserted
+cell grows the worksheet dimension and row spans and takes the row or column
+style; it does not extend a table, defined name, merged range, or validation
+range to cover it.
 
 In this older toolkit form, imported packages retain an immutable baseline.
 Supported edits and results are patched into a private reconstruction,
@@ -448,7 +457,9 @@ bash tools/gate.sh
 ```
 
 It rebuilds the native bridge from the checkout's `.venv`, runs both test suites,
-ruff, clippy and rustfmt, fails on a skipped test, and files its log under
+ruff, clippy and rustfmt, builds the headless browser engine for wasm32 and runs
+its Node tests (the `web/forge-engine` wasm32 build and its `npm test`), fails
+on a skipped test, and files its log under
 `.verification/gates/` by commit. The pieces it runs, for working on one side:
 
 ```sh

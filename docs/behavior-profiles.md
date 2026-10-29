@@ -202,9 +202,16 @@ a branch would not be selected at runtime.
 
 Both toolkit sessions cap populated workbook cells and dependency edges at
 100,000. Atomic engine edit batches contain at most 10,000 edits; the
-[agent contract](agent-protocol.md) imposes a smaller limit of 100. Imported agent
-edits and Rust preservation-aware edits require original existing cells. Supported
-fresh-generation styles do not imply unrestricted imported-style editing.
+[agent contract](agent-protocol.md) imposes a smaller limit of 100. Imported
+agent edits permit value/formula changes to existing cells and to absent cells
+inside Excel's grid (inserted on export); style edits, grouped/table results,
+preserved-only cells, and merged non-anchor cells fail before mutation. Rust preservation-aware edits
+accept existing-cell content edits and absent-cell value/formula insertion
+within the session grid bound, and refuse insertion into merged non-anchor
+cells or outside that bound (`out_of_bounds`), imported style/layout/validation
+changes, and grouped/table result edits. Structure edits remain refused.
+Supported fresh-generation styles do not imply unrestricted imported-style
+editing.
 
 Macros and external data are never executed or fetched by either SDK. Excel may
 recalculate formulas and update workbook-defined external links when a person opens
