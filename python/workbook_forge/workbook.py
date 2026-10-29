@@ -8,7 +8,9 @@ Forge evaluator. It never executes macros or external data sources.
 
 from __future__ import annotations
 
+import functools
 import io
+import json
 import math
 import os
 import re
@@ -25,7 +27,7 @@ from xml.etree import ElementTree as ET
 from xml.sax.saxutils import quoteattr
 
 from . import ArrayValue, ErrorValue, analyze_formula, evaluate_result
-from .catalog import function_status
+from .catalog import _catalog_file, function_status
 from .xml_patterns import (
     XMLLimitError,
     XMLPatternError,
@@ -104,12 +106,49 @@ _WORKBOOK_ORDER = (
 )
 
 
+@functools.lru_cache(maxsize=1)
+def _refusal_rules() -> tuple[tuple[str, tuple[str, ...]], ...]:
+    """The shared refusal-code table (catalog/refusal-codes.json).
+
+    Rust reads the same table (rust/src/refusal_codes.json, kept identical by
+    a test), so both engines give one refusal the same code.
+    """
+    table = json.loads(_catalog_file("refusal-codes.json").read_text(encoding="utf-8"))
+    return tuple(
+        (rule["code"], tuple(phrase.casefold() for phrase in rule["phrases"]))
+        for rule in table["rules"]
+    )
+
+
+def refusal_code(message: str) -> str | None:
+    """Classify a refusal message with the shared table; ``None`` when no rule matches."""
+    folded = message.casefold()
+    for code, phrases in _refusal_rules():
+        if any(phrase in folded for phrase in phrases):
+            return code
+    return None
+
+
 class WorkbookError(Exception):
-    """Base error for unsupported or malformed workbook packages."""
+    """Base error for unsupported or malformed workbook packages.
+
+    ``code`` is the refusal's typed code (docs/refusal-codes.md). A raise site
+    may name it; otherwise the shared table classifies the message, and a
+    message no rule matches keeps the untyped ``workbook_error``.
+    """
+
+    default_code = "workbook_error"
+
+    def __init__(self, *args: object, code: str | None = None):
+        super().__init__(*args)
+        message = str(args[0]) if args else ""
+        self.code = code or refusal_code(message) or self.default_code
 
 
 class UnsupportedWorkbook(WorkbookError):
     """The package is valid but outside this adapter's explicit support."""
+
+    default_code = "unsupported_package"
 
 
 @dataclass(frozen=True)
@@ -629,6 +668,15 @@ class Workbook:
             root_ids = [rel.attrib.get("Id") for rel in root_relationships]
             if any(not rel_id for rel_id in root_ids) or len(root_ids) != len(set(root_ids)):
                 raise UnsupportedWorkbook("package root relationship IDs are missing or duplicated")
+            if any(
+                rel.attrib.get("Type", "").startswith("http://purl.oclc.org/ooxml/")
+                for rel in root_relationships
+            ):
+                raise UnsupportedWorkbook(
+                    "Strict OOXML (purl.oclc.org namespaces) is not read; "
+                    "save the workbook as a Transitional .xlsx",
+                    code="strict_ooxml",
+                )
             office_documents = [
                 rel for rel in root_relationships if rel.attrib.get("Type") == OFFICE_DOCUMENT_REL
             ]

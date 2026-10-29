@@ -50,7 +50,10 @@ def test_corpus_manifest_lists_every_file_and_only_synthetic_writers():
 def test_every_expectation_names_a_corpus_file_and_a_registered_code():
     expectations = json.loads(corpus_check.EXPECTATIONS.read_text(encoding="utf-8"))
     registry = ROOT / "catalog/refusal-codes.json"
-    codes = set(json.loads(registry.read_text(encoding="utf-8"))["codes"]) if registry.exists() else None
+    codes = None
+    if registry.exists():
+        table = json.loads(registry.read_text(encoding="utf-8"))
+        codes = set(table["codes"]) | set(table["inherited"]["codes"])
     files = {path.name for path in corpus_check.corpus_files([])}
     for name, engines in expectations.items():
         if name.startswith("_"):
@@ -77,3 +80,43 @@ def test_corpus_matrix_matches_expectations(rust_bin):
     expectations = json.loads(corpus_check.EXPECTATIONS.read_text(encoding="utf-8"))
     mismatches = corpus_check.expectation_mismatches(results, expectations)
     assert not mismatches, "\n".join(mismatches)
+
+
+def test_refusal_code_table_is_shared_and_complete():
+    catalog = (ROOT / "catalog/refusal-codes.json").read_bytes()
+    assert (ROOT / "rust/src/refusal_codes.json").read_bytes() == catalog
+    table = json.loads(catalog)
+    assert {rule["code"] for rule in table["rules"]} <= set(table["codes"])
+    documented = (ROOT / "docs/refusal-codes.md").read_text(encoding="utf-8")
+    for code in table["codes"]:
+        assert f"`{code}`" in documented, code
+
+
+@pytest.mark.parametrize(
+    ("message", "code"),
+    [
+        ("VBA or macro-enabled package content is not accepted", "macro_content"),
+        ("v0.1 accepts .xlsx only; register an audited adapter for other formats", "not_xlsx"),
+        ("cannot export calculation diagnostics: unsupported function CONCATENATE", "calculation_diagnostics"),
+        ("workbook exceeds uncompressed size limit", "package_limit"),
+        ("refusing to overwrite the source workbook", "output_exists"),
+        ("cannot open workbook: File is not a zip file", "package_damaged"),
+    ],
+)
+def test_untagged_refusals_are_classified(message, code):
+    from workbook_forge.workbook import UnsupportedWorkbook, WorkbookError
+
+    assert WorkbookError(message).code == code
+    assert UnsupportedWorkbook(message).code == code
+    assert WorkbookError(message, code="merged_cell").code == "merged_cell"
+    assert UnsupportedWorkbook("nothing in the table matches this").code == "unsupported_package"
+    assert WorkbookError("nothing in the table matches this").code == "workbook_error"
+
+
+def test_strict_ooxml_is_refused_with_its_code():
+    from workbook_forge.workbook import UnsupportedWorkbook
+    from workbook_forge.xlsx import import_xlsx
+
+    with pytest.raises(UnsupportedWorkbook) as caught:
+        import_xlsx(ROOT / "fixtures/corpus/hb_strict_ooxml.xlsx")
+    assert caught.value.code == "strict_ooxml"

@@ -35,6 +35,7 @@ package-dir = {"" = "python"}
   "catalog/workbook-capabilities.json",
   "catalog/dependency-licenses.json",
   "catalog/agent-operations.json",
+  "catalog/refusal-codes.json",
   "catalog/extraction-patterns.json",
   "catalog/extraction-report.schema.json",
   "catalog/primitive-catalog.json",

@@ -43,17 +43,15 @@ impl XlsxError {
     /// code; [`toolkit::ToolkitError`] conversions keep theirs the same way.
     /// Any other message is `xlsx_error`, the untyped fallback.
     pub fn code(&self) -> &str {
-        match self.0.split_once(": ") {
-            Some((code, _))
-                if !code.is_empty()
-                    && code
-                        .bytes()
-                        .all(|b| b.is_ascii_lowercase() || b == b'_' || b.is_ascii_digit()) =>
-            {
-                code
-            }
-            _ => "xlsx_error",
+        if let Some((code, _)) = self.0.split_once(": ")
+            && !code.is_empty()
+            && code
+                .bytes()
+                .all(|b| b.is_ascii_lowercase() || b == b'_' || b.is_ascii_digit())
+        {
+            return code;
         }
+        refusal_code(&self.0).unwrap_or("xlsx_error")
     }
 }
 impl From<std::io::Error> for XlsxError {
@@ -65,6 +63,49 @@ impl From<toolkit::ToolkitError> for XlsxError {
     fn from(e: toolkit::ToolkitError) -> Self {
         Self(e.to_string())
     }
+}
+/// The shared refusal-code table; `catalog/refusal-codes.json` holds the
+/// same bytes (a Python test keeps them identical).
+const REFUSAL_CODES: &str = include_str!("refusal_codes.json");
+static REFUSAL_RULES: std::sync::OnceLock<Vec<(String, Vec<String>)>> = std::sync::OnceLock::new();
+
+/// Classify a refusal message with the shared table, as Python's
+/// `workbook_forge.workbook.refusal_code` does. `None` when no rule matches.
+pub fn refusal_code(message: &str) -> Option<&'static str> {
+    let rules = REFUSAL_RULES.get_or_init(|| {
+        let table: Json = serde_json::from_str(REFUSAL_CODES).unwrap_or(Json::Null);
+        table["rules"]
+            .as_array()
+            .map(|rules| {
+                rules
+                    .iter()
+                    .map(|rule| {
+                        let code = rule["code"].as_str().unwrap_or("xlsx_error").to_string();
+                        let phrases = rule["phrases"]
+                            .as_array()
+                            .map(|items| {
+                                items
+                                    .iter()
+                                    .filter_map(Json::as_str)
+                                    .map(str::to_lowercase)
+                                    .collect()
+                            })
+                            .unwrap_or_default();
+                        (code, phrases)
+                    })
+                    .collect()
+            })
+            .unwrap_or_default()
+    });
+    let folded = message.to_lowercase();
+    rules
+        .iter()
+        .find(|(_, phrases)| {
+            phrases
+                .iter()
+                .any(|phrase| folded.contains(phrase.as_str()))
+        })
+        .map(|(code, _)| code.as_str())
 }
 fn err(message: impl Into<String>) -> XlsxError {
     XlsxError(message.into())
@@ -674,6 +715,14 @@ fn decode_mode(
         }
     }
     let roots = relationships(package.get("_rels/.rels")?)?;
+    if roots
+        .values()
+        .any(|(kind, _, _)| kind.starts_with("http://purl.oclc.org/ooxml/"))
+    {
+        return Err(err(
+            "strict_ooxml: Strict OOXML (purl.oclc.org namespaces) is not read; save the workbook as a Transitional .xlsx",
+        ));
+    }
     let offices: Vec<_> = roots
         .values()
         .filter(|(kind, _, _)| kind == &format!("{REL}/officeDocument"))
@@ -2938,5 +2987,31 @@ mod tests {
         let mut traversal = scenario_package();
         traversal.parts.insert("../outside.bin".into(), vec![0]);
         assert!(Package::from_bytes(&traversal.encode().unwrap()).is_err());
+    }
+}
+
+#[cfg(test)]
+mod refusal_code_tests {
+    use super::*;
+
+    #[test]
+    fn prefixed_and_classified_codes() {
+        assert_eq!(
+            XlsxError("unsupported_edit: merged".into()).code(),
+            "unsupported_edit"
+        );
+        assert_eq!(
+            XlsxError("VBA content is forbidden".into()).code(),
+            "macro_content"
+        );
+        assert_eq!(
+            XlsxError("compressed package exceeds 130 MiB".into()).code(),
+            "package_limit"
+        );
+        assert_eq!(
+            XlsxError("invalid XML: ill-formed document".into()).code(),
+            "package_damaged"
+        );
+        assert_eq!(XlsxError("zzz".into()).code(), "xlsx_error");
     }
 }
