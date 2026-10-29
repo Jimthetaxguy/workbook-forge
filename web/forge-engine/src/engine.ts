@@ -43,7 +43,6 @@ export interface ForgeWorkbook {
   snapshotJson(): string;
   revisionString(): string;
   applyEditsResultJson(editsJson: string, expectedRevision: string): string;
-  applyAndCalculateJson(envelopeJson: string): string;
   submitJson(requestJson: string): string;
   startLog(name: string, engineJson: string): void;
   logJson(fromSeq: number, limit: number): string;

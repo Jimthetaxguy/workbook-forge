@@ -204,8 +204,8 @@ for (const mode of ['not-execute', 'load-only']) {
       expect(f.snapshot.sheets[0].cells.C1.formula).toBe('B1+100');
       expect(f.calc.values['Sheet1!F1']).toBe(1000);
 
-      // Undo: Univer's undo command is routed to Forge, which applies the
-      // inverse edit at the expected revision (2 -> 3).
+      // Undo: Univer's undo command is routed to Forge as an undo intent
+      // (revision 2 -> 3).
       await page.keyboard.press(process.platform === 'darwin' ? 'Meta+z' : 'Control+z');
       await settle(page);
       v = await view(page);
