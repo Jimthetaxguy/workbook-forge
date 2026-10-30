@@ -10,10 +10,12 @@ by our own scripts so there is no third-party licensing exposure:
   targets, prefixed SpreadsheetML, Strict OOXML, pivot caches, external links,
   threaded comments, BOM-prefixed parts, cells without `r` attributes, and the
   quirks of Google Sheets, Numbers and LibreOffice exports.
-- `lo_*` files come from LibreOffice headless when `soffice` is on PATH.
+- `lo_*` files come from LibreOffice headless when `soffice` is on PATH and
+  `--writers` includes `libreoffice`. That writer is not in the default list.
 
 Regenerate with `python tools/corpus/generate_corpus.py` (openpyxl and XlsxWriter
-installed). `fixtures/corpus/MANIFEST.json` lists each file's writer and
+installed). The default writers are openpyxl, XlsxWriter, and hand-built OOXML.
+`fixtures/corpus/MANIFEST.json` lists each file's writer and
 categories. openpyxl stamps the save time into `docProps/core.xml`, so its files
 are not byte-stable across regenerations; the others are.
 

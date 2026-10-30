@@ -1,7 +1,8 @@
 """Robustness corpus: every fixtures/corpus workbook through every engine.
 
-tools/corpus_check.py runs open, inspect, calculate, a value edit, an
-absent-cell insert, export and reimport. This test holds the matrix to
+tools/corpus_check.py runs open, inspect, calculate, a value edit, export and
+reimport. py_toolkit and rust also insert one value into an absent cell.
+py_canonical only edits an existing number. This test holds the matrix to
 tools/corpus/expectations.json (anything not listed must pass) and never
 accepts a crash, a corrupt package or a lost value. The checks are about
 Workbook Forge's own reader and writers, not Excel results.
