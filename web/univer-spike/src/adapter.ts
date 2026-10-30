@@ -134,16 +134,20 @@ function toCellData(value: Scalar, formula?: string): ICellData {
 
 /**
  * Read one typed cell. In a Text-formatted (`@`) cell, or for a force-string
- * entry (a leading apostrophe), everything typed stays text, as in Excel:
+ * entry (a leading apostrophe), everything typed stays text:
  * `00123` keeps its zeros and `=A1` is the text "=A1", not a formula. A
  * leading apostrophe is the entry marker and is not part of the value.
  */
 export function parseInput(cell: ICellData, textFormat = false): { value: Scalar } | { formula: string } | null {
   let raw: unknown = cell.v;
-  if (raw === undefined && cell.p?.body?.dataStream) raw = cell.p.body.dataStream.replace(/\r\n$/, '');
+  // Univer's editor leaves v null for a formula-shaped entry unless the cell
+  // style pattern is @. A text cell still stores that entry as text.
+  if (cell.p?.body?.dataStream && (raw === undefined || (textFormat && raw === null))) {
+    raw = cell.p.body.dataStream.replace(/\r\n$/, '');
+  }
   const forced = cell.t === CellValueType.FORCE_STRING || (typeof raw === 'string' && raw.startsWith("'"));
   if (textFormat || forced) {
-    if (raw === undefined && typeof cell.f === 'string') raw = cell.f;
+    if ((textFormat ? raw == null : raw === undefined) && typeof cell.f === 'string') raw = cell.f;
     if (raw === undefined) return null;
     if (raw === null || raw === '') return { value: null };
     const text = typeof raw === 'boolean' ? (raw ? 'TRUE' : 'FALSE') : String(raw);
@@ -217,6 +221,9 @@ export class ForgeUniverAdapter {
     this.projected.clear();
     this.sheetIds.clear();
     this.textCells.clear();
+    // Dedupe keeps a notice that matches the previous line. A new workbook
+    // must be able to raise that same sentence again.
+    this.notices.length = 0;
     const calculated = await this.client.calculate();
     if (!calculated.ok) throw new Error(`${calculated.error.code}: ${calculated.error.message}`);
     if (calculated.value.revision !== snapshot.value.revision) throw new Error('revision drift while opening workbook');
