@@ -9,9 +9,11 @@ Writers:
   package itself does not depend on them). Files from a missing writer are
   skipped with a note and the committed copies stay in place.
 - hand-built OOXML (tools/corpus/handbuilt.py, standard library only).
-- LibreOffice headless (``soffice --convert-to xlsx``) when it is on PATH.
+- LibreOffice headless (``soffice --convert-to xlsx``) only when ``--writers``
+  includes ``libreoffice`` and ``soffice`` is on PATH. It is not a default writer.
 
 Usage: python tools/corpus/generate_corpus.py [--out fixtures/corpus]
+       [--writers openpyxl,xlsxwriter,handbuilt]
 The manifest (fixtures/corpus/MANIFEST.json) lists each file's writer and
 categories.
 """
@@ -435,11 +437,11 @@ def xlsxwriter_files(out: Path) -> dict[str, list[str]]:
     scatter = wb.add_chart({"type": "scatter"})
     scatter.add_series({"categories": "='Trial Data'!$B$2:$B$9", "values": "='Trial Data'!$C$2:$C$9"})
     ws.insert_chart("E20", scatter)
-    png = out / "_tmp_logo.png"
-    png.write_bytes(handbuilt.tiny_png())
-    ws.insert_image("M2", str(png))
-    done(wb, ["charts", "drawings", "images", "line-chart", "scatter-chart", "sheet-names"])
-    png.unlink()
+    with tempfile.TemporaryDirectory() as scratch:
+        png = Path(scratch) / "_tmp_logo.png"
+        png.write_bytes(handbuilt.tiny_png())
+        ws.insert_image("M2", str(png))
+        done(wb, ["charts", "drawings", "images", "line-chart", "scatter-chart", "sheet-names"])
 
     # Chartsheet.
     wb = book("xw_chartsheet.xlsx")
@@ -513,11 +515,11 @@ def xlsxwriter_files(out: Path) -> dict[str, list[str]]:
     ws = wb.add_worksheet("Tools")
     ws.write("A1", 5)
     ws.write_formula("A2", "=A1*2", None, 10)
-    vba = out / "_tmp_vbaProject.bin"
-    vba.write_bytes(b"synthetic placeholder, not a VBA project")
-    wb.add_vba_project(str(vba))
-    done(wb, ["vba", "xlsm"])
-    vba.unlink()
+    with tempfile.TemporaryDirectory() as scratch:
+        vba = Path(scratch) / "_tmp_vbaProject.bin"
+        vba.write_bytes(b"synthetic placeholder, not a VBA project")
+        wb.add_vba_project(str(vba))
+        done(wb, ["vba", "xlsm"])
 
     # 1904 dates with cached formula values.
     wb = book("xw_1904_dates.xlsx", date_1904=True)
@@ -585,8 +587,8 @@ def libreoffice_files(out: Path) -> dict[str, list[str]]:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--out", default=str(ROOT / "fixtures/corpus"))
-    parser.add_argument("--writers", default="openpyxl,xlsxwriter,handbuilt,libreoffice",
-                        help="comma-separated writers to run (others keep their files)")
+    parser.add_argument("--writers", default="openpyxl,xlsxwriter,handbuilt",
+                        help="comma-separated writers to run; libreoffice is opt-in (others keep their files)")
     args = parser.parse_args()
     writers = set(args.writers.split(","))
     out = Path(args.out)
