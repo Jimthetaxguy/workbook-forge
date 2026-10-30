@@ -42,9 +42,14 @@ impl std::error::Error for XlsxError {}
 impl XlsxError {
     /// The refusal's typed code (docs/refusal-codes.md).
     ///
-    /// A message that starts with a registered `code: ` prefix carries that
-    /// code; [`toolkit::ToolkitError`] conversions keep theirs the same way.
-    /// Any other message is `xlsx_error`, the untyped fallback.
+    /// A message that starts with a `token: ` prefix carries that code when
+    /// `token` is a non-empty `[a-z0-9_]+` sequence. The shared phrase table
+    /// classifies every other message. A message no rule matches is
+    /// `xlsx_error`.
+    ///
+    /// [`toolkit::ToolkitError`] displays as `code: message`, so converting
+    /// one into `XlsxError` keeps its code under this prefix rule, including
+    /// toolkit codes that are absent from the catalog's `inherited` list.
     pub fn code(&self) -> &str {
         if let Some((code, _)) = self.0.split_once(": ")
             && !code.is_empty()
@@ -770,7 +775,7 @@ fn decode_mode(
     let workbook_part = resolve("", &offices[0].1)?;
     if types.get(&workbook_part).map(String::as_str) != Some(WB_TYPE) {
         return Err(err(
-            "macro-free transitional workbook content type required",
+            "unsupported_package: macro-free transitional workbook content type required",
         ));
     }
     let wb = Xml::parse(package.get(&workbook_part)?)?;
@@ -832,7 +837,9 @@ fn decode_mode(
             // A chartsheet holds one chart and no cells. It stays in the
             // package byte-for-byte and is listed, not modeled.
             if *external {
-                return Err(err("chartsheet relationships must be internal"));
+                return Err(err(
+                    "package_damaged: chartsheet relationships must be internal",
+                ));
             }
             let part = resolve(&workbook_part, target)?;
             package.get(&part)?;
@@ -1427,11 +1434,11 @@ impl ImportedWorkbook {
         self.insertion_bound = (rows, columns);
         Ok(self)
     }
-    /// `(rows, columns)` an absent cell may be inserted within.
     /// Merged ranges per sheet as `(c1, r1, c2, r2)`.
     pub fn merged_ranges(&self) -> BTreeMap<String, Vec<(u32, u32, u32, u32)>> {
         self.merged.clone()
     }
+    /// `(rows, columns)` an absent cell may be inserted within.
     pub fn insertion_bound(&self) -> (u32, u32) {
         self.insertion_bound
     }
@@ -3189,5 +3196,26 @@ mod refusal_code_tests {
             "package_damaged"
         );
         assert_eq!(XlsxError("zzz".into()).code(), "xlsx_error");
+        assert_eq!(XlsxError("unknown worksheet".into()).code(), "xlsx_error");
+        assert_eq!(
+            XlsxError("formula references unknown worksheet 'Other' at Sheet!A1".into()).code(),
+            "formula_unsupported"
+        );
+        assert_eq!(
+            XlsxError(
+                "unsupported_package: macro-free transitional workbook content type required"
+                    .into()
+            )
+            .code(),
+            "unsupported_package"
+        );
+        assert_eq!(
+            XlsxError("invalid_reference: unknown worksheet filter".into()).code(),
+            "invalid_reference"
+        );
+        assert_eq!(
+            XlsxError("package_damaged: chartsheet relationships must be internal".into()).code(),
+            "package_damaged"
+        );
     }
 }

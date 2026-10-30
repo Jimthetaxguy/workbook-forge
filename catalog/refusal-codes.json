@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "description": "Typed codes carried by every workbook refusal. Python's WorkbookError.code and Rust's XlsxError::code() read the same table. A refusal raised with an explicit code keeps it; otherwise the first rule whose phrase occurs in the message (case-insensitive) names the code. docs/refusal-codes.md explains each code.",
+  "description": "Typed codes carried by every workbook refusal. Python's WorkbookError.code and Rust's XlsxError::code() share this table. An explicit code is kept: Python code=, or a leading token: prefix (Python when the token is listed in codes or inherited; Rust for any [a-z0-9_]+ token). Otherwise the first rule whose phrase occurs in the message (case-insensitive) names the code. docs/refusal-codes.md explains each code and the recorded splits that remain.",
   "codes": {
     "macro_content": "The package holds VBA or macro-enabled content. Workbook Forge refuses it rather than preserve code it cannot inspect.",
     "strict_ooxml": "The package uses the Strict OOXML namespaces. Only Transitional SpreadsheetML is read.",
@@ -12,13 +12,13 @@
     "preserved_only_edit": "The edit targets content that is preserved byte-for-byte but not editable (styles, layout, validation rules, grouped or table formula regions).",
     "pivot_output_protected": "The edit writes into a pivot table's output range. Pivot tables are preserved but not refreshed.",
     "chart_reference_protected": "The change would break a chart's series references (for example renaming or removing a sheet a chart reads).",
-    "validation_failed": "The value is not allowed by the target cell's data-validation rule (a drop-down list).",
+    "validation_failed": "The value is outside an enforced data-validation rule: whole, decimal, date, time, textLength or list.",
     "merged_cell": "The edit targets a merged range's non-anchor cell.",
     "out_of_bounds": "The address is outside the Excel grid or the session's grid bound.",
     "output_exists": "The output path exists or is the source workbook.",
     "revision_conflict": "The model changed between the snapshot and the operation.",
     "formula_unsupported": "A formula uses syntax, a function or a reference the engine does not calculate.",
-    "unsupported_sheet_type": "A sheet type other than a worksheet blocked the operation.",
+    "unsupported_sheet_type": "A dialog sheet, macro sheet or other non-worksheet sheet type blocked the operation. Chartsheets are read and preserved.",
     "unsupported_error_value": "A stored error value outside the v1 error set (#NULL!, #DIV/0!, #VALUE!, #REF!, #NAME?, #NUM!, #N/A, #SPILL!, #CALC!), such as #GETTING_DATA, #FIELD! or #BLOCKED!. The model's error enum is fixed for v1.",
     "csv_encoding": "A delimited text file could not be decoded with the requested or detected encoding.",
     "csv_malformed": "A delimited text file has an unterminated quoted field or another syntax error.",
@@ -169,7 +169,7 @@
         "formula kind",
         "formula dependency cycle",
         "unsupported function",
-        "unknown worksheet"
+        "references unknown worksheet"
       ]
     },
     {
