@@ -40,8 +40,10 @@ async function boot() {
   $('redo').onclick = () => adapter.redo();
   $('new').onclick = async () => {
     try {
-      await adapter.newWorkbook('Sheet1');
+      // Clear first. newWorkbook paints notices while it projects, and a
+      // clear after success would erase them.
       notices.textContent = '';
+      await adapter.newWorkbook('Sheet1');
     } catch (error) {
       notices.textContent = `Could not create workbook: ${String(error)}`;
     }
@@ -51,8 +53,10 @@ async function boot() {
     const file = input.files?.[0];
     if (file) {
       try {
-        await adapter.open(new Uint8Array(await file.arrayBuffer()), file.name);
+        // Clear first. open paints notices while it projects, and a clear
+        // after success would erase them.
         notices.textContent = '';
+        await adapter.open(new Uint8Array(await file.arrayBuffer()), file.name);
       } catch (error) {
         notices.textContent = `Could not open ${file.name}: ${String(error)}`;
       } finally {
