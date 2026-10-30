@@ -129,7 +129,8 @@ def _check_insertion(
         raise UnsupportedWorkbook(
             "out_of_bounds: "
             f"{sheet}!{_cell_address(column, row)} is outside this session's grid "
-            f"of {_EXCEL_MAX_ROWS} rows x {_EXCEL_MAX_COLUMNS} columns"
+            f"of {_EXCEL_MAX_ROWS} rows x {_EXCEL_MAX_COLUMNS} columns",
+            code="out_of_bounds",
         )
     ranges = next((item for name, item in merged if name == sheet), ())
     for start_column, start_row, end_column, end_row in ranges:
@@ -142,7 +143,8 @@ def _check_insertion(
             raise UnsupportedWorkbook(
                 "unsupported_edit: "
                 f"{sheet}!{_cell_address(column, row)} is inside a merged range; "
-                "only its top-left cell can hold content"
+                "only its top-left cell can hold content",
+                code="unsupported_edit",
             )
 
 

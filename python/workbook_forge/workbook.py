@@ -123,23 +123,38 @@ _WORKBOOK_ORDER = (
 
 
 @functools.lru_cache(maxsize=1)
-def _refusal_rules() -> tuple[tuple[str, tuple[str, ...]], ...]:
-    """The shared refusal-code table (catalog/refusal-codes.json).
+def _refusal_catalog() -> tuple[tuple[tuple[str, tuple[str, ...]], ...], frozenset[str]]:
+    """Shared phrase table and the codes a leading prefix may name.
 
-    Rust reads the same table (rust/src/refusal_codes.json, kept identical by
-    a test), so both engines give one refusal the same code.
+    ``catalog/refusal-codes.json`` is the table. Rust embeds the same bytes as
+    ``rust/src/refusal_codes.json`` (a test keeps the copies identical). Python
+    takes a leading ``token: `` prefix when ``token`` is listed under ``codes``
+    or ``inherited``, and otherwise the first matching phrase. Rust takes any
+    ``[a-z0-9_]+`` prefix, then the same phrase table.
     """
     table = json.loads(_catalog_file("refusal-codes.json").read_text(encoding="utf-8"))
-    return tuple(
+    rules = tuple(
         (rule["code"], tuple(phrase.casefold() for phrase in rule["phrases"]))
         for rule in table["rules"]
     )
+    registered = set(table["codes"])
+    registered.update(table.get("inherited", {}).get("codes", ()))
+    return rules, frozenset(registered)
 
 
 def refusal_code(message: str) -> str | None:
-    """Classify a refusal message with the shared table; ``None`` when no rule matches."""
+    """Classify a refusal message; ``None`` when no rule matches.
+
+    A leading ``token: `` prefix is the code when ``token`` is registered
+    (catalog ``codes`` or ``inherited``). Any other message is classified by
+    the shared phrase table, first match wins.
+    """
+    rules, registered = _refusal_catalog()
+    prefix, separator, _rest = message.partition(": ")
+    if separator and prefix in registered:
+        return prefix
     folded = message.casefold()
-    for code, phrases in _refusal_rules():
+    for code, phrases in rules:
         if any(phrase in folded for phrase in phrases):
             return code
     return None
@@ -148,9 +163,10 @@ def refusal_code(message: str) -> str | None:
 class WorkbookError(Exception):
     """Base error for unsupported or malformed workbook packages.
 
-    ``code`` is the refusal's typed code (docs/refusal-codes.md). A raise site
-    may name it; otherwise the shared table classifies the message, and a
-    message no rule matches keeps the untyped ``workbook_error``.
+    ``code`` is the refusal's typed code (docs/refusal-codes.md). An explicit
+    ``code=`` is kept. Otherwise ``refusal_code`` applies a registered
+    ``token: `` prefix, then the shared phrase table. A message no rule
+    matches keeps the untyped ``workbook_error``.
     """
 
     default_code = "workbook_error"
@@ -730,7 +746,13 @@ class Workbook:
             if workbook_type == MACRO_WORKBOOK_CONTENT_TYPE:
                 raise UnsupportedWorkbook("macro-enabled workbook content is not accepted")
             if workbook_type != WORKBOOK_CONTENT_TYPE:
-                raise UnsupportedWorkbook("workbook part must use the macro-free XLSX content type")
+                # Real VBA and macro-enabled content are refused above. A
+                # different content type is a profile limit, so the substring
+                # "macro" in "macro-free" must not select macro_content.
+                raise UnsupportedWorkbook(
+                    "workbook part must use the macro-free XLSX content type",
+                    code="unsupported_package",
+                )
             workbook_rels_part = _relationship_part(workbook_part)
             if workbook_rels_part not in parts:
                 raise WorkbookError(f"workbook relationships are absent: {workbook_rels_part}")
@@ -1206,14 +1228,18 @@ class Workbook:
         wb_root = _safe_xml(self._parts[self._workbook_part], self._workbook_part)
         if wb_root.tag != _q("workbook"):
             raise UnsupportedWorkbook(
-                "strict OOXML or non-workbook XML is outside the XLSX adapter profile"
+                "strict OOXML or non-workbook XML is outside the XLSX adapter profile",
+                code="package_damaged",
             )
         workbook_properties = wb_root.find(_q("workbookPr"))
         date1904 = (
             workbook_properties.attrib.get("date1904") if workbook_properties is not None else None
         )
         if date1904 is not None and date1904.casefold() not in {"0", "1", "false", "true"}:
-            raise UnsupportedWorkbook("workbook date1904 setting is not a recognized Boolean")
+            raise UnsupportedWorkbook(
+                "workbook date1904 setting is not a recognized Boolean",
+                code="package_damaged",
+            )
         self._uses_1904_date_system = date1904 is not None and date1904.casefold() in {"1", "true"}
         rel_root = _safe_xml(self._parts[self._workbook_rels_part], self._workbook_rels_part)
         if rel_root.tag != f"{{{PKG_REL}}}Relationships":
@@ -1241,10 +1267,16 @@ class Workbook:
                 # A chartsheet holds one chart and no cells. It stays in the
                 # package byte-for-byte and is listed, not modeled.
                 if relationship.attrib.get("TargetMode") == "External":
-                    raise UnsupportedWorkbook("chartsheet relationships must be internal")
+                    raise UnsupportedWorkbook(
+                        "chartsheet relationships must be internal",
+                        code="package_damaged",
+                    )
                 part = _resolve_part(self._workbook_part, relationship.attrib.get("Target", ""))
                 if part not in self._parts:
-                    raise WorkbookError(f"chartsheet part is absent: {part}")
+                    raise WorkbookError(
+                        f"chartsheet part is absent: {part}",
+                        code="package_damaged",
+                    )
                 self._chartsheets[name] = part
                 continue
             if relationship.attrib.get("Type") != WORKSHEET_REL:
@@ -1262,7 +1294,8 @@ class Workbook:
             worksheet_root = _safe_xml(self._parts[part], part)
             if worksheet_root.tag != _q("worksheet"):
                 raise UnsupportedWorkbook(
-                    "strict OOXML or a non-worksheet part is outside the adapter profile"
+                    "strict OOXML or a non-worksheet part is outside the adapter profile",
+                    code="package_damaged",
                 )
             self._sheet_parts[name] = part
             self._cells[name] = self._index_cells(worksheet_root)

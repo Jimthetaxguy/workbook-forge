@@ -252,7 +252,7 @@ pub fn extract_xlsx(path: impl AsRef<Path>, options: ExtractionOptions) -> Resul
                 .iter()
                 .find(|sheet| sheet.eq_ignore_ascii_case(name))
                 .cloned()
-                .ok_or_else(|| err("unknown worksheet filter"))
+                .ok_or_else(|| err("invalid_reference: unknown worksheet filter"))
         })
         .transpose()?;
     let mut counts = patterns
