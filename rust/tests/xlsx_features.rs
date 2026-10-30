@@ -269,3 +269,101 @@ fn text_round_trips_exactly() {
         }
     }
 }
+
+fn zip_stored(parts: &[(&str, String)]) -> Vec<u8> {
+    let mut cursor = std::io::Cursor::new(Vec::new());
+    let mut writer = zip::ZipWriter::new(&mut cursor);
+    for (name, data) in parts {
+        let options = zip::write::SimpleFileOptions::default()
+            .compression_method(zip::CompressionMethod::Stored);
+        writer.start_file(*name, options).unwrap();
+        std::io::Write::write_all(&mut writer, data.as_bytes()).unwrap();
+    }
+    writer.finish().unwrap();
+    cursor.into_inner()
+}
+
+fn grammar_book(case: &Json) -> Vec<u8> {
+    let names = match (
+        case.get("defined_name").and_then(Json::as_str),
+        case.get("expression").and_then(Json::as_str),
+    ) {
+        (Some(name), Some(expression)) => format!(
+            "<definedNames><definedName name=\"{name}\">{expression}</definedName></definedNames>"
+        ),
+        _ => String::new(),
+    };
+    let sqref = case["sqref"].as_str().unwrap();
+    let formula1 = case["formula1"].as_str().unwrap();
+    let content_types = r#"<?xml version="1.0"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+<Default Extension="xml" ContentType="application/xml"/>
+<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+</Types>"#;
+    let root_rels = r#"<?xml version="1.0"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
+</Relationships>"#;
+    let workbook_rels = r#"<?xml version="1.0"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
+</Relationships>"#;
+    let workbook = format!(
+        r#"<?xml version="1.0"?>
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+<sheets><sheet name="Sheet1" sheetId="1" r:id="rId1"/></sheets>{names}</workbook>"#
+    );
+    let sheet = format!(
+        r#"<?xml version="1.0"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+<sheetData><row r="1"><c r="A1"><v>1</v></c></row></sheetData>
+<dataValidations count="1"><dataValidation type="list" allowBlank="1" showErrorMessage="1" sqref="{sqref}">
+<formula1>{formula1}</formula1></dataValidation></dataValidations></worksheet>"#
+    );
+    zip_stored(&[
+        ("[Content_Types].xml", content_types.into()),
+        ("_rels/.rels", root_rels.into()),
+        ("xl/workbook.xml", workbook),
+        ("xl/_rels/workbook.xml.rels", workbook_rels.into()),
+        ("xl/worksheets/sheet1.xml", sheet),
+    ])
+}
+
+#[test]
+fn grammar_cases_match_the_shared_table() {
+    for case in cases()["grammar"].as_array().unwrap() {
+        let id = case["id"].as_str().unwrap();
+        let imported =
+            import_xlsx_bytes(&grammar_book(case), BTreeMap::new(), BTreeMap::new()).unwrap();
+        let rules = imported.capabilities()["data_validations"]
+            .as_array()
+            .unwrap();
+        assert_eq!(rules.len(), 1, "{id}");
+        let rule = &rules[0];
+        assert_eq!(&rule["enforced"], &case["enforced"], "{id}");
+        if case.get("unenforced_reason").is_some() {
+            assert_eq!(
+                &rule["unenforced_reason"], &case["unenforced_reason"],
+                "{id}"
+            );
+        }
+        if case.get("allowed_values").is_some() {
+            assert_eq!(&rule["allowed_values"], &case["allowed_values"], "{id}");
+        }
+        let result = imported.apply(
+            vec![Edit::value(
+                "Sheet1",
+                case["address"].as_str().unwrap(),
+                value(&case["value"]),
+            )],
+            None,
+        );
+        let got = match &result {
+            Ok(_) => "ok".to_string(),
+            Err(error) => error.code().to_string(),
+        };
+        assert_eq!(got, case["expect"].as_str().unwrap(), "{id} {result:?}");
+    }
+}

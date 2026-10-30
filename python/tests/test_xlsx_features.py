@@ -1,10 +1,8 @@
-"""Drop-downs, pivots and charts on imported workbooks (docs/xlsx-features.md).
+"""Drop-downs, pivots and charts on imported workbooks.
 
 tools/corpus/feature-cases.json holds the cases; rust/tests/xlsx_features.rs
-runs the same table against the Rust engine. Expected outcomes follow Excel's
-documented data-validation behavior (a stop alert blocks the entry; warning
-and information alerts let it through; a rule with no alert accepts anything),
-not either engine.
+runs the same table against the Rust engine. Expected outcomes are the rules
+in docs/xlsx-features.md.
 """
 from __future__ import annotations
 
@@ -114,3 +112,118 @@ def test_formula_entries_are_not_validated_and_blank_clears_pass():
     model = import_xlsx(CORPUS / "xw_dropdowns.xlsx")
     model.set_formula("Orders", "C3", '"Pur"&"ple"')
     model.set_value("Orders", "C4", None)
+
+
+_CONTENT_TYPES = """<?xml version="1.0"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+<Default Extension="xml" ContentType="application/xml"/>
+<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+</Types>"""
+_ROOT_RELS = """<?xml version="1.0"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
+</Relationships>"""
+_WORKBOOK_RELS = """<?xml version="1.0"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
+</Relationships>"""
+
+
+def _workbook_xml(defined_name: str | None, expression: str | None) -> str:
+    names = ""
+    if defined_name is not None and expression is not None:
+        names = f'<definedNames><definedName name="{defined_name}">{expression}</definedName></definedNames>'
+    return (
+        '<?xml version="1.0"?>'
+        '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" '
+        'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
+        '<sheets><sheet name="Sheet1" sheetId="1" r:id="rId1"/></sheets>'
+        f"{names}</workbook>"
+    )
+
+
+def _sheet_xml(sqref: str, formula1: str) -> str:
+    return (
+        '<?xml version="1.0"?>'
+        '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+        '<sheetData><row r="1"><c r="A1"><v>1</v></c></row></sheetData>'
+        '<dataValidations count="1">'
+        f'<dataValidation type="list" allowBlank="1" showErrorMessage="1" sqref="{sqref}">'
+        f"<formula1>{formula1}</formula1></dataValidation></dataValidations></worksheet>"
+    )
+
+
+def _write_zip(path: Path, parts: dict[str, str]) -> None:
+    with zipfile.ZipFile(path, "w") as archive:
+        for name, data in parts.items():
+            archive.writestr(name, data)
+
+
+def _grammar_parts(case: dict) -> dict[str, str]:
+    return {
+        "[Content_Types].xml": _CONTENT_TYPES,
+        "_rels/.rels": _ROOT_RELS,
+        "xl/workbook.xml": _workbook_xml(case.get("defined_name"), case.get("expression")),
+        "xl/_rels/workbook.xml.rels": _WORKBOOK_RELS,
+        "xl/worksheets/sheet1.xml": _sheet_xml(case["sqref"], case["formula1"]),
+    }
+
+
+@pytest.mark.parametrize("case", CASES["grammar"], ids=lambda case: case["id"])
+def test_grammar_cases(case, tmp_path):
+    path = tmp_path / "book.xlsx"
+    _write_zip(path, _grammar_parts(case))
+    model = import_xlsx(path)
+    rule = model.inspect()["xlsx"]["data_validations"][0]
+    assert rule["enforced"] is case["enforced"]
+    if "unenforced_reason" in case:
+        assert rule["unenforced_reason"] == case["unenforced_reason"]
+    if "allowed_values" in case:
+        assert rule["allowed_values"] == case["allowed_values"]
+    if case["expect"] == "ok":
+        model.set_value("Sheet1", case["address"], case["value"])
+        return
+    with pytest.raises(WorkbookError) as caught:
+        model.set_value("Sheet1", case["address"], case["value"])
+    assert caught.value.code == case["expect"]
+
+
+def _pivot_package(path: Path, pivot_xml: str) -> None:
+    parts = _grammar_parts(
+        {"sqref": "B1", "formula1": '"Yes,No"', "defined_name": None, "expression": None}
+    )
+    parts["xl/worksheets/_rels/sheet1.xml.rels"] = (
+        '<?xml version="1.0"?>'
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+        '<Relationship Id="rId1" '
+        'Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/pivotTable" '
+        'Target="../pivotTables/pivotTable1.xml"/>'
+        "</Relationships>"
+    )
+    parts["xl/pivotTables/pivotTable1.xml"] = pivot_xml
+    _write_zip(path, parts)
+
+
+def test_a_pivot_part_with_a_doctype_is_refused(tmp_path):
+    path = tmp_path / "book.xlsx"
+    _pivot_package(
+        path,
+        """<?xml version="1.0"?>
+<!DOCTYPE pivotTableDefinition [<!ENTITY boom "hi">]>
+<pivotTableDefinition xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">&boom;</pivotTableDefinition>
+""",
+    )
+    with pytest.raises(WorkbookError) as caught:
+        import_xlsx(path)
+    assert caught.value.code == "unsupported_package"
+    assert "DTD" in str(caught.value) or "entity" in str(caught.value).casefold()
+
+
+def test_a_broken_pivot_part_is_package_damaged(tmp_path):
+    path = tmp_path / "book.xlsx"
+    _pivot_package(path, "<?xml version='1.0'?><pivotTableDefinition>")
+    with pytest.raises(WorkbookError) as caught:
+        import_xlsx(path)
+    assert caught.value.code == "package_damaged"

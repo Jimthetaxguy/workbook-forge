@@ -29,6 +29,9 @@ import re
 from typing import Any
 from xml.etree import ElementTree as ET
 
+from .workbook import UnsupportedWorkbook, WorkbookError
+from .xml_patterns import XMLLimitError, XMLPatternError, parse_xml
+
 MAIN = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
 REL_DOC = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
 PKG_REL = "http://schemas.openxmlformats.org/package/2006/relationships"
@@ -49,10 +52,16 @@ CHART_KINDS = (
 # Pivot outputs, chart sources and validation lists are only ever read; the
 # limit bounds how many cells one resolved list may hold.
 MAX_LIST_CELLS = 10_000
+_OVER_CAP_REASON = (
+    f"list source has more than {MAX_LIST_CELLS} cells, so this engine does not evaluate it"
+)
 
 _CELL = re.compile(r"^\$?([A-Za-z]{1,3})\$?([0-9]+)$")
 _COLUMN = re.compile(r"^\$?([A-Za-z]{1,3})$")
 _ROW = re.compile(r"^\$?([0-9]+)$")
+# One finite literal: optional sign, at most one dot, optional exponent.
+# ``inf``, ``nan`` and a second dot are not numbers in this grammar.
+_ARRAY_NUMBER = re.compile(r"[-+]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:[eE][-+]?[0-9]+)?")
 
 
 def _local(tag: str) -> str:
@@ -80,17 +89,30 @@ def column_name(number: int) -> str:
     return name
 
 
+def _row_number(digits: str) -> int | None:
+    """Digits with no leading zero. ``A01`` is not ``A1``."""
+    if not digits.isdigit() or digits.startswith("0"):
+        return None
+    return int(digits)
+
+
 def range_bounds(reference: str) -> tuple[int, int, int, int] | None:
     """``A1``, ``A1:B4``, ``A:A`` or ``2:2`` -> (c1, r1, c2, r2); None if malformed."""
     first, _, last = reference.partition(":")
     last = last or first
     a, b = _CELL.match(first), _CELL.match(last)
     if a and b:
-        c1, r1, c2, r2 = column_number(a[1]), int(a[2]), column_number(b[1]), int(b[2])
+        r1, r2 = _row_number(a[2]), _row_number(b[2])
+        if r1 is None or r2 is None:
+            return None
+        c1, c2 = column_number(a[1]), column_number(b[1])
     elif (a := _COLUMN.match(first)) and (b := _COLUMN.match(last)) and ":" in reference:
         c1, r1, c2, r2 = column_number(a[1]), 1, column_number(b[1]), 1_048_576
     elif (a := _ROW.match(first)) and (b := _ROW.match(last)) and ":" in reference:
-        c1, r1, c2, r2 = 1, int(a[1]), 16_384, int(b[1])
+        r1, r2 = _row_number(a[1]), _row_number(b[1])
+        if r1 is None or r2 is None:
+            return None
+        c1, c2 = 1, 16_384
     else:
         return None
     c1, c2 = sorted((c1, c2))
@@ -104,7 +126,10 @@ def position(address: str) -> tuple[int, int]:
     match = _CELL.match(address)
     if match is None:
         raise ValueError(address)
-    return column_number(match[1]), int(match[2])
+    row = _row_number(match[2])
+    if row is None:
+        raise ValueError(address)
+    return column_number(match[1]), row
 
 
 def _contains(bounds: tuple[int, int, int, int], column: int, row: int) -> bool:
@@ -160,11 +185,17 @@ def parse_array_constant(text: str) -> list[str] | None:
         raw = raw.strip()
         if raw.startswith('"') and raw.endswith('"') and len(raw) >= 2:
             items.append(raw[1:-1].replace('""', '"'))
-        elif re.fullmatch(r"[-+]?[0-9.]+(?:[eE][-+]?[0-9]+)?|TRUE|FALSE", raw, re.IGNORECASE):
+        elif raw.upper() in {"TRUE", "FALSE"} or _finite_array_number(raw):
             items.append(raw)
         else:
             return None
     return items
+
+
+def _finite_array_number(text: str) -> bool:
+    if _ARRAY_NUMBER.fullmatch(text) is None:
+        return False
+    return _number(text) is not None
 
 
 def _number(text: str | None) -> float | None:
@@ -235,6 +266,8 @@ def read_validations(sheet: str, root: ET.Element, names: dict) -> list[dict[str
                 rule["allowed_values"] = rule["source"]["values"]
             elif rule["source"]["kind"] not in {"range", "name"} or "range" not in rule["source"]:
                 reason = "list source is a formula this engine does not evaluate"
+            if reason is None and _source_over_cap(rule["source"]):
+                reason = _OVER_CAP_REASON
         elif kind in ENFORCEABLE_TYPES:
             operator = rule["operator"]
             bounds = [_number(formula1)] + ([_number(formula2)] if operator in {"between", "notBetween"} else [])
@@ -289,11 +322,9 @@ def resolve_list_values(rule: dict[str, Any], read) -> list[Any] | None:
     if "range" not in source:
         return None
     bounds = range_bounds(source["range"])
-    if bounds is None:
+    if bounds is None or _source_over_cap(source):
         return None
     c1, r1, c2, r2 = bounds
-    if (c2 - c1 + 1) * (r2 - r1 + 1) > MAX_LIST_CELLS:
-        return None
     values = []
     for row in range(r1, r2 + 1):
         for column in range(c1, c2 + 1):
@@ -301,6 +332,17 @@ def resolve_list_values(rule: dict[str, Any], read) -> list[Any] | None:
             if value is not None and value != "":
                 values.append(value)
     return values
+
+
+def _source_over_cap(source: dict[str, Any]) -> bool:
+    reference = source.get("range")
+    if not isinstance(reference, str):
+        return False
+    bounds = range_bounds(reference)
+    if bounds is None:
+        return False
+    c1, r1, c2, r2 = bounds
+    return (c2 - c1 + 1) * (r2 - r1 + 1) > MAX_LIST_CELLS
 
 
 def _list_item_matches(item: Any, value: Any) -> bool:
@@ -405,13 +447,28 @@ def covering_rule(rules: list[dict[str, Any]], sheet: str, column: int, row: int
 # ------------------------------------------------------------- packages
 
 
+def _part_xml(data: bytes, part: str) -> ET.Element:
+    """Parse one feature part with the same limits worksheets use.
+
+    A DOCTYPE or entity declaration is refused. Broken markup is
+    ``package_damaged``, not a raw parser error.
+    """
+    try:
+        return parse_xml(data)
+    except XMLLimitError as exc:
+        raise UnsupportedWorkbook(f"{exc}: {part}") from exc
+    except XMLPatternError as exc:
+        raise WorkbookError(f"invalid XML in {part}: {exc}") from exc
+
+
 def _rels(parts: dict[str, bytes], part: str) -> dict[str, tuple[str, str, bool]]:
     folder, name = posixpath.split(part)
-    data = parts.get(posixpath.join(folder, "_rels", name + ".rels"))
+    rels_part = posixpath.join(folder, "_rels", name + ".rels")
+    data = parts.get(rels_part)
     if data is None:
         return {}
     out = {}
-    for rel in ET.fromstring(data).findall("p:Relationship", NS):
+    for rel in _part_xml(data, rels_part).findall("p:Relationship", NS):
         target = rel.attrib.get("Target", "")
         external = rel.attrib.get("TargetMode") == "External"
         if external:
@@ -431,7 +488,7 @@ def read_pivots(parts: dict[str, bytes], sheets: dict[str, str]) -> list[dict[st
         for kind, target, external in _rels(parts, part).values():
             if kind != "pivotTable" or external or target not in parts:
                 continue
-            root = ET.fromstring(parts[target])
+            root = _part_xml(parts[target], target)
             location = root.find("m:location", NS)
             ref = location.attrib.get("ref", "") if location is not None else ""
             source: dict[str, Any] = {"type": None}
@@ -439,7 +496,7 @@ def read_pivots(parts: dict[str, bytes], sheets: dict[str, str]) -> list[dict[st
             for cache_kind, cache_part, cache_external in _rels(parts, target).values():
                 if cache_kind != "pivotCacheDefinition" or cache_external or cache_part not in parts:
                     continue
-                cache = ET.fromstring(parts[cache_part])
+                cache = _part_xml(parts[cache_part], cache_part)
                 cache_source = cache.find("m:cacheSource", NS)
                 if cache_source is not None:
                     source["type"] = cache_source.attrib.get("type")
@@ -505,7 +562,7 @@ def _anchor(node: ET.Element, tag: str) -> str | None:
 
 
 def _chart(parts: dict[str, bytes], chart_part: str) -> dict[str, Any]:
-    root = ET.fromstring(parts[chart_part])
+    root = _part_xml(parts[chart_part], chart_part)
     plot = root.find("c:chart/c:plotArea", NS)
     kinds, series = [], []
     for node in list(plot) if plot is not None else []:
@@ -535,7 +592,7 @@ def read_charts(parts: dict[str, bytes], sheets: dict[str, str], chartsheets: di
                 if kind != "drawing" or external or drawing not in parts:
                     continue
                 drawing_rels = _rels(parts, drawing)
-                root = ET.fromstring(parts[drawing])
+                root = _part_xml(parts[drawing], drawing)
                 for anchor in list(root):
                     for frame in anchor.iter():
                         if _local(frame.tag) != "chart" or not frame.tag.startswith("{" + CHART):

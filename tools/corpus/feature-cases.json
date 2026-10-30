@@ -1,5 +1,5 @@
 {
-  "_note": "Cases both engines must agree on (python/tests/test_xlsx_features.py, rust/tests/xlsx_features.rs). writes: one value written into a freshly imported workbook; expect ok or the refusal code. inspect: counts and key fields of inspect output. See docs/xlsx-features.md. text_writes: a value written into a Text-formatted (@) cell is stored as text (numbers with 15 significant digits); other cells keep the written type.",
+  "_note": "Cases both engines must agree on. writes and inspect are run by python/tests/test_xlsx_features.py and rust/tests/xlsx_features.rs. text_writes is run by python/tests/test_text_cells.py and rust/tests/xlsx_features.rs: a value written into a Text-formatted (@) cell is stored as text (numbers with 15 significant digits); other cells keep the written type. grammar rows are built into a package by both of those feature-test files. writes: one value written into a freshly imported workbook; expect ok or the refusal code. inspect: counts and key fields of inspect output. See docs/xlsx-features.md.",
   "writes": [
     {
       "file": "hb_dropdown_rules.xlsx",
@@ -549,6 +549,170 @@
       "address": "A1",
       "value": "00123",
       "stored": "00123"
+    }
+  ],
+  "grammar": [
+    {
+      "id": "finite-array-constant",
+      "defined_name": "Items",
+      "expression": "{1,2.5,-3}",
+      "sqref": "B1",
+      "formula1": "Items",
+      "enforced": true,
+      "allowed_values": ["1", "2.5", "-3"],
+      "address": "B1",
+      "value": 9,
+      "expect": "validation_failed"
+    },
+    {
+      "id": "array-constant-one-dot",
+      "defined_name": "Items",
+      "expression": "{1.,.5,1e2}",
+      "sqref": "B1",
+      "formula1": "Items",
+      "enforced": true,
+      "allowed_values": ["1.", ".5", "1e2"],
+      "address": "B1",
+      "value": 9,
+      "expect": "validation_failed"
+    },
+    {
+      "id": "array-constant-leading-zero-number",
+      "defined_name": "Items",
+      "expression": "{01}",
+      "sqref": "B1",
+      "formula1": "Items",
+      "enforced": true,
+      "allowed_values": ["01"],
+      "address": "B1",
+      "value": 9,
+      "expect": "validation_failed"
+    },
+    {
+      "id": "array-constant-bool",
+      "defined_name": "Items",
+      "expression": "{TRUE,false}",
+      "sqref": "B1",
+      "formula1": "Items",
+      "enforced": true,
+      "allowed_values": ["TRUE", "false"],
+      "address": "B1",
+      "value": "nope",
+      "expect": "validation_failed"
+    },
+    {
+      "id": "array-constant-inf",
+      "defined_name": "Items",
+      "expression": "{1,inf}",
+      "sqref": "B1",
+      "formula1": "Items",
+      "enforced": false,
+      "unenforced_reason": "list source is a formula this engine does not evaluate",
+      "address": "B1",
+      "value": 9,
+      "expect": "ok"
+    },
+    {
+      "id": "array-constant-infinity",
+      "defined_name": "Items",
+      "expression": "{infinity}",
+      "sqref": "B1",
+      "formula1": "Items",
+      "enforced": false,
+      "unenforced_reason": "list source is a formula this engine does not evaluate",
+      "address": "B1",
+      "value": 9,
+      "expect": "ok"
+    },
+    {
+      "id": "array-constant-nan",
+      "defined_name": "Items",
+      "expression": "{NaN}",
+      "sqref": "B1",
+      "formula1": "Items",
+      "enforced": false,
+      "unenforced_reason": "list source is a formula this engine does not evaluate",
+      "address": "B1",
+      "value": 9,
+      "expect": "ok"
+    },
+    {
+      "id": "array-constant-overflow",
+      "defined_name": "Items",
+      "expression": "{1e309}",
+      "sqref": "B1",
+      "formula1": "Items",
+      "enforced": false,
+      "unenforced_reason": "list source is a formula this engine does not evaluate",
+      "address": "B1",
+      "value": 9,
+      "expect": "ok"
+    },
+    {
+      "id": "array-constant-extra-dot",
+      "defined_name": "Items",
+      "expression": "{1.2.3}",
+      "sqref": "B1",
+      "formula1": "Items",
+      "enforced": false,
+      "unenforced_reason": "list source is a formula this engine does not evaluate",
+      "address": "B1",
+      "value": 9,
+      "expect": "ok"
+    },
+    {
+      "id": "leading-zero-row",
+      "sqref": "A01",
+      "formula1": "\"Yes,No\"",
+      "enforced": true,
+      "allowed_values": ["Yes", "No"],
+      "address": "A1",
+      "value": "Maybe",
+      "expect": "ok"
+    },
+    {
+      "id": "plain-row",
+      "sqref": "A1",
+      "formula1": "\"Yes,No\"",
+      "enforced": true,
+      "allowed_values": ["Yes", "No"],
+      "address": "A1",
+      "value": "Maybe",
+      "expect": "validation_failed"
+    },
+    {
+      "id": "list-over-cap",
+      "sqref": "B1",
+      "formula1": "$A$1:$A$10001",
+      "enforced": false,
+      "unenforced_reason": "list source has more than 10000 cells, so this engine does not evaluate it",
+      "allowed_values": null,
+      "address": "B1",
+      "value": "nope",
+      "expect": "ok"
+    },
+    {
+      "id": "list-at-cap",
+      "sqref": "B1",
+      "formula1": "$A$2:$A$10001",
+      "enforced": true,
+      "allowed_values": [],
+      "address": "B1",
+      "value": "nope",
+      "expect": "validation_failed"
+    },
+    {
+      "id": "named-column-over-cap",
+      "defined_name": "Col",
+      "expression": "Sheet1!$A:$A",
+      "sqref": "B1",
+      "formula1": "Col",
+      "enforced": false,
+      "unenforced_reason": "list source has more than 10000 cells, so this engine does not evaluate it",
+      "allowed_values": null,
+      "address": "B1",
+      "value": "nope",
+      "expect": "ok"
     }
   ]
 }
