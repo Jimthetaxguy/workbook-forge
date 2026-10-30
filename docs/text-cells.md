@@ -12,12 +12,12 @@ and strings up to Excel's 32,767-character cell limit. Numeric-looking text such
 
 ## Writing into a Text-formatted (`@`) cell
 
-Excel stores whatever is typed into a Text-formatted cell as text. Both engines do
-the same for imported workbooks: a number written into an existing `@` cell is stored
-as text, written with up to 15 significant digits, switching to an `E` exponent below
-`0.0001` or from `1E+15` up (`123` -> `"123"`, `1.5` -> `"1.5"`, `1e20` -> `"1E+20"`). Text
-written there is kept as given, so `"00456"` keeps its zeros. Booleans and formulas
-are not converted. `tools/corpus/feature-cases.json` (`text_writes`) holds the cases.
+Workbook Forge follows this rule for imported workbooks; not checked against Excel.
+A number written into an existing `@` cell is stored as text, written with up to
+15 significant digits, switching to an `E` exponent below `0.0001` or from `1E+15`
+up (`123` -> `"123"`, `1.5` -> `"1.5"`, `1e20` -> `"1E+20"`). Text written there is
+kept as given, so `"00456"` keeps its zeros. Booleans and formulas are not converted.
+`tools/corpus/feature-cases.json` (`text_writes`) holds the cases.
 
 Only cells the workbook already holds with the `@` format are covered. A cell
 inserted where none existed does not inherit a column's Text format.

@@ -41,7 +41,12 @@ def test_shared_cases(case: dict) -> None:
         assert type(got) is (str if isinstance(expected, str) else float), (address, got)
 
 
-def test_shared_cases_match_on_the_rust_backend() -> None:
+def test_python_delimited_parse_hydrates_the_rust_model() -> None:
+    """Parse with Python delimited.py and only hydrate the document on the Rust model.
+
+    Refuse cases are skipped. This never runs rust/src/delimited.rs; that parser
+    is covered by rust/tests/delimited.rs.
+    """
     pytest.importorskip("workbook_forge._native")
     for case in CASES:
         if "refuse" in case:

@@ -114,10 +114,21 @@ with the submitted fields. The common agent import profile permits value/formula
 changes to cells the workbook holds and to absent cells inside Excel's grid,
 which are inserted (validated against the session's current model, and written
 into the worksheet XML in row/column order on export). Imported style edits,
-grouped/table results, preserved-only cells, addresses past the grid and 1904
-formulas are rejected before mutation.
-These restrictions also apply to set_inputs and preview_inputs. The lower-level
-Python adapter may support additional edits outside this shared agent profile.
+grouped/table results, preserved-only cells, addresses past the grid, 1904
+formulas, and insertion into a merged range's non-anchor cell are rejected
+before mutation.
+These restrictions also apply to set_inputs and preview_inputs. An `edit` that
+writes into a pivot table's output cells, or that sets a value breaking an
+enforced data-validation rule, is also rejected before mutation.
+`WorkbookModel.apply` and Rust `ImportedWorkbook::apply` name those refusals
+`pivot_output_protected` and `validation_failed`. Both agent adapters rewrite
+those two codes, and the merged non-anchor refusal, to `unsupported_operation`.
+The message keeps the underlying text (`unsupported_edit: … is inside a merged
+range` for a non-anchor insert; `pivot_output_protected:` and
+`validation_failed:` for the other two). The discoverable edit description in
+`catalog/agent-operations.json` names insertion into merged non-anchor cells
+and does not name pivot output or data validation. The lower-level Python
+adapter may support additional edits outside this shared agent profile.
 The response is a compact receipt; read or preview to retrieve values.
 
 `export {filename, expected_revision}` calculates and exports through the owning
