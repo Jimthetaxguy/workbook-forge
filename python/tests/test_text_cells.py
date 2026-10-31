@@ -54,3 +54,32 @@ def test_long_and_astral_text_is_exact():
     assert cells["B4"]["value"] == "  padded both ends  "
     assert cells["A1"]["value"] == "00123" and cells["B1"]["value"] == "00123"
     assert cells["A2"]["value"] == "=SUM(1,2)" and cells["A2"].get("formula") is None
+
+
+@pytest.mark.parametrize("backend", ["python", "rust"])
+def test_inserted_cells_inherit_text_rows_and_columns(backend, tmp_path):
+    """A cell typed where none existed takes its row style (customFormat) or
+    else its column style, as Excel does; Text (@) there keeps numbers text."""
+    model = import_xlsx(CORPUS / "hb_text_columns.xlsx", backend=backend)
+    assert model.inspect()["xlsx"]["text_layouts"] == {
+        "Codes": {"text_columns": [[1, 1]], "text_rows": [5], "general_rows": [6]}
+    }
+    model.apply([
+        {"sheet": "Codes", "address": "A4", "value": 17},
+        {"sheet": "Codes", "address": "Z5", "value": 1.25},
+        {"sheet": "Codes", "address": "A6", "value": 8},
+        {"sheet": "Codes", "address": "B4", "value": 5},
+        {"sheet": "Codes", "address": "A3", "value": 7},
+    ])
+    cells = model.to_dict()["sheets"][0]["cells"]
+    assert [cells[a]["value"] for a in ("A4", "Z5", "A6", "B4", "A3")] == ["17", "1.25", 8, 5, 7]
+    # A later write into the inserted cell is still text, and so is the cell
+    # after export and reopen (the writer gives it the inherited style).
+    model.set_value("Codes", "A4", 18)
+    assert model.to_dict()["sheets"][0]["cells"]["A4"]["value"] == "18"
+    target = tmp_path / "out.xlsx"
+    export_xlsx(model, target)
+    again = import_xlsx(target, backend=backend)
+    assert again.to_dict()["sheets"][0]["cells"]["A4"]["style"]["number_format"] == "@"
+    again.set_value("Codes", "A4", 19)
+    assert again.to_dict()["sheets"][0]["cells"]["A4"]["value"] == "19"

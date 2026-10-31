@@ -699,6 +699,78 @@ struct Decoded {
     sheet_entries: Vec<String>,
     /// Drop-down, pivot and chart rules (docs/xlsx-features.md).
     guard: FeatureGuard,
+    /// Lowercased sheet name -> where an inserted cell inherits Text (@).
+    text_layouts: BTreeMap<String, TextLayout>,
+}
+/// Where a newly inserted cell inherits the Text (`@`) number format. A row
+/// with `customFormat` decides for every new cell in it; otherwise the first
+/// `<col>` range covering the column that carries a style decides (Excel's
+/// rule, and the one `inherited_style` writes at export).
+#[derive(Clone, Debug, Default)]
+pub(crate) struct TextLayout {
+    name: String,
+    rows: BTreeMap<u32, bool>,
+    columns: Vec<(u32, u32, bool)>,
+}
+impl TextLayout {
+    fn is_text(&self, col: u32, row: u32) -> bool {
+        if let Some(text) = self.rows.get(&row) {
+            return *text;
+        }
+        self.columns
+            .iter()
+            .find(|(first, last, _)| (*first..=*last).contains(&col))
+            .is_some_and(|(_, _, text)| *text)
+    }
+    fn public(&self) -> Json {
+        json!({
+            "text_columns": self.columns.iter().filter(|c| c.2).map(|c| [c.0, c.1]).collect::<Vec<_>>(),
+            "text_rows": self.rows.iter().filter(|r| *r.1).map(|r| *r.0).collect::<Vec<_>>(),
+            "general_rows": self.rows.iter().filter(|r| !*r.1).map(|r| *r.0).collect::<Vec<_>>(),
+        })
+    }
+}
+fn text_layout(
+    xml: &Xml,
+    root: &Node,
+    data: &Node,
+    name: &str,
+    styles: &[Style],
+) -> Option<TextLayout> {
+    let is_text = |raw: &str| {
+        raw.parse::<usize>()
+            .ok()
+            .and_then(|i| styles.get(i))
+            .is_some_and(|s| s.number_format.as_deref() == Some("@"))
+    };
+    let columns: Vec<(u32, u32, bool)> = xml
+        .child(root, "cols")
+        .into_iter()
+        .flat_map(|n| xml.children(n, MAIN, "col"))
+        .filter_map(|col| {
+            let style = col.attrs.get("style")?;
+            let first = col.attrs.get("min")?.parse().ok()?;
+            let last = col.attrs.get("max")?.parse().ok()?;
+            Some((first, last, is_text(style)))
+        })
+        .collect();
+    let rows: BTreeMap<u32, bool> = xml
+        .children(data, MAIN, "row")
+        .filter(|row| {
+            row.attrs
+                .get("customFormat")
+                .is_some_and(|v| boolean(v).unwrap_or(false))
+        })
+        .filter_map(|row| {
+            let number = row.attrs.get("r")?.parse().ok()?;
+            Some((number, is_text(row.attrs.get("s")?)))
+        })
+        .collect();
+    (columns.iter().any(|c| c.2) || rows.values().any(|t| *t)).then(|| TextLayout {
+        name: name.to_string(),
+        rows,
+        columns,
+    })
 }
 /// Error values newer Excel versions store that the v1 model does not
 /// represent. They refuse as `unsupported_error_value`; any other unknown
@@ -818,6 +890,7 @@ fn decode_mode(
         .collect();
     let defined = features::defined_names(&wb, wbroot, &entry_names);
     let mut rules = Vec::new();
+    let mut text_layouts: BTreeMap<String, TextLayout> = BTreeMap::new();
     let _sheets = wb
         .child(wbroot, "sheets")
         .ok_or_else(|| err("workbook has no worksheets"))?;
@@ -979,6 +1052,9 @@ fn decode_mode(
                 }
             }
         }
+        if let Some(layout) = text_layout(&xml, root, data, name, &styles) {
+            text_layouts.insert(name.to_lowercase(), layout);
+        }
         if let Some(validations) = xml.child(root, "dataValidations") {
             for validation in xml.children(validations, MAIN, "dataValidation") {
                 validation_metadata.push(json!({"sheet":name,"attributes":validation.attrs,"formula":xml.child(validation,"formula1").map(|n|&n.text)}));
@@ -1123,7 +1199,7 @@ fn decode_mode(
         .flat_map(|n| wb.children(n, MAIN, "definedName"))
         .map(|n| json!({"attributes":n.attrs,"expression":n.text}))
         .collect();
-    let capabilities = json!({"backend":"rust-ooxml","date_system":if date1904{"1904"}else{"1900"},"styles":styles.len(),"defined_names":names,"tables":table_metadata,"validation":validation_metadata,"data_validations":guard.records(),"pivots":pivot_records,"charts":charts,"chartsheets":chartsheets,"supported":["typed data-validation inspection; enforced (stop) rules refuse out-of-rule values","pivot table and chart inspection","UTF-8 macro-free transitional XLSX","scalar cells","normal formulas","basic styles","column widths","existing-cell content edits","absent-cell value/formula insertion within the session grid bound"],"preserved_only":["pivot tables and caches","charts and chartsheets","unknown package parts","unknown worksheet XML","names","tables","imported styles and validation"],"rejected":["pivot refresh and writes into pivot output ranges","structural changes to sheets a chart reads","macros","external execution","insertion into merged non-anchor cells or outside the session grid bound","imported style/layout/validation changes","1904 formula calculation and edits","grouped/table result edits"],"parts":package.parts.keys().collect::<Vec<_>>()});
+    let capabilities = json!({"backend":"rust-ooxml","date_system":if date1904{"1904"}else{"1900"},"styles":styles.len(),"defined_names":names,"tables":table_metadata,"validation":validation_metadata,"data_validations":guard.records(),"text_layouts":text_layouts.values().map(|l| (l.name.clone(), l.public())).collect::<serde_json::Map<_, _>>(),"pivots":pivot_records,"charts":charts,"chartsheets":chartsheets,"supported":["typed data-validation inspection; enforced (stop) rules refuse out-of-rule values","pivot table and chart inspection","UTF-8 macro-free transitional XLSX","scalar cells","normal formulas","basic styles","column widths","existing-cell content edits","absent-cell value/formula insertion within the session grid bound"],"preserved_only":["pivot tables and caches","charts and chartsheets","unknown package parts","unknown worksheet XML","names","tables","imported styles and validation"],"rejected":["pivot refresh and writes into pivot output ranges","structural changes to sheets a chart reads","macros","external execution","insertion into merged non-anchor cells or outside the session grid bound","imported style/layout/validation changes","1904 formula calculation and edits","grouped/table result edits"],"parts":package.parts.keys().collect::<Vec<_>>()});
     Ok(Decoded {
         model,
         workbook_part,
@@ -1133,6 +1209,7 @@ fn decode_mode(
         capabilities,
         sheet_entries,
         guard,
+        text_layouts,
     })
 }
 
@@ -1210,6 +1287,7 @@ pub struct ImportedWorkbook {
     guard: FeatureGuard,
     /// (lowercased sheet, address) of Text-formatted (`@`) cells.
     text_cells: BTreeSet<(String, String)>,
+    text_layouts: BTreeMap<String, TextLayout>,
 }
 /// Excel's last row (1,048,576).
 pub const EXCEL_MAX_ROWS: u32 = 1_048_576;
@@ -1297,6 +1375,7 @@ fn import_package(
         capabilities: decoded.capabilities,
         guard: decoded.guard,
         text_cells,
+        text_layouts: decoded.text_layouts,
     })
 }
 impl ImportedWorkbook {
@@ -1420,6 +1499,7 @@ impl ImportedWorkbook {
             capabilities: self.capabilities.clone(),
             guard: self.guard.clone(),
             text_cells: self.text_cells.clone(),
+            text_layouts: self.text_layouts.clone(),
         }
         .export(path)
     }
@@ -1588,14 +1668,11 @@ impl ImportedWorkbook {
     pub fn apply(&self, mut edits: Vec<Edit>, expected_revision: Option<u64>) -> Result<u64> {
         // A number written into a Text-formatted (@) cell is stored as text,
         // as Excel does.
-        if !self.text_cells.is_empty() {
+        if !self.text_cells.is_empty() || !self.text_layouts.is_empty() {
             for edit in &mut edits {
                 if edit.formula.is_none()
                     && let Some(CellValue::Number(n)) = edit.value
-                    && self.text_cells.contains(&(
-                        edit.sheet.to_lowercase(),
-                        edit.address.replace('$', "").to_ascii_uppercase(),
-                    ))
+                    && self.is_text_cell(&edit.sheet, &edit.address)
                 {
                     edit.value = Some(CellValue::Text(features::general_text(n)));
                 }
@@ -1603,6 +1680,39 @@ impl ImportedWorkbook {
         }
         self.validate_edits(&edits)?;
         Ok(self.session.apply(edits, expected_revision)?)
+    }
+    /// True when a number written here is stored as text: the imported cell
+    /// is Text-formatted (`@`), or the import held no cell here and the row
+    /// or column style it inherits is Text.
+    pub fn is_text_cell(&self, sheet: &str, address: &str) -> bool {
+        let sheet = sheet.to_lowercase();
+        let address = address.replace('$', "").to_ascii_uppercase();
+        if self.text_cells.contains(&(sheet.clone(), address.clone())) {
+            return true;
+        }
+        let Some(layout) = self.text_layouts.get(&sheet) else {
+            return false;
+        };
+        let imported = self
+            .original
+            .sheets
+            .iter()
+            .find(|s| s.name.to_lowercase() == sheet)
+            .is_some_and(|s| s.cells.contains_key(&address));
+        !imported
+            && coordinate(&address)
+                .map(|(col, row)| layout.is_text(col, row))
+                .unwrap_or(false)
+    }
+    /// Per sheet name, where an inserted cell inherits Text (`@`):
+    /// `{"text_columns": [[min, max]], "text_rows": [..], "general_rows": [..]}`.
+    pub fn text_layouts(&self) -> Json {
+        Json::Object(
+            self.text_layouts
+                .values()
+                .map(|l| (l.name.clone(), l.public()))
+                .collect(),
+        )
     }
     pub fn set_inputs(
         &self,

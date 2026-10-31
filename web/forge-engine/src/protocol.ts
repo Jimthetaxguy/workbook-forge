@@ -61,9 +61,24 @@ export interface SnapshotCell {
   text?: true;
 }
 
+/**
+ * Where a cell inserted where none existed inherits the Text (`@`) format, as
+ * Excel does: a row listed in `rows` or `generalRows` (a row with its own
+ * format) decides for every new cell in it; otherwise a column inside one of
+ * the 1-based `[min, max]` `columns` ranges is Text. Cells the workbook already
+ * holds keep their own format (`SnapshotCell.text`).
+ */
+export interface TextFormatLayout {
+  columns: [number, number][];
+  rows: number[];
+  generalRows: number[];
+}
+
 export interface SnapshotSheet {
   name: string;
   cells: Record<string, SnapshotCell>;
+  /** Present when the imported sheet's row or column styles are Text (`@`). */
+  textFormat?: TextFormatLayout;
 }
 
 export interface Snapshot {

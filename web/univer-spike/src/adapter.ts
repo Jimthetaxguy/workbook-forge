@@ -38,6 +38,7 @@ import type {
   ForgeClient,
   Revision,
   Snapshot,
+  TextFormatLayout,
 } from '@workbook-forge/engine';
 import { fromA1, toA1 } from './a1';
 import type { UniverHost } from './univer-host';
@@ -173,6 +174,12 @@ export class ForgeUniverAdapter {
   private projected = new Map<string, Projected>();
   /** `Sheet!A1` keys of Text-formatted (`@`) cells: typed input stays text. */
   private readonly textCells = new Set<string>();
+  /**
+   * Sheets whose row or column styles are Text (`@`), with the cells the
+   * workbook held when it opened: a cell typed where none existed inherits
+   * that format, as in Excel, so its input stays text too.
+   */
+  private readonly textLayouts = new Map<string, { layout: TextFormatLayout; opened: Set<string> }>();
   private sheetIds = new Map<string, string>();
   private projecting = false;
   private queue: Promise<unknown> = Promise.resolve();
@@ -217,6 +224,7 @@ export class ForgeUniverAdapter {
     this.projected.clear();
     this.sheetIds.clear();
     this.textCells.clear();
+    this.textLayouts.clear();
     const calculated = await this.client.calculate();
     if (!calculated.ok) throw new Error(`${calculated.error.code}: ${calculated.error.message}`);
     if (calculated.value.revision !== snapshot.value.revision) throw new Error('revision drift while opening workbook');
@@ -234,6 +242,7 @@ export class ForgeUniverAdapter {
       const id = `sheet-${index}`;
       this.sheetIds.set(sheet.name, id);
       data.sheetOrder.push(id);
+      if (sheet.textFormat) this.textLayouts.set(sheet.name, { layout: sheet.textFormat, opened: new Set(Object.keys(sheet.cells)) });
       let rows = 20;
       let cols = 10;
       const cellData: Record<number, Record<number, ICellData>> = {};
@@ -606,11 +615,23 @@ export class ForgeUniverAdapter {
     if (cells.length === 0) return 'no cells';
     const edits: Edit[] = [];
     for (const { row, col, cell } of cells) {
-      const input = parseInput(cell ?? {}, this.textCells.has(`${sheet}!${toA1(row, col)}`));
+      const input = parseInput(cell ?? {}, this.isTextFormat(sheet, row, col));
       if (!input) return 'style-only change is outside the spike scope';
       edits.push({ sheet, address: toA1(row, col), ...input });
     }
     return edits;
+  }
+
+  /** Typed input here stays text: the cell is Text (`@`), or inherits it. */
+  isTextFormat(sheet: string, row: number, col: number): boolean {
+    const address = toA1(row, col);
+    if (this.textCells.has(`${sheet}!${address}`)) return true;
+    const entry = this.textLayouts.get(sheet);
+    if (!entry || entry.opened.has(address)) return false;
+    const [r, c] = [row + 1, col + 1];
+    if (entry.layout.rows.includes(r)) return true;
+    if (entry.layout.generalRows.includes(r)) return false;
+    return entry.layout.columns.some(([first, last]) => first <= c && c <= last);
   }
 
   private spyOnFacade() {

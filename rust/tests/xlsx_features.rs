@@ -379,3 +379,45 @@ fn text_round_trips_exactly() {
         }
     }
 }
+
+#[test]
+fn inserted_cells_inherit_text_rows_and_columns() {
+    let imported = import_xlsx_bytes(
+        &corpus("hb_text_columns.xlsx"),
+        BTreeMap::new(),
+        BTreeMap::new(),
+    )
+    .unwrap();
+    assert_eq!(
+        imported.capabilities()["text_layouts"],
+        serde_json::json!({"Codes": {"text_columns": [[1, 1]], "text_rows": [5], "general_rows": [6]}})
+    );
+    assert_eq!(
+        imported.text_layouts(),
+        imported.capabilities()["text_layouts"]
+    );
+    for (address, text) in [
+        ("A4", true),
+        ("Z5", true),
+        ("A6", false),
+        ("B4", false),
+        ("A3", false),
+        ("A2", true),
+    ] {
+        assert_eq!(imported.is_text_cell("codes", address), text, "{address}");
+    }
+    imported
+        .apply(
+            vec![Edit::value("Codes", "A4", CellValue::Number(17.0))],
+            None,
+        )
+        .unwrap();
+    let bytes = imported.export_bytes().unwrap();
+    let again = import_xlsx_bytes(&bytes, BTreeMap::new(), BTreeMap::new()).unwrap();
+    let cell = &again.snapshot().sheets[0].cells["A4"];
+    assert_eq!(cell.value, CellValue::Text("17".into()));
+    assert_eq!(
+        cell.style.as_ref().and_then(|s| s.number_format.as_deref()),
+        Some("@")
+    );
+}

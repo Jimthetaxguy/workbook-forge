@@ -208,6 +208,16 @@
         "strict-ooxml"
       ]
     },
+    "hb_text_columns.xlsx": {
+      "writer": "handbuilt",
+      "categories": [
+        "text",
+        "text-format",
+        "column-styles",
+        "row-styles",
+        "insert-inherits-style"
+      ]
+    },
     "hb_text_edge_cases.xlsx": {
       "writer": "handbuilt",
       "categories": [
