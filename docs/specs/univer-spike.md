@@ -303,6 +303,21 @@ For `not-execute` and `load-only`:
     the previous workbook, values, and revision visible. These two recovery
     cases run in both `not-execute` and `load-only` modes.
 
+**Repaint latency gate.** A typed commit into A1 of the event-log fixture
+must repaint its dependent B1 in under 100 ms, measured from the adapter's
+commit timestamp to the first animation frame that shows the new value. The
+gate is a dedicated test that makes one unmeasured warm-up commit and then
+five measured ones, and asserts the **median** is under 100 ms and no single
+sample reaches 1000 ms. The event-log test still records its own first
+commit's latency as an annotation but no longer gates on it: one sample right
+after load carries WASM and JIT warm-up and a busy host's scheduling noise,
+and failed on an unchanged main. The median still fails whenever the typical
+commit-to-paint path is slower than 100 ms. `SPIKE_REPAINT_GATE_MS` sets a
+different budget for a host known to be slower; the results above use the
+default. On a 2-core shared arm64 sandbox the warmed samples were 112-149 ms
+(median 128 ms), so there the gate fails on main too: that is host speed, not
+noise, and the median does not hide it.
+
 The control test shows the spy catches Univer's own calculation. The
 `engine-only` and `no-formula-plugins` tests document that no editor is created.
 
