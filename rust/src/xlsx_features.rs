@@ -955,7 +955,8 @@ impl FeatureGuard {
             }
         }
         if formula {
-            return Ok(()); // Formula entries are not checked (Excel checks the result at entry).
+            // A formula entry is checked by its result: see check_formula_results.
+            return Ok(());
         }
         let Some(value) = value else { return Ok(()) };
         let Some(rule) = self.rules.iter().find(|r| {
@@ -972,6 +973,89 @@ impl FeatureGuard {
                 rule.sqref
             )),
         }
+    }
+    /// The enforced rule a formula entry at this cell must satisfy, if any.
+    fn formula_rule(&self, sheet: &str, address: &str) -> Option<&Rule> {
+        let (column, row) = position(address)?;
+        self.rules
+            .iter()
+            .find(|r| {
+                r.sheet.eq_ignore_ascii_case(sheet)
+                    && r.bounds.iter().any(|b| contains(*b, column, row))
+            })
+            .filter(|r| r.enforced)
+    }
+    pub(crate) fn has_formula_rule(&self, sheet: &str, address: &str) -> bool {
+        self.formula_rule(sheet, address).is_some()
+    }
+    /// Check formula entries `(sheet, address, formula)` by their results in
+    /// `model`, which already holds the entries. Excel checks a formula's
+    /// result once, at entry, and never on recalculation. Only entries under an
+    /// enforced rule are calculated, each bound as an output of a detached
+    /// copy. A result the engine cannot calculate cannot be shown to satisfy
+    /// the rule, so it is refused too. `Err(message)` carries its code prefix.
+    pub(crate) fn check_formula_results(
+        &self,
+        model: &crate::toolkit::WorkbookModel,
+        entries: &[(String, String, String)],
+        read: &mut dyn FnMut(&str, &str) -> Option<CellValue>,
+    ) -> std::result::Result<(), String> {
+        let targets: Vec<&(String, String, String)> = entries
+            .iter()
+            .filter(|(sheet, address, _)| self.has_formula_rule(sheet, address))
+            .collect();
+        if targets.is_empty() {
+            return Ok(());
+        }
+        let mut detached = model.clone();
+        detached.inputs.clear();
+        detached.outputs = targets
+            .iter()
+            .enumerate()
+            .map(|(index, (sheet, address, _))| {
+                (
+                    format!("forge_validation_{index}"),
+                    crate::toolkit::CellAddress::new(sheet.clone(), address.clone()),
+                )
+            })
+            .collect();
+        let report = crate::toolkit::calculate(&detached, 1);
+        let whole = report.diagnostics.iter().find(|d| d.address.is_none());
+        for (index, (sheet, address, formula)) in targets.into_iter().enumerate() {
+            let rule = self.formula_rule(sheet, address).expect("filtered above");
+            let formula = formula.trim_start_matches('=');
+            let diagnostic = report.diagnostics.iter().find(|d| {
+                d.sheet.as_deref().is_some_and(|s| s.eq_ignore_ascii_case(sheet))
+                    && d.address.as_deref().is_some_and(|a| a.eq_ignore_ascii_case(address))
+            });
+            let result = report.outputs.get(&format!("forge_validation_{index}"));
+            let value = match (result, diagnostic.or(whole)) {
+                (Some(crate::toolkit::CalculatedValue::Scalar(value)), None) => value.clone(),
+                (Some(crate::toolkit::CalculatedValue::Array { .. }), None) => {
+                    return Err(format!(
+                        "validation_failed: {sheet}!{address} formula ={formula} is refused by the data validation on {}: an array result is not an allowed entry",
+                        rule.sqref
+                    ));
+                }
+                (_, found) => {
+                    let (code, message) = found
+                        .map(|d| (d.code.as_str(), d.message.as_str()))
+                        .unwrap_or(("unknown", "no result was produced"));
+                    return Err(format!(
+                        "validation_failed: {sheet}!{address} formula ={formula} is refused by the data validation on {}: its result could not be calculated to check it ({code}: {message})",
+                        rule.sqref
+                    ));
+                }
+            };
+            if let Some(why) = rule.violation(&value, read) {
+                return Err(format!(
+                    "validation_failed: {sheet}!{address} formula ={formula} (result {}) is refused by the data validation on {}: {why}",
+                    shown(&value),
+                    rule.sqref
+                ));
+            }
+        }
+        Ok(())
     }
     /// Range-sourced allowed values as they stand in `read`, for inspect.
     pub(crate) fn resolve_records(

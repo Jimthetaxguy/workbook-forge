@@ -29,6 +29,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import handbuilt  # noqa: E402
+import shapes  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[2]
 FIXED = dt.datetime(2020, 1, 1, 0, 0, 0)
@@ -595,7 +596,8 @@ def main() -> int:
     manifest = json.loads(manifest_path.read_text()) if manifest_path.exists() else {"files": {}}
     produced = {}
     for writer, function in (("openpyxl", openpyxl_files), ("xlsxwriter", xlsxwriter_files),
-                             ("handbuilt", handbuilt.build_all), ("libreoffice", libreoffice_files)):
+                             ("handbuilt", lambda folder: {**handbuilt.build_all(folder), **shapes.build_all(folder)}),
+                             ("libreoffice", libreoffice_files)):
         if writer not in writers:
             continue
         for name, categories in function(out).items():

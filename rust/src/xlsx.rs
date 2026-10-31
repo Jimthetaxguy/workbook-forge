@@ -1377,6 +1377,36 @@ impl ImportedWorkbook {
                     .map_err(err)?;
             }
         }
+        // Changed formula cells meet the same result check as a live entry.
+        let entries: Vec<(String, String, String)> = self
+            .original
+            .sheets
+            .iter()
+            .zip(&model.sheets)
+            .flat_map(|(before, after)| {
+                after.cells.iter().filter_map(move |(address, cell)| {
+                    let formula = cell.formula.as_ref()?;
+                    (before.cells.get(address) != Some(cell))
+                        .then(|| (after.name.clone(), address.clone(), formula.clone()))
+                })
+            })
+            .collect();
+        if !entries.is_empty() {
+            let mut read = |sheet: &str, reference: &str| -> Option<CellValue> {
+                let found = model
+                    .sheets
+                    .iter()
+                    .find(|s| s.name.eq_ignore_ascii_case(sheet))?;
+                let cell = found.cells.get(reference)?;
+                Some(match (&cell.formula, &cell.cached_value) {
+                    (Some(_), Some(cached)) => cached.clone(),
+                    _ => cell.value.clone(),
+                })
+            };
+            self.guard
+                .check_formula_results(&model, &entries, &mut read)
+                .map_err(err)?;
+        }
         Self {
             source: self.source.clone(),
             baseline: self.baseline.clone(),
@@ -1524,6 +1554,34 @@ impl ImportedWorkbook {
                     )
                     .map_err(err)?;
             }
+        }
+        // Formula entries under an enforced rule are checked by their result,
+        // calculated on a detached copy with the whole batch applied.
+        let entries: Vec<(String, String, String)> = edits
+            .iter()
+            .zip(&keys)
+            .filter_map(|(edit, key)| {
+                let formula = edit.formula.as_ref()?;
+                let (sheet, reference) = key.rsplit_once('!')?;
+                Some((sheet.to_string(), reference.to_string(), formula.clone()))
+            })
+            .filter(|(sheet, reference, _)| self.guard.has_formula_rule(sheet, reference))
+            .collect();
+        if !entries.is_empty() {
+            let scratch = Session::new(self.session.snapshot())?;
+            // An invalid batch fails here exactly as the real apply would.
+            scratch.apply(edits.to_vec(), None)?;
+            let mut read = |s: &str, a: &str| -> Option<CellValue> {
+                let key = self.session.resolve_key(s, a).ok()?;
+                let cell = self.session.read_cells(&[key]).pop().flatten()?;
+                Some(match (cell.formula, cell.cached_value) {
+                    (Some(_), Some(cached)) => cached,
+                    _ => cell.value,
+                })
+            };
+            self.guard
+                .check_formula_results(&scratch.snapshot(), &entries, &mut read)
+                .map_err(err)?;
         }
         Ok(())
     }

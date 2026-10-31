@@ -835,7 +835,9 @@ def _check_chart_sheets(guard, original: dict[str, Any], current: dict[str, Any]
         )
 
 
-def _check_feature_writes(guard, current: dict[str, Any], changes: list[tuple[str, str, dict]]) -> None:
+def _check_feature_writes(
+    guard, current: dict[str, Any], changes: list[tuple[str, str, dict]], engine=None
+) -> None:
     """Pivot output and enforced validation hold at export as they do at edit time."""
     if guard is None or not changes:
         return
@@ -851,6 +853,12 @@ def _check_feature_writes(guard, current: dict[str, Any], changes: list[tuple[st
         refusal = guard.check(sheet, address, cell.get("value"), cell.get("formula"), read)
         if refusal is not None:
             raise UnsupportedWorkbook(refusal[1], code=refusal[0])
+    entries = [(sheet, address, cell["formula"]) for sheet, address, cell in changes
+               if cell.get("formula") is not None]
+    if entries and engine is not None:
+        refusal = guard.check_formula_results(engine, current, entries, read)
+        if refusal is not None:
+            raise UnsupportedWorkbook(refusal[1], code=refusal[0])
 
 
 def _patch_import(
@@ -859,6 +867,7 @@ def _patch_import(
     current: dict[str, Any],
     merged: tuple[tuple[str, tuple[tuple[int, int, int, int], ...]], ...] = (),
     guard=None,
+    engine=None,
 ) -> None:
     _check_chart_sheets(guard, original, current)
     if original["inputs"] != current["inputs"]:
@@ -877,7 +886,7 @@ def _patch_import(
         for address, cell in after["cells"].items():
             if _digest(before["cells"].get(address, {})) != _digest(cell):
                 changes.append((after["name"], address, cell))
-    _check_feature_writes(guard, current, changes)
+    _check_feature_writes(guard, current, changes, engine)
     for before, after in zip(original["sheets"], current["sheets"], strict=True):
         for address in before["cells"].keys() | after["cells"].keys():
             old, new = before["cells"].get(address, {}), after["cells"].get(address, {})
@@ -1041,6 +1050,7 @@ def export_xlsx(
                     document,
                     baseline.merged,
                     getattr(model, "_feature_guard", None),
+                    getattr(model, "_engine", None),
                 )
             workbook._request_recalculation()
             for (sheet, address), value in cache_values.items():

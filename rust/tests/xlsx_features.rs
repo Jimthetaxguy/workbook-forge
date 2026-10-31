@@ -52,6 +52,81 @@ fn write_cases_match_the_shared_table() {
 }
 
 #[test]
+fn formula_write_cases_match_the_shared_table() {
+    let mut failures = Vec::new();
+    for case in cases()["formula_writes"].as_array().unwrap() {
+        let file = case["file"].as_str().unwrap();
+        let sheet = case["sheet"].as_str().unwrap();
+        let address = case["address"].as_str().unwrap();
+        let formula = case["formula"].as_str().unwrap();
+        let imported = import_xlsx_bytes(&corpus(file), BTreeMap::new(), BTreeMap::new()).unwrap();
+        let before = imported.snapshot();
+        let result = imported.apply(vec![Edit::formula(sheet, address, formula)], None);
+        let got = match &result {
+            Ok(_) => "ok".to_string(),
+            Err(error) => error.code().to_string(),
+        };
+        if got != case["expect"].as_str().unwrap() {
+            failures.push(format!(
+                "{file} {sheet}!{address}=({formula}): expected {}, got {got} ({result:?})",
+                case["expect"]
+            ));
+        } else if result.is_err() && imported.snapshot() != before {
+            failures.push(format!("{file} {sheet}!{address}: refused edit changed the model"));
+        }
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+#[test]
+fn formula_results_are_checked_with_the_whole_batch_and_at_export() {
+    let imported =
+        import_xlsx_bytes(&corpus("xw_dropdowns.xlsx"), BTreeMap::new(), BTreeMap::new()).unwrap();
+    imported
+        .apply(
+            vec![
+                Edit::value("Orders", "G3", CellValue::Text("Blue".into())),
+                Edit::formula("Orders", "C3", "G3"),
+            ],
+            None,
+        )
+        .unwrap();
+    let refused = imported
+        .apply(
+            vec![
+                Edit::value("Orders", "G4", CellValue::Text("Pink".into())),
+                Edit::formula("Orders", "C4", "G4"),
+            ],
+            None,
+        )
+        .unwrap_err();
+    assert_eq!(refused.code(), "validation_failed");
+    let unknown = imported
+        .apply(vec![Edit::formula("Orders", "C5", "NOSUCHFUNCTION(1)")], None)
+        .unwrap_err();
+    assert_eq!(unknown.code(), "validation_failed");
+    assert!(unknown.to_string().contains("could not be calculated"), "{unknown}");
+    imported
+        .apply(vec![Edit::formula("Orders", "A5", "NOSUCHFUNCTION(1)")], None)
+        .unwrap();
+
+    let fresh =
+        import_xlsx_bytes(&corpus("xw_dropdowns.xlsx"), BTreeMap::new(), BTreeMap::new()).unwrap();
+    let dir = std::env::temp_dir().join(format!("wf-dv-formula-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let mut model = fresh.snapshot();
+    let orders = model.sheets.iter_mut().find(|s| s.name == "Orders").unwrap();
+    let cell = orders.cells.get_mut("C2").unwrap();
+    cell.formula = Some("\"Pur\"&\"ple\"".into());
+    let refused = fresh.export_snapshot(model.clone(), dir.join("bad.xlsx")).unwrap_err();
+    assert_eq!(refused.code(), "validation_failed", "{refused}");
+    let orders = model.sheets.iter_mut().find(|s| s.name == "Orders").unwrap();
+    orders.cells.get_mut("C2").unwrap().formula = Some("\"Bl\"&\"ue\"".into());
+    fresh.export_snapshot(model, dir.join("ok.xlsx")).unwrap();
+    std::fs::remove_dir_all(&dir).ok();
+}
+
+#[test]
 fn inspect_cases_match_the_shared_table() {
     let cases = cases();
     for (name, want) in cases["inspect"].as_object().unwrap() {

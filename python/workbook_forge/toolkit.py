@@ -169,6 +169,20 @@ class WorkbookModel:
             )
             if refusal is not None:
                 raise UnsupportedWorkbook(refusal[1], code=refusal[0])
+        # Formula entries under an enforced rule are checked by their result,
+        # calculated on a detached copy with the whole batch applied.
+        entries = [
+            (str(edit.get("sheet", "")), str(edit.get("address", "")).replace("$", "").upper(), str(edit["formula"]))
+            for edit in writes if edit.get("formula") is not None
+        ]
+        if entries and any(self._feature_guard.formula_rule(s, a) for s, a, _ in entries):
+            scratch = self._engine.Session(_encode(self.to_dict()))
+            scratch.apply(_encode(batch), None)  # an invalid batch fails the same way below
+            refusal = self._feature_guard.check_formula_results(
+                self._engine, json.loads(scratch.snapshot()), entries, read
+            )
+            if refusal is not None:
+                raise UnsupportedWorkbook(refusal[1], code=refusal[0])
 
     def set_value(self, sheet: str, address: str, value: Any) -> int:
         return self.apply([{"sheet": sheet, "address": address, "value": value}])
