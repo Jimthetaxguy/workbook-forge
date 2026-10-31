@@ -10,6 +10,9 @@ by our own scripts so there is no third-party licensing exposure:
   targets, prefixed SpreadsheetML, Strict OOXML, pivot caches, external links,
   threaded comments, BOM-prefixed parts, cells without `r` attributes, and the
   quirks of Google Sheets, Numbers and LibreOffice exports.
+  `shapes.py` adds later real-world shapes on the same helpers: a sheet out to
+  column XFD, 210 sheets, 30,000 shared strings, mixed inline and shared strings,
+  4,000 cell formats with a theme, and outline, print and protection settings.
 - `lo_*` files come from LibreOffice headless when `soffice` is on PATH.
 
 Regenerate with `python tools/corpus/generate_corpus.py` (openpyxl and XlsxWriter

@@ -102,12 +102,39 @@
         "str-formula"
       ]
     },
+    "hb_huge_shared_strings.xlsx": {
+      "writer": "handbuilt",
+      "categories": [
+        "scale",
+        "shared-strings",
+        "long-strings",
+        "unicode"
+      ]
+    },
+    "hb_inline_and_shared_strings.xlsx": {
+      "writer": "handbuilt",
+      "categories": [
+        "inline-strings",
+        "shared-strings",
+        "rich-text",
+        "str-formula"
+      ]
+    },
     "hb_inline_strings_rich.xlsx": {
       "writer": "handbuilt",
       "categories": [
         "inline-strings",
         "rich-text",
         "cached-values"
+      ]
+    },
+    "hb_layout_protection.xlsx": {
+      "writer": "handbuilt",
+      "categories": [
+        "outline",
+        "freeze-panes",
+        "print-settings",
+        "protection"
       ]
     },
     "hb_libreoffice_like.xlsx": {
@@ -124,6 +151,23 @@
       "writer": "handbuilt",
       "categories": [
         "vba"
+      ]
+    },
+    "hb_many_sheets.xlsx": {
+      "writer": "handbuilt",
+      "categories": [
+        "scale",
+        "many-sheets",
+        "cross-sheet"
+      ]
+    },
+    "hb_many_styles.xlsx": {
+      "writer": "handbuilt",
+      "categories": [
+        "styles",
+        "number-formats",
+        "theme",
+        "scale"
       ]
     },
     "hb_minimal_no_optional_parts.xlsx": {
@@ -245,6 +289,14 @@
         "threaded-comments",
         "comments",
         "vml"
+      ]
+    },
+    "hb_wide_sheet.xlsx": {
+      "writer": "handbuilt",
+      "categories": [
+        "scale",
+        "wide-sheet",
+        "xfd-column"
       ]
     },
     "op_1904_dates.xlsx": {

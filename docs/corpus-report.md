@@ -16,9 +16,9 @@ Excel observation and does not show Excel equivalence.
 
 | Engine | pass | refuse | untyped | crash | corrupt | lossy |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| py_toolkit | 60 | 6 | 0 | 0 | 0 | 0 |
-| py_canonical | 52 | 14 | 0 | 0 | 0 | 0 |
-| rust | 60 | 6 | 0 | 0 | 0 | 0 |
+| py_toolkit | 66 | 6 | 0 | 0 | 0 | 0 |
+| py_canonical | 58 | 14 | 0 | 0 | 0 | 0 |
+| rust | 66 | 6 | 0 | 0 | 0 | 0 |
 
 ## Matrix
 
@@ -37,9 +37,14 @@ Excel observation and does not show Excel equivalence.
 | `hb_external_link.xlsx` | handbuilt | external-links | pass | pass | pass |
 | `hb_far_off_cell.xlsx` | handbuilt | sparse, xfd1048576 | pass | pass | pass |
 | `hb_google_sheets_like.xlsx` | handbuilt | google-sheets, defined-names, autofilter, str-formula | pass | pass | pass |
+| `hb_huge_shared_strings.xlsx` | handbuilt | scale, shared-strings, long-strings, unicode | pass | pass | pass |
+| `hb_inline_and_shared_strings.xlsx` | handbuilt | inline-strings, shared-strings, rich-text, str-formula | pass | pass | pass |
 | `hb_inline_strings_rich.xlsx` | handbuilt | inline-strings, rich-text, cached-values | pass | pass | pass |
+| `hb_layout_protection.xlsx` | handbuilt | outline, freeze-panes, print-settings, protection | pass | pass | pass |
 | `hb_libreoffice_like.xlsx` | handbuilt | libreoffice, number-formats, dates, booleans, empty-string-cache | pass | pass | pass |
 | `hb_macro_content_in_xlsx.xlsx` | handbuilt | vba | refuse `macro_content` | refuse `macro_content` | refuse `macro_content` |
+| `hb_many_sheets.xlsx` | handbuilt | scale, many-sheets, cross-sheet | pass | pass | pass |
+| `hb_many_styles.xlsx` | handbuilt | styles, number-formats, theme, scale | pass | pass | pass |
 | `hb_minimal_no_optional_parts.xlsx` | handbuilt | missing-parts, no-styles, no-sst, no-dimension, inline-strings, booleans | pass | pass | pass |
 | `hb_no_cell_references.xlsx` | handbuilt | no-cell-refs | refuse `positional_cells` | refuse `positional_cells` | refuse `positional_cells` |
 | `hb_numbers_like.xlsx` | handbuilt | numbers, absolute-targets, sheet-name-spaces | pass | pass | pass |
@@ -55,6 +60,7 @@ Excel observation and does not show Excel equivalence.
 | `hb_text_columns.xlsx` | handbuilt | text, text-format, column-styles, row-styles, insert-inherits-style | pass | pass | pass |
 | `hb_text_edge_cases.xlsx` | handbuilt | text, text-format, quote-prefix, leading-zeros, long-strings, unicode, rtl, rich-text, whitespace, escaped-chars | pass | pass | pass |
 | `hb_threaded_comments.xlsx` | handbuilt | threaded-comments, comments, vml | pass | pass | pass |
+| `hb_wide_sheet.xlsx` | handbuilt | scale, wide-sheet, xfd-column | pass | pass | pass |
 | `op_1904_dates.xlsx` | openpyxl | date-1904, dates, formulas | pass | refuse `unsupported_package` | pass |
 | `op_array_formulas.xlsx` | openpyxl | array-formulas, cse | pass | refuse `array_spill_refused` | pass |
 | `op_budget_shared_strings.xlsx` | openpyxl | shared-strings, formulas, budget | pass | pass | pass |
@@ -174,6 +180,7 @@ until the formulas are supported. Counts are calculation diagnostics.
 | `hb_dynamic_array_cached.xlsx` | 4 | 4 |
 | `hb_external_link.xlsx` | 1 | 1 |
 | `hb_google_sheets_like.xlsx` | 2 | 2 |
+| `hb_layout_protection.xlsx` | 1 | 1 |
 | `hb_shared_formulas.xlsx` | 7 | 7 |
 | `op_1904_dates.xlsx` | 1 | 1 |
 | `op_array_formulas.xlsx` | 5 | 5 |
