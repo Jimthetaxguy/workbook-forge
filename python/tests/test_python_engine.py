@@ -233,3 +233,37 @@ def test_unsupported_let_name_is_a_capability_diagnostic_not_parse_error():
     assert result["outputs"] == {}
     assert result["diagnostics"][0]["code"] == "unsupported_formula"
     assert "unsupported name" in result["diagnostics"][0]["message"]
+
+
+@pytest.mark.parametrize(
+    ("formula", "span"),
+    [
+        ("=SUM(Jan:Mar!B2)", "Jan:Mar"),
+        ("=SUM('Q2 Apr:Q2 May'!B2)", "Q2 Apr:Q2 May"),
+        ("=COUNT(Jan:Feb!B2:C2)", "Jan:Feb"),
+        ("=SUM('Q1:Q4'!B2)", "Q1:Q4"),
+        ("=Jan:'Mar 2026'!B2+1", "Jan:Mar 2026"),
+    ],
+)
+def test_three_d_references_are_typed_as_not_calculated(formula, span):
+    source = model({"A1": {"formula": formula}}, {"out": "A1"})
+    result = json.loads(engine.calculate(source))
+    assert result["outputs"] == {}
+    assert result["diagnostics"][0]["code"] == "unsupported_formula"
+    assert result["diagnostics"][0]["message"] == (
+        f"3D reference {span}: a reference across a range of sheets is not calculated"
+    )
+
+
+def test_three_d_references_in_a_workbook_are_typed_as_not_calculated():
+    from pathlib import Path
+
+    from workbook_forge.xlsx import import_xlsx
+
+    corpus = Path(__file__).resolve().parents[2] / "fixtures" / "corpus"
+    report = import_xlsx(corpus / "hb_3d_references.xlsx").calculate()
+    by_cell = {(d.get("sheet"), d.get("address")): d for d in report["diagnostics"]}
+    for address, span in (("A1", "Jan:Mar"), ("B1", "Q2 Apr:Q2 May"), ("C1", "Jan:Mar"), ("E1", "Jan:Feb")):
+        diagnostic = by_cell[("Summary", address)]
+        assert diagnostic["code"] == "unsupported_formula"
+        assert f"3D reference {span}: a reference across" in diagnostic["message"]

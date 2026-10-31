@@ -18,7 +18,7 @@ from threading import Lock, RLock
 from typing import Any
 import unicodedata
 
-from . import ArrayValue, ErrorValue, evaluate_result
+from . import ArrayValue, ErrorValue, _is_unsupported_formula_message, evaluate_result
 from .catalog import _catalog_file
 from .expressions import analyze_formula as _analyze_formula, copy_formula
 
@@ -323,7 +323,7 @@ def _formula_analysis(formula: str) -> dict:
         return _analyze_formula(formula)
     except (ValueError, TypeError, RecursionError) as error:
         message = str(error)
-        if message.startswith("unsupported name "):
+        if _is_unsupported_formula_message(message):
             code = "unsupported_formula"
         elif any(word in message.lower() for word in ("limit", "nesting", "depth", "8192")):
             code = "resource_limit"

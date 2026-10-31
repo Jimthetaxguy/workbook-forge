@@ -71,8 +71,8 @@ Excel observation.
 
 | Category | Files | What is kept |
 | --- | ---: | --- |
-| 3d-references | 1 | 3D references are kept; not calculated. |
-| 3d-refs | 1 | 3D references are kept; not calculated. |
+| 3d-references | 1 | 3D references (Jan:Mar!B2) are kept with their cached values; calculation reports `unsupported_formula`. |
+| 3d-refs | 1 | 3D references (Jan:Mar!B2) are kept with their cached values; calculation reports `unsupported_formula`. |
 | autofilter | 2 | Filters are kept; not applied. |
 | bar-chart | 1 | Chart parts are kept byte-for-byte; inspect reports type, anchor and series refs. |
 | calcchain | 1 | The calculation chain is kept or dropped as Excel allows; never trusted. |

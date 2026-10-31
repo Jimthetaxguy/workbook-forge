@@ -186,6 +186,17 @@ class _FormulaSyntaxError(ValueError):
     pass
 
 
+def _three_d_reference_message(span: str) -> str:
+    """Shared with Rust (``three_d_reference_message`` in ``rust/src/lib.rs``)."""
+    return f"3D reference {span}: a reference across a range of sheets is not calculated"
+
+
+def _is_unsupported_formula_message(message: str) -> bool:
+    """True for parser messages that name syntax Workbook Forge reads but does
+    not calculate (a name, a 3D reference), as opposed to a parse error."""
+    return message.startswith(("unsupported name ", "3D reference "))
+
+
 def _canonical_function_name(name: str) -> str:
     """Recognize known OOXML compatibility prefixes without changing source text."""
     upper = name.upper()
@@ -322,8 +333,38 @@ class _Parser:
             node = _Node("binary", "^", (node, self.parse_unary()))
         return node
 
+    def _three_d_span(self) -> str | None:
+        """The sheet span of a 3D reference starting here (``Jan:Mar!B2`` lexes
+        as name, colon, name, bang; ``'Q2 Apr:Q2 May'!B2`` as one quoted name
+        holding the colon, which Excel forbids in a sheet name), or None."""
+        tokens, index = self.tokens, self.index
+        first = tokens[index]
+        if first.kind == "SHEET":
+            name = first.value[1:-1].replace("''", "'")
+            if ":" in name and tokens[index + 1].value == "!":
+                return name
+            return None
+        # Only a non-cell name opens an unquoted span: ``A1:Data!A2`` is a
+        # range whose end is sheet-qualified, and Excel quotes sheet names
+        # shaped like cells.
+        if (
+            first.kind == "IDENT"
+            and index + 3 < len(tokens)
+            and tokens[index + 1].value == ":"
+            and tokens[index + 2].kind in ("IDENT", "CELL", "SHEET")
+            and tokens[index + 3].value == "!"
+        ):
+            last = tokens[index + 2].value
+            if tokens[index + 2].kind == "SHEET":
+                last = last[1:-1].replace("''", "'")
+            return f"{first.value}:{last}"
+        return None
+
     def parse_primary(self) -> _Node:
         token = self.current
+        span = self._three_d_span()
+        if span is not None:
+            raise _FormulaSyntaxError(_three_d_reference_message(span))
         if token.kind == "NUMBER":
             self.consume()
             number = (
