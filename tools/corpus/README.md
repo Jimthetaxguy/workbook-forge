@@ -29,3 +29,8 @@ are not byte-stable across regenerations; the others are.
 through every engine and writes the matrix. `expectations.json` lists the
 expected non-pass outcomes; `python/tests/test_corpus.py` holds the matrix to it
 and never accepts a crash, a corrupt package or a lost value.
+
+`python tools/corpus/capabilities.py` turns the committed report into
+[docs/capabilities-xlsx.md](../../docs/capabilities-xlsx.md): each category as
+supported, preserved only, or refused with its code. Rerun it after the report
+changes; `test_capabilities_document_is_current` fails until you do.

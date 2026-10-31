@@ -160,3 +160,16 @@ def test_rows_and_cells_without_references_refuse_before_any_export(name):
             reader(ROOT / "fixtures/corpus" / name)
         assert caught.value.code == "positional_cells"
         assert str(caught.value) == POSITIONAL_CELLS_MESSAGE
+
+
+def test_capabilities_document_is_current():
+    """docs/capabilities-xlsx.md is generated from the committed corpus report;
+    regenerate it with `python tools/corpus/capabilities.py` after the report changes."""
+    sys.path.insert(0, str(ROOT / "tools" / "corpus"))
+    import capabilities  # noqa: E402
+
+    expected = capabilities.render(ROOT / "docs" / "corpus-report.md")
+    committed = (ROOT / "docs" / "capabilities-xlsx.md").read_text(encoding="utf-8")
+    assert committed == expected, "docs/capabilities-xlsx.md is stale: run python tools/corpus/capabilities.py"
+    missing = [path.name for path in corpus_check.corpus_files([]) if f"`{path.name}`" not in committed]
+    assert not missing, f"corpus files missing from the capabilities document: {missing}"
