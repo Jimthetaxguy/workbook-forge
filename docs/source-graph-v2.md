@@ -98,7 +98,13 @@ typed input payload, runtime output, retained formula-value payload and an
 individual range payload are each capped at 1 MiB. These are declared experimental
 compiler-profile bounds, not Excel limits or a resolution of the separate proposed
 global per-cell-memory policy. Logical payload accounting is not an RSS claim.
-Rust/Python subprocesses have compilation/execution timeouts.
+Rust/Python subprocesses have compilation/execution timeouts. Optimised
+`rustc` gets 180 seconds by default (`FORGE_RUSTC_TIMEOUT_SECONDS`) and the
+generated program 60 seconds (`FORGE_PROGRAM_TIMEOUT_SECONDS`); either may be
+set to any positive number of seconds, and an invalid value is an error rather
+than a silent default. A timeout is reported as `resource_limit`. The compile
+budget was 60 seconds until 2026-10-31, which a cold toolchain cache on a
+loaded host could exceed for a program that compiles in seconds when warm.
 
 Typed values travel via bounded stdin or the standalone command's typed argument
 form (`A1=n:7.0`). Text uses UTF-8 hex, keeping empty text, arbitrary text and
