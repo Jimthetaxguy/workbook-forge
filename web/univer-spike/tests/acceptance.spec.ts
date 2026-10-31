@@ -695,5 +695,33 @@ test('repaint latency: a typed input commit repaints its dependent within the ga
   expect(median).toBeLessThan(REPAINT_GATE_MS);
   expect(sorted.at(-1) as number).toBeLessThan(REPAINT_CEILING_MS);
   expect((await view(page)).cells.B1.displayed).toBe((21 + REPAINT_WARMUPS + REPAINT_SAMPLES - 1) * 2);
+});
+
+test('text columns: a cell typed where none existed inherits its Text (@) row or column format', async ({ page }) => {
+  const errors = await boot(page, 'not-execute');
+  await page.locator('#file').setInputFiles('../../fixtures/corpus/hb_text_columns.xlsx');
+  await expect.poll(() => page.evaluate(() =>
+    (window as any).__spike.then((s: any) => s.adapter.cell('Codes', 'A2').raw),
+  )).toBe('00017');
+  const layout = await page.evaluate(() => (window as any).__spike.then(async (s: any) =>
+    (await s.client.snapshot()).value.sheets[0].textFormat));
+  expect(layout).toEqual({ columns: [[1, 1]], rows: [5], generalRows: [6] });
+  // Column A is Text: new cells there keep what was typed as text.
+  await typeInto(page, 'A4', '00123');
+  // Row 5 is Text across every column; row 6's own number format wins over column A.
+  await typeInto(page, 'E5', '42');
+  await typeInto(page, 'A6', '8');
+  // Column B has no style; A3 existed with its own General format.
+  await typeInto(page, 'B4', '5');
+  await typeInto(page, 'A3', '7');
+  const cells = await page.evaluate(() => (window as any).__spike.then(async (s: any) =>
+    (await s.client.snapshot()).value.sheets[0].cells));
+  expect(cells.A4).toMatchObject({ value: '00123' });
+  expect(cells.E5).toMatchObject({ value: '42' });
+  expect(cells.A6).toMatchObject({ value: 8 });
+  expect(cells.B4).toMatchObject({ value: 5 });
+  expect(cells.A3).toMatchObject({ value: 7 });
+  const notices = await page.evaluate(() => (window as any).__spike.then((s: any) => s.adapter.notices as string[]));
+  expect(notices.filter((n: string) => n.startsWith('Forge rejected'))).toEqual([]);
   expect(errors).toEqual([]);
 });

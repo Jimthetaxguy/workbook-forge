@@ -41,6 +41,8 @@ export interface ForgeWasm {
 
 export interface ForgeWorkbook {
   snapshotJson(): string;
+  /** Imported sheets' inherited Text layouts (absent on older builds and mocks). */
+  textLayoutJson?(): string;
   revisionString(): string;
   applyEditsResultJson(editsJson: string, expectedRevision: string): string;
   submitJson(requestJson: string): string;
@@ -140,11 +142,21 @@ function stringifyJson(value: unknown): string {
 }
 
 /** Forge model JSON -> protocol snapshot sheets. */
-function toSheets(raw: { sheets: { name: string; cells?: Record<string, never> }[] }): SnapshotSheet[] {
-  return raw.sheets.map((sheet) => ({
-    name: sheet.name,
-    cells: Object.fromEntries(Object.entries(sheet.cells ?? {}).map(([a, c]) => [a, toCell(c)])),
-  }));
+type RawLayout = { text_columns: [number, number][]; text_rows: number[]; general_rows: number[] };
+
+function toSheets(
+  raw: { sheets: { name: string; cells?: Record<string, never> }[] },
+  layouts: Record<string, RawLayout> = {},
+): SnapshotSheet[] {
+  return raw.sheets.map((sheet) => {
+    const out: SnapshotSheet = {
+      name: sheet.name,
+      cells: Object.fromEntries(Object.entries(sheet.cells ?? {}).map(([a, c]) => [a, toCell(c)])),
+    };
+    const layout = layouts[sheet.name];
+    if (layout) out.textFormat = { columns: layout.text_columns, rows: layout.text_rows, generalRows: layout.general_rows };
+    return out;
+  });
 }
 
 export class ForgeEngine {
@@ -281,7 +293,8 @@ export class ForgeEngine {
 
   private snapshot(wb: ForgeWorkbook): { ok: true; value: Snapshot } {
     const raw = JSON.parse(wb.snapshotJson()) as { sheets: { name: string; cells: Record<string, never> }[] };
-    return { ok: true, value: { revision: wb.revisionString(), sheets: toSheets(raw) } };
+    const layouts = wb.textLayoutJson ? (JSON.parse(wb.textLayoutJson()) as Record<string, RawLayout>) : {};
+    return { ok: true, value: { revision: wb.revisionString(), sheets: toSheets(raw, layouts) } };
   }
 
   private exportWorkbook(wb: ForgeWorkbook, includeLog: boolean): Result<Commands['export']['result']> {

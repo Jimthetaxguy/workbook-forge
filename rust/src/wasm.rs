@@ -71,6 +71,18 @@ impl BrowserWorkbook {
         serde_json::to_string(&self.session.snapshot()).map_err(js_error)
     }
 
+    /// Per sheet name, where a cell inserted where none existed inherits the
+    /// Text (`@`) format from its row or column style:
+    /// `{"Sheet": {"text_columns": [[min, max]], "text_rows": [..], "general_rows": [..]}}`
+    /// (1-based). Authored workbooks have none.
+    #[wasm_bindgen(js_name = textLayoutJson)]
+    pub fn text_layout_json(&self) -> String {
+        match &self.session {
+            WorkbookSession::Imported(workbook) => workbook.text_layouts().to_string(),
+            WorkbookSession::Authored(_) => "{}".into(),
+        }
+    }
+
     /// Apply a bounded JSON edit array at an expected revision. Both imported
     /// and authored workbooks may add cells; imported files refuse insertions
     /// outside Excel's grid (`out_of_bounds`) and merged non-anchor cells.

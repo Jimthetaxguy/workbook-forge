@@ -39,7 +39,45 @@ def dropdown_formulas():
                   styles=minimal_styles())
 
 
+def styles_with(xfs: list[str], num_fmts: str = "") -> str:
+    """A minimal style sheet whose cellXfs are ``xfs`` (xf 0 should be General)."""
+    return (
+        f'{hb.DECL}<styleSheet xmlns="{hb.MAIN}">{num_fmts}'
+        '<fonts count="1"><font><sz val="11"/><name val="Calibri"/></font></fonts>'
+        '<fills count="2"><fill><patternFill patternType="none"/></fill>'
+        '<fill><patternFill patternType="gray125"/></fill></fills>'
+        '<borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>'
+        '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>'
+        f'<cellXfs count="{len(xfs)}">{"".join(xfs)}</cellXfs>'
+        "</styleSheet>"
+    )
+
+
+def text_columns():
+    """Text (@) set on whole columns and rows, the way a template reserves a
+    column for codes: cells typed later into column A, or anywhere in row 5,
+    must stay text; row 6's own number format overrides column A."""
+    xfs = [
+        '<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>',
+        '<xf numFmtId="49" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/>',
+        '<xf numFmtId="2" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/>',
+    ]
+    cols = '<cols><col min="1" max="1" width="12" style="1" customWidth="1"/><col min="3" max="4" width="10" style="2" customWidth="1"/></cols>'
+    rows = (
+        '<row r="1"><c r="A1" s="1" t="inlineStr"><is><t>Code</t></is></c>'
+        '<c r="B1" t="inlineStr"><is><t>Name</t></is></c>'
+        '<c r="C1" t="inlineStr"><is><t>Amount</t></is></c></row>'
+        '<row r="2"><c r="A2" s="1" t="inlineStr"><is><t>00017</t></is></c>'
+        '<c r="B2" t="inlineStr"><is><t>Widget</t></is></c><c r="C2" s="2"><v>3.5</v></c></row>'
+        '<row r="3"><c r="A3"><v>42</v></c><c r="B3" t="inlineStr"><is><t>Number in a text column</t></is></c></row>'
+        '<row r="5" s="1" customFormat="1"><c r="B5" s="1" t="inlineStr"><is><t>Text row</t></is></c></row>'
+        '<row r="6" s="2" customFormat="1"><c r="B6" s="2"><v>1</v></c></row>'
+    )
+    return simple({"Codes": sheet_xml(rows, dimension="A1:C6", before=cols)}, styles=styles_with(xfs))
+
+
 BUILDERS = {
+    "hb_text_columns": (text_columns, ["text", "text-format", "column-styles", "row-styles", "insert-inherits-style"]),
     "hb_dropdown_formulas": (dropdown_formulas, ["data-validation", "dropdowns", "formula-in-validated-cell"]),
 }
 STORED: set[str] = set()

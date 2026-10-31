@@ -220,6 +220,63 @@ def _block_range(
             cell["blocked_reason"] = reason
 
 
+class TextLayout:
+    """Where a newly inserted cell inherits the Text (@) number format.
+
+    ``rows`` maps each row with ``customFormat`` to whether its style is Text;
+    such a row decides for every new cell in it. Otherwise the first ``<col>``
+    range that covers the column and carries a style decides.
+    """
+
+    __slots__ = ("rows", "columns")
+
+    def __init__(self, rows: dict[int, bool], columns: list[tuple[int, int, bool]]):
+        self.rows = rows
+        self.columns = columns
+
+    def is_text(self, column: int, row: int) -> bool:
+        if row in self.rows:
+            return self.rows[row]
+        for first, last, text in self.columns:
+            if first <= column <= last:
+                return text
+        return False
+
+    def public(self) -> dict[str, Any]:
+        """``text_columns`` ranges and ``text_rows``/``general_rows`` overrides."""
+        return {
+            "text_columns": [[first, last] for first, last, text in self.columns if text],
+            "text_rows": sorted(row for row, text in self.rows.items() if text),
+            "general_rows": sorted(row for row, text in self.rows.items() if not text),
+        }
+
+
+def _text_layout(root: ET.Element, styles: list[dict[str, Any]]) -> TextLayout | None:
+    """The sheet's row and column styles that make an inserted cell text, if any."""
+
+    def is_text(raw: str) -> bool:
+        try:
+            index = int(raw)
+        except ValueError:
+            return False
+        return 0 <= index < len(styles) and styles[index].get("number_format") == "@"
+
+    columns = []
+    for col in root.findall("m:cols/m:col", NS):
+        if "style" in col.attrib:
+            columns.append((int(col.attrib["min"]), int(col.attrib["max"]), is_text(col.attrib["style"])))
+    rows = {}
+    for row in root.findall("m:sheetData/m:row", NS):
+        if row.attrib.get("customFormat") in {"1", "true"} and "s" in row.attrib and "r" in row.attrib:
+            try:
+                rows[int(row.attrib["r"])] = is_text(row.attrib["s"])
+            except ValueError:
+                continue
+    if not any(text for *_, text in columns) and not any(rows.values()):
+        return None
+    return TextLayout(rows, columns)
+
+
 def import_xlsx(
     path: str | Path, *, inputs=None, outputs=None, backend: str = "python"
 ) -> WorkbookModel:
@@ -290,6 +347,7 @@ def import_xlsx(
         budget = [0]
         width_work = 0
         merged: list[tuple[str, tuple[tuple[int, int, int, int], ...]]] = []
+        text_layouts: dict[str, TextLayout] = {}
         for index, sheet in enumerate(workbook.sheet_names, 1):
             cells: dict[str, Any] = {}
             part = workbook._sheet_parts[sheet]
@@ -399,6 +457,9 @@ def import_xlsx(
                 {"id": f"sheet-{index}", "name": sheet, "cells": cells, "column_widths": widths}
             )
             merged.append((sheet, _worksheet_merges(root)))
+            layout = _text_layout(root, styles)
+            if layout is not None:
+                text_layouts[sheet.casefold()] = layout
             validations += features.read_validations(sheet, root, names)
             metadata["sheets"].append(
                 {
@@ -431,6 +492,10 @@ def import_xlsx(
             if rule["source"] and "range" in rule["source"] and "values" not in rule["source"]:
                 rule["allowed_values"] = features.resolve_list_values(rule, imported_value)
         metadata["data_validations"] = features.public(validations)
+        metadata["text_layouts"] = {
+            item["name"]: text_layouts[item["name"].casefold()].public()
+            for item in document["sheets"] if item["name"].casefold() in text_layouts
+        }
         metadata["pivots"] = features.public(pivots)
         metadata["charts"] = features.public(charts)
         metadata["chartsheets"] = workbook.chartsheets
@@ -451,6 +516,17 @@ def import_xlsx(
             for address, cell in item["cells"].items()
             if (cell.get("style") or {}).get("number_format") == "@"
         )
+        if text_layouts:
+            # A cell inserted where none existed takes its row's style (a row
+            # with customFormat) or else its column's, as Excel does, so it is
+            # text when that style is Text (@).
+            model._text_layouts = text_layouts
+            model._imported_addresses = frozenset(
+                (item["name"].casefold(), address)
+                for item in document["sheets"]
+                if item["name"].casefold() in text_layouts
+                for address in item["cells"]
+            )
         model._source_baseline = _Baseline(
             workbook.source,
             tuple(workbook._parts.items()),
@@ -959,6 +1035,8 @@ def export_snapshot(imported: WorkbookModel, document: dict[str, Any], output: s
     transferred._source_baseline = imported._source_baseline
     transferred._feature_guard = imported._feature_guard
     transferred._text_cells = imported._text_cells
+    transferred._text_layouts = imported._text_layouts
+    transferred._imported_addresses = imported._imported_addresses
     return export_xlsx(transferred, output)
 
 

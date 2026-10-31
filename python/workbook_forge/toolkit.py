@@ -94,6 +94,10 @@ class WorkbookModel:
         self._feature_guard = None
         # (casefolded sheet, address) of imported Text-formatted (@) cells.
         self._text_cells: frozenset[tuple[str, str]] = frozenset()
+        # Imported sheets whose row/column styles make an inserted cell Text
+        # (xlsx.TextLayout), and the cells the import held there.
+        self._text_layouts: dict[str, Any] = {}
+        self._imported_addresses: frozenset[tuple[str, str]] = frozenset()
 
     @property
     def backend(self) -> str:
@@ -120,7 +124,7 @@ class WorkbookModel:
             raise UnsupportedWorkbook(
                 "formula edits in imported 1904 date-system workbooks are unsupported"
             )
-        if self._text_cells:
+        if self._text_cells or self._text_layouts:
             batch = [self._as_text(edit) for edit in batch]
         if self._feature_guard is not None:
             self._check_features(batch)
@@ -132,11 +136,24 @@ class WorkbookModel:
         if "formula" in edit or isinstance(value, bool) or not isinstance(value, (int, float)):
             return edit
         key = (str(edit.get("sheet", "")).casefold(), str(edit.get("address", "")).replace("$", "").upper())
-        if key not in self._text_cells:
+        if key not in self._text_cells and not self._inherits_text(key):
             return edit
         from .xlsx_features import general_text
 
         return {**edit, "value": general_text(value)}
+
+    def _inherits_text(self, key: tuple[str, str]) -> bool:
+        """A cell the import did not hold, in a row or column styled Text (@)."""
+        layout = self._text_layouts.get(key[0])
+        if layout is None or key in self._imported_addresses:
+            return False
+        from .workbook import _cell_position
+
+        try:
+            column, row = _cell_position(key[1])
+        except (ValueError, KeyError):
+            return False
+        return layout.is_text(column, row)
 
     def _check_features(self, batch: list[Mapping[str, Any]]) -> None:
         """Refuse writes into pivot output and out-of-rule drop-down values.
