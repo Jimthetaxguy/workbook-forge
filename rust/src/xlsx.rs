@@ -132,6 +132,44 @@ fn positioned(node: &Node) -> Result<&str> {
         _ => Err(err(POSITIONAL_CELLS_MESSAGE)),
     }
 }
+
+/// Well-formedness check for every XML part at open. Parts the engine reads
+/// are parsed again as UTF-8; a part stored as UTF-16 with a byte-order mark
+/// (Excel writes the Power Query `DataMashup` customXml item this way) is
+/// checked through its UTF-8 text and kept byte-for-byte.
+fn check_xml_part(data: &[u8]) -> Result<()> {
+    let little = data.starts_with(&[0xFF, 0xFE]);
+    if !little && !data.starts_with(&[0xFE, 0xFF]) {
+        Xml::parse(data)?;
+        return Ok(());
+    }
+    let (pairs, rest) = data[2..].as_chunks::<2>();
+    if !rest.is_empty() {
+        return Err(err("invalid UTF-16 XML part"));
+    }
+    let units: Vec<u16> = pairs
+        .iter()
+        .map(|&pair| {
+            if little {
+                u16::from_le_bytes(pair)
+            } else {
+                u16::from_be_bytes(pair)
+            }
+        })
+        .collect();
+    let text = String::from_utf16(&units).map_err(|_| err("invalid UTF-16 XML part"))?;
+    // The declaration names UTF-16; the checked copy is UTF-8, so drop it.
+    let text = match text.strip_prefix("<?xml") {
+        Some(rest) => match rest.find("?>") {
+            Some(end) => &rest[end + 2..],
+            None => return Err(err("invalid UTF-16 XML part")),
+        },
+        None => text.as_str(),
+    };
+    Xml::parse(text.as_bytes())?;
+    Ok(())
+}
+
 fn xml_escape(value: &str) -> Result<String> {
     if value.chars().any(|c| {
         !matches!(c, '\t' | '\r' | '\n') && (c < ' ' || matches!(c, '\u{fffe}' | '\u{ffff}'))
@@ -298,7 +336,7 @@ impl Package {
                 return Err(err("uncompressed package size limit"));
             }
             if is_xml {
-                Xml::parse(&data)?;
+                check_xml_part(&data)?;
             }
             if name.to_ascii_lowercase().contains("vbaproject") {
                 return Err(err("VBA content is forbidden"));
@@ -3368,5 +3406,31 @@ mod refusal_code_tests {
             "package_damaged"
         );
         assert_eq!(XlsxError("zzz".into()).code(), "xlsx_error");
+    }
+
+    #[test]
+    fn utf16_xml_parts_are_checked_and_malformed_ones_refused() {
+        let utf16 = |text: &str, little: bool| {
+            let mut out = if little {
+                vec![0xFF, 0xFE]
+            } else {
+                vec![0xFE, 0xFF]
+            };
+            for unit in text.encode_utf16() {
+                out.extend(if little {
+                    unit.to_le_bytes()
+                } else {
+                    unit.to_be_bytes()
+                });
+            }
+            out
+        };
+        let good = "<?xml version=\"1.0\" encoding=\"utf-16\"?><DataMashup xmlns=\"urn:x\">QQ==</DataMashup>";
+        assert!(check_xml_part(&utf16(good, true)).is_ok());
+        assert!(check_xml_part(&utf16(good, false)).is_ok());
+        assert!(check_xml_part(&utf16("<a><b></a>", true)).is_err());
+        assert!(check_xml_part(&[0xFF, 0xFE, 0x3C]).is_err());
+        // Without a byte-order mark a UTF-16 declaration is still refused.
+        assert!(check_xml_part(good.as_bytes()).is_err());
     }
 }

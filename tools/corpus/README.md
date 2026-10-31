@@ -12,7 +12,12 @@ by our own scripts so there is no third-party licensing exposure:
   quirks of Google Sheets, Numbers and LibreOffice exports.
   `shapes.py` adds later real-world shapes on the same helpers: a sheet out to
   column XFD, 210 sheets, 30,000 shared strings, mixed inline and shared strings,
-  4,000 cell formats with a theme, and outline, print and protection settings.
+  4,000 cell formats with a theme, outline, print and protection settings, and
+  feature parts Excel writes that the libraries do not (form controls, slicers,
+  timelines, sparklines, connections with a Power Query item stored as UTF-16,
+  customXml, embedded OLE objects, a pivot calculated field, a table totals row
+  and calculated column) plus formula shapes (3D references, names that look
+  like references, a formula near the 8,192-character limit).
 - `lo_*` files come from LibreOffice headless when `soffice` is on PATH.
 
 Regenerate with `python tools/corpus/generate_corpus.py` (openpyxl and XlsxWriter

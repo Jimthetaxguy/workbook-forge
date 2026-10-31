@@ -1,5 +1,14 @@
 {
   "files": {
+    "hb_3d_references.xlsx": {
+      "writer": "handbuilt",
+      "categories": [
+        "3d-references",
+        "cross-sheet",
+        "defined-names",
+        "sheet-name-spaces"
+      ]
+    },
     "hb_absolute_targets.xlsx": {
       "writer": "handbuilt",
       "categories": [
@@ -12,6 +21,22 @@
       "categories": [
         "xml-bom",
         "stored-zip"
+      ]
+    },
+    "hb_connections_query.xlsx": {
+      "writer": "handbuilt",
+      "categories": [
+        "connections",
+        "power-query",
+        "query-table",
+        "custom-xml",
+        "tables"
+      ]
+    },
+    "hb_custom_xml.xlsx": {
+      "writer": "handbuilt",
+      "categories": [
+        "custom-xml"
       ]
     },
     "hb_data_table_formula.xlsx": {
@@ -46,6 +71,13 @@
         "dynamic-array",
         "spill",
         "metadata"
+      ]
+    },
+    "hb_embedded_ole.xlsx": {
+      "writer": "handbuilt",
+      "categories": [
+        "ole-objects",
+        "vml"
       ]
     },
     "hb_errors_as_values.xlsx": {
@@ -91,6 +123,14 @@
       "categories": [
         "sparse",
         "xfd1048576"
+      ]
+    },
+    "hb_form_controls.xlsx": {
+      "writer": "handbuilt",
+      "categories": [
+        "form-controls",
+        "vml",
+        "mc-ignorable"
       ]
     },
     "hb_google_sheets_like.xlsx": {
@@ -145,6 +185,13 @@
         "dates",
         "booleans",
         "empty-string-cache"
+      ]
+    },
+    "hb_long_formula.xlsx": {
+      "writer": "handbuilt",
+      "categories": [
+        "long-formula",
+        "formula-length-limit"
       ]
     },
     "hb_macro_content_in_xlsx.xlsx": {
@@ -208,6 +255,13 @@
         "pivot"
       ]
     },
+    "hb_pivot_calculated_field.xlsx": {
+      "writer": "handbuilt",
+      "categories": [
+        "pivot",
+        "pivot-calculated-field"
+      ]
+    },
     "hb_pivot_fields.xlsx": {
       "writer": "handbuilt",
       "categories": [
@@ -221,6 +275,13 @@
       "categories": [
         "prefixed-namespace",
         "shared-strings"
+      ]
+    },
+    "hb_r1c1_looking_names.xlsx": {
+      "writer": "handbuilt",
+      "categories": [
+        "defined-names",
+        "r1c1-looking-names"
       ]
     },
     "hb_rich_text_phonetic.xlsx": {
@@ -245,6 +306,22 @@
         "cached-values"
       ]
     },
+    "hb_slicers.xlsx": {
+      "writer": "handbuilt",
+      "categories": [
+        "slicers",
+        "tables",
+        "extlst"
+      ]
+    },
+    "hb_sparklines.xlsx": {
+      "writer": "handbuilt",
+      "categories": [
+        "sparklines",
+        "extlst",
+        "sheet-name-spaces"
+      ]
+    },
     "hb_stale_dimension.xlsx": {
       "writer": "handbuilt",
       "categories": [
@@ -256,6 +333,15 @@
       "writer": "handbuilt",
       "categories": [
         "strict-ooxml"
+      ]
+    },
+    "hb_table_totals_calculated.xlsx": {
+      "writer": "handbuilt",
+      "categories": [
+        "tables",
+        "totals-row",
+        "calculated-columns",
+        "structured-refs"
       ]
     },
     "hb_text_columns.xlsx": {
@@ -289,6 +375,14 @@
         "threaded-comments",
         "comments",
         "vml"
+      ]
+    },
+    "hb_timelines.xlsx": {
+      "writer": "handbuilt",
+      "categories": [
+        "timelines",
+        "pivot",
+        "extlst"
       ]
     },
     "hb_wide_sheet.xlsx": {
