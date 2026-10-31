@@ -1025,8 +1025,12 @@ impl FeatureGuard {
             let rule = self.formula_rule(sheet, address).expect("filtered above");
             let formula = formula.trim_start_matches('=');
             let diagnostic = report.diagnostics.iter().find(|d| {
-                d.sheet.as_deref().is_some_and(|s| s.eq_ignore_ascii_case(sheet))
-                    && d.address.as_deref().is_some_and(|a| a.eq_ignore_ascii_case(address))
+                d.sheet
+                    .as_deref()
+                    .is_some_and(|s| s.eq_ignore_ascii_case(sheet))
+                    && d.address
+                        .as_deref()
+                        .is_some_and(|a| a.eq_ignore_ascii_case(address))
             });
             let result = report.outputs.get(&format!("forge_validation_{index}"));
             let value = match (result, diagnostic.or(whole)) {
