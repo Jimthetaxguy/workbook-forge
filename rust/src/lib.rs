@@ -652,9 +652,15 @@ impl Parser {
             self.expect(Token::RParen)?;
             return Ok(Expr::Call(name.to_ascii_uppercase(), args));
         }
-        // An unqualified identifier is an A1 reference if it has the expected shape.
+        // An unqualified identifier is an A1 reference if it has the expected
+        // shape; anything else (R1C1Total, C3PO, RC_Rate) is a name, reported
+        // with the same words as Python.
+        if validate_cell_ref(&name).is_err() {
+            return Err(FormulaError::Unsupported(format!(
+                "unsupported name '{name}'"
+            )));
+        }
         name.make_ascii_uppercase();
-        validate_cell_ref(&name)?;
         Ok(Expr::Ref(String::new(), name))
     }
 
