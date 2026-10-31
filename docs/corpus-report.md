@@ -16,9 +16,9 @@ Excel observation and does not show Excel equivalence.
 
 | Engine | pass | refuse | untyped | crash | corrupt | lossy |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| py_toolkit | 58 | 5 | 0 | 0 | 0 | 0 |
-| py_canonical | 50 | 13 | 0 | 0 | 0 | 0 |
-| rust | 58 | 5 | 0 | 0 | 0 | 0 |
+| py_toolkit | 59 | 5 | 0 | 0 | 0 | 0 |
+| py_canonical | 51 | 13 | 0 | 0 | 0 | 0 |
+| rust | 59 | 5 | 0 | 0 | 0 | 0 |
 
 ## Matrix
 
@@ -27,6 +27,7 @@ Excel observation and does not show Excel equivalence.
 | `hb_absolute_targets.xlsx` | handbuilt | absolute-targets, missing-parts | pass | pass | pass |
 | `hb_bom_part.xlsx` | handbuilt | xml-bom, stored-zip | pass | pass | pass |
 | `hb_data_table_formula.xlsx` | handbuilt | data-table | pass | refuse `unsupported_formula_group` | pass |
+| `hb_dropdown_formulas.xlsx` | handbuilt | data-validation, dropdowns, formula-in-validated-cell | pass | pass | pass |
 | `hb_dropdown_rules.xlsx` | handbuilt | data-validation, dropdowns, error-styles, sheet-scoped-names, text-length, custom-validation, formula-list | pass | pass | pass |
 | `hb_dynamic_array_cached.xlsx` | handbuilt | dynamic-array, spill, metadata | pass | refuse `array_spill_refused` | pass |
 | `hb_errors_as_values.xlsx` | handbuilt | errors, booleans, cached-values | pass | pass | pass |

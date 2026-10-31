@@ -20,6 +20,14 @@
         "data-table"
       ]
     },
+    "hb_dropdown_formulas.xlsx": {
+      "writer": "handbuilt",
+      "categories": [
+        "data-validation",
+        "dropdowns",
+        "formula-in-validated-cell"
+      ]
+    },
     "hb_dropdown_rules.xlsx": {
       "writer": "handbuilt",
       "categories": [
