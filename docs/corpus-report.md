@@ -16,32 +16,38 @@ Excel observation and does not show Excel equivalence.
 
 | Engine | pass | refuse | untyped | crash | corrupt | lossy |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| py_toolkit | 66 | 6 | 0 | 0 | 0 | 0 |
-| py_canonical | 58 | 14 | 0 | 0 | 0 | 0 |
-| rust | 66 | 6 | 0 | 0 | 0 | 0 |
+| py_toolkit | 78 | 6 | 0 | 0 | 0 | 0 |
+| py_canonical | 70 | 14 | 0 | 0 | 0 | 0 |
+| rust | 78 | 6 | 0 | 0 | 0 | 0 |
 
 ## Matrix
 
 | File | Writer | Categories | py_toolkit | py_canonical | rust |
 | --- | --- | --- | --- | --- | --- |
+| `hb_3d_references.xlsx` | handbuilt | 3d-references, cross-sheet, defined-names, sheet-name-spaces | pass | pass | pass |
 | `hb_absolute_targets.xlsx` | handbuilt | absolute-targets, missing-parts | pass | pass | pass |
 | `hb_bom_part.xlsx` | handbuilt | xml-bom, stored-zip | pass | pass | pass |
+| `hb_connections_query.xlsx` | handbuilt | connections, power-query, query-table, custom-xml, tables | pass | pass | pass |
+| `hb_custom_xml.xlsx` | handbuilt | custom-xml | pass | pass | pass |
 | `hb_data_table_formula.xlsx` | handbuilt | data-table | pass | refuse `unsupported_formula_group` | pass |
 | `hb_dropdown_formulas.xlsx` | handbuilt | data-validation, dropdowns, formula-in-validated-cell | pass | pass | pass |
 | `hb_dropdown_rules.xlsx` | handbuilt | data-validation, dropdowns, error-styles, sheet-scoped-names, text-length, custom-validation, formula-list | pass | pass | pass |
 | `hb_dynamic_array_cached.xlsx` | handbuilt | dynamic-array, spill, metadata | pass | refuse `array_spill_refused` | pass |
+| `hb_embedded_ole.xlsx` | handbuilt | ole-objects, vml | pass | pass | pass |
 | `hb_errors_as_values.xlsx` | handbuilt | errors, booleans, cached-values | pass | pass | pass |
 | `hb_errors_newer_values.xlsx` | handbuilt | errors, newer-errors | refuse `unsupported_error_value` | refuse `unsupported_error_value` | refuse `unsupported_error_value` |
 | `hb_escaped_control_chars.xlsx` | handbuilt | escaped-chars, shared-strings | pass | pass | pass |
 | `hb_excel_like_markup.xlsx` | handbuilt | excel-markup, mc-ignorable, calcchain, extlst, docprops | pass | pass | pass |
 | `hb_external_link.xlsx` | handbuilt | external-links | pass | pass | pass |
 | `hb_far_off_cell.xlsx` | handbuilt | sparse, xfd1048576 | pass | pass | pass |
+| `hb_form_controls.xlsx` | handbuilt | form-controls, vml, mc-ignorable | pass | pass | pass |
 | `hb_google_sheets_like.xlsx` | handbuilt | google-sheets, defined-names, autofilter, str-formula | pass | pass | pass |
 | `hb_huge_shared_strings.xlsx` | handbuilt | scale, shared-strings, long-strings, unicode | pass | pass | pass |
 | `hb_inline_and_shared_strings.xlsx` | handbuilt | inline-strings, shared-strings, rich-text, str-formula | pass | pass | pass |
 | `hb_inline_strings_rich.xlsx` | handbuilt | inline-strings, rich-text, cached-values | pass | pass | pass |
 | `hb_layout_protection.xlsx` | handbuilt | outline, freeze-panes, print-settings, protection | pass | pass | pass |
 | `hb_libreoffice_like.xlsx` | handbuilt | libreoffice, number-formats, dates, booleans, empty-string-cache | pass | pass | pass |
+| `hb_long_formula.xlsx` | handbuilt | long-formula, formula-length-limit | pass | pass | pass |
 | `hb_macro_content_in_xlsx.xlsx` | handbuilt | vba | refuse `macro_content` | refuse `macro_content` | refuse `macro_content` |
 | `hb_many_sheets.xlsx` | handbuilt | scale, many-sheets, cross-sheet | pass | pass | pass |
 | `hb_many_styles.xlsx` | handbuilt | styles, number-formats, theme, scale | pass | pass | pass |
@@ -50,16 +56,22 @@ Excel observation and does not show Excel equivalence.
 | `hb_numbers_like.xlsx` | handbuilt | numbers, absolute-targets, sheet-name-spaces | pass | pass | pass |
 | `hb_odd_part_name.xlsx` | handbuilt | odd-part-names, dot-segments | pass | pass | pass |
 | `hb_pivot_cache.xlsx` | handbuilt | pivot | pass | pass | pass |
+| `hb_pivot_calculated_field.xlsx` | handbuilt | pivot, pivot-calculated-field | pass | pass | pass |
 | `hb_pivot_fields.xlsx` | handbuilt | pivot, pivot-fields, page-fields | pass | pass | pass |
 | `hb_prefixed_spreadsheetml.xlsx` | handbuilt | prefixed-namespace, shared-strings | pass | pass | pass |
+| `hb_r1c1_looking_names.xlsx` | handbuilt | defined-names, r1c1-looking-names | pass | pass | pass |
 | `hb_rich_text_phonetic.xlsx` | handbuilt | rich-text, phonetic, unicode, whitespace | pass | pass | pass |
 | `hb_rows_without_references.xlsx` | handbuilt | no-row-refs | refuse `positional_cells` | refuse `positional_cells` | refuse `positional_cells` |
 | `hb_shared_formulas.xlsx` | handbuilt | shared-formulas, cached-values | pass | refuse `unsupported_formula_group` | pass |
+| `hb_slicers.xlsx` | handbuilt | slicers, tables, extlst | pass | pass | pass |
+| `hb_sparklines.xlsx` | handbuilt | sparklines, extlst, sheet-name-spaces | pass | pass | pass |
 | `hb_stale_dimension.xlsx` | handbuilt | stale-dimension, sparse | pass | pass | pass |
 | `hb_strict_ooxml.xlsx` | handbuilt | strict-ooxml | refuse `strict_ooxml` | refuse `strict_ooxml` | refuse `strict_ooxml` |
+| `hb_table_totals_calculated.xlsx` | handbuilt | tables, totals-row, calculated-columns, structured-refs | pass | pass | pass |
 | `hb_text_columns.xlsx` | handbuilt | text, text-format, column-styles, row-styles, insert-inherits-style | pass | pass | pass |
 | `hb_text_edge_cases.xlsx` | handbuilt | text, text-format, quote-prefix, leading-zeros, long-strings, unicode, rtl, rich-text, whitespace, escaped-chars | pass | pass | pass |
 | `hb_threaded_comments.xlsx` | handbuilt | threaded-comments, comments, vml | pass | pass | pass |
+| `hb_timelines.xlsx` | handbuilt | timelines, pivot, extlst | pass | pass | pass |
 | `hb_wide_sheet.xlsx` | handbuilt | scale, wide-sheet, xfd-column | pass | pass | pass |
 | `op_1904_dates.xlsx` | openpyxl | date-1904, dates, formulas | pass | refuse `unsupported_package` | pass |
 | `op_array_formulas.xlsx` | openpyxl | array-formulas, cse | pass | refuse `array_spill_refused` | pass |
@@ -176,12 +188,16 @@ until the formulas are supported. Counts are calculation diagnostics.
 
 | File | py_toolkit | rust |
 | --- | ---: | ---: |
+| `hb_3d_references.xlsx` | 5 | 5 |
 | `hb_data_table_formula.xlsx` | 2 | 2 |
 | `hb_dynamic_array_cached.xlsx` | 4 | 4 |
 | `hb_external_link.xlsx` | 1 | 1 |
 | `hb_google_sheets_like.xlsx` | 2 | 2 |
 | `hb_layout_protection.xlsx` | 1 | 1 |
+| `hb_long_formula.xlsx` | 2 | 2 |
+| `hb_r1c1_looking_names.xlsx` | 4 | 4 |
 | `hb_shared_formulas.xlsx` | 7 | 7 |
+| `hb_table_totals_calculated.xlsx` | 7 | 7 |
 | `op_1904_dates.xlsx` | 1 | 1 |
 | `op_array_formulas.xlsx` | 5 | 5 |
 | `op_defined_names.xlsx` | 2 | 2 |
