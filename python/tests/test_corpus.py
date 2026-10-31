@@ -148,3 +148,15 @@ def test_newer_error_values_refuse_with_their_code():
         import_xlsx(ROOT / "fixtures/corpus/hb_errors_newer_values.xlsx")
     assert caught.value.code == "unsupported_error_value"
     import_xlsx(ROOT / "fixtures/corpus/hb_errors_as_values.xlsx")
+
+
+@pytest.mark.parametrize("name", ["hb_no_cell_references.xlsx", "hb_rows_without_references.xlsx"])
+def test_rows_and_cells_without_references_refuse_before_any_export(name):
+    from workbook_forge.workbook import POSITIONAL_CELLS_MESSAGE, UnsupportedWorkbook, Workbook
+    from workbook_forge.xlsx import import_xlsx
+
+    for reader in (Workbook.open, import_xlsx):
+        with pytest.raises(UnsupportedWorkbook) as caught:
+            reader(ROOT / "fixtures/corpus" / name)
+        assert caught.value.code == "positional_cells"
+        assert str(caught.value) == POSITIONAL_CELLS_MESSAGE

@@ -229,6 +229,13 @@ def no_cell_references():
     return simple({"Sheet1": sheet_xml(rows)}, styles=minimal_styles())
 
 
+def rows_without_references():
+    """Rows without `r` whose cells do carry `r`. Readers that index cells by
+    their own `r` open it; a later insert would have to guess the row."""
+    rows = '<row><c r="A1"><v>1</v></c><c r="B1"><v>2</v></c></row><row><c r="A2"><f>A1+B1</f><v>3</v></c></row>'
+    return simple({"Sheet1": sheet_xml(rows, dimension="A1:B2")}, styles=minimal_styles())
+
+
 def errors_as_values():
     errors = ["#N/A", "#DIV/0!", "#REF!", "#NAME?", "#NULL!", "#NUM!", "#VALUE!", "#SPILL!", "#CALC!"]
     rows = "".join(f'<row r="{i}"><c r="A{i}" t="e"><v>{e}</v></c><c r="B{i}" t="b"><v>{i % 2}</v></c></row>' for i, e in enumerate(errors, 1))
@@ -662,6 +669,7 @@ BUILDERS = {
     "hb_strict_ooxml": (strict_ooxml, ["strict-ooxml"]),
     "hb_prefixed_spreadsheetml": (prefixed_spreadsheetml, ["prefixed-namespace", "shared-strings"]),
     "hb_no_cell_references": (no_cell_references, ["no-cell-refs"]),
+    "hb_rows_without_references": (rows_without_references, ["no-row-refs"]),
     "hb_errors_as_values": (errors_as_values, ["errors", "booleans", "cached-values"]),
     "hb_errors_newer_values": (newer_error_values, ["errors", "newer-errors"]),
     "hb_far_off_cell": (far_off_cell, ["sparse", "xfd1048576"]),

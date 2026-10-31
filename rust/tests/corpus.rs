@@ -93,3 +93,21 @@ fn byte_order_marked_parts_export_valid_xml() {
     let exported = imported.export_bytes().expect("export");
     import_xlsx_bytes(&exported, BTreeMap::new(), BTreeMap::new()).expect("reimport");
 }
+
+#[test]
+fn rows_and_cells_without_references_refuse_with_the_shared_message() {
+    for name in [
+        "hb_no_cell_references.xlsx",
+        "hb_rows_without_references.xlsx",
+    ] {
+        let error = import_xlsx_bytes(&corpus(name), BTreeMap::new(), BTreeMap::new())
+            .err()
+            .expect("refused");
+        assert_eq!(error.code(), "positional_cells", "{name}");
+        assert_eq!(
+            error.to_string(),
+            workbook_forge::xlsx::POSITIONAL_CELLS_MESSAGE,
+            "{name}"
+        );
+    }
+}

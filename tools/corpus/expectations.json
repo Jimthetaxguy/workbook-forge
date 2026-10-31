@@ -17,9 +17,14 @@
     "rust": "refuse:macro_content"
   },
   "hb_no_cell_references.xlsx": {
-    "py_toolkit": "refuse:unsupported_package",
-    "py_canonical": "refuse:unsupported_package",
-    "rust": "refuse:package_damaged"
+    "py_toolkit": "refuse:positional_cells",
+    "py_canonical": "refuse:positional_cells",
+    "rust": "refuse:positional_cells"
+  },
+  "hb_rows_without_references.xlsx": {
+    "py_toolkit": "refuse:positional_cells",
+    "py_canonical": "refuse:positional_cells",
+    "rust": "refuse:positional_cells"
   },
   "hb_shared_formulas.xlsx": {
     "py_canonical": "refuse:unsupported_formula_group"
