@@ -528,6 +528,17 @@ const REPAINT_GATE_MS = (() => {
 const REPAINT_WARMUPS = 1;
 const REPAINT_SAMPLES = 5;
 const REPAINT_CEILING_MS = 1000;
+// __b1At is written inside requestAnimationFrame, after settle()'s 250 ms pad
+// and adapter.idle(). Poll past the per-sample ceiling so a slow paint is
+// recorded and that ceiling can reject it. This wait is not a gate threshold.
+const REPAINT_SEEN_TIMEOUT_MS = REPAINT_CEILING_MS + 4_000;
+
+async function waitForB1Paint(page: Page, shown: string) {
+  await expect.poll(
+    () => page.evaluate(() => (window as any).__b1At as number | null),
+    { timeout: REPAINT_SEEN_TIMEOUT_MS, message: `B1 never showed ${shown}` },
+  ).not.toBeNull();
+}
 
 test('event log: typed edits are logged human intents with exact deltas, Ctrl+Z is an undo intent, and the log replays', async ({ page }) => {
   const errors = await boot(page, 'not-execute');
@@ -570,6 +581,7 @@ test('event log: typed edits are logged human intents with exact deltas, Ctrl+Z 
   }));
   await page.keyboard.press('Enter');
   await settle(page);
+  await waitForB1Paint(page, '40');
   const timing = await page.evaluate(() => (window as any).__spike.then((s: any) => ({
     commitAt: s.adapter.lastCommitAt as number,
     paintAt: s.adapter.lastPaintAt as number,
@@ -678,6 +690,7 @@ test('repaint latency: a typed input commit repaints its dependent within the ga
     }), input * 2);
     await page.keyboard.press('Enter');
     await settle(page);
+    await waitForB1Paint(page, String(input * 2));
     const timing = await page.evaluate(() => (window as any).__spike.then((s: any) => ({
       commitAt: s.adapter.lastCommitAt as number,
       seenAt: (window as any).__b1At as number | null,
