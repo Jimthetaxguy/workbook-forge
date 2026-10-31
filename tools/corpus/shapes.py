@@ -1,7 +1,8 @@
 """More hand-built OOXML shapes for the robustness corpus (standard library only).
 
-``handbuilt.py`` holds the original set; this module adds the real-world shapes
-found later, built with the same helpers so every file is synthetic,
+``handbuilt.py`` holds the original set; this module adds a synthetic package
+with hand-authored stale caches (A3's formula is B3, cached <v>No</v>, while
+B3 is the literal Maybe), built with the same helpers so every file is synthetic,
 general-purpose and byte-stable across regenerations. ``generate_corpus.py``
 writes both sets under the ``handbuilt`` writer.
 """
@@ -15,9 +16,8 @@ from handbuilt import minimal_styles, sheet_xml, simple
 
 
 def dropdown_formulas():
-    """Drop-down cells that already hold formulas, as Excel saves them: each
-    result was in the list when it was entered. One result has since drifted
-    out of its list on recalculation, which Excel never re-checks."""
+    """Synthetic package with hand-authored stale caches: A3's formula is B3
+    with cached <v>No</v>, while B3 is the literal Maybe."""
     rows = (
         '<row r="1"><c r="A1" t="inlineStr"><is><t>Choice</t></is></c>'
         '<c r="B1" t="inlineStr"><is><t>Source</t></is></c></row>'
