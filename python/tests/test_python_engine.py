@@ -286,3 +286,16 @@ def test_names_and_functions_shaped_like_references_are_not_parse_errors(formula
     assert result["outputs"] == {}
     assert result["diagnostics"][0]["code"] == code
     assert message in result["diagnostics"][0]["message"]
+
+
+@pytest.mark.parametrize("prefix", ["", "="])
+def test_the_formula_length_limit_counts_the_body_with_or_without_equals(prefix):
+    def body(units):
+        return 'LEN("' + "x" * (units - 7) + '")'
+
+    at_limit = json.loads(engine.calculate(model({"A1": {"formula": prefix + body(8192)}}, {"out": "A1"})))
+    assert at_limit["outputs"] == {"out": 8185}
+    with pytest.raises(engine.ToolkitError) as error:
+        engine.calculate(model({"A1": {"formula": prefix + body(8193)}}, {"out": "A1"}))
+    assert error.value.code == "resource_limit"
+    assert "formula exceeds 8192 UTF-16 code units" in str(error.value)

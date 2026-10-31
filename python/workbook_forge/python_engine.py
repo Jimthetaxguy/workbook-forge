@@ -230,7 +230,9 @@ def _normalize_model(source: Any) -> dict:
                 formula = _string(cell["formula"], "formula")
                 if item["value"] is not None:
                     _fail("invalid_cell", "a formula cell cannot also contain an authored value")
-                if _units(formula) > 8193:
+                # The limit is on the formula body; the leading "=" is optional here,
+                # so count without it (an 8,193-unit body must not pass unprefixed).
+                if _units(formula.removeprefix("=")) > 8192:
                     _fail("resource_limit", "formula exceeds 8192 UTF-16 code units")
                 item["formula"] = formula
             if cell.get("cached_value") is not None:
