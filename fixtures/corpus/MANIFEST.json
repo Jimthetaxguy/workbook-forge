@@ -188,6 +188,12 @@
         "whitespace"
       ]
     },
+    "hb_rows_without_references.xlsx": {
+      "writer": "handbuilt",
+      "categories": [
+        "no-row-refs"
+      ]
+    },
     "hb_shared_formulas.xlsx": {
       "writer": "handbuilt",
       "categories": [

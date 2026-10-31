@@ -53,6 +53,10 @@ TABLE_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetm
 MACRO_WORKBOOK_CONTENT_TYPE = "application/vnd.ms-excel.sheet.macroEnabled.main+xml"
 XML_NS = "http://www.w3.org/XML/1998/namespace"
 NS = {"m": MAIN, "r": REL_DOC}
+# Shared with Rust (xlsx::POSITIONAL_CELLS_MESSAGE): the same words, the same code.
+POSITIONAL_CELLS_MESSAGE = (
+    "a worksheet row or cell has no r reference; rows and cells placed by position are not read"
+)
 CELL_RE = re.compile(r"^\$?([A-Za-z]{1,3})\$?([1-9][0-9]{0,6})$")
 RANGE_RE = re.compile(
     r"^\$?([A-Za-z]{1,3})\$?([1-9][0-9]{0,6})(?::\$?([A-Za-z]{1,3})\$?([1-9][0-9]{0,6}))?$"
@@ -1487,6 +1491,10 @@ class Workbook:
     @staticmethod
     def _index_cells(root: ET.Element) -> dict[str, ET.Element]:
         result: dict[str, ET.Element] = {}
+        for row in select_path(root, MAIN, ("worksheet", "sheetData", "row")):
+            if not row.attrib.get("r"):
+                # A later insert would have to guess where the row sits.
+                raise UnsupportedWorkbook(POSITIONAL_CELLS_MESSAGE, code="positional_cells")
         for cell in select_path(root, MAIN, ("worksheet", "sheetData", "row", "c")):
             for name in ("f", "v", "is"):
                 children = cell.findall(_q(name))
@@ -1505,9 +1513,7 @@ class Workbook:
             address = cell.attrib.get("r")
             if not address:
                 # Dropping the cell would lose data without a word.
-                raise UnsupportedWorkbook(
-                    "a cell has no address; cells placed by position are not read"
-                )
+                raise UnsupportedWorkbook(POSITIONAL_CELLS_MESSAGE, code="positional_cells")
             normalized = _normal_address(address)
             if normalized in result:
                 raise UnsupportedWorkbook(f"duplicate cell address: {normalized}")

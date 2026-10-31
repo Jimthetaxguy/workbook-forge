@@ -591,7 +591,7 @@ def test_a_formula_cell_with_no_text_is_not_read_as_a_literal(tmp_path):
 
 def test_a_cell_with_no_address_is_refused_and_not_dropped(tmp_path):
     reason = _refused(tmp_path, '<row r="1"><c r="A1"><v>111</v></c><c><v>222</v></c></row>')
-    assert "no address" in reason
+    assert "placed by position" in reason
 
 
 @pytest.mark.parametrize("stored", ["1e999", "-1e999", "NaN"])
@@ -698,8 +698,9 @@ def test_the_reader_every_command_shares_refuses_a_cell_with_no_address(tmp_path
     from workbook_forge.workbook import UnsupportedWorkbook, Workbook as Package
 
     path = _write(tmp_path / "placed.xlsx", {"Data": '<row r="1"><c r="A1"><v>111</v></c><c><v>222</v></c></row>'})
-    with pytest.raises(UnsupportedWorkbook, match="no address"):
+    with pytest.raises(UnsupportedWorkbook, match="placed by position") as caught:
         Package.open(path)
+    assert caught.value.code == "positional_cells"
 
 
 def test_a_workbook_with_macros_is_refused(tmp_path):

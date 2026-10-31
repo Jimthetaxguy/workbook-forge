@@ -121,6 +121,17 @@ fn attr<'a>(node: &'a Node, name: &str) -> Result<&'a str> {
         .map(String::as_str)
         .ok_or_else(|| err(format!("missing {name} on {}", node.name)))
 }
+/// Shared with Python (`workbook.POSITIONAL_CELLS_MESSAGE`); the refusal
+/// table maps it to `positional_cells`.
+pub const POSITIONAL_CELLS_MESSAGE: &str =
+    "a worksheet row or cell has no r reference; rows and cells placed by position are not read";
+/// A row's or cell's `r`, refused with the shared message when absent or empty.
+fn positioned(node: &Node) -> Result<&str> {
+    match node.attrs.get("r").map(String::as_str) {
+        Some(reference) if !reference.is_empty() => Ok(reference),
+        _ => Err(err(POSITIONAL_CELLS_MESSAGE)),
+    }
+}
 fn xml_escape(value: &str) -> Result<String> {
     if value.chars().any(|c| {
         !matches!(c, '\t' | '\r' | '\n') && (c < ' ' || matches!(c, '\u{fffe}' | '\u{ffff}'))
@@ -932,13 +943,13 @@ fn decode_mode(
             .child(root, "sheetData")
             .ok_or_else(|| err("worksheet missing sheetData"))?;
         for row in xml.children(data, MAIN, "row") {
-            let row_number: usize = integer(attr(row, "r")?)?;
+            let row_number: usize = integer(positioned(row)?)?;
             for source in xml.children(row, MAIN, "c") {
                 cell_work += 1;
                 if cell_work > toolkit::MAX_WORKBOOK_CELLS {
                     return Err(err("import exceeds 100000 populated cells"));
                 }
-                let reference = attr(source, "r")?;
+                let reference = positioned(source)?;
                 let (col, r) = coordinate(reference)?;
                 if r as usize != row_number || reference != address(col, r) {
                     return Err(err("cell/row coordinates must be canonical and consistent"));

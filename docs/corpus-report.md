@@ -16,9 +16,9 @@ Excel observation and does not show Excel equivalence.
 
 | Engine | pass | refuse | untyped | crash | corrupt | lossy |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| py_toolkit | 60 | 5 | 0 | 0 | 0 | 0 |
-| py_canonical | 52 | 13 | 0 | 0 | 0 | 0 |
-| rust | 60 | 5 | 0 | 0 | 0 | 0 |
+| py_toolkit | 60 | 6 | 0 | 0 | 0 | 0 |
+| py_canonical | 52 | 14 | 0 | 0 | 0 | 0 |
+| rust | 60 | 6 | 0 | 0 | 0 | 0 |
 
 ## Matrix
 
@@ -41,13 +41,14 @@ Excel observation and does not show Excel equivalence.
 | `hb_libreoffice_like.xlsx` | handbuilt | libreoffice, number-formats, dates, booleans, empty-string-cache | pass | pass | pass |
 | `hb_macro_content_in_xlsx.xlsx` | handbuilt | vba | refuse `macro_content` | refuse `macro_content` | refuse `macro_content` |
 | `hb_minimal_no_optional_parts.xlsx` | handbuilt | missing-parts, no-styles, no-sst, no-dimension, inline-strings, booleans | pass | pass | pass |
-| `hb_no_cell_references.xlsx` | handbuilt | no-cell-refs | refuse `unsupported_package` | refuse `unsupported_package` | refuse `package_damaged` |
+| `hb_no_cell_references.xlsx` | handbuilt | no-cell-refs | refuse `positional_cells` | refuse `positional_cells` | refuse `positional_cells` |
 | `hb_numbers_like.xlsx` | handbuilt | numbers, absolute-targets, sheet-name-spaces | pass | pass | pass |
 | `hb_odd_part_name.xlsx` | handbuilt | odd-part-names, dot-segments | pass | pass | pass |
 | `hb_pivot_cache.xlsx` | handbuilt | pivot | pass | pass | pass |
 | `hb_pivot_fields.xlsx` | handbuilt | pivot, pivot-fields, page-fields | pass | pass | pass |
 | `hb_prefixed_spreadsheetml.xlsx` | handbuilt | prefixed-namespace, shared-strings | pass | pass | pass |
 | `hb_rich_text_phonetic.xlsx` | handbuilt | rich-text, phonetic, unicode, whitespace | pass | pass | pass |
+| `hb_rows_without_references.xlsx` | handbuilt | no-row-refs | refuse `positional_cells` | refuse `positional_cells` | refuse `positional_cells` |
 | `hb_shared_formulas.xlsx` | handbuilt | shared-formulas, cached-values | pass | refuse `unsupported_formula_group` | pass |
 | `hb_stale_dimension.xlsx` | handbuilt | stale-dimension, sparse | pass | pass | pass |
 | `hb_strict_ooxml.xlsx` | handbuilt | strict-ooxml | refuse `strict_ooxml` | refuse `strict_ooxml` | refuse `strict_ooxml` |
@@ -114,9 +115,15 @@ Excel observation and does not show Excel equivalence.
 
 `hb_no_cell_references.xlsx`
 
-- py_toolkit: UnsupportedWorkbook: a cell has no address; cells placed by position are not read
-- py_canonical: UnsupportedWorkbook: a cell has no address; cells placed by position are not read
-- rust: missing r on row
+- py_toolkit: UnsupportedWorkbook: a worksheet row or cell has no r reference; rows and cells placed by position are not read
+- py_canonical: UnsupportedWorkbook: a worksheet row or cell has no r reference; rows and cells placed by position are not read
+- rust: a worksheet row or cell has no r reference; rows and cells placed by position are not read
+
+`hb_rows_without_references.xlsx`
+
+- py_toolkit: UnsupportedWorkbook: a worksheet row or cell has no r reference; rows and cells placed by position are not read
+- py_canonical: UnsupportedWorkbook: a worksheet row or cell has no r reference; rows and cells placed by position are not read
+- rust: a worksheet row or cell has no r reference; rows and cells placed by position are not read
 
 `hb_shared_formulas.xlsx`
 
