@@ -584,6 +584,30 @@ impl Parser {
     }
 
     fn parse_name_or_call(&mut self, mut name: String) -> Result<Expr, FormulaError> {
+        // A 3D reference spans a run of sheets: `Jan:Mar!B2` lexes as
+        // name, colon, name, bang; `'Q2 Apr:Q2 May'!B2` as one quoted name
+        // holding the colon (Excel forbids ':' in a sheet name).
+        let span = if name.contains(':') && self.peek() == Some(&Token::Bang) {
+            Some(name.clone())
+        } else if self.peek() == Some(&Token::Colon)
+            && self.tokens.get(self.pos + 2) == Some(&Token::Bang)
+            // `A1:Data!A2` is a range whose end is sheet-qualified; Excel
+            // quotes sheet names shaped like cells, so only a non-cell name
+            // can open an unquoted sheet span.
+            && validate_cell_ref(&name).is_err()
+        {
+            match self.tokens.get(self.pos + 1) {
+                Some(Token::Ident(last) | Token::QuotedSheet(last)) => {
+                    Some(format!("{name}:{last}"))
+                }
+                _ => None,
+            }
+        } else {
+            None
+        };
+        if let Some(span) = span {
+            return Err(FormulaError::Unsupported(three_d_reference_message(&span)));
+        }
         let sheet_qualifier = if self.peek() == Some(&Token::Bang) {
             self.take();
             Some(name.clone())
@@ -641,6 +665,11 @@ impl Parser {
             )))
         }
     }
+}
+
+/// Shared with Python (`workbook_forge._three_d_reference_message`).
+fn three_d_reference_message(span: &str) -> String {
+    format!("3D reference {span}: a reference across a range of sheets is not calculated")
 }
 
 fn validate_cell_ref(address: &str) -> Result<(), FormulaError> {

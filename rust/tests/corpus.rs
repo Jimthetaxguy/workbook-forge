@@ -111,3 +111,41 @@ fn rows_and_cells_without_references_refuse_with_the_shared_message() {
         );
     }
 }
+
+#[test]
+fn three_d_references_are_typed_as_not_calculated() {
+    let imported = import_xlsx_bytes(
+        &corpus("hb_3d_references.xlsx"),
+        BTreeMap::new(),
+        BTreeMap::new(),
+    )
+    .expect("import");
+    let report = imported.calculate(1);
+    for (address, span) in [
+        ("A1", "Jan:Mar"),
+        ("B1", "Q2 Apr:Q2 May"),
+        ("C1", "Jan:Mar"),
+        ("E1", "Jan:Feb"),
+    ] {
+        let diagnostic = report
+            .diagnostics
+            .iter()
+            .find(|d| {
+                d.sheet.as_deref() == Some("Summary") && d.address.as_deref() == Some(address)
+            })
+            .unwrap_or_else(|| {
+                panic!(
+                    "no diagnostic for Summary!{address}: {:?}",
+                    report.diagnostics
+                )
+            });
+        assert_eq!(diagnostic.code, "unsupported_formula", "{address}");
+        assert!(
+            diagnostic.message.contains(&format!(
+                "3D reference {span}: a reference across a range of sheets is not calculated"
+            )),
+            "{address}: {}",
+            diagnostic.message
+        );
+    }
+}
