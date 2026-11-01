@@ -232,3 +232,27 @@ def test_compatibility_version_2_is_not_treated_as_3(tmp_path):
             archive.writestr(name, data)
     cells = import_xlsx(path).to_dict()["sheets"][0]["cells"]
     assert "blocked_reason" not in cells["B2"]
+
+
+def test_compatibility_version_3_snapshot_export_refuses_new_formulas(tmp_path):
+    # Codex review on PR #75: export_snapshot must not bypass the live-edit
+    # refusal by carrying a new formula in a detached snapshot.
+    from workbook_forge.xlsx import export_snapshot
+
+    imported = import_xlsx(CORPUS / "hb_compat_version_3.xlsx")
+    document = imported.to_dict()
+    document["sheets"][0]["cells"]["C1"] = {"value": None, "formula": "LEN(A1)"}
+    document["outputs"] = {"length": {"sheet": "Calc", "address": "C1"}}
+    target = tmp_path / "out.xlsx"
+    with pytest.raises(UnsupportedWorkbook) as caught:
+        export_snapshot(imported, document, target)
+    assert caught.value.code == "compat_version_3"
+    assert str(caught.value) == COMPAT_V3_EDIT
+    assert not target.exists()
+
+    changed = imported.to_dict()
+    changed["sheets"][0]["cells"]["B2"]["formula"] = "A2*4"
+    with pytest.raises(UnsupportedWorkbook) as caught:
+        export_snapshot(imported, changed, tmp_path / "changed.xlsx")
+    assert caught.value.code == "compat_version_3"
+    assert not (tmp_path / "changed.xlsx").exists()

@@ -363,3 +363,43 @@ fn compatibility_version_3_preserves_formulas_and_refuses_formula_edits() {
         );
     }
 }
+
+#[test]
+fn compatibility_version_3_snapshot_export_refuses_new_formulas() {
+    // Codex review on PR #75: export_snapshot must not bypass the live-edit
+    // refusal by carrying a new formula in a detached snapshot.
+    use workbook_forge::toolkit::{Cell, CellAddress};
+    use workbook_forge::xlsx::COMPAT_V3_EDIT;
+    let source = corpus("hb_compat_version_3.xlsx");
+    let imported = import_xlsx_bytes(&source, BTreeMap::new(), BTreeMap::new()).expect("import");
+    let folder = std::env::temp_dir().join(format!("wf-compat3-{}", std::process::id()));
+    std::fs::create_dir_all(&folder).expect("temp folder");
+
+    let mut model = imported.snapshot();
+    model.sheets[0]
+        .cells
+        .insert("C1".into(), Cell::formula("LEN(A1)"));
+    model
+        .outputs
+        .insert("length".into(), CellAddress::new("Calc", "C1"));
+    let target = folder.join("added.xlsx");
+    let error = imported
+        .export_snapshot(model, &target)
+        .expect_err("new formula in a snapshot");
+    assert_eq!(error.code(), "compat_version_3");
+    assert_eq!(
+        error.to_string(),
+        format!("compat_version_3: {COMPAT_V3_EDIT}")
+    );
+    assert!(!target.exists());
+
+    let mut model = imported.snapshot();
+    model.sheets[0].cells.get_mut("B2").expect("B2").formula = Some("A2*4".into());
+    let target = folder.join("changed.xlsx");
+    let error = imported
+        .export_snapshot(model, &target)
+        .expect_err("changed formula in a snapshot");
+    assert_eq!(error.code(), "compat_version_3");
+    assert!(!target.exists());
+    let _ = std::fs::remove_dir_all(&folder);
+}

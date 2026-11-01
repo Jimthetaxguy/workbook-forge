@@ -1038,6 +1038,16 @@ def export_snapshot(imported: WorkbookModel, document: dict[str, Any], output: s
                 raise UnsupportedWorkbook("transferred snapshot cannot add preserved-only guards")
             column, row = _cell_position(address)
             _check_insertion(after["name"], column, row, merged)
+    if imported._source_baseline.compatibility_version >= 3:
+        # A snapshot is an edit batch by another route: the live-edit refusal
+        # of new or changed formulas holds here too, before anything is written.
+        for before, after in zip(original["sheets"], current["sheets"], strict=True):
+            for address, cell in after["cells"].items():
+                formula = cell.get("formula")
+                if formula is not None and formula != before["cells"].get(address, {}).get("formula"):
+                    from .workbook import COMPAT_V3_EDIT
+
+                    raise UnsupportedWorkbook(COMPAT_V3_EDIT, code="compat_version_3")
     transferred._source_baseline = imported._source_baseline
     transferred._feature_guard = imported._feature_guard
     transferred._text_cells = imported._text_cells

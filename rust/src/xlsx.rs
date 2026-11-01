@@ -1536,6 +1536,28 @@ impl ImportedWorkbook {
                 "transferred snapshot must retain all source cell addresses",
             ));
         }
+        if self.compat3 {
+            // A snapshot is an edit batch by another route: the live-edit
+            // refusal of new or changed formulas holds here too.
+            let changed = self
+                .original
+                .sheets
+                .iter()
+                .zip(&model.sheets)
+                .any(|(before, after)| {
+                    after.cells.iter().any(|(address, cell)| {
+                        cell.formula.is_some()
+                            && before
+                                .cells
+                                .get(address)
+                                .and_then(|old| old.formula.as_ref())
+                                != cell.formula.as_ref()
+                    })
+                });
+            if changed {
+                return Err(err(format!("compat_version_3: {COMPAT_V3_EDIT}")));
+            }
+        }
         for (before, after) in self.original.sheets.iter().zip(&model.sheets) {
             for (address, cell) in &before.cells {
                 if cell.blocked_reason != after.cells[address].blocked_reason {
