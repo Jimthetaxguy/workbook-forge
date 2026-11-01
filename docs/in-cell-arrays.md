@@ -42,7 +42,9 @@ The browser reports a refused open as `open_failed` and a refused export as
   namespace prefix; Rust keeps it byte-for-byte.
 - Exporting caches for formulas the engine did not calculate is refused
   (`calculation_diagnostics`) unless the caller binds the cells it works with,
-  the documented flow for unsupported formulas.
+  the documented flow for unsupported formulas. In Rust, for a Compatibility
+  Version 3 workbook, that export refusal carries `compat_version_3` (the browser
+  reports `export_failed` with `refusal: "compat_version_3"`).
 
 Tests: `python/tests/test_in_cell_arrays.py`, `rust/tests/corpus.rs`,
 `web/forge-engine/test/engine.node.test.mjs`, and the corpus matrix
