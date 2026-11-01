@@ -21,6 +21,7 @@ from . import ErrorValue
 from . import xlsx_features as features
 from .toolkit import WorkbookModel, _digest
 from .workbook import (
+    COMPAT_V3_CALCULATION,
     CONTENT_TYPES,
     EXCEL_ERROR_CODES,
     NS,
@@ -98,6 +99,8 @@ class _Baseline:
     # Sheet name -> merged ranges (column, row, column, row). Non-anchor cells
     # inside those ranges cannot receive an inserted cell.
     merged: tuple[tuple[str, tuple[tuple[int, int, int, int], ...]], ...]
+    # The workbook's Compatibility Version; 3 or later blocks formula edits.
+    compatibility_version: int = 1
 
 
 _EXCEL_MAX_ROWS = 1_048_576
@@ -370,6 +373,8 @@ def import_xlsx(
                         cell["blocked_reason"] = (
                             "1904 date-system formula calculation is unsupported"
                         )
+                    if workbook._compatibility_version >= 3:
+                        cell["blocked_reason"] = COMPAT_V3_CALCULATION
                     if source.formula_kind in {"shared", "array", "dataTable"}:
                         reference = node.attrib.get("ref")
                         if reference:
@@ -535,6 +540,7 @@ def import_xlsx(
             json.dumps(model.to_dict(), allow_nan=False),
             workbook._uses_1904_date_system,
             tuple(merged),
+            workbook._compatibility_version,
         )
         model._import_metadata = metadata
         return model
@@ -1032,6 +1038,16 @@ def export_snapshot(imported: WorkbookModel, document: dict[str, Any], output: s
                 raise UnsupportedWorkbook("transferred snapshot cannot add preserved-only guards")
             column, row = _cell_position(address)
             _check_insertion(after["name"], column, row, merged)
+    if imported._source_baseline.compatibility_version >= 3:
+        # A snapshot is an edit batch by another route: the live-edit refusal
+        # of new or changed formulas holds here too, before anything is written.
+        for before, after in zip(original["sheets"], current["sheets"], strict=True):
+            for address, cell in after["cells"].items():
+                formula = cell.get("formula")
+                if formula is not None and formula != before["cells"].get(address, {}).get("formula"):
+                    from .workbook import COMPAT_V3_EDIT
+
+                    raise UnsupportedWorkbook(COMPAT_V3_EDIT, code="compat_version_3")
     transferred._source_baseline = imported._source_baseline
     transferred._feature_guard = imported._feature_guard
     transferred._text_cells = imported._text_cells

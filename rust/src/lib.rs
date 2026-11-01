@@ -434,6 +434,9 @@ impl Parser {
         {
             return Err(FormulaError::Value);
         }
+        if let Some(message) = in_cell_array_syntax(source) {
+            return Err(FormulaError::Unsupported(message));
+        }
         let mut lexer = Lexer::new(source);
         let mut tokens = Vec::new();
         loop {
@@ -670,6 +673,206 @@ impl Parser {
 /// Shared with Python (`workbook_forge._three_d_reference_message`).
 fn three_d_reference_message(span: &str) -> String {
     format!("3D reference {span}: a reference across a range of sheets is not calculated")
+}
+
+/// Excel's in-cell array functions (Excel Beta, September 2026).
+pub const IN_CELL_ARRAY_FUNCTIONS: [&str; 4] = ["FLATTEN", "HAS", "HASANY", "HASALL"];
+const IN_CELL_ARRAY_SPAN_LIMIT: usize = 40;
+
+/// Shared with Python (`workbook_forge._in_cell_array_braces_message`).
+fn in_cell_array_braces_message(span: &[char]) -> String {
+    let mut text: String = span.iter().take(IN_CELL_ARRAY_SPAN_LIMIT).collect();
+    if span.len() > IN_CELL_ARRAY_SPAN_LIMIT {
+        text.push_str("...");
+    }
+    format!(
+        "in-cell array {text}: braces around a formula or an array keep an array in one cell (Excel arrays in cells), which is not calculated"
+    )
+}
+
+/// Shared with Python (`workbook_forge._in_cell_array_function_message`).
+fn in_cell_array_function_message(name: &str) -> String {
+    format!(
+        "in-cell array function {name}: FLATTEN, HAS, HASANY and HASALL work on Excel arrays in cells and are not calculated"
+    )
+}
+
+/// Index just past the quoted run opening at `index` (doubled quotes escape).
+fn skip_quoted(source: &[char], mut index: usize, quote: char) -> usize {
+    index += 1;
+    while index < source.len() {
+        if source[index] == quote {
+            if source.get(index + 1) == Some(&quote) {
+                index += 2;
+                continue;
+            }
+            return index + 1;
+        }
+        index += 1;
+    }
+    index
+}
+
+/// One classic array-constant item: a number, text, TRUE/FALSE or an error.
+fn is_array_constant_item(item: &[char]) -> bool {
+    let text: String = item.iter().collect();
+    let text = text.trim();
+    if text.is_empty() {
+        return true;
+    }
+    if text.eq_ignore_ascii_case("TRUE") || text.eq_ignore_ascii_case("FALSE") {
+        return true;
+    }
+    let chars: Vec<char> = text.chars().collect();
+    if chars[0] == '"' {
+        // A whole quoted text: "" escapes, and the closing quote is last.
+        let mut i = 1;
+        while i < chars.len() {
+            if chars[i] == '"' {
+                if chars.get(i + 1) == Some(&'"') {
+                    i += 2;
+                    continue;
+                }
+                return i == chars.len() - 1;
+            }
+            i += 1;
+        }
+        return false;
+    }
+    if chars[0] == '#' {
+        let body = &chars[1..];
+        let core = match body.last() {
+            Some('!' | '?') => &body[..body.len() - 1],
+            _ => body,
+        };
+        return !core.is_empty()
+            && core
+                .iter()
+                .all(|c| c.is_ascii_alphanumeric() || *c == '/' || *c == '_');
+    }
+    // [+-]? (digits [. digits*] | . digits) ([eE] [+-]? digits)?
+    let mut i = 0;
+    if matches!(chars.get(i), Some('+' | '-')) {
+        i += 1;
+    }
+    let start = i;
+    while chars.get(i).is_some_and(char::is_ascii_digit) {
+        i += 1;
+    }
+    let integer = i > start;
+    if chars.get(i) == Some(&'.') {
+        i += 1;
+        let fraction = i;
+        while chars.get(i).is_some_and(char::is_ascii_digit) {
+            i += 1;
+        }
+        if !integer && i == fraction {
+            return false;
+        }
+    } else if !integer {
+        return false;
+    }
+    if matches!(chars.get(i), Some('e' | 'E')) {
+        i += 1;
+        if matches!(chars.get(i), Some('+' | '-')) {
+            i += 1;
+        }
+        let exponent = i;
+        while chars.get(i).is_some_and(char::is_ascii_digit) {
+            i += 1;
+        }
+        if i == exponent {
+            return false;
+        }
+    }
+    i == chars.len()
+}
+
+fn is_array_constant(content: &[char]) -> bool {
+    let mut start = 0;
+    let mut index = 0;
+    while index < content.len() {
+        if content[index] == '"' {
+            index = skip_quoted(content, index, '"');
+            continue;
+        }
+        if matches!(content[index], ',' | ';') {
+            if !is_array_constant_item(&content[start..index]) {
+                return false;
+            }
+            start = index + 1;
+        }
+        index += 1;
+    }
+    is_array_constant_item(&content[start.min(content.len())..])
+}
+
+/// The message for the first in-cell array construct in a formula, or `None`.
+/// Shared with Python (`workbook_forge._in_cell_array_syntax`): braces whose
+/// contents are not a classic array constant (`{{1,2,3};{4,5,6}}`,
+/// `{SEQUENCE(3)}`), and calls to FLATTEN, HAS, HASANY or HASALL with or
+/// without the `_xlfn.`/`_xlws.` prefixes, outside text and quoted sheet names.
+pub fn in_cell_array_syntax(source: &str) -> Option<String> {
+    let source: Vec<char> = source.chars().collect();
+    let mut index = 0;
+    while index < source.len() {
+        let ch = source[index];
+        if ch == '"' || ch == '\'' {
+            index = skip_quoted(&source, index, ch);
+            continue;
+        }
+        if ch == '{' {
+            let mut depth = 0usize;
+            let mut end = index;
+            while end < source.len() {
+                if source[end] == '"' {
+                    end = skip_quoted(&source, end, '"');
+                    continue;
+                }
+                if source[end] == '{' {
+                    depth += 1;
+                } else if source[end] == '}' {
+                    depth -= 1;
+                    if depth == 0 {
+                        break;
+                    }
+                }
+                end += 1;
+            }
+            if end >= source.len() {
+                return None;
+            }
+            if !is_array_constant(&source[index + 1..end]) {
+                return Some(in_cell_array_braces_message(&source[index..=end]));
+            }
+            index = end + 1;
+            continue;
+        }
+        if ch.is_ascii_alphabetic() || ch == '_' {
+            let mut end = index;
+            while end < source.len()
+                && (source[end].is_ascii_alphanumeric() || matches!(source[end], '_' | '.'))
+            {
+                end += 1;
+            }
+            let upper: String = source[index..end]
+                .iter()
+                .collect::<String>()
+                .to_ascii_uppercase();
+            let name = upper
+                .strip_prefix("_XLFN._XLWS.")
+                .or_else(|| upper.strip_prefix("_XLFN."))
+                .or_else(|| upper.strip_prefix("_XLWS."))
+                .unwrap_or(&upper);
+            if IN_CELL_ARRAY_FUNCTIONS.contains(&name) && source.get(end) == Some(&'(') {
+                return Some(in_cell_array_function_message(name));
+            }
+            index = end;
+            continue;
+        }
+        index += 1;
+    }
+    None
 }
 
 fn validate_cell_ref(address: &str) -> Result<(), FormulaError> {

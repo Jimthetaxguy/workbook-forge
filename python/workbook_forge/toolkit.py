@@ -124,6 +124,14 @@ class WorkbookModel:
             raise UnsupportedWorkbook(
                 "formula edits in imported 1904 date-system workbooks are unsupported"
             )
+        if (
+            self._source_baseline is not None
+            and self._source_baseline.compatibility_version >= 3
+            and any(edit.get("formula") is not None for edit in batch)
+        ):
+            from .workbook import COMPAT_V3_EDIT, UnsupportedWorkbook
+
+            raise UnsupportedWorkbook(COMPAT_V3_EDIT, code="compat_version_3")
         if self._text_cells or self._text_layouts:
             batch = [self._as_text(edit) for edit in batch]
         if self._feature_guard is not None:

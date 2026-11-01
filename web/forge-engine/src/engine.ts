@@ -66,6 +66,17 @@ const fail = (code: string, message: string, extra: Partial<EngineError> = {}): 
 
 const messageOf = (error: unknown): string => (error instanceof Error ? error.message : String(error));
 
+/**
+ * An import or export refusal. The engine reports "code: message"; the code
+ * is the typed refusal (docs/refusal-codes.md) shared with Python and Rust,
+ * returned as `refusal` beside the command-level code.
+ */
+const typedFailure = (code: string, error: unknown): Result<never> => {
+  const text = messageOf(error);
+  const typed = /^([a-z0-9_]+): ([\s\S]*)$/.exec(text);
+  return typed ? fail(code, typed[2], { refusal: typed[1] }) : fail(code, text);
+};
+
 /** Forge model JSON cell -> protocol cell. */
 function toCell(raw: { value?: unknown; formula?: string | null; style?: { number_format?: string } | null }) {
   const cell: { value: Scalar; formula?: string; text?: true } = { value: (raw.value ?? null) as Scalar };
@@ -269,7 +280,9 @@ export class ForgeEngine {
     try {
       next = this.wasm.openXlsx(bytes);
     } catch (error) {
-      return fail('open_failed', messageOf(error));
+      // The engine reports "code: message"; the code is the typed refusal
+      // (docs/refusal-codes.md), shared with Python and Rust.
+      return typedFailure('open_failed', error);
     }
     this.adopt(next, typeof name === 'string' && name ? name : 'workbook.xlsx');
     const snapshot = this.snapshot(next);
@@ -298,7 +311,12 @@ export class ForgeEngine {
   }
 
   private exportWorkbook(wb: ForgeWorkbook, includeLog: boolean): Result<Commands['export']['result']> {
-    const bytes = wb.exportXlsx();
+    let bytes: Uint8Array;
+    try {
+      bytes = wb.exportXlsx();
+    } catch (error) {
+      return typedFailure('export_failed', error);
+    }
     if (!includeLog) return { ok: true, value: { bytes } };
     const sha = this.wasm.sha256Hex ? this.wasm.sha256Hex(bytes) : '';
     const log = wb.exportLogNdjson(sha);
