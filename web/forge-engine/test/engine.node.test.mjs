@@ -345,4 +345,12 @@ test('a Compatibility Version 3 workbook reads values and refuses formula edits 
   assert.equal(refused.ok, false);
   assert.equal(refused.error.code, 'compat_version_3');
   assert.equal(call(engine, 'applyEdits', { edits: [{ sheet: 'Calc', address: 'A2', value: 5 }], expectedRevision: '0' }).value.revision, '1');
+  // No outputs are bound in the browser, so export refuses with a typed code
+  // rather than write caches for formulas it did not calculate; the formulas
+  // stay in the session unchanged. Rust and Python test the bound export.
+  const exported = call(engine, 'export');
+  assert.equal(exported.ok, false);
+  assert.equal(exported.error.code, 'export_failed');
+  assert.equal(exported.error.refusal, 'calculation_diagnostics');
+  assert.equal(call(engine, 'snapshot').value.sheets[0].cells.B1.formula, 'LEN(A1)');
 });

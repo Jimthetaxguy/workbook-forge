@@ -194,6 +194,10 @@ def test_compatibility_version_3_preserves_formulas_and_refuses_formula_edits(tm
     model.set_value("Calc", "A2", 5)
     target = export_xlsx(model, tmp_path / "out.xlsx")
     before, after = _parts(source), _parts(target)
+    assert set(before) == set(after)
+    for name in before:
+        if name not in {"xl/worksheets/sheet1.xml", "xl/workbook.xml", "[Content_Types].xml"}:
+            assert after[name] == before[name], name
     # workbook.xml is rewritten (calcPr asks Excel to recalculate), so the
     # setting is compared as XML rather than as bytes.
     import xml.etree.ElementTree as ET

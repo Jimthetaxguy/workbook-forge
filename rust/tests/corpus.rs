@@ -175,7 +175,7 @@ fn cell_xml(sheet: &[u8], address: &str) -> Vec<u8> {
         .unwrap_or_else(|| panic!("no cell {address}"));
     let rest = &text[start..];
     let end = rest.find("</c>").map(|i| i + 4).expect("cell end");
-    rest[..end].as_bytes().to_vec()
+    rest.as_bytes()[..end].to_vec()
 }
 
 #[test]
@@ -344,6 +344,18 @@ fn compatibility_version_3_preserves_formulas_and_refuses_formula_edits() {
     let before = zip_parts(&source);
     let version = "<xlwcv:version setVersion=\"3\" warnBelowVersion=\"3\"/>";
     assert!(String::from_utf8_lossy(&after["xl/workbook.xml"]).contains(version));
+    assert_eq!(
+        before.keys().collect::<Vec<_>>(),
+        after.keys().collect::<Vec<_>>()
+    );
+    for (name, data) in &before {
+        if !matches!(
+            name.as_str(),
+            "xl/worksheets/sheet1.xml" | "xl/workbook.xml" | "[Content_Types].xml"
+        ) {
+            assert_eq!(&after[name], data, "{name}");
+        }
+    }
     for address in ["B1", "B2"] {
         assert_eq!(
             cell_xml(&after["xl/worksheets/sheet1.xml"], address),
