@@ -149,3 +149,205 @@ fn three_d_references_are_typed_as_not_calculated() {
         );
     }
 }
+
+// Excel's lists, arrays in cells and nested arrays (Excel Beta, September
+// 2026). The corpus files are modeled, not captured from Excel; see
+// tools/corpus/in_cell_arrays.py. Python holds the same files to the same
+// outcomes in python/tests/test_in_cell_arrays.py.
+
+fn zip_parts(bytes: &[u8]) -> BTreeMap<String, Vec<u8>> {
+    use std::io::Read;
+    let mut archive = zip::ZipArchive::new(std::io::Cursor::new(bytes)).expect("zip");
+    let mut parts = BTreeMap::new();
+    for index in 0..archive.len() {
+        let mut entry = archive.by_index(index).expect("entry");
+        let mut data = Vec::new();
+        entry.read_to_end(&mut data).expect("read entry");
+        parts.insert(entry.name().to_string(), data);
+    }
+    parts
+}
+
+fn cell_xml(sheet: &[u8], address: &str) -> Vec<u8> {
+    let text = String::from_utf8_lossy(sheet);
+    let start = text
+        .find(&format!("<c r=\"{address}\""))
+        .unwrap_or_else(|| panic!("no cell {address}"));
+    let rest = &text[start..];
+    let end = rest.find("</c>").map(|i| i + 4).expect("cell end");
+    rest[..end].as_bytes().to_vec()
+}
+
+#[test]
+fn a_cell_holding_an_array_is_refused_with_one_typed_code() {
+    for (name, sheet, address) in [
+        ("hb_in_cell_list.xlsx", "Projects", "B2"),
+        ("hb_in_cell_array_formula.xlsx", "Splits", "A1"),
+        ("hb_nested_array.xlsx", "Nested", "A1"),
+    ] {
+        let error = match import_xlsx_bytes(&corpus(name), BTreeMap::new(), BTreeMap::new()) {
+            Ok(_) => panic!("{name} imported"),
+            Err(error) => error,
+        };
+        assert_eq!(error.code(), "in_cell_array", "{name}");
+        assert_eq!(
+            error.to_string(),
+            format!(
+                "in_cell_array: {}",
+                workbook_forge::xlsx::in_cell_array_message(sheet, address)
+            )
+        );
+        // The browser reports the same code with the prefix split off.
+        assert_eq!(
+            workbook_forge::browser_contract::typed_open_error(&error),
+            error.to_string()
+        );
+    }
+}
+
+#[test]
+fn in_cell_array_syntax_matches_the_shared_cases() {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../tools/corpus/in-cell-array-cases.json");
+    let cases: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(path).expect("cases")).expect("json");
+    let cases = cases["formulas"].as_array().expect("formulas");
+    assert!(cases.len() >= 20);
+    for case in cases {
+        let formula = case["formula"].as_str().expect("formula");
+        let expected = case["message"].as_str().map(str::to_string);
+        assert_eq!(
+            workbook_forge::in_cell_array_syntax(formula),
+            expected,
+            "{formula}"
+        );
+    }
+}
+
+#[test]
+fn new_functions_are_typed_not_calculated_and_preserved() {
+    use workbook_forge::toolkit::{CellAddress, CellValue, Edit};
+    let source = corpus("hb_flatten_has_functions.xlsx");
+    let report = import_xlsx_bytes(&source, BTreeMap::new(), BTreeMap::new())
+        .expect("import")
+        .calculate(1);
+    for (address, name) in [
+        ("A3", "HAS"),
+        ("B3", "HASANY"),
+        ("C3", "HASALL"),
+        ("D3", "FLATTEN"),
+    ] {
+        let diagnostic = report
+            .diagnostics
+            .iter()
+            .find(|d| d.address.as_deref() == Some(address))
+            .unwrap_or_else(|| panic!("no diagnostic for {address}"));
+        assert_eq!(diagnostic.code, "unsupported_formula", "{address}");
+        assert!(
+            diagnostic.message.ends_with(&format!(
+                "in-cell array function {name}: FLATTEN, HAS, HASANY and HASALL work on Excel arrays in cells and are not calculated"
+            )),
+            "{address}: {}",
+            diagnostic.message
+        );
+    }
+    assert!(
+        !report
+            .diagnostics
+            .iter()
+            .any(|d| d.address.as_deref() == Some("E3"))
+    );
+
+    let outputs = BTreeMap::from([("edited".to_string(), CellAddress::new("Tags", "E3"))]);
+    let imported = import_xlsx_bytes(&source, BTreeMap::new(), outputs).expect("rebind");
+    imported
+        .apply(
+            vec![Edit::value("Tags", "A2", CellValue::Number(10.0))],
+            None,
+        )
+        .expect("edit");
+    let exported = imported.export_bytes().expect("export");
+    let (before, after) = (zip_parts(&source), zip_parts(&exported));
+    assert_eq!(
+        before.keys().collect::<Vec<_>>(),
+        after.keys().collect::<Vec<_>>()
+    );
+    for (name, data) in &before {
+        if !matches!(
+            name.as_str(),
+            "xl/worksheets/sheet1.xml" | "xl/workbook.xml" | "[Content_Types].xml"
+        ) {
+            assert_eq!(&after[name], data, "{name}");
+        }
+    }
+    for address in ["A3", "B3", "C3", "D3"] {
+        assert_eq!(
+            cell_xml(&after["xl/worksheets/sheet1.xml"], address),
+            cell_xml(&before["xl/worksheets/sheet1.xml"], address),
+            "{address}"
+        );
+    }
+    // A new formula using one is refused, not calculated.
+    let error = imported
+        .apply(
+            vec![Edit::formula("Tags", "F3", "=HAS(A1:C1,\"drama\")")],
+            None,
+        )
+        .expect_err("formula edit");
+    assert!(
+        error.to_string().contains("in-cell array function HAS"),
+        "{error}"
+    );
+}
+
+#[test]
+fn compatibility_version_3_preserves_formulas_and_refuses_formula_edits() {
+    use workbook_forge::toolkit::{CellAddress, CellValue, Edit};
+    use workbook_forge::xlsx::{COMPAT_V3_CALCULATION, COMPAT_V3_EDIT};
+    let source = corpus("hb_compat_version_3.xlsx");
+    let imported = import_xlsx_bytes(&source, BTreeMap::new(), BTreeMap::new()).expect("import");
+    let snapshot = imported.snapshot();
+    for address in ["B1", "B2"] {
+        assert_eq!(
+            snapshot.sheets[0].cells[address].blocked_reason.as_deref(),
+            Some(COMPAT_V3_CALCULATION)
+        );
+    }
+    let report = imported.calculate(1);
+    assert_eq!(report.diagnostics.len(), 2, "{:?}", report.diagnostics);
+    assert!(
+        report
+            .diagnostics
+            .iter()
+            .all(|d| d.message == COMPAT_V3_CALCULATION)
+    );
+    let error = imported
+        .apply(vec![Edit::formula("Calc", "C1", "=A2+1")], None)
+        .expect_err("formula edit");
+    assert_eq!(error.code(), "compat_version_3");
+    assert_eq!(
+        error.to_string(),
+        format!("compat_version_3: {COMPAT_V3_EDIT}")
+    );
+    let browser = workbook_forge::browser_contract::classify_edit_error(&error.to_string());
+    assert_eq!(browser.code, "compat_version_3");
+
+    let outputs = BTreeMap::from([("edited".to_string(), CellAddress::new("Calc", "A2"))]);
+    let imported = import_xlsx_bytes(&source, BTreeMap::new(), outputs).expect("rebind");
+    imported
+        .apply(
+            vec![Edit::value("Calc", "A2", CellValue::Number(5.0))],
+            None,
+        )
+        .expect("value edit");
+    let after = zip_parts(&imported.export_bytes().expect("export"));
+    let before = zip_parts(&source);
+    let version = "<xlwcv:version setVersion=\"3\" warnBelowVersion=\"3\"/>";
+    assert!(String::from_utf8_lossy(&after["xl/workbook.xml"]).contains(version));
+    for address in ["B1", "B2"] {
+        assert_eq!(
+            cell_xml(&after["xl/worksheets/sheet1.xml"], address),
+            cell_xml(&before["xl/worksheets/sheet1.xml"], address)
+        );
+    }
+}

@@ -290,3 +290,59 @@ test('imported workbook: insert into absent cells, recalc the range, undo to abs
   assert.equal(cells.H1.formula, 'SUM(A1:A3)');
   assert.equal(call(reopened, 'calculate').value.values['Sheet1!H1'], 15);
 });
+
+// Excel's lists, arrays in cells and nested arrays (Excel Beta, September
+// 2026). The corpus files are modeled, not captured from Excel; Python and
+// Rust hold them to the same codes and messages.
+const corpusFile = (name) => readFileSync(new URL(`../../../fixtures/corpus/${name}`, import.meta.url));
+
+test('a workbook holding an in-cell array is refused with its typed code and keeps the open workbook', () => {
+  const engine = new ForgeEngine({ openXlsx, createBlankWorkbook });
+  assert.equal(call(engine, 'open', { bytes: new Uint8Array(fixture) }).ok, true);
+  for (const [name, sheet, address] of [
+    ['hb_in_cell_list.xlsx', 'Projects', 'B2'],
+    ['hb_in_cell_array_formula.xlsx', 'Splits', 'A1'],
+    ['hb_nested_array.xlsx', 'Nested', 'A1'],
+  ]) {
+    const refused = call(engine, 'open', { bytes: new Uint8Array(corpusFile(name)) });
+    assert.equal(refused.ok, false, name);
+    assert.equal(refused.error.code, 'open_failed');
+    assert.equal(refused.error.refusal, 'in_cell_array');
+    assert.ok(refused.error.message.startsWith(`cell ${address} on sheet '${sheet}' holds an Excel array in a cell`), refused.error.message);
+  }
+  // The previous workbook stays open.
+  assert.equal(call(engine, 'snapshot').value.sheets[0].name, 'Sheet1');
+});
+
+test('FLATTEN, HAS, HASANY and HASALL are typed, not calculated, and survive export', () => {
+  const engine = new ForgeEngine({ openXlsx, createBlankWorkbook });
+  assert.equal(call(engine, 'open', { bytes: new Uint8Array(corpusFile('hb_flatten_has_functions.xlsx')) }).ok, true);
+  const calc = call(engine, 'calculate').value;
+  for (const [address, name] of [['A3', 'HAS'], ['B3', 'HASANY'], ['C3', 'HASALL'], ['D3', 'FLATTEN']]) {
+    const diagnostic = calc.diagnostics.find((d) => d.address === address);
+    assert.equal(diagnostic.code, 'unsupported_formula', address);
+    assert.ok(diagnostic.message.endsWith(`in-cell array function ${name}: FLATTEN, HAS, HASANY and HASALL work on Excel arrays in cells and are not calculated`), diagnostic.message);
+  }
+  assert.equal(calc.values['Tags!E3'], 6);
+  const typed = call(engine, 'applyEdits', { edits: [{ sheet: 'Tags', address: 'F3', formula: 'HAS(A1:C1,"drama")' }], expectedRevision: '0' });
+  assert.equal(typed.ok, false);
+  assert.equal(typed.error.code, 'unsupported_formula');
+  // The browser session binds no outputs, so export refuses with a typed code
+  // rather than write caches for formulas it did not calculate. Rust and
+  // Python test the bound export, which preserves these cells byte-for-byte.
+  const exported = call(engine, 'export');
+  assert.equal(exported.ok, false);
+  assert.equal(exported.error.code, 'export_failed');
+  assert.equal(exported.error.refusal, 'calculation_diagnostics');
+  assert.equal(call(engine, 'snapshot').value.sheets[0].cells.A3.formula, '_xlfn.HAS(A1:C1,"space")');
+});
+
+test('a Compatibility Version 3 workbook reads values and refuses formula edits with its code', () => {
+  const engine = new ForgeEngine({ openXlsx, createBlankWorkbook });
+  assert.equal(call(engine, 'open', { bytes: new Uint8Array(corpusFile('hb_compat_version_3.xlsx')) }).ok, true);
+  assert.equal(call(engine, 'snapshot').value.sheets[0].cells.A2.value, 2);
+  const refused = call(engine, 'applyEdits', { edits: [{ sheet: 'Calc', address: 'C1', formula: 'A2+1' }], expectedRevision: '0' });
+  assert.equal(refused.ok, false);
+  assert.equal(refused.error.code, 'compat_version_3');
+  assert.equal(call(engine, 'applyEdits', { edits: [{ sheet: 'Calc', address: 'A2', value: 5 }], expectedRevision: '0' }).value.revision, '1');
+});

@@ -30,6 +30,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import handbuilt  # noqa: E402
 import shapes  # noqa: E402
+import in_cell_arrays  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[2]
 FIXED = dt.datetime(2020, 1, 1, 0, 0, 0)
@@ -596,12 +597,16 @@ def main() -> int:
     manifest = json.loads(manifest_path.read_text()) if manifest_path.exists() else {"files": {}}
     produced = {}
     for writer, function in (("openpyxl", openpyxl_files), ("xlsxwriter", xlsxwriter_files),
-                             ("handbuilt", lambda folder: {**handbuilt.build_all(folder), **shapes.build_all(folder)}),
+                             ("handbuilt", lambda folder: {**handbuilt.build_all(folder), **shapes.build_all(folder),
+                                                           **in_cell_arrays.build_all(folder)}),
                              ("libreoffice", libreoffice_files)):
         if writer not in writers:
             continue
         for name, categories in function(out).items():
             produced[name] = {"writer": writer, "categories": categories}
+            # Modeled shapes say so in the manifest: they were not captured
+            # from the application they imitate.
+            produced[name].update(in_cell_arrays.PROVENANCE.get(name, {}))
     manifest["files"].update(produced)
     for name in list(manifest["files"]):
         if not (out / name).exists():

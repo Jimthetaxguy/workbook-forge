@@ -1,0 +1,97 @@
+{
+  "_note": "Formulas and the in-cell array message both engines give (null: none). Python reads this in python/tests/test_in_cell_arrays.py and Rust in rust/tests/corpus.rs, so the two parsers stay in step.",
+  "formulas": [
+    {
+      "formula": "{{1,2,3};{4,5,6}}",
+      "message": "in-cell array {{1,2,3};{4,5,6}}: braces around a formula or an array keep an array in one cell (Excel arrays in cells), which is not calculated"
+    },
+    {
+      "formula": "{{1;2;3}}",
+      "message": "in-cell array {{1;2;3}}: braces around a formula or an array keep an array in one cell (Excel arrays in cells), which is not calculated"
+    },
+    {
+      "formula": "{_xlfn.TEXTSPLIT(A3,\",\")}",
+      "message": "in-cell array {_xlfn.TEXTSPLIT(A3,\",\")}: braces around a formula or an array keep an array in one cell (Excel arrays in cells), which is not calculated"
+    },
+    {
+      "formula": "{SEQUENCE(3)}",
+      "message": "in-cell array {SEQUENCE(3)}: braces around a formula or an array keep an array in one cell (Excel arrays in cells), which is not calculated"
+    },
+    {
+      "formula": "{A1:A3}",
+      "message": "in-cell array {A1:A3}: braces around a formula or an array keep an array in one cell (Excel arrays in cells), which is not calculated"
+    },
+    {
+      "formula": "SUM({1,2;3,4})",
+      "message": null
+    },
+    {
+      "formula": "{1,-2.5e3,TRUE,#N/A,\"a\"\"b\"}",
+      "message": null
+    },
+    {
+      "formula": "{\"x}\",{1}}",
+      "message": "in-cell array {\"x}\",{1}}: braces around a formula or an array keep an array in one cell (Excel arrays in cells), which is not calculated"
+    },
+    {
+      "formula": "_xlfn.HAS(A1:C1,\"space\")",
+      "message": "in-cell array function HAS: FLATTEN, HAS, HASANY and HASALL work on Excel arrays in cells and are not calculated"
+    },
+    {
+      "formula": "HASANY(A1:C1,{\"comedy\",\"drama\"})",
+      "message": "in-cell array function HASANY: FLATTEN, HAS, HASANY and HASALL work on Excel arrays in cells and are not calculated"
+    },
+    {
+      "formula": "_xlfn._xlws.HASALL(A1:C1,B1:C1)",
+      "message": "in-cell array function HASALL: FLATTEN, HAS, HASANY and HASALL work on Excel arrays in cells and are not calculated"
+    },
+    {
+      "formula": "COUNTA(_xlfn.FLATTEN(A1:C2,\"\"))",
+      "message": "in-cell array function FLATTEN: FLATTEN, HAS, HASANY and HASALL work on Excel arrays in cells and are not calculated"
+    },
+    {
+      "formula": "flatten(A1:B2)",
+      "message": "in-cell array function FLATTEN: FLATTEN, HAS, HASANY and HASALL work on Excel arrays in cells and are not calculated"
+    },
+    {
+      "formula": "MYHAS(1)",
+      "message": null
+    },
+    {
+      "formula": "HAS+1",
+      "message": null
+    },
+    {
+      "formula": "\"HAS(1)\"&\"{{\"",
+      "message": null
+    },
+    {
+      "formula": "'HAS(1)'!A1+1",
+      "message": null
+    },
+    {
+      "formula": "SUM('{x}'!A1)",
+      "message": null
+    },
+    {
+      "formula": "{1,2}+HAS(A1,1)",
+      "message": "in-cell array function HAS: FLATTEN, HAS, HASANY and HASALL work on Excel arrays in cells and are not calculated"
+    },
+    {
+      "formula": "{{1;2;3}}+111111111111111111111111111111111111111111111111111111111111",
+      "message": "in-cell array {{1;2;3}}: braces around a formula or an array keep an array in one cell (Excel arrays in cells), which is not calculated"
+    },
+    {
+      "formula": "{1,2",
+      "message": null
+    },
+    {
+      "formula": "{SUM(A1:A2),SUM(B1:B2),SUM(C1:C2),SUM(D1:D2)}",
+      "message": "in-cell array {SUM(A1:A2),SUM(B1:B2),SUM(C1:C2),SUM(D1...: braces around a formula or an array keep an array in one cell (Excel arrays in cells), which is not calculated"
+    },
+    {
+      "formula": "{\"café 😀 long text here!!\",{1,2,3,4,5,6,7,8}}",
+      "message": "in-cell array {\"café 😀 long text here!!\",{1,2,3,4,5,6,...: braces around a formula or an array keep an array in one cell (Excel arrays in cells), which is not calculated"
+    }
+  ]
+}

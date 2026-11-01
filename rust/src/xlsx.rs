@@ -25,6 +25,67 @@ const PKG: &str = "http://schemas.openxmlformats.org/package/2006/relationships"
 const CT: &str = "http://schemas.openxmlformats.org/package/2006/content-types";
 const WB_TYPE: &str = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml";
 const WS_TYPE: &str = "application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml";
+// Excel's lists, arrays in cells and nested arrays (Excel Beta, September
+// 2026) store a cell's array as a rich value whose structure is `_array`
+// ([MS-XLSX] 2.3.6.1.1), its items in a rich array part (rdarray.xml); the
+// cell keeps only a fallback value. Shared with Python
+// (`workbook_forge.workbook.in_cell_array_message` and `COMPAT_V3_*`).
+const RICH_DATA_NS: &str = "http://schemas.microsoft.com/office/spreadsheetml/2017/richdata";
+const RICH_ARRAY_TYPE: &str = "application/vnd.ms-excel.rdarray+xml";
+const RICH_STRUCTURE_TYPE: &str = "application/vnd.ms-excel.rdrichvaluestructure+xml";
+const COMPATIBILITY_VERSION_NS: &str =
+    "http://schemas.microsoft.com/office/spreadsheetml/2024/workbookCompatibilityVersion";
+pub const COMPAT_V3_CALCULATION: &str = "Compatibility Version 3 formula calculation is unsupported: Excel may calculate this workbook's formulas differently";
+pub const COMPAT_V3_EDIT: &str =
+    "formula edits in a Compatibility Version 3 workbook are unsupported";
+pub fn in_cell_array_message(sheet: &str, address: &str) -> String {
+    format!(
+        "cell {address} on sheet '{sheet}' holds an Excel array in a cell (a list, an array or a nested array stored as a rich array value); in-cell arrays are not read, so the workbook is refused rather than the array replaced by its fallback value"
+    )
+}
+/// True when the package stores rich arrays: a rich array part, or a rich
+/// value structure of type `_array`. A cell with value metadata (`vm`) in
+/// such a package may hold an array, so it is not read as its fallback. A
+/// structure part that does not parse is left to the preserved parts.
+fn holds_rich_arrays(package: &Package, types: &BTreeMap<String, String>) -> bool {
+    types.iter().any(|(part, kind)| {
+        let kind = kind.to_ascii_lowercase();
+        if kind == RICH_ARRAY_TYPE {
+            return true;
+        }
+        kind == RICH_STRUCTURE_TYPE
+            && package
+                .get(part)
+                .ok()
+                .and_then(|bytes| Xml::parse(bytes).ok())
+                .is_some_and(|xml| {
+                    xml.nodes.iter().any(|node| {
+                        node.ns == RICH_DATA_NS
+                            && node.local == "s"
+                            && node.attrs.get("t").map(String::as_str) == Some("_array")
+                    })
+                })
+    })
+}
+/// The workbook's Compatibility Version ([MS-XLSX] 2.6.260); 1 when unset.
+fn compatibility_version(wb: &Xml, root: &Node) -> u32 {
+    let mut version = 1;
+    if let Some(list) = wb.child(root, "extLst") {
+        for ext in wb.children(list, MAIN, "ext") {
+            for node in wb.children(ext, COMPATIBILITY_VERSION_NS, "version") {
+                if let Some(raw) = node.attrs.get("setVersion")
+                    && !raw.is_empty()
+                    && raw.len() <= 9
+                    && raw.bytes().all(|b| b.is_ascii_digit())
+                    && let Ok(value) = raw.parse::<u32>()
+                {
+                    version = version.max(value);
+                }
+            }
+        }
+    }
+    version
+}
 const MAX_PACKAGE: usize = 128 * 1024 * 1024;
 const MAX_COMPRESSED: usize = 130 * 1024 * 1024;
 const MAX_XML: usize = 32 * 1024 * 1024;
@@ -742,6 +803,8 @@ struct Decoded {
     /// Sheet name -> merged ranges `(c1, r1, c2, r2)` from `<mergeCells>`.
     merged: BTreeMap<String, Vec<(u32, u32, u32, u32)>>,
     date1904: bool,
+    /// Compatibility Version 3 or later: formulas are preserved, not calculated.
+    compat3: bool,
     capabilities: Json,
     /// Every `<sheet>` entry in workbook order (worksheets and chartsheets),
     /// the order `localSheetId` counts.
@@ -902,6 +965,8 @@ fn decode_mode(
         .map(|s| boolean(s))
         .transpose()?
         .unwrap_or(false);
+    let compat3 = compatibility_version(&wb, wbroot) >= 3;
+    let rich_arrays = holds_rich_arrays(package, &types);
     let rels = relationships(package.get(&rel_part(&workbook_part))?)?;
     let mut strings = Vec::new();
     let string_parts: Vec<_> = types
@@ -1003,6 +1068,12 @@ fn decode_mode(
                         return Err(err(format!("cell {name} cannot contain child elements")));
                     }
                 }
+                if rich_arrays && source.attrs.contains_key("vm") {
+                    return Err(err(format!(
+                        "in_cell_array: {}",
+                        in_cell_array_message(name, reference)
+                    )));
+                }
                 if xml.child(source, "is").is_some()
                     && (xml.child(source, "v").is_some() || xml.child(source, "f").is_some())
                 {
@@ -1026,6 +1097,9 @@ fn decode_mode(
                     if date1904 {
                         cell.blocked_reason =
                             Some("1904 date-system formula calculation is unsupported".into());
+                    }
+                    if compat3 {
+                        cell.blocked_reason = Some(COMPAT_V3_CALCULATION.into());
                     }
                     if matches!(kind, "array" | "dataTable" | "shared")
                         && !(inspect_shared && kind == "shared")
@@ -1255,6 +1329,7 @@ fn decode_mode(
         sheet_parts,
         merged,
         date1904,
+        compat3,
         capabilities,
         sheet_entries,
         guard,
@@ -1332,6 +1407,7 @@ pub struct ImportedWorkbook {
     /// inserted at. Excel's grid unless the session declared a smaller one.
     insertion_bound: (u32, u32),
     date1904: bool,
+    compat3: bool,
     capabilities: Json,
     guard: FeatureGuard,
     /// (lowercased sheet, address) of Text-formatted (`@`) cells.
@@ -1421,6 +1497,7 @@ fn import_package(
         merged: decoded.merged,
         insertion_bound: (EXCEL_MAX_ROWS, EXCEL_MAX_COLUMNS),
         date1904: decoded.date1904,
+        compat3: decoded.compat3,
         capabilities: decoded.capabilities,
         guard: decoded.guard,
         text_cells,
@@ -1545,6 +1622,7 @@ impl ImportedWorkbook {
             merged: self.merged.clone(),
             insertion_bound: self.insertion_bound,
             date1904: self.date1904,
+            compat3: self.compat3,
             capabilities: self.capabilities.clone(),
             guard: self.guard.clone(),
             text_cells: self.text_cells.clone(),
@@ -1623,6 +1701,9 @@ impl ImportedWorkbook {
         for edit in edits {
             if self.date1904 && edit.formula.is_some() {
                 return Err(err("1904 formula edits are unsupported"));
+            }
+            if self.compat3 && edit.formula.is_some() {
+                return Err(err(format!("compat_version_3: {COMPAT_V3_EDIT}")));
             }
             if edit.style.is_some() {
                 return Err(err("imported style edits are unsupported"));

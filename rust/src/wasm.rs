@@ -38,7 +38,9 @@ impl WorkbookSession {
 
     fn export_xlsx(&self) -> Result<Vec<u8>, String> {
         match self {
-            Self::Imported(workbook) => workbook.export_bytes().map_err(|error| error.to_string()),
+            Self::Imported(workbook) => workbook
+                .export_bytes()
+                .map_err(|error| crate::browser_contract::typed_open_error(&error)),
             Self::Authored(session) => {
                 xlsx::export_xlsx_bytes(&session.snapshot()).map_err(|error| error.to_string())
             }
@@ -198,8 +200,8 @@ impl BrowserWorkbook {
 /// Open caller-selected `.xlsx` bytes without uploading or retaining a path.
 #[wasm_bindgen(js_name = openXlsx)]
 pub fn open_xlsx(bytes: &[u8]) -> Result<BrowserWorkbook, JsValue> {
-    let imported =
-        xlsx::import_xlsx_bytes(bytes, BTreeMap::new(), BTreeMap::new()).map_err(js_error)?;
+    let imported = xlsx::import_xlsx_bytes(bytes, BTreeMap::new(), BTreeMap::new())
+        .map_err(|error| JsValue::from_str(&crate::browser_contract::typed_open_error(&error)))?;
     let commands = crate::browser_contract::CommandSession::new();
     commands.set_baseline(Baseline::xlsx("workbook.xlsx", bytes));
     Ok(BrowserWorkbook {
