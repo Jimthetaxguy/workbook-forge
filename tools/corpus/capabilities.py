@@ -6,10 +6,12 @@ The input is the committed corpus report (``tools/corpus_check.py --report``),
 so this needs no engine run and the test can check the document is current.
 Each corpus category (the report's Categories column) is placed in one tier:
 
-- supported: modeled and editable; every file in the category passes in the
-  engines that read it.
-- preserved-only: the content round-trips byte-for-byte but is not modeled or
-  editable (the TIERS table below names these).
+- supported: read and editable. A harness pass means every file in the category
+  opens, the bound edit and export reopen, and no engine refuses it. Formula
+  calculation is reported separately in the corpus report.
+- preserved-only: the Python toolkit and the Rust patch path keep the content
+  byte-for-byte through an edit and export, but it is not modeled or editable.
+  The canonical writer builds a fresh package. The table below names these.
 - refused: at least one engine refuses a file in the category, with the code.
 
 The outcomes and codes come from the run; only the preserved-only list is
@@ -28,8 +30,6 @@ ENGINES = ("py_toolkit", "py_canonical", "rust")
 # not listed (and not refused) is reported as supported.
 PRESERVED_ONLY = {
     "charts": "Chart parts are kept byte-for-byte; inspect reports type, anchor and series refs.",
-    "chart-image": "Drawing and chart parts are kept; images are never read.",
-    "chartsheets": "Listed and kept byte-for-byte; not modeled.",
     "pivot": "Pivot tables and caches are kept and inspected, never refreshed.",
     "pivot-fields": "Pivot field layout is inspected, never refreshed.",
     "page-fields": "Pivot page fields are inspected, never refreshed.",
@@ -38,7 +38,6 @@ PRESERVED_ONLY = {
     "threaded-comments": "Threaded comments and persons parts are kept; not editable.",
     "vml": "Legacy VML drawings are kept as opaque parts.",
     "conditional-formatting": "Rules are kept; not evaluated or editable.",
-    "conditional-ext": "x14 conditional-format extensions are kept.",
     "hyperlinks": "Hyperlinks are kept; not editable.",
     "freeze-panes": "Sheet views are kept.",
     "autofilter": "Filters are kept; not applied.",
@@ -60,7 +59,6 @@ PRESERVED_ONLY = {
     "external-links": "External-link parts are kept; links are never refreshed.",
     "extlst": "Unknown extension lists are kept.",
     "mc-ignorable": "Markup-compatibility content is kept.",
-    "metadata": "Cell metadata parts are kept.",
     "bar-chart": "Chart parts are kept byte-for-byte; inspect reports type, anchor and series refs.",
     "line-chart": "Chart parts are kept byte-for-byte; inspect reports type, anchor and series refs.",
     "pie-chart": "Chart parts are kept byte-for-byte; inspect reports type, anchor and series refs.",
@@ -72,16 +70,16 @@ PRESERVED_ONLY = {
     "tables": "Table parts are kept; cells inside are ordinary cells, table formula regions are not edited.",
     "totals-row": "The totals row is kept; its formulas are not calculated (table formula region).",
     "calculated-columns": "Calculated-column formulas are kept; not calculated (table formula region).",
-    "structured-refs": "Structured references are kept; most are not calculated.",
+    "structured-refs": "Structured references are kept; none of these formulas are calculated.",
     "3d-references": "3D references (Jan:Mar!B2) are kept with their cached values; calculation reports `unsupported_formula`.",
-    "3d-refs": "3D references (Jan:Mar!B2) are kept with their cached values; calculation reports `unsupported_formula`.",
-    "r1c1-looking-names": "The names and formulas are kept; formulas using them are not calculated.",
+    "3d-refs": "The 3D formula in `op_sheet_name_quoting.xlsx` is `SUM('Q1 Budget:Σ Totals'!A1)` and its cached value is empty. Calculation reports `unsupported_formula`.",
+    "r1c1-looking-names": "The names are kept. The four formulas are not calculated, and they do not share one outcome: calculation reports `parse_error`, `unsupported_formula`, and `invalid_reference`.",
     "long-formula": "Kept; the toolkit engine does not calculate a long flat chain (expression depth limit), the canonical model does.",
     "formula-length-limit": "Kept; see long-formula.",
     "print-titles": "Print titles are kept.",
     "hidden-rows": "Row visibility is kept.",
     "docprops": "Document properties are kept.",
-    "calcchain": "The calculation chain is kept or dropped as Excel allows; never trusted.",
+    "calcchain": "An edit export removes `xl/calcChain.xml`. The chain is never trusted.",
     "dot-segments": "Part names are normalized for reading; parts are kept.",
     "odd-part-names": "Parts are kept under their own names.",
 }
@@ -93,6 +91,37 @@ NOT_FEATURES = {
     "no-dimension", "no-sst", "no-styles", "stale-dimension", "stored-zip", "xml-bom",
     "prefixed-namespace", "absolute-targets", "empty-sheet", "sparse", "xfd1048576",
     "xfd-column", "wide-sheet", "many-sheets", "unicode", "rtl", "whitespace",
+}
+
+# Supported categories that still hold formulas a full calculation does not
+# cover. A harness pass does not mean those formulas were calculated.
+SUPPORTED_NOTES = {
+    "cross-sheet": (
+        "`hb_3d_references.xlsx` reports `unsupported_formula` for its 3D spans "
+        "and for the name `FirstQuarter`. The other files in this category have "
+        "no calculation diagnostics."
+    ),
+    "defined-names": (
+        "3D spans and the name `FirstQuarter` in `hb_3d_references.xlsx` are "
+        "`unsupported_formula`. `op_defined_names.xlsx` reports unsupported names "
+        "`Rate` and `LocalFactor`. `xw_hyperlinks_names.xlsx` reports the "
+        "unsupported name `Answer`. `hb_r1c1_looking_names.xlsx` reports "
+        "`parse_error`, `unsupported_formula`, and `invalid_reference`. "
+        "`hb_google_sheets_like.xlsx` reports `unsupported_formula` for CONCATENATE."
+    ),
+    "in-cell-array-functions": (
+        "`hb_flatten_has_functions.xlsx` reports `unsupported_formula` for HAS, "
+        "HASANY, HASALL, and FLATTEN."
+    ),
+    "new-functions": (
+        "`hb_flatten_has_functions.xlsx` reports `unsupported_formula` for HAS, "
+        "HASANY, HASALL, and FLATTEN."
+    ),
+    "sheet-name-spaces": (
+        "`hb_3d_references.xlsx` reports `unsupported_formula` for its 3D spans "
+        "and for the name `FirstQuarter`. The other files in this category have "
+        "no calculation diagnostics."
+    ),
 }
 
 
@@ -172,9 +201,12 @@ def build(results: dict, manifest: dict) -> str:
         "the Python toolkit (`py_toolkit`), the Python canonical model (`py_canonical`, which",
         "writes a fresh package by design) and Rust (`rust`, also the WASM engine).",
         "",
-        "- **Supported**: read, calculated where formulas apply, editable, and round-tripped.",
-        "- **Preserved-only**: kept byte-for-byte through an edit and export, but not modeled",
-        "  or editable.",
+        "- **Supported**: read and editable. A harness pass means the file opens,",
+        "  the bound edit and export reopen, and no engine refuses it. Formula",
+        "  calculation is reported separately in [the corpus report](corpus-report.md).",
+        "- **Preserved-only**: the Python toolkit and the Rust patch path keep the",
+        "  content byte-for-byte through an edit and export. The canonical writer",
+        "  builds a fresh package. The content is not modeled or editable.",
         "- **Refused**: at least one engine stops on at least one file in the category with",
         "  a typed refusal code ([refusal codes](refusal-codes.md)). A category can be refused",
         "  in one engine and read in another, or for one file and not another; the counts and",
@@ -191,6 +223,14 @@ def build(results: dict, manifest: dict) -> str:
         if tier == "supported":
             lines += ["| Category | Files |", "| --- | ---: |"]
             lines += [f"| {c} | {len(f)} |" for c, f, *_ in rows]
+            notes = [(c, SUPPORTED_NOTES[c]) for c, *_ in rows if c in SUPPORTED_NOTES]
+            if notes:
+                lines += [
+                    "",
+                    "Formulas a full calculation does not cover in these categories:",
+                    "",
+                ]
+                lines += [f"- **{c}**: {text}" for c, text in notes]
         elif tier == "preserved-only":
             lines += ["| Category | Files | What is kept |", "| --- | ---: | --- |"]
             lines += [f"| {c} | {len(f)} | {PRESERVED_ONLY[c]} |" for c, f, *_ in rows]
