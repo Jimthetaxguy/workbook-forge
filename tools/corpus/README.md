@@ -10,7 +10,7 @@ by our own scripts so there is no third-party licensing exposure:
   targets, prefixed SpreadsheetML, Strict OOXML, pivot caches, external links,
   threaded comments, BOM-prefixed parts, cells without `r` attributes, and the
   quirks of Google Sheets, Numbers and LibreOffice exports.
-  `shapes.py` adds later real-world shapes on the same helpers: a sheet out to
+  `shapes.py` adds later synthetic shapes on the same helpers: a sheet out to
   column XFD, 210 sheets, 30,000 shared strings, mixed inline and shared strings,
   4,000 cell formats with a theme, outline, print and protection settings, and
   feature parts Excel writes that the libraries do not (form controls, slicers,
@@ -25,10 +25,12 @@ by our own scripts so there is no third-party licensing exposure:
   published and what is guessed, and their `MANIFEST.json` entries carry
   `"provenance": "modeled, not captured from Excel"` with a note to replace
   them with real Excel Beta captures. See [in-cell arrays](../../docs/in-cell-arrays.md).
-- `lo_*` files come from LibreOffice headless when `soffice` is on PATH.
+- `lo_*` files come from LibreOffice headless when `soffice` is on PATH and
+  `--writers` includes `libreoffice`. That writer is not in the default list.
 
 Regenerate with `python tools/corpus/generate_corpus.py` (openpyxl and XlsxWriter
-installed). `fixtures/corpus/MANIFEST.json` lists each file's writer and
+installed). The default writers are openpyxl, XlsxWriter, and hand-built OOXML.
+`fixtures/corpus/MANIFEST.json` lists each file's writer and
 categories. openpyxl stamps the save time into `docProps/core.xml`, so its files
 are not byte-stable across regenerations; the others are.
 
