@@ -19,10 +19,11 @@ up (`123` -> `"123"`, `1.5` -> `"1.5"`, `1e20` -> `"1E+20"`). Text written there
 kept as given, so `"00456"` keeps its zeros. Booleans and formulas are not converted.
 `tools/corpus/feature-cases.json` (`text_writes`) holds the cases.
 
-For existing cells, both engines use the cell's `@` format. Python also gives an
-inserted cell its row style when `customFormat` is set, otherwise its column
-style; an inherited `@` keeps numeric writes as text. That insertion behavior is
-covered by the Python test and is not a Rust parity claim.
+For existing cells, both engines use the cell's `@` format. An inserted cell
+takes its row style when `customFormat` is set, otherwise its column style; an
+inherited `@` keeps numeric writes as text. The Python import/export test covers
+the Python path. Rust's insertion behavior is covered separately in
+`rust/tests/xlsx_features.rs`.
 
 ## Browser view
 
