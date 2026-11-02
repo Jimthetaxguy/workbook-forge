@@ -314,7 +314,7 @@ test('a workbook holding an in-cell array is refused with its typed code and kee
   assert.equal(call(engine, 'snapshot').value.sheets[0].name, 'Sheet1');
 });
 
-test('FLATTEN, HAS, HASANY and HASALL are typed, not calculated, and survive export', () => {
+test('FLATTEN, HAS, HASANY and HASALL are typed, not calculated, and export is refused', () => {
   const engine = new ForgeEngine({ openXlsx, createBlankWorkbook });
   assert.equal(call(engine, 'open', { bytes: new Uint8Array(corpusFile('hb_flatten_has_functions.xlsx')) }).ok, true);
   const calc = call(engine, 'calculate').value;

@@ -1,11 +1,10 @@
-"""Excel's lists, arrays in cells and nested arrays (Excel Beta, September 2026).
+"""The corpus files are modeled, not captured from Excel.
 
-The corpus files are MODELED, not captured from Excel (see
-tools/corpus/in_cell_arrays.py and their MANIFEST.json entries). Each construct
-is either refused with one typed code, naming the cell, or read and preserved
-byte-for-byte with a typed calculation diagnostic. Nothing is replaced by its
-fallback value. Rust holds the same files to the same outcomes in
-rust/tests/corpus.rs, and the browser engine in web/forge-engine/test.
+See tools/corpus/in_cell_arrays.py and their MANIFEST.json entries. Each
+construct is either refused with one typed code, naming the cell, or read and
+preserved byte-for-byte with a typed calculation diagnostic. Nothing is
+replaced by its fallback value. Rust holds the same files to the same outcomes
+in rust/tests/corpus.rs, and the browser engine in web/forge-engine/test.
 """
 from __future__ import annotations
 
@@ -99,7 +98,7 @@ def test_value_metadata_without_rich_arrays_still_reads(tmp_path):
     assert cells["B2"]["value"] == {"error": "#VALUE!"}
 
 
-def test_an_array_structure_without_an_array_part_is_still_refused(tmp_path):
+def test_the_structure_type_refuses_when_the_rich_array_content_type_is_absent(tmp_path):
     sys.path.insert(0, str(ROOT / "tools" / "corpus"))
     import handbuilt
     import in_cell_arrays
@@ -185,6 +184,7 @@ def test_compatibility_version_3_preserves_formulas_and_refuses_formula_edits(tm
     report = model.calculate()
     assert {d["address"] for d in report["diagnostics"]} == {"B1", "B2"}
     assert all(d["message"] == COMPAT_V3_CALCULATION for d in report["diagnostics"])
+    assert all(d["code"] == "unsupported_cell" for d in report["diagnostics"])
     with pytest.raises(UnsupportedWorkbook) as caught:
         model.set_formula("Calc", "C1", "=A2+1")
     assert caught.value.code == "compat_version_3"

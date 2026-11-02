@@ -65,12 +65,16 @@ async function boot() {
     }
   };
   $('export').onclick = async () => {
-    const bytes = await adapter.exportXlsx();
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(new Blob([bytes as BlobPart], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
-    link.download = 'forge-export.xlsx';
-    link.click();
-    URL.revokeObjectURL(link.href);
+    try {
+      const bytes = await adapter.exportXlsx();
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(new Blob([bytes as BlobPart], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
+      link.download = 'forge-export.xlsx';
+      link.click();
+      URL.revokeObjectURL(link.href);
+    } catch (error) {
+      notices.textContent = `Could not export: ${String(error)}`;
+    }
   };
   return { adapter, host, client, fixture, mode, startForgeWorker };
 }
