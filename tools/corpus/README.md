@@ -18,6 +18,13 @@ by our own scripts so there is no third-party licensing exposure:
   customXml, embedded OLE objects, a pivot calculated field, a table totals row
   and calculated column) plus formula shapes (3D references, names that look
   like references, a formula near the 8,192-character limit).
+  `in_cell_arrays.py` adds Excel's lists, arrays in cells, nested arrays, the
+  FLATTEN/HAS/HASANY/HASALL functions and Compatibility Version 3 (Excel Beta,
+  September 2026). These five files are **modeled, not captured from Excel**:
+  Microsoft has not published the cell markup, so the module documents what is
+  published and what is guessed, and their `MANIFEST.json` entries carry
+  `"provenance": "modeled, not captured from Excel"` with a note to replace
+  them with real Excel Beta captures. See [in-cell arrays](../../docs/in-cell-arrays.md).
 - `lo_*` files come from LibreOffice headless when `soffice` is on PATH.
 
 Regenerate with `python tools/corpus/generate_corpus.py` (openpyxl and XlsxWriter
