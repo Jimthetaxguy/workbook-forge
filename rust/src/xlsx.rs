@@ -25,6 +25,67 @@ const PKG: &str = "http://schemas.openxmlformats.org/package/2006/relationships"
 const CT: &str = "http://schemas.openxmlformats.org/package/2006/content-types";
 const WB_TYPE: &str = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml";
 const WS_TYPE: &str = "application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml";
+// Excel's lists, arrays in cells and nested arrays (Excel Beta, September
+// 2026) store a cell's array as a rich value whose structure is `_array`
+// ([MS-XLSX] 2.3.6.1.1), its items in a rich array part (rdarray.xml); the
+// cell keeps only a fallback value. Shared with Python
+// (`workbook_forge.workbook.in_cell_array_message` and `COMPAT_V3_*`).
+const RICH_DATA_NS: &str = "http://schemas.microsoft.com/office/spreadsheetml/2017/richdata";
+const RICH_ARRAY_TYPE: &str = "application/vnd.ms-excel.rdarray+xml";
+const RICH_STRUCTURE_TYPE: &str = "application/vnd.ms-excel.rdrichvaluestructure+xml";
+const COMPATIBILITY_VERSION_NS: &str =
+    "http://schemas.microsoft.com/office/spreadsheetml/2024/workbookCompatibilityVersion";
+pub const COMPAT_V3_CALCULATION: &str = "Compatibility Version 3 formula calculation is unsupported: Excel may calculate this workbook's formulas differently";
+pub const COMPAT_V3_EDIT: &str =
+    "formula edits in a Compatibility Version 3 workbook are unsupported";
+pub fn in_cell_array_message(sheet: &str, address: &str) -> String {
+    format!(
+        "cell {address} on sheet '{sheet}' holds an Excel array in a cell (a list, an array or a nested array stored as a rich array value); in-cell arrays are not read, so the workbook is refused rather than the array replaced by its fallback value"
+    )
+}
+/// True when the package stores rich arrays: a rich array part, or a rich
+/// value structure of type `_array`. A cell with value metadata (`vm`) in
+/// such a package may hold an array, so it is not read as its fallback. A
+/// structure part that does not parse is left to the preserved parts.
+fn holds_rich_arrays(package: &Package, types: &BTreeMap<String, String>) -> bool {
+    types.iter().any(|(part, kind)| {
+        let kind = kind.to_ascii_lowercase();
+        if kind == RICH_ARRAY_TYPE {
+            return true;
+        }
+        kind == RICH_STRUCTURE_TYPE
+            && package
+                .get(part)
+                .ok()
+                .and_then(|bytes| Xml::parse(bytes).ok())
+                .is_some_and(|xml| {
+                    xml.nodes.iter().any(|node| {
+                        node.ns == RICH_DATA_NS
+                            && node.local == "s"
+                            && node.attrs.get("t").map(String::as_str) == Some("_array")
+                    })
+                })
+    })
+}
+/// The workbook's Compatibility Version ([MS-XLSX] 2.6.260); 1 when unset.
+fn compatibility_version(wb: &Xml, root: &Node) -> u32 {
+    let mut version = 1;
+    if let Some(list) = wb.child(root, "extLst") {
+        for ext in wb.children(list, MAIN, "ext") {
+            for node in wb.children(ext, COMPATIBILITY_VERSION_NS, "version") {
+                if let Some(raw) = node.attrs.get("setVersion")
+                    && !raw.is_empty()
+                    && raw.len() <= 9
+                    && raw.bytes().all(|b| b.is_ascii_digit())
+                    && let Ok(value) = raw.parse::<u32>()
+                {
+                    version = version.max(value);
+                }
+            }
+        }
+    }
+    version
+}
 const MAX_PACKAGE: usize = 128 * 1024 * 1024;
 const MAX_COMPRESSED: usize = 130 * 1024 * 1024;
 const MAX_XML: usize = 32 * 1024 * 1024;
@@ -121,6 +182,55 @@ fn attr<'a>(node: &'a Node, name: &str) -> Result<&'a str> {
         .map(String::as_str)
         .ok_or_else(|| err(format!("missing {name} on {}", node.name)))
 }
+/// Shared with Python (`workbook.POSITIONAL_CELLS_MESSAGE`); the refusal
+/// table maps it to `positional_cells`.
+pub const POSITIONAL_CELLS_MESSAGE: &str =
+    "a worksheet row or cell has no r reference; rows and cells placed by position are not read";
+/// A row's or cell's `r`, refused with the shared message when absent or empty.
+fn positioned(node: &Node) -> Result<&str> {
+    match node.attrs.get("r").map(String::as_str) {
+        Some(reference) if !reference.is_empty() => Ok(reference),
+        _ => Err(err(POSITIONAL_CELLS_MESSAGE)),
+    }
+}
+
+/// Well-formedness check for every XML part at open. Parts the engine reads
+/// are parsed again as UTF-8; a part stored as UTF-16 with a byte-order mark
+/// (Excel writes the Power Query `DataMashup` customXml item this way) is
+/// checked through its UTF-8 text and kept byte-for-byte.
+fn check_xml_part(data: &[u8]) -> Result<()> {
+    let little = data.starts_with(&[0xFF, 0xFE]);
+    if !little && !data.starts_with(&[0xFE, 0xFF]) {
+        Xml::parse(data)?;
+        return Ok(());
+    }
+    let (pairs, rest) = data[2..].as_chunks::<2>();
+    if !rest.is_empty() {
+        return Err(err("invalid UTF-16 XML part"));
+    }
+    let units: Vec<u16> = pairs
+        .iter()
+        .map(|&pair| {
+            if little {
+                u16::from_le_bytes(pair)
+            } else {
+                u16::from_be_bytes(pair)
+            }
+        })
+        .collect();
+    let text = String::from_utf16(&units).map_err(|_| err("invalid UTF-16 XML part"))?;
+    // The declaration names UTF-16; the checked copy is UTF-8, so drop it.
+    let text = match text.strip_prefix("<?xml") {
+        Some(rest) => match rest.find("?>") {
+            Some(end) => &rest[end + 2..],
+            None => return Err(err("invalid UTF-16 XML part")),
+        },
+        None => text.as_str(),
+    };
+    Xml::parse(text.as_bytes())?;
+    Ok(())
+}
+
 fn xml_escape(value: &str) -> Result<String> {
     if value.chars().any(|c| {
         !matches!(c, '\t' | '\r' | '\n') && (c < ' ' || matches!(c, '\u{fffe}' | '\u{ffff}'))
@@ -287,7 +397,7 @@ impl Package {
                 return Err(err("uncompressed package size limit"));
             }
             if is_xml {
-                Xml::parse(&data)?;
+                check_xml_part(&data)?;
             }
             if name.to_ascii_lowercase().contains("vbaproject") {
                 return Err(err("VBA content is forbidden"));
@@ -693,12 +803,86 @@ struct Decoded {
     /// Sheet name -> merged ranges `(c1, r1, c2, r2)` from `<mergeCells>`.
     merged: BTreeMap<String, Vec<(u32, u32, u32, u32)>>,
     date1904: bool,
+    /// Compatibility Version 3 or later: formulas are preserved, not calculated.
+    compat3: bool,
     capabilities: Json,
     /// Every `<sheet>` entry in workbook order (worksheets and chartsheets),
     /// the order `localSheetId` counts.
     sheet_entries: Vec<String>,
     /// Drop-down, pivot and chart rules (docs/xlsx-features.md).
     guard: FeatureGuard,
+    /// Lowercased sheet name -> where an inserted cell inherits Text (@).
+    text_layouts: BTreeMap<String, TextLayout>,
+}
+/// Where a newly inserted cell inherits the Text (`@`) number format. A row
+/// with `customFormat` decides for every new cell in it; otherwise the first
+/// `<col>` range covering the column that carries a style decides (Excel's
+/// rule, and the one `inherited_style` writes at export).
+#[derive(Clone, Debug, Default)]
+pub(crate) struct TextLayout {
+    name: String,
+    rows: BTreeMap<u32, bool>,
+    columns: Vec<(u32, u32, bool)>,
+}
+impl TextLayout {
+    fn is_text(&self, col: u32, row: u32) -> bool {
+        if let Some(text) = self.rows.get(&row) {
+            return *text;
+        }
+        self.columns
+            .iter()
+            .find(|(first, last, _)| (*first..=*last).contains(&col))
+            .is_some_and(|(_, _, text)| *text)
+    }
+    fn public(&self) -> Json {
+        json!({
+            "text_columns": self.columns.iter().filter(|c| c.2).map(|c| [c.0, c.1]).collect::<Vec<_>>(),
+            "text_rows": self.rows.iter().filter(|r| *r.1).map(|r| *r.0).collect::<Vec<_>>(),
+            "general_rows": self.rows.iter().filter(|r| !*r.1).map(|r| *r.0).collect::<Vec<_>>(),
+        })
+    }
+}
+fn text_layout(
+    xml: &Xml,
+    root: &Node,
+    data: &Node,
+    name: &str,
+    styles: &[Style],
+) -> Option<TextLayout> {
+    let is_text = |raw: &str| {
+        raw.parse::<usize>()
+            .ok()
+            .and_then(|i| styles.get(i))
+            .is_some_and(|s| s.number_format.as_deref() == Some("@"))
+    };
+    let columns: Vec<(u32, u32, bool)> = xml
+        .child(root, "cols")
+        .into_iter()
+        .flat_map(|n| xml.children(n, MAIN, "col"))
+        .filter_map(|col| {
+            let style = col.attrs.get("style")?;
+            let first = col.attrs.get("min")?.parse().ok()?;
+            let last = col.attrs.get("max")?.parse().ok()?;
+            Some((first, last, is_text(style)))
+        })
+        .collect();
+    let rows: BTreeMap<u32, bool> = xml
+        .children(data, MAIN, "row")
+        .filter(|row| {
+            row.attrs
+                .get("customFormat")
+                .is_some_and(|v| boolean(v).unwrap_or(false))
+        })
+        .filter_map(|row| {
+            let number = row.attrs.get("r")?.parse().ok()?;
+            Some((number, is_text(row.attrs.get("s")?)))
+        })
+        .collect();
+    (columns.iter().any(|c| c.2) || rows.values().any(|t| *t)).then(|| TextLayout {
+        name: name.to_string(),
+        rows,
+        columns,
+    })
 }
 /// Error values newer Excel versions store that the v1 model does not
 /// represent. They refuse as `unsupported_error_value`; any other unknown
@@ -781,6 +965,8 @@ fn decode_mode(
         .map(|s| boolean(s))
         .transpose()?
         .unwrap_or(false);
+    let compat3 = compatibility_version(&wb, wbroot) >= 3;
+    let rich_arrays = holds_rich_arrays(package, &types);
     let rels = relationships(package.get(&rel_part(&workbook_part))?)?;
     let mut strings = Vec::new();
     let string_parts: Vec<_> = types
@@ -818,6 +1004,7 @@ fn decode_mode(
         .collect();
     let defined = features::defined_names(&wb, wbroot, &entry_names);
     let mut rules = Vec::new();
+    let mut text_layouts: BTreeMap<String, TextLayout> = BTreeMap::new();
     let _sheets = wb
         .child(wbroot, "sheets")
         .ok_or_else(|| err("workbook has no worksheets"))?;
@@ -859,13 +1046,13 @@ fn decode_mode(
             .child(root, "sheetData")
             .ok_or_else(|| err("worksheet missing sheetData"))?;
         for row in xml.children(data, MAIN, "row") {
-            let row_number: usize = integer(attr(row, "r")?)?;
+            let row_number: usize = integer(positioned(row)?)?;
             for source in xml.children(row, MAIN, "c") {
                 cell_work += 1;
                 if cell_work > toolkit::MAX_WORKBOOK_CELLS {
                     return Err(err("import exceeds 100000 populated cells"));
                 }
-                let reference = attr(source, "r")?;
+                let reference = positioned(source)?;
                 let (col, r) = coordinate(reference)?;
                 if r as usize != row_number || reference != address(col, r) {
                     return Err(err("cell/row coordinates must be canonical and consistent"));
@@ -880,6 +1067,12 @@ fn decode_mode(
                     if name != "is" && children.iter().any(|node| !node.children.is_empty()) {
                         return Err(err(format!("cell {name} cannot contain child elements")));
                     }
+                }
+                if rich_arrays && source.attrs.contains_key("vm") {
+                    return Err(err(format!(
+                        "in_cell_array: {}",
+                        in_cell_array_message(name, reference)
+                    )));
                 }
                 if xml.child(source, "is").is_some()
                     && (xml.child(source, "v").is_some() || xml.child(source, "f").is_some())
@@ -904,6 +1097,9 @@ fn decode_mode(
                     if date1904 {
                         cell.blocked_reason =
                             Some("1904 date-system formula calculation is unsupported".into());
+                    }
+                    if compat3 {
+                        cell.blocked_reason = Some(COMPAT_V3_CALCULATION.into());
                     }
                     if matches!(kind, "array" | "dataTable" | "shared")
                         && !(inspect_shared && kind == "shared")
@@ -978,6 +1174,9 @@ fn decode_mode(
                     }
                 }
             }
+        }
+        if let Some(layout) = text_layout(&xml, root, data, name, &styles) {
+            text_layouts.insert(name.to_lowercase(), layout);
         }
         if let Some(validations) = xml.child(root, "dataValidations") {
             for validation in xml.children(validations, MAIN, "dataValidation") {
@@ -1123,16 +1322,18 @@ fn decode_mode(
         .flat_map(|n| wb.children(n, MAIN, "definedName"))
         .map(|n| json!({"attributes":n.attrs,"expression":n.text}))
         .collect();
-    let capabilities = json!({"backend":"rust-ooxml","date_system":if date1904{"1904"}else{"1900"},"styles":styles.len(),"defined_names":names,"tables":table_metadata,"validation":validation_metadata,"data_validations":guard.records(),"pivots":pivot_records,"charts":charts,"chartsheets":chartsheets,"supported":["typed data-validation inspection; enforced (stop) rules refuse out-of-rule values","pivot table and chart inspection","UTF-8 macro-free transitional XLSX","scalar cells","normal formulas","basic styles","column widths","existing-cell content edits","absent-cell value/formula insertion within the session grid bound"],"preserved_only":["pivot tables and caches","charts and chartsheets","unknown package parts","unknown worksheet XML","names","tables","imported styles and validation"],"rejected":["pivot refresh and writes into pivot output ranges","structural changes to sheets a chart reads","macros","external execution","insertion into merged non-anchor cells or outside the session grid bound","imported style/layout/validation changes","1904 formula calculation and edits","grouped/table result edits"],"parts":package.parts.keys().collect::<Vec<_>>()});
+    let capabilities = json!({"backend":"rust-ooxml","date_system":if date1904{"1904"}else{"1900"},"styles":styles.len(),"defined_names":names,"tables":table_metadata,"validation":validation_metadata,"data_validations":guard.records(),"text_layouts":text_layouts.values().map(|l| (l.name.clone(), l.public())).collect::<serde_json::Map<_, _>>(),"pivots":pivot_records,"charts":charts,"chartsheets":chartsheets,"supported":["typed data-validation inspection; enforced (stop) rules refuse out-of-rule values","pivot table and chart inspection","UTF-8 macro-free transitional XLSX","scalar cells","normal formulas","basic styles","column widths","existing-cell content edits","absent-cell value/formula insertion within the session grid bound"],"preserved_only":["pivot tables and caches","charts and chartsheets","unknown package parts","unknown worksheet XML","names","tables","imported styles and validation"],"rejected":["pivot refresh and writes into pivot output ranges","structural changes to sheets a chart reads","macros","external execution","insertion into merged non-anchor cells or outside the session grid bound","imported style/layout/validation changes","1904 formula calculation and edits","grouped/table result edits"],"parts":package.parts.keys().collect::<Vec<_>>()});
     Ok(Decoded {
         model,
         workbook_part,
         sheet_parts,
         merged,
         date1904,
+        compat3,
         capabilities,
         sheet_entries,
         guard,
+        text_layouts,
     })
 }
 
@@ -1206,10 +1407,12 @@ pub struct ImportedWorkbook {
     /// inserted at. Excel's grid unless the session declared a smaller one.
     insertion_bound: (u32, u32),
     date1904: bool,
+    compat3: bool,
     capabilities: Json,
     guard: FeatureGuard,
     /// (lowercased sheet, address) of Text-formatted (`@`) cells.
     text_cells: BTreeSet<(String, String)>,
+    text_layouts: BTreeMap<String, TextLayout>,
 }
 /// Excel's last row (1,048,576).
 pub const EXCEL_MAX_ROWS: u32 = 1_048_576;
@@ -1294,9 +1497,11 @@ fn import_package(
         merged: decoded.merged,
         insertion_bound: (EXCEL_MAX_ROWS, EXCEL_MAX_COLUMNS),
         date1904: decoded.date1904,
+        compat3: decoded.compat3,
         capabilities: decoded.capabilities,
         guard: decoded.guard,
         text_cells,
+        text_layouts: decoded.text_layouts,
     })
 }
 impl ImportedWorkbook {
@@ -1330,6 +1535,28 @@ impl ImportedWorkbook {
             return Err(err(
                 "transferred snapshot must retain all source cell addresses",
             ));
+        }
+        if self.compat3 {
+            // A snapshot is an edit batch by another route: the live-edit
+            // refusal of new or changed formulas holds here too.
+            let changed = self
+                .original
+                .sheets
+                .iter()
+                .zip(&model.sheets)
+                .any(|(before, after)| {
+                    after.cells.iter().any(|(address, cell)| {
+                        cell.formula.is_some()
+                            && before
+                                .cells
+                                .get(address)
+                                .and_then(|old| old.formula.as_ref())
+                                != cell.formula.as_ref()
+                    })
+                });
+            if changed {
+                return Err(err(format!("compat_version_3: {COMPAT_V3_EDIT}")));
+            }
         }
         for (before, after) in self.original.sheets.iter().zip(&model.sheets) {
             for (address, cell) in &before.cells {
@@ -1417,9 +1644,11 @@ impl ImportedWorkbook {
             merged: self.merged.clone(),
             insertion_bound: self.insertion_bound,
             date1904: self.date1904,
+            compat3: self.compat3,
             capabilities: self.capabilities.clone(),
             guard: self.guard.clone(),
             text_cells: self.text_cells.clone(),
+            text_layouts: self.text_layouts.clone(),
         }
         .export(path)
     }
@@ -1494,6 +1723,9 @@ impl ImportedWorkbook {
         for edit in edits {
             if self.date1904 && edit.formula.is_some() {
                 return Err(err("1904 formula edits are unsupported"));
+            }
+            if self.compat3 && edit.formula.is_some() {
+                return Err(err(format!("compat_version_3: {COMPAT_V3_EDIT}")));
             }
             if edit.style.is_some() {
                 return Err(err("imported style edits are unsupported"));
@@ -1588,14 +1820,11 @@ impl ImportedWorkbook {
     pub fn apply(&self, mut edits: Vec<Edit>, expected_revision: Option<u64>) -> Result<u64> {
         // A number written into a Text-formatted (@) cell is stored as text,
         // as Excel does.
-        if !self.text_cells.is_empty() {
+        if !self.text_cells.is_empty() || !self.text_layouts.is_empty() {
             for edit in &mut edits {
                 if edit.formula.is_none()
                     && let Some(CellValue::Number(n)) = edit.value
-                    && self.text_cells.contains(&(
-                        edit.sheet.to_lowercase(),
-                        edit.address.replace('$', "").to_ascii_uppercase(),
-                    ))
+                    && self.is_text_cell(&edit.sheet, &edit.address)
                 {
                     edit.value = Some(CellValue::Text(features::general_text(n)));
                 }
@@ -1603,6 +1832,39 @@ impl ImportedWorkbook {
         }
         self.validate_edits(&edits)?;
         Ok(self.session.apply(edits, expected_revision)?)
+    }
+    /// True when a number written here is stored as text: the imported cell
+    /// is Text-formatted (`@`), or the import held no cell here and the row
+    /// or column style it inherits is Text.
+    pub fn is_text_cell(&self, sheet: &str, address: &str) -> bool {
+        let sheet = sheet.to_lowercase();
+        let address = address.replace('$', "").to_ascii_uppercase();
+        if self.text_cells.contains(&(sheet.clone(), address.clone())) {
+            return true;
+        }
+        let Some(layout) = self.text_layouts.get(&sheet) else {
+            return false;
+        };
+        let imported = self
+            .original
+            .sheets
+            .iter()
+            .find(|s| s.name.to_lowercase() == sheet)
+            .is_some_and(|s| s.cells.contains_key(&address));
+        !imported
+            && coordinate(&address)
+                .map(|(col, row)| layout.is_text(col, row))
+                .unwrap_or(false)
+    }
+    /// Per sheet name, where an inserted cell inherits Text (`@`):
+    /// `{"text_columns": [[min, max]], "text_rows": [..], "general_rows": [..]}`.
+    pub fn text_layouts(&self) -> Json {
+        Json::Object(
+            self.text_layouts
+                .values()
+                .map(|l| (l.name.clone(), l.public()))
+                .collect(),
+        )
     }
     pub fn set_inputs(
         &self,
@@ -3247,5 +3509,31 @@ mod refusal_code_tests {
             "package_damaged"
         );
         assert_eq!(XlsxError("zzz".into()).code(), "xlsx_error");
+    }
+
+    #[test]
+    fn utf16_xml_parts_are_checked_and_malformed_ones_refused() {
+        let utf16 = |text: &str, little: bool| {
+            let mut out = if little {
+                vec![0xFF, 0xFE]
+            } else {
+                vec![0xFE, 0xFF]
+            };
+            for unit in text.encode_utf16() {
+                out.extend(if little {
+                    unit.to_le_bytes()
+                } else {
+                    unit.to_be_bytes()
+                });
+            }
+            out
+        };
+        let good = "<?xml version=\"1.0\" encoding=\"utf-16\"?><DataMashup xmlns=\"urn:x\">QQ==</DataMashup>";
+        assert!(check_xml_part(&utf16(good, true)).is_ok());
+        assert!(check_xml_part(&utf16(good, false)).is_ok());
+        assert!(check_xml_part(&utf16("<a><b></a>", true)).is_err());
+        assert!(check_xml_part(&[0xFF, 0xFE, 0x3C]).is_err());
+        // Without a byte-order mark a UTF-16 declaration is still refused.
+        assert!(check_xml_part(good.as_bytes()).is_err());
     }
 }

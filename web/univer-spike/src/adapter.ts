@@ -38,6 +38,7 @@ import type {
   ForgeClient,
   Revision,
   Snapshot,
+  TextFormatLayout,
 } from '@workbook-forge/engine';
 import { fromA1, toA1 } from './a1';
 import type { UniverHost } from './univer-host';
@@ -134,16 +135,20 @@ function toCellData(value: Scalar, formula?: string): ICellData {
 
 /**
  * Read one typed cell. In a Text-formatted (`@`) cell, or for a force-string
- * entry (a leading apostrophe), everything typed stays text, as in Excel:
+ * entry (a leading apostrophe), everything typed stays text:
  * `00123` keeps its zeros and `=A1` is the text "=A1", not a formula. A
  * leading apostrophe is the entry marker and is not part of the value.
  */
 export function parseInput(cell: ICellData, textFormat = false): { value: Scalar } | { formula: string } | null {
   let raw: unknown = cell.v;
-  if (raw === undefined && cell.p?.body?.dataStream) raw = cell.p.body.dataStream.replace(/\r\n$/, '');
+  // Univer's editor leaves v null for a formula-shaped entry unless the cell
+  // style pattern is @. A text cell still stores that entry as text.
+  if (cell.p?.body?.dataStream && (raw === undefined || (textFormat && raw === null))) {
+    raw = cell.p.body.dataStream.replace(/\r\n$/, '');
+  }
   const forced = cell.t === CellValueType.FORCE_STRING || (typeof raw === 'string' && raw.startsWith("'"));
   if (textFormat || forced) {
-    if (raw === undefined && typeof cell.f === 'string') raw = cell.f;
+    if ((textFormat ? raw == null : raw === undefined) && typeof cell.f === 'string') raw = cell.f;
     if (raw === undefined) return null;
     if (raw === null || raw === '') return { value: null };
     const text = typeof raw === 'boolean' ? (raw ? 'TRUE' : 'FALSE') : String(raw);
@@ -173,6 +178,12 @@ export class ForgeUniverAdapter {
   private projected = new Map<string, Projected>();
   /** `Sheet!A1` keys of Text-formatted (`@`) cells: typed input stays text. */
   private readonly textCells = new Set<string>();
+  /**
+   * Sheets whose row or column styles are Text (`@`), with the cells the
+   * workbook held when it opened: a cell typed where none existed inherits
+   * that format, as in Excel, so its input stays text too.
+   */
+  private readonly textLayouts = new Map<string, { layout: TextFormatLayout; opened: Set<string> }>();
   private sheetIds = new Map<string, string>();
   private projecting = false;
   private queue: Promise<unknown> = Promise.resolve();
@@ -217,6 +228,10 @@ export class ForgeUniverAdapter {
     this.projected.clear();
     this.sheetIds.clear();
     this.textCells.clear();
+    // Dedupe keeps a notice that matches the previous line. A new workbook
+    // must be able to raise that same sentence again.
+    this.notices.length = 0;
+    this.textLayouts.clear();
     const calculated = await this.client.calculate();
     if (!calculated.ok) throw new Error(`${calculated.error.code}: ${calculated.error.message}`);
     if (calculated.value.revision !== snapshot.value.revision) throw new Error('revision drift while opening workbook');
@@ -234,6 +249,7 @@ export class ForgeUniverAdapter {
       const id = `sheet-${index}`;
       this.sheetIds.set(sheet.name, id);
       data.sheetOrder.push(id);
+      if (sheet.textFormat) this.textLayouts.set(sheet.name, { layout: sheet.textFormat, opened: new Set(Object.keys(sheet.cells)) });
       let rows = 20;
       let cols = 10;
       const cellData: Record<number, Record<number, ICellData>> = {};
@@ -606,11 +622,23 @@ export class ForgeUniverAdapter {
     if (cells.length === 0) return 'no cells';
     const edits: Edit[] = [];
     for (const { row, col, cell } of cells) {
-      const input = parseInput(cell ?? {}, this.textCells.has(`${sheet}!${toA1(row, col)}`));
+      const input = parseInput(cell ?? {}, this.isTextFormat(sheet, row, col));
       if (!input) return 'style-only change is outside the spike scope';
       edits.push({ sheet, address: toA1(row, col), ...input });
     }
     return edits;
+  }
+
+  /** Typed input here stays text: the cell is Text (`@`), or inherits it. */
+  isTextFormat(sheet: string, row: number, col: number): boolean {
+    const address = toA1(row, col);
+    if (this.textCells.has(`${sheet}!${address}`)) return true;
+    const entry = this.textLayouts.get(sheet);
+    if (!entry || entry.opened.has(address)) return false;
+    const [r, c] = [row + 1, col + 1];
+    if (entry.layout.rows.includes(r)) return true;
+    if (entry.layout.generalRows.includes(r)) return false;
+    return entry.layout.columns.some(([first, last]) => first <= c && c <= last);
   }
 
   private spyOnFacade() {

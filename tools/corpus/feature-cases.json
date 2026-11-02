@@ -1,5 +1,5 @@
 {
-  "_note": "Cases both engines must agree on (python/tests/test_xlsx_features.py, rust/tests/xlsx_features.rs). writes: one value written into a freshly imported workbook; expect ok or the refusal code. inspect: counts and key fields of inspect output. See docs/xlsx-features.md. text_writes: a value written into a Text-formatted (@) cell is stored as text (numbers with 15 significant digits); other cells keep the written type. formula_writes: a formula entered into a fresh import; expect ok or the refusal code. An entry under an enforced rule is checked by its calculated result (Excel checks a formula's result once, at entry).",
+  "_note": "Cases both engines must agree on (python/tests/test_xlsx_features.py, rust/tests/xlsx_features.rs). writes: one value written into a freshly imported workbook; expect ok or the refusal code. inspect: counts and key fields of inspect output. See docs/xlsx-features.md. text_writes: a value written into a Text-formatted (@) cell is stored as text (numbers with 15 significant digits); other cells keep the written type. formula_writes: a formula entered into a fresh import; expect ok or the refusal code. An entry under an enforced rule is checked by its calculated result (Excel checks a formula's result once, at entry). text_writes also cover cells inserted where none existed: they take the row style (customFormat) or else the column style, so a new cell in a Text (@) row or column stays text.",
   "writes": [
     {
       "file": "hb_dropdown_rules.xlsx",
@@ -556,6 +556,69 @@
       "address": "A1",
       "value": "00123",
       "stored": "00123"
+    },
+    {
+      "file": "hb_text_columns.xlsx",
+      "sheet": "Codes",
+      "address": "A4",
+      "value": 123,
+      "stored": "123"
+    },
+    {
+      "file": "hb_text_columns.xlsx",
+      "sheet": "Codes",
+      "address": "A4",
+      "value": "00123",
+      "stored": "00123"
+    },
+    {
+      "file": "hb_text_columns.xlsx",
+      "sheet": "Codes",
+      "address": "A3",
+      "value": 7,
+      "stored": 7
+    },
+    {
+      "file": "hb_text_columns.xlsx",
+      "sheet": "Codes",
+      "address": "E5",
+      "value": 5,
+      "stored": "5"
+    },
+    {
+      "file": "hb_text_columns.xlsx",
+      "sheet": "Codes",
+      "address": "A6",
+      "value": 8,
+      "stored": 8
+    },
+    {
+      "file": "hb_text_columns.xlsx",
+      "sheet": "Codes",
+      "address": "A7",
+      "value": 1.5,
+      "stored": "1.5"
+    },
+    {
+      "file": "hb_text_columns.xlsx",
+      "sheet": "Codes",
+      "address": "C7",
+      "value": 2,
+      "stored": 2
+    },
+    {
+      "file": "hb_text_columns.xlsx",
+      "sheet": "Codes",
+      "address": "B4",
+      "value": 3,
+      "stored": 3
+    },
+    {
+      "file": "hb_text_columns.xlsx",
+      "sheet": "Codes",
+      "address": "A1048576",
+      "value": 99,
+      "stored": "99"
     }
   ],
   "formula_writes": [

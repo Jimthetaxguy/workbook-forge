@@ -41,6 +41,8 @@ export interface ForgeWasm {
 
 export interface ForgeWorkbook {
   snapshotJson(): string;
+  /** Imported sheets' inherited Text layouts (absent on older builds and mocks). */
+  textLayoutJson?(): string;
   revisionString(): string;
   applyEditsResultJson(editsJson: string, expectedRevision: string): string;
   submitJson(requestJson: string): string;
@@ -63,6 +65,17 @@ const fail = (code: string, message: string, extra: Partial<EngineError> = {}): 
 });
 
 const messageOf = (error: unknown): string => (error instanceof Error ? error.message : String(error));
+
+/**
+ * An import or export refusal. The engine reports "code: message"; the code
+ * is the typed refusal (docs/refusal-codes.md) shared with Python and Rust,
+ * returned as `refusal` beside the command-level code.
+ */
+const typedFailure = (code: string, error: unknown): Result<never> => {
+  const text = messageOf(error);
+  const typed = /^([a-z0-9_]+): ([\s\S]*)$/.exec(text);
+  return typed ? fail(code, typed[2], { refusal: typed[1] }) : fail(code, text);
+};
 
 /** Forge model JSON cell -> protocol cell. */
 function toCell(raw: { value?: unknown; formula?: string | null; style?: { number_format?: string } | null }) {
@@ -140,11 +153,21 @@ function stringifyJson(value: unknown): string {
 }
 
 /** Forge model JSON -> protocol snapshot sheets. */
-function toSheets(raw: { sheets: { name: string; cells?: Record<string, never> }[] }): SnapshotSheet[] {
-  return raw.sheets.map((sheet) => ({
-    name: sheet.name,
-    cells: Object.fromEntries(Object.entries(sheet.cells ?? {}).map(([a, c]) => [a, toCell(c)])),
-  }));
+type RawLayout = { text_columns: [number, number][]; text_rows: number[]; general_rows: number[] };
+
+function toSheets(
+  raw: { sheets: { name: string; cells?: Record<string, never> }[] },
+  layouts: Record<string, RawLayout> = {},
+): SnapshotSheet[] {
+  return raw.sheets.map((sheet) => {
+    const out: SnapshotSheet = {
+      name: sheet.name,
+      cells: Object.fromEntries(Object.entries(sheet.cells ?? {}).map(([a, c]) => [a, toCell(c)])),
+    };
+    const layout = layouts[sheet.name];
+    if (layout) out.textFormat = { columns: layout.text_columns, rows: layout.text_rows, generalRows: layout.general_rows };
+    return out;
+  });
 }
 
 export class ForgeEngine {
@@ -257,7 +280,9 @@ export class ForgeEngine {
     try {
       next = this.wasm.openXlsx(bytes);
     } catch (error) {
-      return fail('open_failed', messageOf(error));
+      // The engine reports "code: message"; the code is the typed refusal
+      // (docs/refusal-codes.md), shared with Python and Rust.
+      return typedFailure('open_failed', error);
     }
     this.adopt(next, typeof name === 'string' && name ? name : 'workbook.xlsx');
     const snapshot = this.snapshot(next);
@@ -281,11 +306,17 @@ export class ForgeEngine {
 
   private snapshot(wb: ForgeWorkbook): { ok: true; value: Snapshot } {
     const raw = JSON.parse(wb.snapshotJson()) as { sheets: { name: string; cells: Record<string, never> }[] };
-    return { ok: true, value: { revision: wb.revisionString(), sheets: toSheets(raw) } };
+    const layouts = wb.textLayoutJson ? (JSON.parse(wb.textLayoutJson()) as Record<string, RawLayout>) : {};
+    return { ok: true, value: { revision: wb.revisionString(), sheets: toSheets(raw, layouts) } };
   }
 
   private exportWorkbook(wb: ForgeWorkbook, includeLog: boolean): Result<Commands['export']['result']> {
-    const bytes = wb.exportXlsx();
+    let bytes: Uint8Array;
+    try {
+      bytes = wb.exportXlsx();
+    } catch (error) {
+      return typedFailure('export_failed', error);
+    }
     if (!includeLog) return { ok: true, value: { bytes } };
     const sha = this.wasm.sha256Hex ? this.wasm.sha256Hex(bytes) : '';
     const log = wb.exportLogNdjson(sha);

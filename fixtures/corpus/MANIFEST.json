@@ -1,5 +1,14 @@
 {
   "files": {
+    "hb_3d_references.xlsx": {
+      "writer": "handbuilt",
+      "categories": [
+        "3d-references",
+        "cross-sheet",
+        "defined-names",
+        "sheet-name-spaces"
+      ]
+    },
     "hb_absolute_targets.xlsx": {
       "writer": "handbuilt",
       "categories": [
@@ -12,6 +21,31 @@
       "categories": [
         "xml-bom",
         "stored-zip"
+      ]
+    },
+    "hb_compat_version_3.xlsx": {
+      "writer": "handbuilt",
+      "categories": [
+        "compatibility-version-3",
+        "modeled"
+      ],
+      "provenance": "modeled, not captured from Excel",
+      "note": "Replace with a real capture from Excel Beta (Windows 2610 build 20520.20000+ or Mac 16.114 build 26092111+) once one is available; the cell markup is a guess."
+    },
+    "hb_connections_query.xlsx": {
+      "writer": "handbuilt",
+      "categories": [
+        "connections",
+        "power-query",
+        "query-table",
+        "custom-xml",
+        "tables"
+      ]
+    },
+    "hb_custom_xml.xlsx": {
+      "writer": "handbuilt",
+      "categories": [
+        "custom-xml"
       ]
     },
     "hb_data_table_formula.xlsx": {
@@ -46,6 +80,13 @@
         "dynamic-array",
         "spill",
         "metadata"
+      ]
+    },
+    "hb_embedded_ole.xlsx": {
+      "writer": "handbuilt",
+      "categories": [
+        "ole-objects",
+        "vml"
       ]
     },
     "hb_errors_as_values.xlsx": {
@@ -93,6 +134,24 @@
         "xfd1048576"
       ]
     },
+    "hb_flatten_has_functions.xlsx": {
+      "writer": "handbuilt",
+      "categories": [
+        "in-cell-array-functions",
+        "new-functions",
+        "modeled"
+      ],
+      "provenance": "modeled, not captured from Excel",
+      "note": "Replace with a real capture from Excel Beta (Windows 2610 build 20520.20000+ or Mac 16.114 build 26092111+) once one is available; the cell markup is a guess."
+    },
+    "hb_form_controls.xlsx": {
+      "writer": "handbuilt",
+      "categories": [
+        "form-controls",
+        "vml",
+        "mc-ignorable"
+      ]
+    },
     "hb_google_sheets_like.xlsx": {
       "writer": "handbuilt",
       "categories": [
@@ -102,12 +161,63 @@
         "str-formula"
       ]
     },
+    "hb_huge_shared_strings.xlsx": {
+      "writer": "handbuilt",
+      "categories": [
+        "scale",
+        "shared-strings",
+        "long-strings",
+        "unicode"
+      ]
+    },
+    "hb_in_cell_array_formula.xlsx": {
+      "writer": "handbuilt",
+      "categories": [
+        "in-cell-array",
+        "array-in-cell-formula",
+        "rich-value",
+        "metadata",
+        "modeled"
+      ],
+      "provenance": "modeled, not captured from Excel",
+      "note": "Replace with a real capture from Excel Beta (Windows 2610 build 20520.20000+ or Mac 16.114 build 26092111+) once one is available; the cell markup is a guess."
+    },
+    "hb_in_cell_list.xlsx": {
+      "writer": "handbuilt",
+      "categories": [
+        "in-cell-array",
+        "list",
+        "rich-value",
+        "metadata",
+        "modeled"
+      ],
+      "provenance": "modeled, not captured from Excel",
+      "note": "Replace with a real capture from Excel Beta (Windows 2610 build 20520.20000+ or Mac 16.114 build 26092111+) once one is available; the cell markup is a guess."
+    },
+    "hb_inline_and_shared_strings.xlsx": {
+      "writer": "handbuilt",
+      "categories": [
+        "inline-strings",
+        "shared-strings",
+        "rich-text",
+        "str-formula"
+      ]
+    },
     "hb_inline_strings_rich.xlsx": {
       "writer": "handbuilt",
       "categories": [
         "inline-strings",
         "rich-text",
         "cached-values"
+      ]
+    },
+    "hb_layout_protection.xlsx": {
+      "writer": "handbuilt",
+      "categories": [
+        "outline",
+        "freeze-panes",
+        "print-settings",
+        "protection"
       ]
     },
     "hb_libreoffice_like.xlsx": {
@@ -120,10 +230,34 @@
         "empty-string-cache"
       ]
     },
+    "hb_long_formula.xlsx": {
+      "writer": "handbuilt",
+      "categories": [
+        "long-formula",
+        "formula-length-limit"
+      ]
+    },
     "hb_macro_content_in_xlsx.xlsx": {
       "writer": "handbuilt",
       "categories": [
         "vba"
+      ]
+    },
+    "hb_many_sheets.xlsx": {
+      "writer": "handbuilt",
+      "categories": [
+        "scale",
+        "many-sheets",
+        "cross-sheet"
+      ]
+    },
+    "hb_many_styles.xlsx": {
+      "writer": "handbuilt",
+      "categories": [
+        "styles",
+        "number-formats",
+        "theme",
+        "scale"
       ]
     },
     "hb_minimal_no_optional_parts.xlsx": {
@@ -136,6 +270,19 @@
         "inline-strings",
         "booleans"
       ]
+    },
+    "hb_nested_array.xlsx": {
+      "writer": "handbuilt",
+      "categories": [
+        "in-cell-array",
+        "nested-array",
+        "spill",
+        "rich-value",
+        "metadata",
+        "modeled"
+      ],
+      "provenance": "modeled, not captured from Excel",
+      "note": "Replace with a real capture from Excel Beta (Windows 2610 build 20520.20000+ or Mac 16.114 build 26092111+) once one is available; the cell markup is a guess."
     },
     "hb_no_cell_references.xlsx": {
       "writer": "handbuilt",
@@ -164,6 +311,13 @@
         "pivot"
       ]
     },
+    "hb_pivot_calculated_field.xlsx": {
+      "writer": "handbuilt",
+      "categories": [
+        "pivot",
+        "pivot-calculated-field"
+      ]
+    },
     "hb_pivot_fields.xlsx": {
       "writer": "handbuilt",
       "categories": [
@@ -179,6 +333,13 @@
         "shared-strings"
       ]
     },
+    "hb_r1c1_looking_names.xlsx": {
+      "writer": "handbuilt",
+      "categories": [
+        "defined-names",
+        "r1c1-looking-names"
+      ]
+    },
     "hb_rich_text_phonetic.xlsx": {
       "writer": "handbuilt",
       "categories": [
@@ -188,11 +349,33 @@
         "whitespace"
       ]
     },
+    "hb_rows_without_references.xlsx": {
+      "writer": "handbuilt",
+      "categories": [
+        "no-row-refs"
+      ]
+    },
     "hb_shared_formulas.xlsx": {
       "writer": "handbuilt",
       "categories": [
         "shared-formulas",
         "cached-values"
+      ]
+    },
+    "hb_slicers.xlsx": {
+      "writer": "handbuilt",
+      "categories": [
+        "slicers",
+        "tables",
+        "extlst"
+      ]
+    },
+    "hb_sparklines.xlsx": {
+      "writer": "handbuilt",
+      "categories": [
+        "sparklines",
+        "extlst",
+        "sheet-name-spaces"
       ]
     },
     "hb_stale_dimension.xlsx": {
@@ -206,6 +389,25 @@
       "writer": "handbuilt",
       "categories": [
         "strict-ooxml"
+      ]
+    },
+    "hb_table_totals_calculated.xlsx": {
+      "writer": "handbuilt",
+      "categories": [
+        "tables",
+        "totals-row",
+        "calculated-columns",
+        "structured-refs"
+      ]
+    },
+    "hb_text_columns.xlsx": {
+      "writer": "handbuilt",
+      "categories": [
+        "text",
+        "text-format",
+        "column-styles",
+        "row-styles",
+        "insert-inherits-style"
       ]
     },
     "hb_text_edge_cases.xlsx": {
@@ -229,6 +431,22 @@
         "threaded-comments",
         "comments",
         "vml"
+      ]
+    },
+    "hb_timelines.xlsx": {
+      "writer": "handbuilt",
+      "categories": [
+        "timelines",
+        "pivot",
+        "extlst"
+      ]
+    },
+    "hb_wide_sheet.xlsx": {
+      "writer": "handbuilt",
+      "categories": [
+        "scale",
+        "wide-sheet",
+        "xfd-column"
       ]
     },
     "op_1904_dates.xlsx": {

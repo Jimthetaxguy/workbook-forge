@@ -186,6 +186,132 @@ class _FormulaSyntaxError(ValueError):
     pass
 
 
+def _three_d_reference_message(span: str) -> str:
+    """Shared with Rust (``three_d_reference_message`` in ``rust/src/lib.rs``)."""
+    return f"3D reference {span}: a reference across a range of sheets is not calculated"
+
+
+def _is_unsupported_formula_message(message: str) -> bool:
+    """True for parser messages that name syntax Workbook Forge reads but does
+    not calculate (a name, a 3D reference, Excel's in-cell array syntax), as
+    opposed to a parse error."""
+    return message.startswith(("unsupported name ", "3D reference ", "in-cell array "))
+
+
+# Excel's arrays in cells (Excel Beta, September 2026). Shared with Rust
+# (``in_cell_array_syntax`` in ``rust/src/lib.rs``); a test holds both to the
+# same messages.
+IN_CELL_ARRAY_FUNCTIONS = ("FLATTEN", "HAS", "HASANY", "HASALL")
+_IN_CELL_ARRAY_SPAN_LIMIT = 40
+
+
+def _in_cell_array_braces_message(span: str) -> str:
+    if len(span) > _IN_CELL_ARRAY_SPAN_LIMIT:
+        span = span[:_IN_CELL_ARRAY_SPAN_LIMIT] + "..."
+    return (
+        f"in-cell array {span}: braces around a formula or an array keep an array in one "
+        "cell (Excel arrays in cells), which is not calculated"
+    )
+
+
+def _in_cell_array_function_message(name: str) -> str:
+    return (
+        f"in-cell array function {name}: FLATTEN, HAS, HASANY and HASALL work on Excel "
+        "arrays in cells and are not calculated"
+    )
+
+
+def _skip_quoted(source: str, index: int, quote: str) -> int:
+    """Index just past the quoted run opening at ``index`` (doubled quotes escape)."""
+    index += 1
+    while index < len(source):
+        if source[index] == quote:
+            if index + 1 < len(source) and source[index + 1] == quote:
+                index += 2
+                continue
+            return index + 1
+        index += 1
+    return index
+
+
+_ARRAY_CONSTANT_ITEM = re.compile(
+    r'[+-]?(?:[0-9]+\.?[0-9]*|\.[0-9]+)(?:[eE][+-]?[0-9]+)?'
+    r'|"(?:[^"]|"")*"'
+    r"|(?i:TRUE|FALSE)"
+    r"|#[A-Za-z0-9/_]+[!?]?"
+)
+
+
+def _is_array_constant(content: str) -> bool:
+    """True when brace contents are a classic array constant: numbers, text,
+    logical and error values separated by commas and semicolons."""
+    items, start, index = [], 0, 0
+    while index < len(content):
+        if content[index] == '"':
+            index = _skip_quoted(content, index, '"')
+            continue
+        if content[index] in ",;":
+            items.append(content[start:index])
+            start = index + 1
+        index += 1
+    items.append(content[start:])
+    return all(
+        not item.strip() or _ARRAY_CONSTANT_ITEM.fullmatch(item.strip()) for item in items
+    )
+
+
+def _in_cell_array_syntax(source: str) -> str | None:
+    """The message for the first in-cell array construct in a formula, or None.
+
+    Two constructs are recognized outside text and quoted sheet names: braces
+    whose contents are not a classic array constant (``{{1,2,3};{4,5,6}}``,
+    ``{SEQUENCE(3)}``), and a call to FLATTEN, HAS, HASANY or HASALL with or
+    without the ``_xlfn.``/``_xlws.`` prefixes.
+    """
+    index = 0
+    while index < len(source):
+        character = source[index]
+        if character in "\"'":
+            index = _skip_quoted(source, index, character)
+            continue
+        if character == "{":
+            depth, end = 0, index
+            while end < len(source):
+                if source[end] == '"':
+                    end = _skip_quoted(source, end, '"')
+                    continue
+                if source[end] == "{":
+                    depth += 1
+                elif source[end] == "}":
+                    depth -= 1
+                    if depth == 0:
+                        break
+                end += 1
+            if end >= len(source):
+                return None
+            if not _is_array_constant(source[index + 1 : end]):
+                return _in_cell_array_braces_message(source[index : end + 1])
+            index = end + 1
+            continue
+        if character.isascii() and (character.isalpha() or character == "_"):
+            end = index
+            while end < len(source) and source[end].isascii() and (
+                source[end].isalnum() or source[end] in "_."
+            ):
+                end += 1
+            name = source[index:end].upper()
+            for prefix in ("_XLFN._XLWS.", "_XLFN.", "_XLWS."):
+                if name.startswith(prefix):
+                    name = name[len(prefix) :]
+                    break
+            if name in IN_CELL_ARRAY_FUNCTIONS and end < len(source) and source[end] == "(":
+                return _in_cell_array_function_message(name)
+            index = end
+            continue
+        index += 1
+    return None
+
+
 def _canonical_function_name(name: str) -> str:
     """Recognize known OOXML compatibility prefixes without changing source text."""
     upper = name.upper()
@@ -224,6 +350,9 @@ class _Parser:
                 raise _FormulaSyntaxError(
                     f"formula exceeds Excel's {MAX_FORMULA_LENGTH_UNITS}-character limit"
                 )
+        in_cell_array = _in_cell_array_syntax(source)
+        if in_cell_array is not None:
+            raise _FormulaSyntaxError(in_cell_array)
         self.tokens = _tokenize(source)
         self._validate_nesting()
         self.index = 0
@@ -322,8 +451,38 @@ class _Parser:
             node = _Node("binary", "^", (node, self.parse_unary()))
         return node
 
+    def _three_d_span(self) -> str | None:
+        """The sheet span of a 3D reference starting here (``Jan:Mar!B2`` lexes
+        as name, colon, name, bang; ``'Q2 Apr:Q2 May'!B2`` as one quoted name
+        holding the colon, which Excel forbids in a sheet name), or None."""
+        tokens, index = self.tokens, self.index
+        first = tokens[index]
+        if first.kind == "SHEET":
+            name = first.value[1:-1].replace("''", "'")
+            if ":" in name and tokens[index + 1].value == "!":
+                return name
+            return None
+        # Only a non-cell name opens an unquoted span: ``A1:Data!A2`` is a
+        # range whose end is sheet-qualified, and Excel quotes sheet names
+        # shaped like cells.
+        if (
+            first.kind == "IDENT"
+            and index + 3 < len(tokens)
+            and tokens[index + 1].value == ":"
+            and tokens[index + 2].kind in ("IDENT", "CELL", "SHEET")
+            and tokens[index + 3].value == "!"
+        ):
+            last = tokens[index + 2].value
+            if tokens[index + 2].kind == "SHEET":
+                last = last[1:-1].replace("''", "'")
+            return f"{first.value}:{last}"
+        return None
+
     def parse_primary(self) -> _Node:
         token = self.current
+        span = self._three_d_span()
+        if span is not None:
+            raise _FormulaSyntaxError(_three_d_reference_message(span))
         if token.kind == "NUMBER":
             self.consume()
             number = (

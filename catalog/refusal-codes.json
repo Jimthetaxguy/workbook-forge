@@ -19,9 +19,12 @@
     "revision_conflict": "The model changed between the snapshot and the operation.",
     "formula_unsupported": "A formula uses syntax, a function or a reference the engine does not calculate.",
     "unsupported_sheet_type": "A sheet type other than a worksheet blocked the operation.",
+    "in_cell_array": "A cell holds an Excel array in a cell (a list, an array or a nested array stored as a rich array value, Excel Beta 2026). The array is not read, so the workbook is refused rather than the array replaced by its fallback value.",
+    "compat_version_3": "The workbook is set to Excel Compatibility Version 3, where Excel may calculate formulas differently. Formulas are preserved byte-for-byte but not calculated or edited; the canonical path refuses the workbook.",
     "unsupported_error_value": "A stored error value outside the v1 error set (#NULL!, #DIV/0!, #VALUE!, #REF!, #NAME?, #NUM!, #N/A, #SPILL!, #CALC!), such as #GETTING_DATA, #FIELD! or #BLOCKED!. The model's error enum is fixed for v1.",
     "csv_encoding": "A delimited text file could not be decoded with the requested or detected encoding.",
     "csv_malformed": "A delimited text file has an unterminated quoted field or another syntax error.",
+    "positional_cells": "A worksheet row or cell has no r reference. Rows and cells placed by position are refused rather than guessed, in Python and Rust alike.",
     "package_damaged": "The ZIP container, a package relationship, or a part's XML is malformed or inconsistent.",
     "unsupported_package": "The package is well formed but uses a feature outside the supported profile."
   },
@@ -44,6 +47,18 @@
       "code": "unsupported_error_value",
       "phrases": [
         "outside the supported error set"
+      ]
+    },
+    {
+      "code": "in_cell_array",
+      "phrases": [
+        "in-cell arrays are not read"
+      ]
+    },
+    {
+      "code": "compat_version_3",
+      "phrases": [
+        "compatibility version 3"
       ]
     },
     {
@@ -173,6 +188,12 @@
       ]
     },
     {
+      "code": "positional_cells",
+      "phrases": [
+        "placed by position"
+      ]
+    },
+    {
       "code": "package_damaged",
       "phrases": [
         "zip",
@@ -218,6 +239,7 @@
     "description": "Codes raised with an explicit code by other error types (canonical-model ModelError and CanonicalPackageError, engine ToolkitError, and existing Rust XlsxError prefixes). They are not produced by the message table.",
     "codes": [
       "array_spill_refused",
+      "compat_version_3",
       "evidence_insufficient",
       "invalid_bound",
       "invalid_formula",
