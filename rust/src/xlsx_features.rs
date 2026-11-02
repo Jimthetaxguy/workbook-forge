@@ -178,7 +178,7 @@ fn parse_array_constant(text: &str) -> Option<Vec<String>> {
         let item = item.trim();
         if item.len() >= 2 && item.starts_with('"') && item.ends_with('"') {
             items.push(item[1..item.len() - 1].replace("\"\"", "\""));
-        } else if item.parse::<f64>().is_ok()
+        } else if finite_array_number(item)
             || item.eq_ignore_ascii_case("TRUE")
             || item.eq_ignore_ascii_case("FALSE")
         {
@@ -188,6 +188,45 @@ fn parse_array_constant(text: &str) -> Option<Vec<String>> {
         }
     }
     Some(items)
+}
+/// One finite literal: optional sign, at most one dot, optional exponent.
+/// `inf`, `nan` and a second dot are not numbers in this grammar.
+fn finite_array_number(item: &str) -> bool {
+    let rest = item
+        .strip_prefix('+')
+        .or_else(|| item.strip_prefix('-'))
+        .unwrap_or(item);
+    if rest.is_empty() {
+        return false;
+    }
+    let (body, exponent) = match rest.find(['e', 'E']) {
+        Some(index) => (&rest[..index], Some(&rest[index + 1..])),
+        None => (rest, None),
+    };
+    if body.is_empty() || body.matches('.').count() > 1 {
+        return false;
+    }
+    let mut digits = 0usize;
+    for byte in body.bytes() {
+        if byte.is_ascii_digit() {
+            digits += 1;
+        } else if byte != b'.' {
+            return false;
+        }
+    }
+    if digits == 0 {
+        return false;
+    }
+    if let Some(exponent) = exponent {
+        let digits = exponent
+            .strip_prefix('+')
+            .or_else(|| exponent.strip_prefix('-'))
+            .unwrap_or(exponent);
+        if digits.is_empty() || !digits.bytes().all(|b| b.is_ascii_digit()) {
+            return false;
+        }
+    }
+    item.parse::<f64>().is_ok_and(f64::is_finite)
 }
 fn number(text: Option<&str>) -> Option<f64> {
     let value: f64 = text?.trim().trim_start_matches('=').parse().ok()?;
@@ -337,6 +376,12 @@ pub(crate) fn read_validations(sheet: &str, xml: &Xml, root: &Node, names: &Name
                 }
                 if matches!(parsed, ListSource::Unresolved) {
                     reason = Some("list source is a formula this engine does not evaluate".into());
+                } else if let ListSource::Range(_, (c1, r1, c2, r2)) = &parsed
+                    && u64::from(*c2 - *c1 + 1) * u64::from(*r2 - *r1 + 1) > MAX_LIST_CELLS
+                {
+                    reason = Some(format!(
+                        "list source has more than {MAX_LIST_CELLS} cells, so this engine does not evaluate it"
+                    ));
                 }
                 source = record;
                 list = parsed;
