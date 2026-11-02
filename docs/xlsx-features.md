@@ -28,33 +28,33 @@ Each `dataValidation` becomes one record:
 | `allow_blank`, `show_error`, `error_style`, `in_cell_dropdown`, `error_title`, `error` | The rule's flags. `in_cell_dropdown` is false when OOXML `showDropDown="1"` hides the arrow. |
 | `enforced`, `unenforced_reason` | Whether writes are checked, and why not when they are not. |
 
-A rule is **enforced** when Excel would stop the entry: `showErrorMessage` is on and
-`errorStyle` is `stop` (the default). Warning and information alerts let the entry
-through in Excel, and a rule with no error alert accepts anything, so those rules are
-reported but not enforced. Rules this engine cannot evaluate are also reported with
-`enforced: false`: custom formulas, lists built by a formula (for example `OFFSET`),
-and number rules whose bounds are formulas.
+A rule is **enforced** when `showErrorMessage` is on and `errorStyle` is `stop`
+(the default). Workbook Forge follows that rule; not checked against Excel.
+Warning and information alerts, and a rule with no error alert, are reported
+but not enforced, so the entry is accepted. Rules this engine cannot evaluate
+are also reported with `enforced: false`: custom formulas, lists built by a
+formula (for example `OFFSET`), and number rules whose bounds are formulas.
 
 An enforced rule refuses an out-of-rule value with `validation_failed`, at edit time
 and again at export (so a transferred snapshot meets the same check):
 
-- Lists compare text without regard to case (Excel's list check is not
-  case-sensitive). A number matches a list item that is the same number, including an
+- Lists compare text without regard to case. Workbook Forge follows that rule;
+  not checked against Excel. A number matches a list item that is the same number, including an
   inline item such as `"1,2,3"`. Text never matches a number in a source range. A
   range-sourced list reads the range's current values when the write happens.
 - `whole` needs an integer, `decimal`, `date` and `time` need a number, each compared
   with the operator and bounds. `textLength` compares the length of the text.
-- Clearing a cell (an empty value) is never validated, as in Excel.
-- A formula entry is checked by its calculated result, as Excel checks a formula's
-  result once, at entry, and never again on recalculation. The result is calculated
-  on a detached copy with the whole edit batch applied (so a formula may read a cell
-  the same batch writes); only cells under an enforced rule are calculated. An error
-  result (`#DIV/0!`, `#N/A`, ...) and an array result are refused. A result the
-  engine cannot calculate (an unsupported function, a cycle) cannot be shown to
-  satisfy the rule and is refused with `validation_failed` too, naming the
-  diagnostic. Outside an enforced rule, formula entries are not calculated at entry.
-  Python and Rust apply the same check, at edit time and at snapshot export
-  (`tools/corpus/feature-cases.json` `formula_writes`).
+- Clearing a cell (an empty value) is never validated.
+- A formula entry is checked by its calculated result. Workbook Forge follows this
+  rule; not checked against Excel. The result is calculated on a detached copy with
+  the whole edit batch applied (so a formula may read a cell the same batch writes);
+  only cells under an enforced rule are calculated. An error result (`#DIV/0!`,
+  `#N/A`, ...) and an array result are refused. A result the engine cannot calculate
+  (an unsupported function, a cycle) cannot be shown to satisfy the rule and is
+  refused with `validation_failed` too, naming the diagnostic. Outside an enforced
+  rule, formula entries are not calculated at entry. Python and Rust apply the same
+  check, at edit time and at snapshot export (`tools/corpus/feature-cases.json`
+  `formula_writes`).
 
 Validation rules themselves cannot be edited; they are preserved.
 
@@ -67,9 +67,9 @@ the cache part and `refresh_on_load`), the cache `fields`, `row_fields`,
 `data_fields` with their source field and summary function.
 
 **Refresh is not supported.** The cached output is preserved as stored. Editing the
-source range is allowed and leaves the pivot output stale until Excel refreshes it
-(a cache with `refreshOnLoad` refreshes when Excel opens the file). A write into a
-pivot's output range refuses with `pivot_output_protected`.
+source range is allowed and leaves the pivot output stale. Workbook Forge does not
+refresh a pivot cache, including one marked `refreshOnLoad`; not checked against
+Excel. A write into a pivot's output range refuses with `pivot_output_protected`.
 
 ## Charts
 
@@ -79,8 +79,9 @@ for a one-cell anchor, or `whole sheet`), `types` (for example `barChart`,
 `lineChart`, `scatterChart`) and `series`, each with its chart type and the reference
 formulas it reads (`tx`, `cat`, `val`, `xVal`, `yVal`, `bubbleSize`).
 
-Value edits keep chart references valid: the chart reads the same cells and Excel
-redraws it from their new values. Structural changes to a sheet a chart reads
+Value edits keep chart references valid: the chart part still names the same
+cells. Whether those new values are redrawn has not been checked against Excel.
+Structural changes to a sheet a chart reads
 (renaming, removing or moving it in a transferred snapshot) refuse with
 `chart_reference_protected`. Row and column insertion and deletion are not offered by
 either engine, so they cannot shift a series range.

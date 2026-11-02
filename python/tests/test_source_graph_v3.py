@@ -10,6 +10,7 @@ import zipfile
 import pytest
 
 from workbook_forge import source_graph as g
+from workbook_forge import source_process
 from workbook_forge.source_contract import SourceDiagnostic
 from workbook_forge.toolkit import WorkbookModel
 from workbook_forge.xlsx import export_xlsx, import_xlsx
@@ -141,8 +142,8 @@ fn main(){
  assert!(std::panic::catch_unwind(std::panic::AssertUnwindSafe(||if_error(error("#N/A"),&mut e,|_|panic!("host error")))).is_err());
 }
 ''')
-    subprocess.run(['rustc','--edition=2024','--crate-name','lazy_profile',str(source),'-o',str(tmp_path/'lazy')],capture_output=True,check=True)
-    subprocess.run([str(tmp_path/'lazy')],capture_output=True,check=True)
+    subprocess.run(['rustc','--edition=2024','--crate-name','lazy_profile',str(source),'-o',str(tmp_path/'lazy')],capture_output=True,check=True,timeout=source_process.rustc_timeout_seconds())
+    subprocess.run([str(tmp_path/'lazy')],capture_output=True,check=True,timeout=source_process.program_timeout_seconds())
 
 
 @pytest.mark.parametrize('reference',["'Missing'!A1","'[external.xlsx]Calc'!A1","'Calc'!A1:'Other'!A1"])

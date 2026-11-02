@@ -215,11 +215,13 @@ editing.
 
 Macros and external data are never executed or fetched by either SDK. Excel may
 recalculate formulas and update workbook-defined external links when a person opens
-the output, depending on Excel settings. Macro-enabled `.xlsm`, legacy `.xls`,
-chart sheets, strict OOXML, structured table references, grouped/table formula
-calculation, worksheet spill placement and 1904-date formula calculation remain
-outside the supported workbook profile. Unsupported formula text can be retained
-for inspection and preservation; calculation depending on it is refused.
+the output, depending on Excel settings. Macro-enabled `.xlsm` and legacy `.xls`
+remain outside the supported workbook profile. Dialog sheets, macro sheets and
+Strict OOXML are refused. Chartsheets are listed and preserved byte-for-byte;
+they are not modeled as worksheets. Structured table references, grouped/table
+formula calculation, worksheet spill placement and 1904-date formula calculation
+remain outside the supported workbook profile. Unsupported formula text can be
+retained for inspection and preservation; calculation depending on it is refused.
 
 Array results such as FILTER, SORT and UNIQUE are supported by the shape-preserving
 formula API. That does not imply that the workbook adapters can place or edit
