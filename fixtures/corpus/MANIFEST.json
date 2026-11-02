@@ -23,6 +23,15 @@
         "stored-zip"
       ]
     },
+    "hb_compat_version_3.xlsx": {
+      "writer": "handbuilt",
+      "categories": [
+        "compatibility-version-3",
+        "modeled"
+      ],
+      "provenance": "modeled, not captured from Excel",
+      "note": "Replace with a real capture from Excel Beta (Windows 2610 build 20520.20000+ or Mac 16.114 build 26092111+) once one is available; the cell markup is a guess."
+    },
     "hb_connections_query.xlsx": {
       "writer": "handbuilt",
       "categories": [
@@ -125,6 +134,16 @@
         "xfd1048576"
       ]
     },
+    "hb_flatten_has_functions.xlsx": {
+      "writer": "handbuilt",
+      "categories": [
+        "in-cell-array-functions",
+        "new-functions",
+        "modeled"
+      ],
+      "provenance": "modeled, not captured from Excel",
+      "note": "Replace with a real capture from Excel Beta (Windows 2610 build 20520.20000+ or Mac 16.114 build 26092111+) once one is available; the cell markup is a guess."
+    },
     "hb_form_controls.xlsx": {
       "writer": "handbuilt",
       "categories": [
@@ -150,6 +169,30 @@
         "long-strings",
         "unicode"
       ]
+    },
+    "hb_in_cell_array_formula.xlsx": {
+      "writer": "handbuilt",
+      "categories": [
+        "in-cell-array",
+        "array-in-cell-formula",
+        "rich-value",
+        "metadata",
+        "modeled"
+      ],
+      "provenance": "modeled, not captured from Excel",
+      "note": "Replace with a real capture from Excel Beta (Windows 2610 build 20520.20000+ or Mac 16.114 build 26092111+) once one is available; the cell markup is a guess."
+    },
+    "hb_in_cell_list.xlsx": {
+      "writer": "handbuilt",
+      "categories": [
+        "in-cell-array",
+        "list",
+        "rich-value",
+        "metadata",
+        "modeled"
+      ],
+      "provenance": "modeled, not captured from Excel",
+      "note": "Replace with a real capture from Excel Beta (Windows 2610 build 20520.20000+ or Mac 16.114 build 26092111+) once one is available; the cell markup is a guess."
     },
     "hb_inline_and_shared_strings.xlsx": {
       "writer": "handbuilt",
@@ -227,6 +270,19 @@
         "inline-strings",
         "booleans"
       ]
+    },
+    "hb_nested_array.xlsx": {
+      "writer": "handbuilt",
+      "categories": [
+        "in-cell-array",
+        "nested-array",
+        "spill",
+        "rich-value",
+        "metadata",
+        "modeled"
+      ],
+      "provenance": "modeled, not captured from Excel",
+      "note": "Replace with a real capture from Excel Beta (Windows 2610 build 20520.20000+ or Mac 16.114 build 26092111+) once one is available; the cell markup is a guess."
     },
     "hb_no_cell_references.xlsx": {
       "writer": "handbuilt",

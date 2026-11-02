@@ -37,6 +37,12 @@ export interface EngineError {
   message: string;
   expected_revision?: Revision;
   current_revision?: Revision;
+  /**
+   * open_failed / export_failed: the typed refusal code shared with Python
+   * and Rust (docs/refusal-codes.md), for example `in_cell_array`,
+   * `strict_ooxml` or `calculation_diagnostics`.
+   */
+  refusal?: string;
   /** The log event that recorded this rejection, when the command was logged. */
   event_id?: string;
   /** undo_conflict / redo_conflict: the event being undone or redone. */
