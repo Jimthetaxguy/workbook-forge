@@ -180,8 +180,9 @@ export class ForgeUniverAdapter {
   private readonly textCells = new Set<string>();
   /**
    * Sheets whose row or column styles are Text (`@`), with the cells the
-   * workbook held when it opened: a cell typed where none existed inherits
-   * that format, as in Excel, so its input stays text too.
+   * workbook held when it opened. An inserted cell takes its row style when
+   * `customFormat` is set, otherwise its column style, so its input stays
+   * text. Workbook Forge follows this rule; not checked against Excel.
    */
   private readonly textLayouts = new Map<string, { layout: TextFormatLayout; opened: Set<string> }>();
   private sheetIds = new Map<string, string>();

@@ -68,11 +68,11 @@ export interface SnapshotCell {
 }
 
 /**
- * Where a cell inserted where none existed inherits the Text (`@`) format, as
- * Excel does: a row listed in `rows` or `generalRows` (a row with its own
- * format) decides for every new cell in it; otherwise a column inside one of
- * the 1-based `[min, max]` `columns` ranges is Text. Cells the workbook already
- * holds keep their own format (`SnapshotCell.text`).
+ * Where a cell inserted where none existed inherits the Text (`@`) format.
+ * Workbook Forge follows this rule: a row listed in `rows` or `generalRows`
+ * (a row with its own format) decides for every new cell in it; otherwise a
+ * column inside one of the 1-based `[min, max]` `columns` ranges is Text.
+ * Cells the workbook already holds keep their own format (`SnapshotCell.text`).
  */
 export interface TextFormatLayout {
   columns: [number, number][];

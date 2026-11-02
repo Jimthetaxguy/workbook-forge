@@ -25,11 +25,12 @@ const PKG: &str = "http://schemas.openxmlformats.org/package/2006/relationships"
 const CT: &str = "http://schemas.openxmlformats.org/package/2006/content-types";
 const WB_TYPE: &str = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml";
 const WS_TYPE: &str = "application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml";
-// Excel's lists, arrays in cells and nested arrays (Excel Beta, September
-// 2026) store a cell's array as a rich value whose structure is `_array`
-// ([MS-XLSX] 2.3.6.1.1), its items in a rich array part (rdarray.xml); the
-// cell keeps only a fallback value. Shared with Python
-// (`workbook_forge.workbook.in_cell_array_message` and `COMPAT_V3_*`).
+// Lists, arrays in cells and nested arrays (Excel Beta, September 2026).
+// Published: rich-value parts ([MS-XLSX] Rich Value Data, Rich Value
+// Structure, Rich Value Array: a structure with `t="_array"`, items in
+// rdarray.xml). Guessed: the cell's fallback value and how `vm` is wired.
+// Shared with Python (`workbook_forge.workbook.in_cell_array_message` and
+// `COMPAT_V3_*`).
 const RICH_DATA_NS: &str = "http://schemas.microsoft.com/office/spreadsheetml/2017/richdata";
 const RICH_ARRAY_TYPE: &str = "application/vnd.ms-excel.rdarray+xml";
 const RICH_STRUCTURE_TYPE: &str = "application/vnd.ms-excel.rdrichvaluestructure+xml";
@@ -201,8 +202,9 @@ fn positioned(node: &Node) -> Result<&str> {
 
 /// Well-formedness check for every XML part at open. Parts the engine reads
 /// are parsed again as UTF-8; a part stored as UTF-16 with a byte-order mark
-/// (Excel writes the Power Query `DataMashup` customXml item this way) is
-/// checked through its UTF-8 text and kept byte-for-byte.
+/// (a synthetic Power Query `DataMashup` customXml item, shaped after the
+/// published OOXML schema) is checked through its UTF-8 text and kept
+/// byte-for-byte.
 fn check_xml_part(data: &[u8]) -> Result<()> {
     let little = data.starts_with(&[0xFF, 0xFE]);
     if !little && !data.starts_with(&[0xFE, 0xFF]) {
@@ -819,10 +821,11 @@ struct Decoded {
     /// Lowercased sheet name -> where an inserted cell inherits Text (@).
     text_layouts: BTreeMap<String, TextLayout>,
 }
-/// Where a newly inserted cell inherits the Text (`@`) number format. A row
-/// with `customFormat` decides for every new cell in it; otherwise the first
-/// `<col>` range covering the column that carries a style decides (Excel's
-/// rule, and the one `inherited_style` writes at export).
+/// Where a newly inserted cell inherits the Text (`@`) number format. An
+/// inserted cell takes its row style when `customFormat` is set, otherwise
+/// its column style: the first `<col>` range covering the column that carries
+/// a style. Workbook Forge follows this rule; not checked against Excel.
+/// `inherited_style` writes the same choice at export.
 #[derive(Clone, Debug, Default)]
 pub(crate) struct TextLayout {
     name: String,

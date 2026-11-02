@@ -401,12 +401,12 @@ pub(crate) fn read_validations(sheet: &str, xml: &Xml, root: &Node, names: &Name
         }
         if reason.is_none() && !show_error {
             reason = Some(
-                "Excel shows no error alert (showErrorMessage is off), so any value is accepted"
+                "showErrorMessage is off, so Workbook Forge does not enforce the rule and accepts any value"
                     .into(),
             );
         } else if reason.is_none() && error_style != "stop" {
             reason = Some(format!(
-                "errorStyle {error_style} lets the entry through in Excel"
+                "errorStyle {error_style} is not stop, so Workbook Forge does not enforce the rule and accepts the entry"
             ));
         }
         let has_operator = !matches!(kind.as_str(), "list" | "custom" | "none");
@@ -466,7 +466,8 @@ fn item_matches(item: &CellValue, value: &CellValue) -> bool {
             CellValue::Boolean(b) => t.trim().eq_ignore_ascii_case(upper_bool(*b)),
             // Text never matches a number in the source range.
             CellValue::Number(_) => false,
-            // Excel's list check is not case-sensitive.
+            // Lists compare text without regard to case. Workbook Forge
+            // follows that rule; not checked against Excel.
             _ => item_text.to_lowercase() == t.to_lowercase(),
         },
         _ => false,
@@ -547,7 +548,7 @@ impl Rule {
             return None;
         }
         match value {
-            // Clearing a cell is never validated in Excel.
+            // Workbook Forge never validates a cleared cell (an empty value).
             CellValue::Blank => return None,
             CellValue::Text(t) if t.is_empty() => return None,
             CellValue::Error { .. } => {
@@ -1034,9 +1035,10 @@ impl FeatureGuard {
         self.formula_rule(sheet, address).is_some()
     }
     /// Check formula entries `(sheet, address, formula)` by their results in
-    /// `model`, which already holds the entries. Excel checks a formula's
-    /// result once, at entry, and never on recalculation. Only entries under an
-    /// enforced rule are calculated, each bound as an output of a detached
+    /// `model`, which already holds the entries. A formula entry is checked by
+    /// its calculated result. Workbook Forge follows this rule; not checked
+    /// against Excel. Only entries under an enforced rule are calculated, each
+    /// bound as an output of a detached
     /// copy. A result the engine cannot calculate cannot be shown to satisfy
     /// the rule, so it is refused too. `Err(message)` carries its code prefix.
     pub(crate) fn check_formula_results(

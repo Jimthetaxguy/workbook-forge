@@ -57,11 +57,12 @@ NS = {"m": MAIN, "r": REL_DOC}
 POSITIONAL_CELLS_MESSAGE = (
     "a worksheet row or cell has no r reference; rows and cells placed by position are not read"
 )
-# Excel's lists, arrays in cells and nested arrays (Excel Beta, September
-# 2026) store a cell's array as a rich value whose structure is "_array"
-# ([MS-XLSX] 2.3.6.1.1) with its items in a rich array part (rdarray.xml).
-# The cell keeps only a fallback value. Shared with Rust
-# (``in_cell_array_message`` and ``COMPAT_V3_*`` in rust/src/xlsx.rs).
+# Lists, arrays in cells and nested arrays (Excel Beta, September 2026).
+# Published: rich-value parts ([MS-XLSX] Rich Value Data, Rich Value
+# Structure, Rich Value Array: a structure with t="_array", items in a rich
+# array part, rdarray.xml). Guessed: the cell's fallback value and how vm is
+# wired. Shared with Rust (``in_cell_array_message`` and ``COMPAT_V3_*`` in
+# rust/src/xlsx.rs).
 RICH_DATA_NS = "http://schemas.microsoft.com/office/spreadsheetml/2017/richdata"
 RICH_ARRAY_CONTENT_TYPE = "application/vnd.ms-excel.rdarray+xml"
 RICH_STRUCTURE_CONTENT_TYPE = "application/vnd.ms-excel.rdrichvaluestructure+xml"

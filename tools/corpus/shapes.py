@@ -272,9 +272,10 @@ def layout_and_protection():
     return parts
 
 # ------------------------------------------------- objects and extensions
-# Feature parts Excel writes that the libraries do not: form controls,
-# slicers, timelines, sparklines, connections and query tables, customXml,
-# embedded OLE objects. Every payload is synthetic.
+# Synthetic feature parts shaped after the published OOXML schema that the
+# libraries do not write: form controls, slicers, timelines, sparklines,
+# connections and query tables, customXml, embedded OLE objects. Every
+# payload is synthetic.
 
 MC_NS = "http://schemas.openxmlformats.org/markup-compatibility/2006"
 X14_NS = "http://schemas.microsoft.com/office/spreadsheetml/2009/9/main"
@@ -330,7 +331,8 @@ def _region_rows(count: int = 4) -> str:
 
 def form_controls():
     """A check box and a drop-down form control (ctrlProp parts, legacy VML),
-    each linked to a cell, as Excel 2010+ saves them."""
+    each linked to a cell. Synthetic parts shaped after the published OOXML
+    schema."""
     rows = ('<row r="1"><c r="A1" t="inlineStr"><is><t>Include</t></is></c><c r="B1" t="b"><v>1</v></c>'
             '<c r="E1" t="inlineStr"><is><t>low</t></is></c></row>'
             '<row r="2"><c r="A2" t="inlineStr"><is><t>Pick</t></is></c><c r="B2"><v>2</v></c>'
@@ -364,8 +366,8 @@ def form_controls():
 
 def slicers():
     """A table slicer: slicer and slicerCache parts, the workbook and sheet
-    extLst lists that point at them, and the `Slicer_Region` name Excel adds
-    (its value is #N/A)."""
+    extLst lists that point at them, and a synthetic `Slicer_Region` name
+    (its value is #N/A), shaped after the published OOXML schema."""
     rows = _region_rows()
     sheet_ext = (
         f'<tableParts count="1"><tablePart r:id="rId1"/></tableParts><extLst>'
@@ -410,8 +412,9 @@ def slicers():
 
 
 def timelines():
-    """A pivot table with a date timeline (timeline and timelineCache parts),
-    the shape Excel 2013+ writes for a date filter."""
+    """A pivot table with a date timeline (timeline and timelineCache parts).
+    Synthetic parts shaped after the published OOXML schema for a date
+    filter."""
     parts = hb.pivot_cache()
     sheet2 = parts["xl/worksheets/sheet2.xml"]
     ext = (
@@ -506,7 +509,8 @@ def connections_query():
         '<tableColumn id="2" uniqueName="2" name="Units" queryTableFieldId="2"/></tableColumns>'
         '<tableStyleInfo name="TableStyleMedium7" showFirstColumn="0" showLastColumn="0" showRowStripes="1" showColumnStripes="0"/></table>'
     )
-    # Excel stores the DataMashup item as UTF-16 little-endian with a BOM.
+    # Synthetic DataMashup item, stored as UTF-16 little-endian with a BOM,
+    # shaped after the published OOXML schema.
     mashup = (
         '<?xml version="1.0" encoding="utf-16"?><DataMashup xmlns="http://schemas.microsoft.com/DataMashup">'
         "c3ludGhldGljIGRhdGEgbWFzaHVwIHBheWxvYWQgZm9yIHRoZSBjb3JwdXM=</DataMashup>"
@@ -532,7 +536,7 @@ def connections_query():
 
 def _with_custom_xml(parts: dict, item: str | bytes, guid: str, schema: str | None = None) -> dict:
     """Add customXml/item1.xml with its properties part, linked from the root
-    package as Office does for document-level custom XML."""
+    package. Synthetic parts shaped after the published OOXML schema."""
     refs = f'<ds:schemaRefs><ds:schemaRef ds:uri="{schema}"/></ds:schemaRefs>' if schema else "<ds:schemaRefs/>"
     parts["customXml/item1.xml"] = item
     parts["customXml/itemProps1.xml"] = (
