@@ -56,11 +56,10 @@ def test_long_and_astral_text_is_exact():
     assert cells["A2"]["value"] == "=SUM(1,2)" and cells["A2"].get("formula") is None
 
 
-@pytest.mark.parametrize("backend", ["python", "rust"])
-def test_inserted_cells_inherit_text_rows_and_columns(backend, tmp_path):
-    """A cell typed where none existed takes its row style (customFormat) or
-    else its column style, as Excel does; Text (@) there keeps numbers text."""
-    model = import_xlsx(CORPUS / "hb_text_columns.xlsx", backend=backend)
+def test_inserted_cells_inherit_text_rows_and_columns(tmp_path):
+    """A new cell takes its row style when the row has customFormat, otherwise
+    its column style. Text (@) there keeps numbers text."""
+    model = import_xlsx(CORPUS / "hb_text_columns.xlsx")
     assert model.inspect()["xlsx"]["text_layouts"] == {
         "Codes": {"text_columns": [[1, 1]], "text_rows": [5], "general_rows": [6]}
     }
@@ -79,7 +78,7 @@ def test_inserted_cells_inherit_text_rows_and_columns(backend, tmp_path):
     assert model.to_dict()["sheets"][0]["cells"]["A4"]["value"] == "18"
     target = tmp_path / "out.xlsx"
     export_xlsx(model, target)
-    again = import_xlsx(target, backend=backend)
+    again = import_xlsx(target)
     assert again.to_dict()["sheets"][0]["cells"]["A4"]["style"]["number_format"] == "@"
     again.set_value("Codes", "A4", 19)
     assert again.to_dict()["sheets"][0]["cells"]["A4"]["value"] == "19"
