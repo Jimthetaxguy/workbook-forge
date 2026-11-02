@@ -19,8 +19,10 @@ up (`123` -> `"123"`, `1.5` -> `"1.5"`, `1e20` -> `"1E+20"`). Text written there
 kept as given, so `"00456"` keeps its zeros. Booleans and formulas are not converted.
 `tools/corpus/feature-cases.json` (`text_writes`) holds the cases.
 
-Only cells the workbook already holds with the `@` format are covered. A cell
-inserted where none existed does not inherit a column's Text format.
+For existing cells, both engines use the cell's `@` format. Python also gives an
+inserted cell its row style when `customFormat` is set, otherwise its column
+style; an inherited `@` keeps numeric writes as text. That insertion behavior is
+covered by the Python test and is not a Rust parity claim.
 
 ## Browser view
 

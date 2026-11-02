@@ -1,5 +1,8 @@
 {
   "_note": "Expected non-pass outcomes per corpus file and engine. Anything not listed must pass. refuse:<code> means a typed refusal with that code; untyped means a refusal that carries no specific code yet (a gap tracked in docs/corpus-report.md).",
+  "hb_compat_version_3.xlsx": {
+    "py_canonical": "refuse:compat_version_3"
+  },
   "hb_data_table_formula.xlsx": {
     "py_canonical": "refuse:unsupported_formula_group"
   },
@@ -11,15 +14,35 @@
     "py_canonical": "refuse:unsupported_error_value",
     "rust": "refuse:unsupported_error_value"
   },
+  "hb_in_cell_array_formula.xlsx": {
+    "py_toolkit": "refuse:in_cell_array",
+    "py_canonical": "refuse:in_cell_array",
+    "rust": "refuse:in_cell_array"
+  },
+  "hb_in_cell_list.xlsx": {
+    "py_toolkit": "refuse:in_cell_array",
+    "py_canonical": "refuse:in_cell_array",
+    "rust": "refuse:in_cell_array"
+  },
   "hb_macro_content_in_xlsx.xlsx": {
     "py_toolkit": "refuse:macro_content",
     "py_canonical": "refuse:macro_content",
     "rust": "refuse:macro_content"
   },
+  "hb_nested_array.xlsx": {
+    "py_toolkit": "refuse:in_cell_array",
+    "py_canonical": "refuse:in_cell_array",
+    "rust": "refuse:in_cell_array"
+  },
   "hb_no_cell_references.xlsx": {
-    "py_toolkit": "refuse:unsupported_package",
-    "py_canonical": "refuse:unsupported_package",
-    "rust": "refuse:package_damaged"
+    "py_toolkit": "refuse:positional_cells",
+    "py_canonical": "refuse:positional_cells",
+    "rust": "refuse:positional_cells"
+  },
+  "hb_rows_without_references.xlsx": {
+    "py_toolkit": "refuse:positional_cells",
+    "py_canonical": "refuse:positional_cells",
+    "rust": "refuse:positional_cells"
   },
   "hb_shared_formulas.xlsx": {
     "py_canonical": "refuse:unsupported_formula_group"
