@@ -432,12 +432,18 @@ impl fmt::Display for ToolkitError {
 impl std::error::Error for ToolkitError {}
 impl From<FormulaError> for ToolkitError {
     fn from(error: FormulaError) -> Self {
-        let code = match error {
+        let code = match &error {
             FormulaError::Parse(_) => "parse_error",
             FormulaError::Unsupported(_) => "unsupported_formula",
             _ => "invalid_formula",
         };
-        Self::new(code, error.to_string())
+        // `Display` prefixes an unsupported formula with "unsupported formula: ".
+        // The diagnostic keeps that code and stores the reason itself.
+        let message = match error {
+            FormulaError::Unsupported(reason) => reason,
+            other => other.to_string(),
+        };
+        Self::new(code, message)
     }
 }
 
@@ -2725,5 +2731,22 @@ mod tests {
             report.values["Data!C1"],
             CalculatedValue::Scalar(CellValue::Blank)
         );
+    }
+    #[test]
+    fn three_d_reference_diagnostic_is_the_shared_sentence() {
+        const SENTENCE: &str =
+            "3D reference Jan:Mar: a reference across a range of sheets is not calculated";
+        let parsed = Expression::parse("=SUM(Jan:Mar!B2)").unwrap_err();
+        assert_eq!(parsed.code, "unsupported_formula");
+        assert_eq!(parsed.message, SENTENCE);
+        let report = calculate(&model(&[("A1", Cell::formula("=SUM(Jan:Mar!B2)"))], &[]), 1);
+        let diagnostic = report
+            .diagnostics
+            .iter()
+            .find(|item| item.address.as_deref() == Some("A1"))
+            .expect("diagnostic for Data!A1");
+        assert_eq!(diagnostic.code, "unsupported_formula");
+        assert_eq!(diagnostic.message, SENTENCE);
+        assert_eq!(diagnostic.sheet.as_deref(), Some("Data"));
     }
 }
