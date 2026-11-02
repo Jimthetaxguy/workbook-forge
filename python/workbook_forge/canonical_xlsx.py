@@ -162,6 +162,14 @@ def import_canonical(path: str | Path) -> Workbook:
             "unsupported_formula",
             f"formula cells with no formula text at {listed}; their stored values are not read as literals",
         )
+    if stored.get("compatibility_version", 1) >= 3:
+        # The fresh package would drop the setting, and the engines do not
+        # calculate with Compatibility Version 3 semantics.
+        raise CanonicalPackageError(
+            "compat_version_3",
+            "the workbook is set to Compatibility Version 3, which is outside the v1 "
+            "canonical import and export profile",
+        )
     if stored["date_system"] != "1900":
         raise CanonicalPackageError(
             "unsupported_package",
@@ -203,6 +211,7 @@ def read_package(path: str | Path) -> dict[str, Any]:
     cells: list[dict[str, Any]] = []
     with Package.open(source) as package:
         date_system = "1904" if package._uses_1904_date_system else "1900"
+        compatibility_version = package._compatibility_version
         styles, _metadata = _styles(package)
         for sheet in package.sheet_names:
             for address, element in package._cells[sheet].items():
@@ -246,6 +255,7 @@ def read_package(path: str | Path) -> dict[str, Any]:
         "source": str(source),
         "workbook_part": workbook_part,
         "date_system": date_system,
+        "compatibility_version": compatibility_version,
         "sheet_names": sheet_names,
         "cells": cells,
     }

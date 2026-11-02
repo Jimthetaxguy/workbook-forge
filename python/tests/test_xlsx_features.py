@@ -110,7 +110,61 @@ def test_renaming_a_charted_sheet_refuses(tmp_path):
     assert caught.value.code == "chart_reference_protected"
 
 
-def test_formula_entries_are_not_validated_and_blank_clears_pass():
+@pytest.mark.parametrize("backend", ["python", "rust"])
+@pytest.mark.parametrize(
+    "case", CASES["formula_writes"],
+    ids=lambda c: f"{c['file']}:{c['sheet']}!{c['address']}=({c['formula']})",
+)
+def test_formula_write_cases(case, backend):
+    """A formula entry under an enforced rule is checked by its calculated result."""
+    model = import_xlsx(CORPUS / case["file"], backend=backend)
+    if case["expect"] == "ok":
+        model.set_formula(case["sheet"], case["address"], case["formula"])
+        return
+    before = model.to_dict()
+    with pytest.raises(WorkbookError) as caught:
+        model.set_formula(case["sheet"], case["address"], case["formula"])
+    assert caught.value.code == case["expect"]
+    assert "formula =" in str(caught.value)
+    assert model.to_dict() == before  # refused atomically
+
+
+def test_blank_clear_passes_and_formula_result_reads_the_same_batch():
     model = import_xlsx(CORPUS / "xw_dropdowns.xlsx")
-    model.set_formula("Orders", "C3", '"Pur"&"ple"')
     model.set_value("Orders", "C4", None)
+    # The formula reads a cell the same batch writes: its result is checked
+    # with the whole batch applied, as Excel would see it after entry.
+    model.apply([
+        {"sheet": "Orders", "address": "G3", "value": "Blue"},
+        {"sheet": "Orders", "address": "C3", "formula": "G3"},
+    ])
+    with pytest.raises(UnsupportedWorkbook) as caught:
+        model.apply([
+            {"sheet": "Orders", "address": "G4", "value": "Pink"},
+            {"sheet": "Orders", "address": "C4", "formula": "G4"},
+        ])
+    assert caught.value.code == "validation_failed"
+    cells = next(s for s in model.to_dict()["sheets"] if s["name"] == "Orders")["cells"]
+    assert "G4" not in cells and cells.get("C4", {}).get("formula") is None  # batch refused
+
+
+def test_formula_result_that_cannot_be_calculated_is_refused_under_a_stop_rule():
+    model = import_xlsx(CORPUS / "xw_dropdowns.xlsx")
+    with pytest.raises(UnsupportedWorkbook) as caught:
+        model.set_formula("Orders", "C3", "NOSUCHFUNCTION(1)")
+    assert caught.value.code == "validation_failed"
+    assert "could not be calculated" in str(caught.value)
+    # Outside any rule the same formula is accepted (and preserved) as before.
+    model.set_formula("Orders", "A3", "NOSUCHFUNCTION(1)")
+
+
+def test_export_checks_formula_results_like_edits(tmp_path):
+    model = import_xlsx(CORPUS / "xw_dropdowns.xlsx")
+    document = model.to_dict()
+    orders = next(sheet for sheet in document["sheets"] if sheet["name"] == "Orders")
+    orders["cells"]["C2"] = {"formula": '"Pur"&"ple"', "value": None}
+    with pytest.raises(UnsupportedWorkbook) as caught:
+        export_snapshot(model, document, tmp_path / "out.xlsx")
+    assert caught.value.code == "validation_failed"
+    orders["cells"]["C2"] = {"formula": '"Bl"&"ue"', "value": None}
+    export_snapshot(model, document, tmp_path / "ok.xlsx")

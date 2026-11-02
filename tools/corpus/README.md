@@ -10,6 +10,21 @@ by our own scripts so there is no third-party licensing exposure:
   targets, prefixed SpreadsheetML, Strict OOXML, pivot caches, external links,
   threaded comments, BOM-prefixed parts, cells without `r` attributes, and the
   quirks of Google Sheets, Numbers and LibreOffice exports.
+  `shapes.py` adds later synthetic shapes on the same helpers: a sheet out to
+  column XFD, 210 sheets, 30,000 shared strings, mixed inline and shared strings,
+  4,000 cell formats with a theme, outline, print and protection settings, and
+  feature parts Excel writes that the libraries do not (form controls, slicers,
+  timelines, sparklines, connections with a Power Query item stored as UTF-16,
+  customXml, embedded OLE objects, a pivot calculated field, a table totals row
+  and calculated column) plus formula shapes (3D references, names that look
+  like references, a formula near the 8,192-character limit).
+  `in_cell_arrays.py` adds Excel's lists, arrays in cells, nested arrays, the
+  FLATTEN/HAS/HASANY/HASALL functions and Compatibility Version 3 (Excel Beta,
+  September 2026). These five files are **modeled, not captured from Excel**:
+  Microsoft has not published the cell markup, so the module documents what is
+  published and what is guessed, and their `MANIFEST.json` entries carry
+  `"provenance": "modeled, not captured from Excel"` with a note to replace
+  them with real Excel Beta captures. See [in-cell arrays](../../docs/in-cell-arrays.md).
 - `lo_*` files come from LibreOffice headless when `soffice` is on PATH and
   `--writers` includes `libreoffice`. That writer is not in the default list.
 
@@ -23,3 +38,8 @@ are not byte-stable across regenerations; the others are.
 through every engine and writes the matrix. `expectations.json` lists the
 expected non-pass outcomes; `python/tests/test_corpus.py` holds the matrix to it
 and never accepts a crash, a corrupt package or a lost value.
+
+`python tools/corpus/capabilities.py` turns the committed report into
+[docs/capabilities-xlsx.md](../../docs/capabilities-xlsx.md): each category as
+supported, preserved only, or refused with its code. Rerun it after the report
+changes; `test_capabilities_document_is_current` fails until you do.

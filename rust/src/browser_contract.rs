@@ -64,7 +64,9 @@ pub fn parse_revision(text: &str) -> Result<u64, ContractError> {
 pub fn classify_edit_error(message: &str) -> ContractError {
     if let Some((code, rest)) = message.split_once(": ")
         && !code.is_empty()
-        && code.bytes().all(|b| b.is_ascii_lowercase() || b == b'_')
+        && code
+            .bytes()
+            .all(|b| b.is_ascii_lowercase() || b == b'_' || b.is_ascii_digit())
     {
         return ContractError::new(code, rest);
     }
@@ -78,6 +80,20 @@ pub fn classify_edit_error(message: &str) -> ContractError {
         _ => "edit_rejected",
     };
     ContractError::new(code, message)
+}
+
+/// An import or export refusal as `code: message`, with the typed refusal
+/// code (docs/refusal-codes.md) always present, so the browser can report it
+/// as `open_failed`/`export_failed` with `refusal: code` instead of an opaque
+/// string.
+pub fn typed_open_error(error: &crate::xlsx::XlsxError) -> String {
+    let code = error.code();
+    let text = error.to_string();
+    let message = text
+        .strip_prefix(code)
+        .and_then(|rest| rest.strip_prefix(": "))
+        .unwrap_or(&text);
+    format!("{code}: {message}")
 }
 
 /// The current revision of an imported workbook as a decimal string. Reads
