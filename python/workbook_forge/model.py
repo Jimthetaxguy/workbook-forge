@@ -17,7 +17,13 @@ import re
 from dataclasses import dataclass, field
 from typing import Any
 
-from workbook_forge import ArrayValue, ErrorValue, analyze_formula, evaluate_result
+from workbook_forge import (
+    ArrayValue,
+    ErrorValue,
+    _is_unsupported_formula_message,
+    analyze_formula,
+    evaluate_result,
+)
 from workbook_forge.catalog import function_status
 
 SCHEMA_VERSION = 1
@@ -696,7 +702,7 @@ def _analyze(
         analysis = analyze_formula(expression)
     except (TypeError, ValueError, RecursionError) as exc:
         message = str(exc)
-        if message.startswith("unsupported name "):
+        if _is_unsupported_formula_message(message):
             return (), _cell_diagnostic(
                 "unsupported_formula", "unsupported", message, sheet_name, address
             )

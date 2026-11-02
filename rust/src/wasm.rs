@@ -38,7 +38,9 @@ impl WorkbookSession {
 
     fn export_xlsx(&self) -> Result<Vec<u8>, String> {
         match self {
-            Self::Imported(workbook) => workbook.export_bytes().map_err(|error| error.to_string()),
+            Self::Imported(workbook) => workbook
+                .export_bytes()
+                .map_err(|error| crate::browser_contract::typed_open_error(&error)),
             Self::Authored(session) => {
                 xlsx::export_xlsx_bytes(&session.snapshot()).map_err(|error| error.to_string())
             }
@@ -69,6 +71,18 @@ impl BrowserWorkbook {
     #[wasm_bindgen(js_name = snapshotJson)]
     pub fn snapshot_json(&self) -> Result<String, JsValue> {
         serde_json::to_string(&self.session.snapshot()).map_err(js_error)
+    }
+
+    /// Per sheet name, where a cell inserted where none existed inherits the
+    /// Text (`@`) format from its row or column style:
+    /// `{"Sheet": {"text_columns": [[min, max]], "text_rows": [..], "general_rows": [..]}}`
+    /// (1-based). Authored workbooks have none.
+    #[wasm_bindgen(js_name = textLayoutJson)]
+    pub fn text_layout_json(&self) -> String {
+        match &self.session {
+            WorkbookSession::Imported(workbook) => workbook.text_layouts().to_string(),
+            WorkbookSession::Authored(_) => "{}".into(),
+        }
     }
 
     /// Apply a bounded JSON edit array at an expected revision. Both imported
@@ -186,8 +200,8 @@ impl BrowserWorkbook {
 /// Open caller-selected `.xlsx` bytes without uploading or retaining a path.
 #[wasm_bindgen(js_name = openXlsx)]
 pub fn open_xlsx(bytes: &[u8]) -> Result<BrowserWorkbook, JsValue> {
-    let imported =
-        xlsx::import_xlsx_bytes(bytes, BTreeMap::new(), BTreeMap::new()).map_err(js_error)?;
+    let imported = xlsx::import_xlsx_bytes(bytes, BTreeMap::new(), BTreeMap::new())
+        .map_err(|error| JsValue::from_str(&crate::browser_contract::typed_open_error(&error)))?;
     let commands = crate::browser_contract::CommandSession::new();
     commands.set_baseline(Baseline::xlsx("workbook.xlsx", bytes));
     Ok(BrowserWorkbook {
