@@ -11,7 +11,8 @@ agree on.
   it can be resolved, its allowed values. A rule is *enforced* when Excel
   would stop the entry: ``showErrorMessage`` is on and ``errorStyle`` is
   ``stop`` (the default). An enforced rule refuses an out-of-rule value with
-  ``validation_failed``. Rules this module cannot evaluate (custom formulas,
+  ``validation_failed``. A formula entry is checked by its calculated
+  result, as Excel checks it once at entry. Rules this module cannot evaluate (custom formulas,
   lists built by a formula, non-constant bounds) are reported with
   ``enforced: false`` and a reason; writes into them are not checked.
 - Pivot tables: location, source range and fields are reported. Refresh is
@@ -592,7 +593,7 @@ class FeatureGuard:
                     "as stored and pivot refresh is unsupported",
                 )
         if formula is not None:
-            return None  # Excel checks a formula's result at entry; formula entries are not checked.
+            return None  # A formula entry is checked by its result: formula_rule/check_result.
         rule = covering_rule(self.validations, sheet, column, row)
         if rule is None:
             return None
@@ -604,6 +605,81 @@ class FeatureGuard:
             f"validation_failed: {sheet}!{address} {value!r} is refused by the data validation "
             f"on {' '.join(rule['sqref'])}: {why}",
         )
+
+    def formula_rule(self, sheet: str, address: str) -> dict[str, Any] | None:
+        """The enforced rule a formula entry at this cell must satisfy, if any."""
+        try:
+            column, row = position(address.replace("$", ""))
+        except ValueError:
+            return None
+        rule = covering_rule(self.validations, sheet, column, row)
+        return rule if rule is not None and rule["enforced"] else None
+
+    def check_result(
+        self, sheet: str, address: str, formula: str, result: Any, diagnostic: dict | None, read
+    ) -> tuple[str, str] | None:
+        """(code, message) when a formula entry's calculated result breaks its rule.
+
+        Excel checks a formula's result once, when it is entered, and never on
+        recalculation. A result this engine cannot calculate cannot be shown
+        to satisfy the rule, so it is refused too.
+        """
+        rule = self.formula_rule(sheet, address)
+        if rule is None:
+            return None
+        where = " ".join(rule["sqref"])
+        if diagnostic is not None:
+            return (
+                "validation_failed",
+                f"validation_failed: {sheet}!{address} formula ={formula.removeprefix('=')} is refused "
+                f"by the data validation on {where}: its result could not be calculated to check it "
+                f"({diagnostic.get('code', 'unknown')}: {diagnostic.get('message', '')})",
+            )
+        why = rule_violation(rule, result, read)
+        if why is None:
+            return None
+        return (
+            "validation_failed",
+            f"validation_failed: {sheet}!{address} formula ={formula.removeprefix('=')} "
+            f"(result {result!r}) is refused by the data validation on {where}: {why}",
+        )
+
+    def check_formula_results(self, engine, document: dict[str, Any], entries, read) -> tuple[str, str] | None:
+        """Check formula entries by their results in ``document`` (edits already applied).
+
+        ``entries`` is ``[(sheet, address, formula)]``. Only entries under an
+        enforced rule are calculated, each bound as an output of a detached
+        copy of the document so nothing else is evaluated.
+        """
+        import json
+
+        targets = [(sheet, address, formula) for sheet, address, formula in entries
+                   if self.formula_rule(sheet, address) is not None]
+        if not targets:
+            return None
+        detached = json.loads(json.dumps(document))
+        detached["outputs"] = {
+            f"forge_validation_{index}": {"sheet": sheet, "address": address}
+            for index, (sheet, address, _) in enumerate(targets)
+        }
+        detached["inputs"] = {}
+        report = json.loads(engine.calculate(json.dumps(detached, allow_nan=False, ensure_ascii=False), 1))
+        failures = {
+            (str(item.get("sheet", "")).casefold(), str(item.get("address", "")).upper()): item
+            for item in report.get("diagnostics", [])
+        }
+        whole = next((item for item in report.get("diagnostics", []) if not item.get("address")), None)
+        for index, (sheet, address, formula) in enumerate(targets):
+            name = f"forge_validation_{index}"
+            diagnostic = failures.get((sheet.casefold(), address.replace("$", "").upper()))
+            if name not in report.get("outputs", {}) and diagnostic is None:
+                diagnostic = whole or {"code": "unknown", "message": "no result was produced"}
+            refusal = self.check_result(
+                sheet, address, formula, report.get("outputs", {}).get(name), diagnostic, read
+            )
+            if refusal is not None:
+                return refusal
+        return None
 
     def charted_sheets(self) -> set[str]:
         out: set[str] = set()

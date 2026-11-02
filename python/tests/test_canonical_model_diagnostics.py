@@ -48,6 +48,41 @@ def test_diagnostic_names_the_formula_cell_when_other_cells_follow_it(formula, c
 
 
 @pytest.mark.parametrize(
+    ("formula", "message"),
+    [
+        (
+            "=SUM(Jan:Mar!B2)",
+            "3D reference Jan:Mar: a reference across a range of sheets is not calculated",
+        ),
+        (
+            "=SUM('Q2 Apr:Q2 May'!B2)",
+            "3D reference Q2 Apr:Q2 May: a reference across a range of sheets is not calculated",
+        ),
+        (
+            "=AVERAGE(Jan:Mar!C2)",
+            "3D reference Jan:Mar: a reference across a range of sheets is not calculated",
+        ),
+        (
+            "=COUNT(Jan:Feb!B2:C2)",
+            "3D reference Jan:Feb: a reference across a range of sheets is not calculated",
+        ),
+    ],
+    ids=["sum-jan-mar", "sum-quoted-months", "average-jan-mar", "count-jan-feb"],
+)
+def test_a_three_d_reference_is_an_unsupported_formula(formula, message):
+    """The formula is in S!C1. These are the 3D formulas in hb_3d_references.xlsx,
+    except SUM(FirstQuarter), which is an unsupported name."""
+    document = _workbook(
+        ("S", [_cell("A1", 1), _cell("A2", 2), _cell("C1", formula=formula), _cell("D9", 3)]),
+        ("T", [_cell("Q7", 4)]),
+    )
+    result = calculate(hydrate(document))
+    assert [(item.code, item.sheet, item.address, item.message) for item in result.diagnostics] == [
+        ("unsupported_formula", "S", "C1", message)
+    ]
+
+
+@pytest.mark.parametrize(
     "formula",
     [
         "=XFE1",

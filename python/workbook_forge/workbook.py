@@ -53,6 +53,36 @@ TABLE_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetm
 MACRO_WORKBOOK_CONTENT_TYPE = "application/vnd.ms-excel.sheet.macroEnabled.main+xml"
 XML_NS = "http://www.w3.org/XML/1998/namespace"
 NS = {"m": MAIN, "r": REL_DOC}
+# Shared with Rust (xlsx::POSITIONAL_CELLS_MESSAGE): the same words, the same code.
+POSITIONAL_CELLS_MESSAGE = (
+    "a worksheet row or cell has no r reference; rows and cells placed by position are not read"
+)
+# Excel's lists, arrays in cells and nested arrays (Excel Beta, September
+# 2026) store a cell's array as a rich value whose structure is "_array"
+# ([MS-XLSX] 2.3.6.1.1) with its items in a rich array part (rdarray.xml).
+# The cell keeps only a fallback value. Shared with Rust
+# (``in_cell_array_message`` and ``COMPAT_V3_*`` in rust/src/xlsx.rs).
+RICH_DATA_NS = "http://schemas.microsoft.com/office/spreadsheetml/2017/richdata"
+RICH_ARRAY_CONTENT_TYPE = "application/vnd.ms-excel.rdarray+xml"
+RICH_STRUCTURE_CONTENT_TYPE = "application/vnd.ms-excel.rdrichvaluestructure+xml"
+COMPATIBILITY_VERSION_NS = (
+    "http://schemas.microsoft.com/office/spreadsheetml/2024/workbookCompatibilityVersion"
+)
+COMPAT_V3_CALCULATION = (
+    "Compatibility Version 3 formula calculation is unsupported: Excel may calculate "
+    "this workbook's formulas differently"
+)
+COMPAT_V3_EDIT = "formula edits in a Compatibility Version 3 workbook are unsupported"
+
+
+def in_cell_array_message(sheet: str, address: str) -> str:
+    return (
+        f"cell {address} on sheet '{sheet}' holds an Excel array in a cell (a list, an "
+        "array or a nested array stored as a rich array value); in-cell arrays are not "
+        "read, so the workbook is refused rather than the array replaced by its fallback value"
+    )
+
+
 CELL_RE = re.compile(r"^\$?([A-Za-z]{1,3})\$?([1-9][0-9]{0,6})$")
 RANGE_RE = re.compile(
     r"^\$?([A-Za-z]{1,3})\$?([1-9][0-9]{0,6})(?::\$?([A-Za-z]{1,3})\$?([1-9][0-9]{0,6}))?$"
@@ -654,6 +684,8 @@ class Workbook:
         self._table_formula_ranges: dict[str, list[tuple[int, int, int, int, str]]] = {}
         self._shared_strings: list[str] = []
         self._uses_1904_date_system = False
+        # The workbook's Compatibility Version ([MS-XLSX] 2.6.260); 1 when unset.
+        self._compatibility_version = 1
         self._load()
 
     @classmethod
@@ -831,6 +863,8 @@ class Workbook:
             raise UnsupportedWorkbook(
                 "formula calculation does not support the workbook's 1904 date system"
             )
+        if self._compatibility_version >= 3:
+            raise UnsupportedWorkbook(COMPAT_V3_CALCULATION, code="compat_version_3")
 
         sheet_by_fold = {name.casefold(): name for name in self._sheet_parts}
 
@@ -1241,6 +1275,12 @@ class Workbook:
                 code="package_damaged",
             )
         self._uses_1904_date_system = date1904 is not None and date1904.casefold() in {"1", "true"}
+        for version in wb_root.findall(
+            f"{_q('extLst')}/{_q('ext')}/{{{COMPATIBILITY_VERSION_NS}}}version"
+        ):
+            raw = version.attrib.get("setVersion", "")
+            if re.fullmatch(r"[0-9]{1,9}", raw):
+                self._compatibility_version = max(self._compatibility_version, int(raw))
         rel_root = _safe_xml(self._parts[self._workbook_rels_part], self._workbook_rels_part)
         if rel_root.tag != f"{{{PKG_REL}}}Relationships":
             raise UnsupportedWorkbook("workbook relationships use an unsupported namespace")
@@ -1318,6 +1358,34 @@ class Workbook:
             if root.tag != _q("sst"):
                 raise UnsupportedWorkbook("shared-string part has an unsupported XML root")
             self._shared_strings = [self._inline_text(item) for item in root.findall(_q("si"))]
+        if self._holds_rich_arrays():
+            for name, cells in self._cells.items():
+                for address, element in cells.items():
+                    if "vm" in element.attrib:
+                        raise UnsupportedWorkbook(
+                            in_cell_array_message(name, address), code="in_cell_array"
+                        )
+
+    def _holds_rich_arrays(self) -> bool:
+        """True when the package stores rich arrays: a rich array part, or a rich
+        value structure of type ``_array``. A cell with value metadata (``vm``)
+        in such a package may hold an array, so it is not read as its fallback.
+        A structure part that does not parse is left to the preserved parts."""
+        for part, content_type in self._content_type_overrides.items():
+            folded = content_type.casefold()
+            if folded == RICH_ARRAY_CONTENT_TYPE:
+                return True
+            if folded == RICH_STRUCTURE_CONTENT_TYPE and part in self._parts:
+                try:
+                    root = _safe_xml(self._parts[part], part)
+                except WorkbookError:
+                    continue
+                if any(
+                    structure.attrib.get("t") == "_array"
+                    for structure in root.iter(f"{{{RICH_DATA_NS}}}s")
+                ):
+                    return True
+        return False
 
     def _load_table_formula_ranges(
         self, sheet: str, worksheet_root: ET.Element, worksheet_part: str
@@ -1520,6 +1588,10 @@ class Workbook:
     @staticmethod
     def _index_cells(root: ET.Element) -> dict[str, ET.Element]:
         result: dict[str, ET.Element] = {}
+        for row in select_path(root, MAIN, ("worksheet", "sheetData", "row")):
+            if not row.attrib.get("r"):
+                # A later insert would have to guess where the row sits.
+                raise UnsupportedWorkbook(POSITIONAL_CELLS_MESSAGE, code="positional_cells")
         for cell in select_path(root, MAIN, ("worksheet", "sheetData", "row", "c")):
             for name in ("f", "v", "is"):
                 children = cell.findall(_q(name))
@@ -1538,9 +1610,7 @@ class Workbook:
             address = cell.attrib.get("r")
             if not address:
                 # Dropping the cell would lose data without a word.
-                raise UnsupportedWorkbook(
-                    "a cell has no address; cells placed by position are not read"
-                )
+                raise UnsupportedWorkbook(POSITIONAL_CELLS_MESSAGE, code="positional_cells")
             normalized = _normal_address(address)
             if normalized in result:
                 raise UnsupportedWorkbook(f"duplicate cell address: {normalized}")

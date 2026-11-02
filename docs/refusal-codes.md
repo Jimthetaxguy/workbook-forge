@@ -54,8 +54,11 @@ Callers should branch on the code, not on the message text, which may change.
 | `formula_unsupported` | A formula uses syntax, a function or a reference the engine does not calculate. |
 | `unsupported_sheet_type` | A dialog sheet, macro sheet or other non-worksheet sheet type blocked the operation. Chartsheets are read and preserved byte-for-byte; they are listed and are not modeled as worksheets. |
 | `unsupported_error_value` | A cell stores an error value outside the v1 error set (`#NULL!`, `#DIV/0!`, `#VALUE!`, `#REF!`, `#NAME?`, `#NUM!`, `#N/A`, `#SPILL!`, `#CALC!`), for example `#GETTING_DATA`, `#FIELD!` or `#BLOCKED!`. The model's error enum is fixed for v1; the workbook is refused rather than the value rewritten. |
+| `in_cell_array` | A cell holds an Excel array in a cell: a list, an array or a nested array stored as a rich array value (Excel Beta, September 2026). Workbook Forge does not read in-cell arrays, so the workbook is refused, naming the cell, rather than the array replaced by its fallback value. Formulas that use the syntax or functions of arrays in cells (`={{1;2;3}}`, `={SEQUENCE(3)}`, `{{1,2,3};{4,5,6}}`, FLATTEN, HAS, HASANY, HASALL) are read and preserved but not calculated: their calculation diagnostic is `unsupported_formula` with a message starting `in-cell array`. See [in-cell arrays](in-cell-arrays.md). |
+| `compat_version_3` | The workbook is set to Excel Compatibility Version 3, where Excel may calculate formulas differently. Values read and edit; formulas are preserved byte-for-byte but not calculated (each formula cell reports `unsupported_cell`), and formula edits are refused. The canonical path refuses the workbook, since its fresh package would drop the setting. |
 | `csv_encoding` | A delimited text file could not be decoded with the requested or detected encoding. |
 | `csv_malformed` | A delimited text file has an unterminated quoted field or another syntax error. |
+| `positional_cells` | A worksheet row or cell has no `r` reference. Rows and cells placed by position are refused rather than guessed, in Python and Rust alike. |
 | `package_damaged` | The ZIP container, a package relationship, or a part's XML is malformed or inconsistent. |
 | `unsupported_package` | The package is well formed but uses a feature outside the supported profile. |
 

@@ -21,6 +21,7 @@ from . import ErrorValue
 from . import xlsx_features as features
 from .toolkit import WorkbookModel, _digest
 from .workbook import (
+    COMPAT_V3_CALCULATION,
     CONTENT_TYPES,
     EXCEL_ERROR_CODES,
     NS,
@@ -98,6 +99,8 @@ class _Baseline:
     # Sheet name -> merged ranges (column, row, column, row). Non-anchor cells
     # inside those ranges cannot receive an inserted cell.
     merged: tuple[tuple[str, tuple[tuple[int, int, int, int], ...]], ...]
+    # The workbook's Compatibility Version; 3 or later blocks formula edits.
+    compatibility_version: int = 1
 
 
 _EXCEL_MAX_ROWS = 1_048_576
@@ -222,6 +225,63 @@ def _block_range(
             cell["blocked_reason"] = reason
 
 
+class TextLayout:
+    """Where a newly inserted cell inherits the Text (@) number format.
+
+    ``rows`` maps each row with ``customFormat`` to whether its style is Text;
+    such a row decides for every new cell in it. Otherwise the first ``<col>``
+    range that covers the column and carries a style decides.
+    """
+
+    __slots__ = ("rows", "columns")
+
+    def __init__(self, rows: dict[int, bool], columns: list[tuple[int, int, bool]]):
+        self.rows = rows
+        self.columns = columns
+
+    def is_text(self, column: int, row: int) -> bool:
+        if row in self.rows:
+            return self.rows[row]
+        for first, last, text in self.columns:
+            if first <= column <= last:
+                return text
+        return False
+
+    def public(self) -> dict[str, Any]:
+        """``text_columns`` ranges and ``text_rows``/``general_rows`` overrides."""
+        return {
+            "text_columns": [[first, last] for first, last, text in self.columns if text],
+            "text_rows": sorted(row for row, text in self.rows.items() if text),
+            "general_rows": sorted(row for row, text in self.rows.items() if not text),
+        }
+
+
+def _text_layout(root: ET.Element, styles: list[dict[str, Any]]) -> TextLayout | None:
+    """The sheet's row and column styles that make an inserted cell text, if any."""
+
+    def is_text(raw: str) -> bool:
+        try:
+            index = int(raw)
+        except ValueError:
+            return False
+        return 0 <= index < len(styles) and styles[index].get("number_format") == "@"
+
+    columns = []
+    for col in root.findall("m:cols/m:col", NS):
+        if "style" in col.attrib:
+            columns.append((int(col.attrib["min"]), int(col.attrib["max"]), is_text(col.attrib["style"])))
+    rows = {}
+    for row in root.findall("m:sheetData/m:row", NS):
+        if row.attrib.get("customFormat") in {"1", "true"} and "s" in row.attrib and "r" in row.attrib:
+            try:
+                rows[int(row.attrib["r"])] = is_text(row.attrib["s"])
+            except ValueError:
+                continue
+    if not any(text for *_, text in columns) and not any(rows.values()):
+        return None
+    return TextLayout(rows, columns)
+
+
 def import_xlsx(
     path: str | Path, *, inputs=None, outputs=None, backend: str = "python"
 ) -> WorkbookModel:
@@ -292,6 +352,7 @@ def import_xlsx(
         budget = [0]
         width_work = 0
         merged: list[tuple[str, tuple[tuple[int, int, int, int], ...]]] = []
+        text_layouts: dict[str, TextLayout] = {}
         for index, sheet in enumerate(workbook.sheet_names, 1):
             cells: dict[str, Any] = {}
             part = workbook._sheet_parts[sheet]
@@ -314,6 +375,8 @@ def import_xlsx(
                         cell["blocked_reason"] = (
                             "1904 date-system formula calculation is unsupported"
                         )
+                    if workbook._compatibility_version >= 3:
+                        cell["blocked_reason"] = COMPAT_V3_CALCULATION
                     if source.formula_kind in {"shared", "array", "dataTable"}:
                         reference = node.attrib.get("ref")
                         if reference:
@@ -401,6 +464,9 @@ def import_xlsx(
                 {"id": f"sheet-{index}", "name": sheet, "cells": cells, "column_widths": widths}
             )
             merged.append((sheet, _worksheet_merges(root)))
+            layout = _text_layout(root, styles)
+            if layout is not None:
+                text_layouts[sheet.casefold()] = layout
             validations += features.read_validations(sheet, root, names)
             metadata["sheets"].append(
                 {
@@ -433,6 +499,10 @@ def import_xlsx(
             if rule["source"] and "range" in rule["source"] and "values" not in rule["source"]:
                 rule["allowed_values"] = features.resolve_list_values(rule, imported_value)
         metadata["data_validations"] = features.public(validations)
+        metadata["text_layouts"] = {
+            item["name"]: text_layouts[item["name"].casefold()].public()
+            for item in document["sheets"] if item["name"].casefold() in text_layouts
+        }
         metadata["pivots"] = features.public(pivots)
         metadata["charts"] = features.public(charts)
         metadata["chartsheets"] = workbook.chartsheets
@@ -453,6 +523,17 @@ def import_xlsx(
             for address, cell in item["cells"].items()
             if (cell.get("style") or {}).get("number_format") == "@"
         )
+        if text_layouts:
+            # A cell inserted where none existed takes its row's style (a row
+            # with customFormat) or else its column's, as Excel does, so it is
+            # text when that style is Text (@).
+            model._text_layouts = text_layouts
+            model._imported_addresses = frozenset(
+                (item["name"].casefold(), address)
+                for item in document["sheets"]
+                if item["name"].casefold() in text_layouts
+                for address in item["cells"]
+            )
         model._source_baseline = _Baseline(
             workbook.source,
             tuple(workbook._parts.items()),
@@ -461,6 +542,7 @@ def import_xlsx(
             json.dumps(model.to_dict(), allow_nan=False),
             workbook._uses_1904_date_system,
             tuple(merged),
+            workbook._compatibility_version,
         )
         model._import_metadata = metadata
         return model
@@ -837,7 +919,9 @@ def _check_chart_sheets(guard, original: dict[str, Any], current: dict[str, Any]
         )
 
 
-def _check_feature_writes(guard, current: dict[str, Any], changes: list[tuple[str, str, dict]]) -> None:
+def _check_feature_writes(
+    guard, current: dict[str, Any], changes: list[tuple[str, str, dict]], engine=None
+) -> None:
     """Pivot output and enforced validation hold at export as they do at edit time."""
     if guard is None or not changes:
         return
@@ -853,6 +937,12 @@ def _check_feature_writes(guard, current: dict[str, Any], changes: list[tuple[st
         refusal = guard.check(sheet, address, cell.get("value"), cell.get("formula"), read)
         if refusal is not None:
             raise UnsupportedWorkbook(refusal[1], code=refusal[0])
+    entries = [(sheet, address, cell["formula"]) for sheet, address, cell in changes
+               if cell.get("formula") is not None]
+    if entries and engine is not None:
+        refusal = guard.check_formula_results(engine, current, entries, read)
+        if refusal is not None:
+            raise UnsupportedWorkbook(refusal[1], code=refusal[0])
 
 
 def _patch_import(
@@ -861,6 +951,7 @@ def _patch_import(
     current: dict[str, Any],
     merged: tuple[tuple[str, tuple[tuple[int, int, int, int], ...]], ...] = (),
     guard=None,
+    engine=None,
 ) -> None:
     _check_chart_sheets(guard, original, current)
     if original["inputs"] != current["inputs"]:
@@ -879,7 +970,7 @@ def _patch_import(
         for address, cell in after["cells"].items():
             if _digest(before["cells"].get(address, {})) != _digest(cell):
                 changes.append((after["name"], address, cell))
-    _check_feature_writes(guard, current, changes)
+    _check_feature_writes(guard, current, changes, engine)
     for before, after in zip(original["sheets"], current["sheets"], strict=True):
         for address in before["cells"].keys() | after["cells"].keys():
             old, new = before["cells"].get(address, {}), after["cells"].get(address, {})
@@ -949,9 +1040,21 @@ def export_snapshot(imported: WorkbookModel, document: dict[str, Any], output: s
                 raise UnsupportedWorkbook("transferred snapshot cannot add preserved-only guards")
             column, row = _cell_position(address)
             _check_insertion(after["name"], column, row, merged)
+    if imported._source_baseline.compatibility_version >= 3:
+        # A snapshot is an edit batch by another route: the live-edit refusal
+        # of new or changed formulas holds here too, before anything is written.
+        for before, after in zip(original["sheets"], current["sheets"], strict=True):
+            for address, cell in after["cells"].items():
+                formula = cell.get("formula")
+                if formula is not None and formula != before["cells"].get(address, {}).get("formula"):
+                    from .workbook import COMPAT_V3_EDIT
+
+                    raise UnsupportedWorkbook(COMPAT_V3_EDIT, code="compat_version_3")
     transferred._source_baseline = imported._source_baseline
     transferred._feature_guard = imported._feature_guard
     transferred._text_cells = imported._text_cells
+    transferred._text_layouts = imported._text_layouts
+    transferred._imported_addresses = imported._imported_addresses
     return export_xlsx(transferred, output)
 
 
@@ -1043,6 +1146,7 @@ def export_xlsx(
                     document,
                     baseline.merged,
                     getattr(model, "_feature_guard", None),
+                    getattr(model, "_engine", None),
                 )
             workbook._request_recalculation()
             for (sheet, address), value in cache_values.items():
