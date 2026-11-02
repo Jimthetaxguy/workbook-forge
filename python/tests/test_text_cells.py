@@ -6,6 +6,7 @@ runs the same table in rust/tests/xlsx_features.rs.
 from __future__ import annotations
 
 import json
+import zipfile
 from pathlib import Path
 
 import pytest
@@ -82,3 +83,30 @@ def test_inserted_cells_inherit_text_rows_and_columns(tmp_path):
     assert again.to_dict()["sheets"][0]["cells"]["A4"]["style"]["number_format"] == "@"
     again.set_value("Codes", "A4", 19)
     assert again.to_dict()["sheets"][0]["cells"]["A4"]["value"] == "19"
+
+
+def test_a_styled_column_with_a_bad_span_is_skipped(tmp_path):
+    """A styled <col> with a missing or non-numeric min/max is skipped.
+
+    The well-formed ranges in the same sheet still apply.
+    """
+    source = CORPUS / "hb_text_columns.xlsx"
+    damaged = tmp_path / "missing-min.xlsx"
+    with zipfile.ZipFile(source) as archive, zipfile.ZipFile(damaged, "w") as out:
+        for name in archive.namelist():
+            payload = archive.read(name)
+            if name == "xl/worksheets/sheet1.xml":
+                payload = payload.replace(
+                    b"<cols>",
+                    b"<cols>"
+                    b'<col max="2" width="8" style="1" customWidth="1"/>'
+                    b'<col min="nope" max="9" width="8" style="1"/>'
+                    b'<col min="5" max="wide" width="8" style="1"/>',
+                    1,
+                )
+            out.writestr(name, payload)
+    model = import_xlsx(damaged)
+    assert model.inspect()["xlsx"]["text_layouts"] == {
+        "Codes": {"text_columns": [[1, 1]], "text_rows": [5], "general_rows": [6]}
+    }
+    assert model.to_dict()["sheets"][0]["column_widths"] == {"A": 12.0, "C": 10.0, "D": 10.0}

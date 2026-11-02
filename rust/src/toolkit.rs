@@ -2749,4 +2749,33 @@ mod tests {
         assert_eq!(diagnostic.message, SENTENCE);
         assert_eq!(diagnostic.sheet.as_deref(), Some("Data"));
     }
+
+    #[cfg(test)]
+    mod quoted_three_d_references {
+        use super::*;
+
+        #[test]
+        fn quoted_sheet_spans_match_the_python_sentences() {
+            for (formula, span) in [
+                ("=SUM('Q1:Q4'!B2)", "Q1:Q4"),
+                ("=SUM(Jan:'Mar 2026'!B2)", "Jan:Mar 2026"),
+            ] {
+                let sentence = format!(
+                    "3D reference {span}: a reference across a range of sheets is not calculated"
+                );
+                let parsed = Expression::parse(formula).unwrap_err();
+                assert_eq!(parsed.code, "unsupported_formula");
+                assert_eq!(parsed.message, sentence);
+                let report = calculate(&model(&[("A1", Cell::formula(formula))], &[]), 1);
+                let diagnostic = report
+                    .diagnostics
+                    .iter()
+                    .find(|item| item.address.as_deref() == Some("A1"))
+                    .expect("diagnostic for Data!A1");
+                assert_eq!(diagnostic.code, "unsupported_formula");
+                assert_eq!(diagnostic.message, sentence);
+                assert_eq!(diagnostic.sheet.as_deref(), Some("Data"));
+            }
+        }
+    }
 }
