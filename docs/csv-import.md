@@ -27,7 +27,7 @@ export_xlsx(model, "parts.xlsx")
 
 ## Syntax
 
-RFC 4180, the way Excel reads it:
+Workbook Forge follows RFC 4180; not checked against Excel:
 
 - The delimiter is one of `,` (default), tab, `;` or `|`.
 - A field that starts with `"` is quoted. `""` inside it is a literal quote, and it may hold
@@ -41,7 +41,10 @@ RFC 4180, the way Excel reads it:
   **`csv_malformed`**. The message names the line.
 - More than 1,048,576 rows or 16,384 fields in a record refuse with `out_of_bounds`; input
   over 128 MiB with `package_limit`; a field over 32,767 UTF-16 units with the model's usual
-  text-length refusal.
+  text-length refusal. More than 100,000 populated cells refuse with `resource_limit`.
+  Empty fields are absent and do not count. Python applies that cap when the session
+  is built (`python_engine.MAX_WORKBOOK_CELLS`). Rust applies the same cap in
+  `delimited::to_model` when `WorkbookModel::validate` runs.
 
 ## Values
 
@@ -53,9 +56,10 @@ RFC 4180, the way Excel reads it:
   like a formula is never imported as one, so a CSV cannot inject formulas.
 - `as_text=True` keeps every non-empty field text.
 
-Text-looking numbers stay text where Excel would convert them and lose digits (leading
-zeros, long IDs). Imported cells carry no number format; see [text cells](text-cells.md) for
-how `@`-formatted cells keep later edits as text.
+Text-looking numbers stay text, including leading zeros and long digit strings.
+Workbook Forge follows that rule; not checked against Excel. Imported cells carry
+no number format; see [text cells](text-cells.md) for how `@`-formatted cells keep
+later edits as text.
 
 ## Not covered
 
