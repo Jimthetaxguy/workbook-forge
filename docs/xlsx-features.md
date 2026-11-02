@@ -45,8 +45,16 @@ and again at export (so a transferred snapshot meets the same check):
 - `whole` needs an integer, `decimal`, `date` and `time` need a number, each compared
   with the operator and bounds. `textLength` compares the length of the text.
 - Clearing a cell (an empty value) is never validated, as in Excel.
-- Formula entries are not checked. Excel checks a formula's result once at entry and
-  never again on recalculation; Workbook Forge does not check it at all (a known gap).
+- A formula entry is checked by its calculated result, as Excel checks a formula's
+  result once, at entry, and never again on recalculation. The result is calculated
+  on a detached copy with the whole edit batch applied (so a formula may read a cell
+  the same batch writes); only cells under an enforced rule are calculated. An error
+  result (`#DIV/0!`, `#N/A`, ...) and an array result are refused. A result the
+  engine cannot calculate (an unsupported function, a cycle) cannot be shown to
+  satisfy the rule and is refused with `validation_failed` too, naming the
+  diagnostic. Outside an enforced rule, formula entries are not calculated at entry.
+  Python and Rust apply the same check, at edit time and at snapshot export
+  (`tools/corpus/feature-cases.json` `formula_writes`).
 
 Validation rules themselves cannot be edited; they are preserved.
 

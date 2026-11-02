@@ -1,5 +1,5 @@
 {
-  "_note": "Cases both engines must agree on. writes and inspect are run by python/tests/test_xlsx_features.py and rust/tests/xlsx_features.rs. text_writes is run by python/tests/test_text_cells.py and rust/tests/xlsx_features.rs: a value written into a Text-formatted (@) cell is stored as text (numbers with 15 significant digits); other cells keep the written type. grammar rows are built into a package by both of those feature-test files. writes: one value written into a freshly imported workbook; expect ok or the refusal code. inspect: counts and key fields of inspect output. See docs/xlsx-features.md.",
+  "_note": "Cases both engines must agree on (python/tests/test_xlsx_features.py, rust/tests/xlsx_features.rs). writes: one value written into a freshly imported workbook; expect ok or the refusal code. inspect: counts and key fields of inspect output. See docs/xlsx-features.md. text_writes: a value written into a Text-formatted (@) cell is stored as text (numbers with 15 significant digits); other cells keep the written type. formula_writes: a formula entered into a fresh import; expect ok or the refusal code. An entry under an enforced rule is checked by its calculated result (Excel checks a formula's result once, at entry). text_writes also cover cells inserted where none existed: they take the row style (customFormat) or else the column style, so a new cell in a Text (@) row or column stays text.",
   "writes": [
     {
       "file": "hb_dropdown_rules.xlsx",
@@ -343,6 +343,13 @@
       "address": "B2",
       "value": 123,
       "expect": "ok"
+    },
+    {
+      "file": "hb_dropdown_formulas.xlsx",
+      "sheet": "Choices",
+      "address": "B3",
+      "value": "Later",
+      "expect": "ok"
     }
   ],
   "inspect": {
@@ -549,6 +556,303 @@
       "address": "A1",
       "value": "00123",
       "stored": "00123"
+    },
+    {
+      "file": "hb_text_columns.xlsx",
+      "sheet": "Codes",
+      "address": "A4",
+      "value": 123,
+      "stored": "123"
+    },
+    {
+      "file": "hb_text_columns.xlsx",
+      "sheet": "Codes",
+      "address": "A4",
+      "value": "00123",
+      "stored": "00123"
+    },
+    {
+      "file": "hb_text_columns.xlsx",
+      "sheet": "Codes",
+      "address": "A3",
+      "value": 7,
+      "stored": 7
+    },
+    {
+      "file": "hb_text_columns.xlsx",
+      "sheet": "Codes",
+      "address": "E5",
+      "value": 5,
+      "stored": "5"
+    },
+    {
+      "file": "hb_text_columns.xlsx",
+      "sheet": "Codes",
+      "address": "A6",
+      "value": 8,
+      "stored": 8
+    },
+    {
+      "file": "hb_text_columns.xlsx",
+      "sheet": "Codes",
+      "address": "A7",
+      "value": 1.5,
+      "stored": "1.5"
+    },
+    {
+      "file": "hb_text_columns.xlsx",
+      "sheet": "Codes",
+      "address": "C7",
+      "value": 2,
+      "stored": 2
+    },
+    {
+      "file": "hb_text_columns.xlsx",
+      "sheet": "Codes",
+      "address": "B4",
+      "value": 3,
+      "stored": 3
+    },
+    {
+      "file": "hb_text_columns.xlsx",
+      "sheet": "Codes",
+      "address": "A1048576",
+      "value": 99,
+      "stored": "99"
+    }
+  ],
+  "formula_writes": [
+    {
+      "file": "xw_dropdowns.xlsx",
+      "sheet": "Orders",
+      "address": "C3",
+      "formula": "\"Gr\"&\"een\"",
+      "expect": "ok",
+      "why": "result Green is in the inline list"
+    },
+    {
+      "file": "xw_dropdowns.xlsx",
+      "sheet": "Orders",
+      "address": "C3",
+      "formula": "\"gr\"&\"EEN\"",
+      "expect": "ok",
+      "why": "list match ignores case"
+    },
+    {
+      "file": "xw_dropdowns.xlsx",
+      "sheet": "Orders",
+      "address": "C3",
+      "formula": "\"Pur\"&\"ple\"",
+      "expect": "validation_failed",
+      "why": "result Purple is not in the inline list"
+    },
+    {
+      "file": "xw_dropdowns.xlsx",
+      "sheet": "Orders",
+      "address": "C3",
+      "formula": "C2",
+      "expect": "ok",
+      "why": "a reference whose value is in the list"
+    },
+    {
+      "file": "xw_dropdowns.xlsx",
+      "sheet": "Orders",
+      "address": "B3",
+      "formula": "'Sizes List'!A2",
+      "expect": "ok",
+      "why": "cross-sheet reference to a list item"
+    },
+    {
+      "file": "xw_dropdowns.xlsx",
+      "sheet": "Orders",
+      "address": "B3",
+      "formula": "\"X\"&\"XL\"",
+      "expect": "validation_failed",
+      "why": "XXL is not in the range-sourced list"
+    },
+    {
+      "file": "xw_dropdowns.xlsx",
+      "sheet": "Orders",
+      "address": "D3",
+      "formula": "1+1",
+      "expect": "ok",
+      "why": "whole number greater than 0"
+    },
+    {
+      "file": "xw_dropdowns.xlsx",
+      "sheet": "Orders",
+      "address": "D3",
+      "formula": "1-1",
+      "expect": "validation_failed",
+      "why": "0 is not greater than 0"
+    },
+    {
+      "file": "xw_dropdowns.xlsx",
+      "sheet": "Orders",
+      "address": "D3",
+      "formula": "1/2",
+      "expect": "validation_failed",
+      "why": "a whole-number rule needs an integer"
+    },
+    {
+      "file": "xw_dropdowns.xlsx",
+      "sheet": "Orders",
+      "address": "D3",
+      "formula": "1/0",
+      "expect": "validation_failed",
+      "why": "an error result is not an allowed entry"
+    },
+    {
+      "file": "xw_dropdowns.xlsx",
+      "sheet": "Orders",
+      "address": "D3",
+      "formula": "\"\"",
+      "expect": "ok",
+      "why": "an empty result is not validated, as a cleared cell"
+    },
+    {
+      "file": "xw_dropdowns.xlsx",
+      "sheet": "Orders",
+      "address": "F3",
+      "formula": "\"M\"",
+      "expect": "ok",
+      "why": "defined-name/range list via a text constant"
+    },
+    {
+      "file": "xw_dropdowns.xlsx",
+      "sheet": "Orders",
+      "address": "A3",
+      "formula": "1/0",
+      "expect": "ok",
+      "why": "no rule covers column A"
+    },
+    {
+      "file": "hb_dropdown_rules.xlsx",
+      "sheet": "Form",
+      "address": "B2",
+      "formula": "\"Y\"&\"es\"",
+      "expect": "ok",
+      "why": "inline stop list"
+    },
+    {
+      "file": "hb_dropdown_rules.xlsx",
+      "sheet": "Form",
+      "address": "B2",
+      "formula": "\"Mayb\"&\"e\"",
+      "expect": "validation_failed",
+      "why": "inline stop list"
+    },
+    {
+      "file": "hb_dropdown_rules.xlsx",
+      "sheet": "Form",
+      "address": "B3",
+      "formula": "\"Mayb\"&\"e\"",
+      "expect": "ok",
+      "why": "warning alert does not stop the entry"
+    },
+    {
+      "file": "hb_dropdown_rules.xlsx",
+      "sheet": "Form",
+      "address": "B4",
+      "formula": "\"Mayb\"&\"e\"",
+      "expect": "ok",
+      "why": "information alert does not stop the entry"
+    },
+    {
+      "file": "hb_dropdown_rules.xlsx",
+      "sheet": "Form",
+      "address": "B7",
+      "formula": "10+10",
+      "expect": "ok",
+      "why": "20 is in the numeric range list"
+    },
+    {
+      "file": "hb_dropdown_rules.xlsx",
+      "sheet": "Form",
+      "address": "B7",
+      "formula": "10+15",
+      "expect": "validation_failed",
+      "why": "25 is not in the numeric range list"
+    },
+    {
+      "file": "hb_dropdown_rules.xlsx",
+      "sheet": "Form",
+      "address": "B7",
+      "formula": "\"2\"&\"0\"",
+      "expect": "validation_failed",
+      "why": "text 20 never matches a number in a source range"
+    },
+    {
+      "file": "hb_dropdown_rules.xlsx",
+      "sheet": "Form",
+      "address": "B8",
+      "formula": "\"ab\"&\"c\"",
+      "expect": "ok",
+      "why": "text length 3 <= 5"
+    },
+    {
+      "file": "hb_dropdown_rules.xlsx",
+      "sheet": "Form",
+      "address": "B8",
+      "formula": "\"abc\"&\"def\"",
+      "expect": "validation_failed",
+      "why": "text length 6 > 5"
+    },
+    {
+      "file": "hb_dropdown_rules.xlsx",
+      "sheet": "Form",
+      "address": "B9",
+      "formula": "\"x\"",
+      "expect": "ok",
+      "why": "custom rule is not enforced"
+    },
+    {
+      "file": "hb_dropdown_rules.xlsx",
+      "sheet": "Form",
+      "address": "B11",
+      "formula": "1/4",
+      "expect": "validation_failed",
+      "why": "0.25 is between -1 and 1"
+    },
+    {
+      "file": "hb_dropdown_rules.xlsx",
+      "sheet": "Form",
+      "address": "B11",
+      "formula": "3*1",
+      "expect": "ok",
+      "why": "3 is not between -1 and 1"
+    },
+    {
+      "file": "hb_dropdown_formulas.xlsx",
+      "sheet": "Choices",
+      "address": "A3",
+      "formula": "B2",
+      "expect": "ok",
+      "why": "re-entering a formula whose result is in the list"
+    },
+    {
+      "file": "hb_dropdown_formulas.xlsx",
+      "sheet": "Choices",
+      "address": "A3",
+      "formula": "B3",
+      "expect": "validation_failed",
+      "why": "the stored formula's current result Maybe is out of the list; re-entry is checked"
+    },
+    {
+      "file": "hb_dropdown_formulas.xlsx",
+      "sheet": "Choices",
+      "address": "A4",
+      "formula": "B4*3",
+      "expect": "ok",
+      "why": "6 is between 1 and 10"
+    },
+    {
+      "file": "hb_dropdown_formulas.xlsx",
+      "sheet": "Choices",
+      "address": "A4",
+      "formula": "B4*20",
+      "expect": "validation_failed",
+      "why": "40 is not between 1 and 10"
     }
   ],
   "grammar": [
@@ -559,7 +863,11 @@
       "sqref": "B1",
       "formula1": "Items",
       "enforced": true,
-      "allowed_values": ["1", "2.5", "-3"],
+      "allowed_values": [
+        "1",
+        "2.5",
+        "-3"
+      ],
       "address": "B1",
       "value": 9,
       "expect": "validation_failed"
@@ -571,7 +879,11 @@
       "sqref": "B1",
       "formula1": "Items",
       "enforced": true,
-      "allowed_values": ["1.", ".5", "1e2"],
+      "allowed_values": [
+        "1.",
+        ".5",
+        "1e2"
+      ],
       "address": "B1",
       "value": 9,
       "expect": "validation_failed"
@@ -583,7 +895,9 @@
       "sqref": "B1",
       "formula1": "Items",
       "enforced": true,
-      "allowed_values": ["01"],
+      "allowed_values": [
+        "01"
+      ],
       "address": "B1",
       "value": 9,
       "expect": "validation_failed"
@@ -595,7 +909,10 @@
       "sqref": "B1",
       "formula1": "Items",
       "enforced": true,
-      "allowed_values": ["TRUE", "false"],
+      "allowed_values": [
+        "TRUE",
+        "false"
+      ],
       "address": "B1",
       "value": "nope",
       "expect": "validation_failed"
@@ -665,7 +982,10 @@
       "sqref": "A01",
       "formula1": "\"Yes,No\"",
       "enforced": true,
-      "allowed_values": ["Yes", "No"],
+      "allowed_values": [
+        "Yes",
+        "No"
+      ],
       "address": "A1",
       "value": "Maybe",
       "expect": "ok"
@@ -675,7 +995,10 @@
       "sqref": "A1",
       "formula1": "\"Yes,No\"",
       "enforced": true,
-      "allowed_values": ["Yes", "No"],
+      "allowed_values": [
+        "Yes",
+        "No"
+      ],
       "address": "A1",
       "value": "Maybe",
       "expect": "validation_failed"

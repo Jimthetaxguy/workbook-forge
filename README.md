@@ -42,6 +42,7 @@ agreement and established expected values; it does not replace either implementa
 | Compose calculations with named inputs and no workbook | [Native primitives](docs/primitives.md) |
 | Author or modify a workbook and calculate its outputs | [Programmable workbooks](#programmable-workbooks) |
 | Inspect XML records, formulas and source locations | [Extraction guide](docs/extraction-patterns.md) |
+| See which XLSX shapes and features are supported, kept as-is, or refused | [XLSX capabilities](docs/capabilities-xlsx.md) and [corpus report](docs/corpus-report.md) |
 | Give an agent bounded workbook operations | [Agent quick start](#agent-sdk-quick-start) and [operation contract](docs/agent-protocol.md) |
 | Understand product goals and planned behavior | [Product specifications](docs/product-specifications.md) |
 | Assess behavior and verification limits | [Behavior profiles](docs/behavior-profiles.md) and [delivery evidence](docs/toolkit-delivery.md#current-state-findings) |
