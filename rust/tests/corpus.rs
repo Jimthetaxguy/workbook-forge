@@ -403,3 +403,29 @@ fn compatibility_version_3_snapshot_export_refuses_new_formulas() {
     assert!(!target.exists());
     let _ = std::fs::remove_dir_all(&folder);
 }
+
+#[test]
+fn names_that_look_like_references_are_typed_as_names() {
+    let imported = import_xlsx_bytes(
+        &corpus("hb_r1c1_looking_names.xlsx"),
+        BTreeMap::new(),
+        BTreeMap::new(),
+    )
+    .expect("import");
+    let report = imported.calculate(1);
+    for (address, name) in [("A2", "R1C1Total"), ("B2", "rate_R2"), ("D2", "R1C1Total")] {
+        let diagnostic = report
+            .diagnostics
+            .iter()
+            .find(|d| d.address.as_deref() == Some(address))
+            .unwrap_or_else(|| panic!("no diagnostic for {address}: {:?}", report.diagnostics));
+        assert_eq!(diagnostic.code, "unsupported_formula", "{address}");
+        assert!(
+            diagnostic
+                .message
+                .contains(&format!("unsupported name '{name}'")),
+            "{address}: {}",
+            diagnostic.message
+        );
+    }
+}

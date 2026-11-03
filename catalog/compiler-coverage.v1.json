@@ -1220,7 +1220,7 @@
       "languages": {
         "python": {
           "recognized": "catalogued",
-          "parsed_syntax_probe": false,
+          "parsed_syntax_probe": true,
           "preserved": "generic_normal_formula_path; per_function_unverified",
           "translated_source": "not_implemented",
           "executable": "planned",
@@ -1250,7 +1250,7 @@
       "languages": {
         "python": {
           "recognized": "catalogued",
-          "parsed_syntax_probe": false,
+          "parsed_syntax_probe": true,
           "preserved": "generic_normal_formula_path; per_function_unverified",
           "translated_source": "not_implemented",
           "executable": "planned",
@@ -1280,7 +1280,7 @@
       "languages": {
         "python": {
           "recognized": "catalogued",
-          "parsed_syntax_probe": false,
+          "parsed_syntax_probe": true,
           "preserved": "generic_normal_formula_path; per_function_unverified",
           "translated_source": "not_implemented",
           "executable": "planned",
@@ -4434,7 +4434,7 @@
       "languages": {
         "python": {
           "recognized": "catalogued",
-          "parsed_syntax_probe": false,
+          "parsed_syntax_probe": true,
           "preserved": "generic_normal_formula_path; per_function_unverified",
           "translated_source": "not_implemented",
           "executable": "planned",
@@ -4464,7 +4464,7 @@
       "languages": {
         "python": {
           "recognized": "catalogued",
-          "parsed_syntax_probe": false,
+          "parsed_syntax_probe": true,
           "preserved": "generic_normal_formula_path; per_function_unverified",
           "translated_source": "not_implemented",
           "executable": "planned",
@@ -4494,7 +4494,7 @@
       "languages": {
         "python": {
           "recognized": "catalogued",
-          "parsed_syntax_probe": false,
+          "parsed_syntax_probe": true,
           "preserved": "generic_normal_formula_path; per_function_unverified",
           "translated_source": "not_implemented",
           "executable": "planned",
@@ -7144,7 +7144,7 @@
       "languages": {
         "python": {
           "recognized": "catalogued",
-          "parsed_syntax_probe": false,
+          "parsed_syntax_probe": true,
           "preserved": "generic_normal_formula_path; per_function_unverified",
           "translated_source": "not_implemented",
           "executable": "planned",
@@ -7174,7 +7174,7 @@
       "languages": {
         "python": {
           "recognized": "catalogued",
-          "parsed_syntax_probe": false,
+          "parsed_syntax_probe": true,
           "preserved": "generic_normal_formula_path; per_function_unverified",
           "translated_source": "not_implemented",
           "executable": "planned",
@@ -7204,7 +7204,7 @@
       "languages": {
         "python": {
           "recognized": "catalogued",
-          "parsed_syntax_probe": false,
+          "parsed_syntax_probe": true,
           "preserved": "generic_normal_formula_path; per_function_unverified",
           "translated_source": "not_implemented",
           "executable": "planned",
@@ -11410,7 +11410,7 @@
       "languages": {
         "python": {
           "recognized": "catalogued",
-          "parsed_syntax_probe": false,
+          "parsed_syntax_probe": true,
           "preserved": "generic_normal_formula_path; per_function_unverified",
           "translated_source": "not_implemented",
           "executable": "planned",
@@ -11440,7 +11440,7 @@
       "languages": {
         "python": {
           "recognized": "catalogued",
-          "parsed_syntax_probe": false,
+          "parsed_syntax_probe": true,
           "preserved": "generic_normal_formula_path; per_function_unverified",
           "translated_source": "not_implemented",
           "executable": "planned",
@@ -11470,7 +11470,7 @@
       "languages": {
         "python": {
           "recognized": "catalogued",
-          "parsed_syntax_probe": false,
+          "parsed_syntax_probe": true,
           "preserved": "generic_normal_formula_path; per_function_unverified",
           "translated_source": "not_implemented",
           "executable": "planned",

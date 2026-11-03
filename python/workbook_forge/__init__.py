@@ -163,7 +163,9 @@ _LEX_RE = re.compile(
     r"|(?P<SHEET>'(?:[^']|'')*')"
     r"|(?P<ERROR>\#(?:NULL!|DIV/0!|VALUE!|REF!|NAME\?|NUM!|N/A|N/A!|SPILL!|CALC!))"
     r"|(?P<NUMBER>(?:\d+(?:\.\d*)?|\.\d+)(?:[Ee][+-]?\d+)?)"
-    r"|(?P<CELL>\$?[A-Za-z]{1,3}\$?[1-9][0-9]*)"
+    # A cell reference ends at its row digits. Text that carries on (R1C1Total,
+    # C3PO, DEC2BIN) or opens a call (LOG10) is a name or function, not a cell.
+    r"|(?P<CELL>\$?[A-Za-z]{1,3}\$?[1-9][0-9]*(?![A-Za-z0-9_.(]))"
     r"|(?P<IDENT>[A-Za-z_][A-Za-z0-9_.]*)"
     r"|(?P<OP><=|>=|<>|[+\-*/^%&=<>(),:!])"
 )
