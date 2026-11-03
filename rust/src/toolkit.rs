@@ -890,7 +890,10 @@ impl WorkbookModel {
                             "a formula cell cannot also contain an authored value",
                         ));
                     }
-                    if formula.encode_utf16().count() > crate::MAX_FORMULA_LENGTH_UNITS + 1 {
+                    // The limit is on the formula body; the leading '=' is
+                    // optional here, so count without it (Python does the same).
+                    let body = formula.strip_prefix('=').unwrap_or(formula);
+                    if body.encode_utf16().count() > crate::MAX_FORMULA_LENGTH_UNITS {
                         return Err(ToolkitError::new(
                             "resource_limit",
                             "formula exceeds 8192 UTF-16 code units",
@@ -2713,6 +2716,25 @@ mod tests {
                 .code,
             "resource_limit"
         );
+    }
+    #[test]
+    fn the_formula_length_limit_counts_the_body_with_or_without_equals() {
+        // LEN("xxx...") with a body of exactly `units` UTF-16 code units.
+        let body = |units: usize| format!("LEN(\"{}\")", "x".repeat(units - 7));
+        for prefix in ["", "="] {
+            let at_limit = model(
+                &[("A1", Cell::formula(format!("{prefix}{}", body(8192))))],
+                &[],
+            );
+            assert!(at_limit.validate().is_ok(), "{prefix:?} at 8192");
+            let over = model(
+                &[("A1", Cell::formula(format!("{prefix}{}", body(8193))))],
+                &[],
+            );
+            let error = over.validate().unwrap_err();
+            assert_eq!(error.code, "resource_limit", "{prefix:?} at 8193");
+            assert_eq!(error.message, "formula exceeds 8192 UTF-16 code units");
+        }
     }
     #[test]
     fn reversed_ranges_case_insensitivity_and_blank_dependencies() {
