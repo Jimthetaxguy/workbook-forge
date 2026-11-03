@@ -11,8 +11,9 @@ calculation diagnostic. It never replaces an array with its fallback value.
 
 ## What each surface does
 
-Python (toolkit and canonical), Rust and the browser engine (Rust compiled to
-WASM) behave the same way and report the same codes and messages.
+The Python toolkit, Rust and the browser engine (Rust compiled to WASM) report
+the same codes and messages. The canonical lane refuses a Compatibility Version
+3 workbook on open with its own sentence.
 
 | Construct | How it is stored (see below) | Outcome |
 | --- | --- | --- |
@@ -42,9 +43,16 @@ The browser reports a refused open as `open_failed` and a refused export as
   namespace prefix; Rust keeps it byte-for-byte.
 - Exporting caches for formulas the engine did not calculate is refused
   (`calculation_diagnostics`) unless the caller binds the cells it works with,
-  the documented flow for unsupported formulas. In Rust, for a Compatibility
-  Version 3 workbook, that export refusal carries `compat_version_3` (the browser
-  reports `export_failed` with `refusal: "compat_version_3"`).
+  the documented flow for unsupported formulas. For a Compatibility Version 3
+  workbook, that unbound export refusal carries `compat_version_3` in both
+  Python and Rust. Python reaches that code through the refusal phrase order:
+  the phrase `compatibility version 3` is earlier in the shared table than
+  `cannot export calculation diagnostics`, and the diagnostic sentence contains
+  it. Rust's unbound export message includes the same diagnostic sentence, so
+  the same phrase selects `compat_version_3`. A snapshot that adds or changes a
+  formula is an explicit `compat_version_3` refusal in both Python and Rust.
+  The browser reports the unbound export as `export_failed` with
+  `refusal: "compat_version_3"`.
 
 Tests: `python/tests/test_in_cell_arrays.py`, `rust/tests/corpus.rs`,
 `web/forge-engine/test/engine.node.test.mjs`, and the corpus matrix

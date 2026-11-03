@@ -319,7 +319,7 @@ fn compatibility_version_3_preserves_formulas_and_refuses_formula_edits() {
         report
             .diagnostics
             .iter()
-            .all(|d| d.message == COMPAT_V3_CALCULATION)
+            .all(|d| d.message == COMPAT_V3_CALCULATION && d.code == "unsupported_cell")
     );
     let error = imported
         .apply(vec![Edit::formula("Calc", "C1", "=A2+1")], None)
