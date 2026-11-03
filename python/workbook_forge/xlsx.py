@@ -268,8 +268,15 @@ def _text_layout(root: ET.Element, styles: list[dict[str, Any]]) -> TextLayout |
 
     columns = []
     for col in root.findall("m:cols/m:col", NS):
-        if "style" in col.attrib:
-            columns.append((int(col.attrib["min"]), int(col.attrib["max"]), is_text(col.attrib["style"])))
+        if "style" not in col.attrib:
+            continue
+        # A missing or non-numeric min/max is not a column range. Skip it, as
+        # the row loop skips a bad r, instead of failing the import.
+        try:
+            first, last = int(col.attrib["min"]), int(col.attrib["max"])
+        except (KeyError, ValueError):
+            continue
+        columns.append((first, last, is_text(col.attrib["style"])))
     rows = {}
     for row in root.findall("m:sheetData/m:row", NS):
         if row.attrib.get("customFormat") in {"1", "true"} and "s" in row.attrib and "r" in row.attrib:
@@ -444,7 +451,10 @@ def import_xlsx(
                 )
             widths = {}
             for col in root.findall("m:cols/m:col", NS):
-                first, last = int(col.attrib["min"]), int(col.attrib["max"])
+                try:
+                    first, last = int(col.attrib["min"]), int(col.attrib["max"])
+                except (KeyError, ValueError):
+                    continue
                 if not 1 <= first <= last <= 16384:
                     raise WorkbookError("invalid column-width range")
                 width_work += last - first + 1
@@ -524,9 +534,10 @@ def import_xlsx(
             if (cell.get("style") or {}).get("number_format") == "@"
         )
         if text_layouts:
-            # A cell inserted where none existed takes its row's style (a row
-            # with customFormat) or else its column's, as Excel does, so it is
-            # text when that style is Text (@).
+            # Workbook Forge rule for imported workbooks; not checked against
+            # Excel. An inserted cell takes its row style when customFormat is
+            # set, otherwise its column style; an inherited @ keeps numeric
+            # writes as text.
             model._text_layouts = text_layouts
             model._imported_addresses = frozenset(
                 (item["name"].casefold(), address)
