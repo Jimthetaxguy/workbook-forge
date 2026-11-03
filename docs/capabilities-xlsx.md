@@ -8,9 +8,12 @@ calculate, a value edit, an absent-cell insert, export and reimport in three eng
 the Python toolkit (`py_toolkit`), the Python canonical model (`py_canonical`, which
 writes a fresh package by design) and Rust (`rust`, also the WASM engine).
 
-- **Supported**: read, calculated where formulas apply, editable, and round-tripped.
-- **Preserved-only**: kept byte-for-byte through an edit and export, but not modeled
-  or editable.
+- **Supported**: read and editable. A harness pass means the file opens,
+  the bound edit and export reopen, and no engine refuses it. Formula
+  calculation is reported separately in [the corpus report](corpus-report.md).
+- **Preserved-only**: the Python toolkit and the Rust patch path keep the
+  content byte-for-byte through an edit and export. The canonical writer
+  builds a fresh package. The content is not modeled or editable.
 - **Refused**: at least one engine stops on at least one file in the category with
   a typed refusal code ([refusal codes](refusal-codes.md)). A category can be refused
   in one engine and read in another, or for one file and not another; the counts and
@@ -69,15 +72,23 @@ Excel observation.
 | text-length | 1 |
 | very-hidden | 1 |
 
+Formulas a full calculation does not cover in these categories:
+
+- **cross-sheet**: `hb_3d_references.xlsx` reports `unsupported_formula` for its 3D spans and for the name `FirstQuarter`. The other files in this category have no calculation diagnostics.
+- **defined-names**: 3D spans and the name `FirstQuarter` in `hb_3d_references.xlsx` are `unsupported_formula`. `op_defined_names.xlsx` reports unsupported names `Rate` and `LocalFactor`. `xw_hyperlinks_names.xlsx` reports the unsupported name `Answer`. `hb_r1c1_looking_names.xlsx` reports `parse_error`, `unsupported_formula`, and `invalid_reference`. `hb_google_sheets_like.xlsx` reports `unsupported_formula` for CONCATENATE.
+- **in-cell-array-functions**: `hb_flatten_has_functions.xlsx` reports `unsupported_formula` for HAS, HASANY, HASALL, and FLATTEN.
+- **new-functions**: `hb_flatten_has_functions.xlsx` reports `unsupported_formula` for HAS, HASANY, HASALL, and FLATTEN.
+- **sheet-name-spaces**: `hb_3d_references.xlsx` reports `unsupported_formula` for its 3D spans and for the name `FirstQuarter`. The other files in this category have no calculation diagnostics.
+
 ## Preserved only (53)
 
 | Category | Files | What is kept |
 | --- | ---: | --- |
 | 3d-references | 1 | 3D references (Jan:Mar!B2) are kept with their cached values; calculation reports `unsupported_formula`. |
-| 3d-refs | 1 | 3D references (Jan:Mar!B2) are kept with their cached values; calculation reports `unsupported_formula`. |
+| 3d-refs | 1 | The 3D formula in `op_sheet_name_quoting.xlsx` is `SUM('Q1 Budget:Σ Totals'!A1)` and its cached value is empty. Calculation reports `unsupported_formula`. |
 | autofilter | 2 | Filters are kept; not applied. |
 | bar-chart | 1 | Chart parts are kept byte-for-byte; inspect reports type, anchor and series refs. |
-| calcchain | 1 | The calculation chain is kept or dropped as Excel allows; never trusted. |
+| calcchain | 1 | An edit export removes `xl/calcChain.xml`. The chain is never trusted. |
 | calculated-columns | 1 | Calculated-column formulas are kept; not calculated (table formula region). |
 | charts | 3 | Chart parts are kept byte-for-byte; inspect reports type, anchor and series refs. |
 | chartsheet | 1 | Listed and kept byte-for-byte; not modeled. |
@@ -114,11 +125,11 @@ Excel observation.
 | print-titles | 1 | Print titles are kept. |
 | protection | 1 | Sheet and workbook protection is kept; hashes are never checked. |
 | query-table | 1 | Query-table parts are kept; never refreshed. |
-| r1c1-looking-names | 1 | The names and formulas are kept; formulas using them are not calculated. |
+| r1c1-looking-names | 1 | The names are kept. The four formulas are not calculated, and they do not share one outcome: calculation reports `parse_error`, `unsupported_formula`, and `invalid_reference`. |
 | scatter-chart | 1 | Chart parts are kept byte-for-byte; inspect reports type, anchor and series refs. |
 | slicers | 1 | Slicer and slicer-cache parts are kept; never applied. |
 | sparklines | 1 | x14 sparkline groups are kept in the worksheet extLst. |
-| structured-refs | 3 | Structured references are kept; most are not calculated. |
+| structured-refs | 3 | Structured references are kept; none of these formulas are calculated. |
 | styles | 2 | Imported styles are inspected and kept; style edits are refused. |
 | tables | 5 | Table parts are kept; cells inside are ordinary cells, table formula regions are not edited. |
 | theme | 1 | The theme part is kept. |
