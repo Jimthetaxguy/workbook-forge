@@ -130,7 +130,9 @@ def test_blank_clear_passes_and_formula_result_reads_the_same_batch():
     model = import_xlsx(CORPUS / "xw_dropdowns.xlsx")
     model.set_value("Orders", "C4", None)
     # The formula reads a cell the same batch writes: its result is checked
-    # with the whole batch applied, as Excel would see it after entry.
+    # with the whole batch applied. A formula entry is checked by its
+    # calculated result. Workbook Forge follows this rule; not checked
+    # against Excel.
     model.apply([
         {"sheet": "Orders", "address": "G3", "value": "Blue"},
         {"sheet": "Orders", "address": "C3", "formula": "G3"},

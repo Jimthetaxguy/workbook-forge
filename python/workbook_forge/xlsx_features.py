@@ -8,11 +8,12 @@ agree on.
 
 - Data validation ("drop-downs"): every ``dataValidation`` is reported with
   its type, operator, source (inline list, range, or defined name) and, where
-  it can be resolved, its allowed values. A rule is *enforced* when Excel
-  would stop the entry: ``showErrorMessage`` is on and ``errorStyle`` is
-  ``stop`` (the default). An enforced rule refuses an out-of-rule value with
-  ``validation_failed``. A formula entry is checked by its calculated
-  result, as Excel checks it once at entry. Rules this module cannot evaluate (custom formulas,
+  it can be resolved, its allowed values. A rule is *enforced* when
+  ``showErrorMessage`` is on and ``errorStyle`` is ``stop`` (the default).
+  Workbook Forge follows that rule; not checked against Excel. An enforced
+  rule refuses an out-of-rule value with ``validation_failed``. A formula
+  entry is checked by its calculated result. Workbook Forge follows this
+  rule; not checked against Excel. Rules this module cannot evaluate (custom formulas,
   lists built by a formula, non-constant bounds) are reported with
   ``enforced: false`` and a reason; writes into them are not checked.
 - Pivot tables: location, source range and fields are reported. Refresh is
@@ -167,7 +168,7 @@ def split_reference(text: str) -> tuple[str | None, str] | None:
 
 
 def parse_inline_list(text: str) -> list[str] | None:
-    """Excel's inline list (one quoted string, items split on commas, ``""`` for a quote)."""
+    """An inline list (one quoted string, items split on commas, ``""`` for a quote)."""
     if len(text) < 2 or not text.startswith('"') or not text.endswith('"'):
         return None
     body = text[1:-1]
@@ -281,9 +282,15 @@ def read_validations(sheet: str, root: ET.Element, names: dict) -> list[dict[str
         else:
             reason = "no rule"
         if reason is None and not show_error:
-            reason = "Excel shows no error alert (showErrorMessage is off), so any value is accepted"
+            reason = (
+                "showErrorMessage is off, so Workbook Forge does not enforce the rule "
+                "and accepts any value"
+            )
         elif reason is None and error_style != "stop":
-            reason = f"errorStyle {error_style} lets the entry through in Excel"
+            reason = (
+                f"errorStyle {error_style} is not stop, so Workbook Forge does not "
+                "enforce the rule and accepts the entry"
+            )
         rule["enforced"] = reason is None
         rule["unenforced_reason"] = reason
         rule["_bounds"] = [b for b in (range_bounds(r) for r in rule["sqref"]) if b]
@@ -360,7 +367,8 @@ def _list_item_matches(item: Any, value: Any) -> bool:
         return str(value).strip().upper() == ("TRUE" if item else "FALSE")
     if isinstance(item, (int, float)):
         return False  # Text never matches a number in the source range.
-    # Excel's list check is not case-sensitive.
+    # Lists compare text without regard to case. Workbook Forge follows that
+    # rule; not checked against Excel.
     return str(item).casefold() == str(value).casefold()
 
 
@@ -400,9 +408,9 @@ def _compare(operator: str, value: float, low: float, high: float | None) -> boo
 
 
 def rule_violation(rule: dict[str, Any], value: Any, read) -> str | None:
-    """Why ``value`` breaks an enforced rule, or None when Excel would accept it."""
+    """Why ``value`` breaks an enforced rule, or None when Workbook Forge accepts it."""
     if not rule["enforced"] or value is None or value == "":
-        return None  # Clearing a cell is never validated in Excel.
+        return None  # Workbook Forge never validates a cleared cell (an empty value).
     if isinstance(value, dict):
         return "an error value is not an allowed entry"
     kind = rule["type"]
@@ -436,7 +444,7 @@ def rule_violation(rule: dict[str, Any], value: Any, read) -> str | None:
 
 
 def covering_rule(rules: list[dict[str, Any]], sheet: str, column: int, row: int) -> dict[str, Any] | None:
-    """The rule Excel applies to a cell: the first one whose sqref covers it."""
+    """The rule Workbook Forge applies to a cell: the first one whose sqref covers it."""
     for rule in rules:
         if rule["sheet"].casefold() == sheet.casefold() and any(
             _contains(bounds, column, row) for bounds in rule["_bounds"]
@@ -677,9 +685,10 @@ class FeatureGuard:
     ) -> tuple[str, str] | None:
         """(code, message) when a formula entry's calculated result breaks its rule.
 
-        Excel checks a formula's result once, when it is entered, and never on
-        recalculation. A result this engine cannot calculate cannot be shown
-        to satisfy the rule, so it is refused too.
+        A formula entry is checked by its calculated result. Workbook Forge
+        follows this rule; not checked against Excel. A result this engine
+        cannot calculate cannot be shown to satisfy the rule, so it is refused
+        too.
         """
         rule = self.formula_rule(sheet, address)
         if rule is None:
