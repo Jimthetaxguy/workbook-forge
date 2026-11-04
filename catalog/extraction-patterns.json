@@ -2809,22 +2809,22 @@
       "name": "RAND",
       "known": true,
       "category": "Math and trigonometry",
-      "python": "catalogued",
-      "rust": "catalogued"
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
     },
     "RANDARRAY": {
       "name": "RANDARRAY",
       "known": true,
       "category": "Math and trigonometry",
-      "python": "catalogued",
-      "rust": "catalogued"
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
     },
     "RANDBETWEEN": {
       "name": "RANDBETWEEN",
       "known": true,
       "category": "Math and trigonometry",
-      "python": "catalogued",
-      "rust": "catalogued"
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
     },
     "RANK": {
       "name": "RANK",

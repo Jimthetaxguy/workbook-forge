@@ -23,7 +23,7 @@ A category is a shape or feature a corpus file exercises; one file has several.
 This is a robustness statement about Workbook Forge's readers and writers, not an
 Excel observation.
 
-## Supported (47)
+## Supported (48)
 
 | Category | Files |
 | --- | ---: |
@@ -60,6 +60,7 @@ Excel observation.
 | phonetic | 1 |
 | quote-prefix | 2 |
 | quoting | 1 |
+| rand | 1 |
 | range-list | 2 |
 | rich-text | 7 |
 | row-styles | 1 |
@@ -291,6 +292,7 @@ absolute-targets (2), budget (2), empty-sheet (1), engineering (1), excel-markup
 - **quote-prefix**: `hb_text_edge_cases.xlsx` (pass / pass / pass), `op_text_cells.xlsx` (pass / pass / pass)
 - **quoting**: `op_sheet_name_quoting.xlsx` (pass / pass / pass)
 - **r1c1-looking-names**: `hb_r1c1_looking_names.xlsx` (pass / pass / pass)
+- **rand**: `hb_volatile_formulas.xlsx` (pass / pass / pass)
 - **range-list**: `op_dropdowns.xlsx` (pass / pass / pass), `xw_dropdowns.xlsx` (pass / pass / pass)
 - **research-data**: `op_large_60k.xlsx` (pass / pass / pass)
 - **rich-text**: `hb_inline_and_shared_strings.xlsx` (pass / pass / pass), `hb_inline_strings_rich.xlsx` (pass / pass / pass), `hb_rich_text_phonetic.xlsx` (pass / pass / pass), `hb_text_edge_cases.xlsx` (pass / pass / pass), `op_rich_text.xlsx` (pass / pass / pass), `op_text_cells.xlsx` (pass / pass / pass), `xw_text_formats.xlsx` (pass / pass / pass)
