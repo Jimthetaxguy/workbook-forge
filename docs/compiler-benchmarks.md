@@ -46,14 +46,14 @@ and `inventory_refresh_required` remains true. The map records generic parse
 probes separately from valid argument domains, executable semantics, shared
 expected fixtures, preservation and generated-source translation.
 
-The 120 implemented names in each language are declared implementation-profile
+The 123 implemented names in each language are declared implementation-profile
 statuses in the existing function catalog, cross-checked against Rust's explicit
-120-name runtime registry. All 120 have associated cases in the shared
+123-name runtime registry. All 123 have associated cases in the shared
 fixture file. The available project suite executes those fixtures, but association
 or registry membership is not a complete argument-domain proof and is not a
 count of independently Excel-observed functions. Numeric source profile 1 has no
 function-call code generation; source profile 2 now compiles SUM as one explicitly
-bounded source function, separately from the 120 runtime profiles.
+bounded source function, separately from the 123 runtime profiles.
 
 The [Microsoft alphabetical index](https://support.microsoft.com/en-us/excel/excel-functions-alphabetical)
 applies across Microsoft 365 and several older releases; version markers do not
@@ -231,7 +231,7 @@ whole-workbook environment construction remains a separate quadratic cost.
    entry points independently runnable. Arbitrary source programs remain a
    deliberately diagnosed import boundary, not an Excel-equivalence assumption.
 2. **Language surface:** reconcile the 521-entry snapshot against current primary
-   catalogs/specification revision, then implement the 401 currently unimplemented
+   catalogs/specification revision, then implement the 398 currently unimplemented
    inventory entries by family with shared independent expected fixtures and
    backend-specific execution tests. Preserve separate parsed/preserved/translated/
    executable/reference/Excel-observed status for every function, never a count-only

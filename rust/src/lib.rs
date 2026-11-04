@@ -1670,6 +1670,305 @@ fn randarray_call(
     ArrayValue::new(result)
 }
 
+const MONTH_NAMES: &[(&str, i32)] = &[
+    ("january", 1),
+    ("jan", 1),
+    ("february", 2),
+    ("feb", 2),
+    ("march", 3),
+    ("mar", 3),
+    ("april", 4),
+    ("apr", 4),
+    ("may", 5),
+    ("june", 6),
+    ("jun", 6),
+    ("july", 7),
+    ("jul", 7),
+    ("august", 8),
+    ("aug", 8),
+    ("september", 9),
+    ("sep", 9),
+    ("sept", 9),
+    ("october", 10),
+    ("oct", 10),
+    ("november", 11),
+    ("nov", 11),
+    ("december", 12),
+    ("dec", 12),
+];
+
+fn month_number(word: &str) -> Option<i32> {
+    MONTH_NAMES
+        .iter()
+        .find(|(name, _)| *name == word)
+        .map(|(_, month)| *month)
+}
+
+fn ascii_digits(text: &str, low: usize, high: usize) -> bool {
+    (low..=high).contains(&text.len()) && text.bytes().all(|b| b.is_ascii_digit())
+}
+
+/// Milliseconds of day for `H[:MM[:SS[.fff]]]` (+ AM/PM), or `None`.
+fn text_time(token: &str, meridiem: Option<&str>) -> Option<i64> {
+    let mut parts: Vec<&str> = token.split(':').collect();
+    if parts.len() > 3 || (meridiem.is_none() && parts.len() < 2) {
+        return None;
+    }
+    let mut fraction = 0i64;
+    let last = parts.len() - 1;
+    if let Some((whole, digits)) = parts[last].split_once('.') {
+        if parts.len() != 3 || !ascii_digits(digits, 1, 3) {
+            return None;
+        }
+        let padded: String = digits.chars().chain("00".chars()).take(3).collect();
+        fraction = padded.parse().ok()?;
+        parts[last] = whole;
+    }
+    if !ascii_digits(parts[0], 1, 2) || !parts[1..].iter().all(|part| ascii_digits(part, 2, 2)) {
+        return None;
+    }
+    let mut hour: i64 = parts[0].parse().ok()?;
+    let minute: i64 = parts.get(1).map_or(Some(0), |part| part.parse().ok())?;
+    let second: i64 = parts.get(2).map_or(Some(0), |part| part.parse().ok())?;
+    match meridiem {
+        None if hour > 23 => return None,
+        None => {}
+        Some(_) if !(1..=12).contains(&hour) => return None,
+        Some(half) => hour = hour % 12 + if half == "pm" { 12 } else { 0 },
+    }
+    if minute > 59 || second > 59 {
+        return None;
+    }
+    Some(((hour * 60 + minute) * 60 + second) * 1000 + fraction)
+}
+
+/// Split trimmed text into its date part and optional time of day (ms).
+/// `None` means the text is not an accepted date/time form.
+fn split_date_time(text: &str) -> Option<(&str, Option<i64>)> {
+    let mut rest = text;
+    let mut meridiem = None;
+    if rest.len() >= 2 && rest.is_char_boundary(rest.len() - 2) {
+        let tail = rest[rest.len() - 2..].to_ascii_lowercase();
+        if tail == "am" || tail == "pm" {
+            meridiem = Some(if tail == "am" { "am" } else { "pm" });
+            rest = &rest[..rest.len() - 2];
+            rest = rest.strip_suffix(' ').unwrap_or(rest);
+        }
+    }
+    let start = rest
+        .char_indices()
+        .rev()
+        .take_while(|(_, c)| c.is_ascii_digit() || *c == ':' || *c == '.')
+        .last()
+        .map_or(rest.len(), |(index, _)| index);
+    let token = &rest[start..];
+    if meridiem.is_none() && !token.contains(':') {
+        return Some((text, None));
+    }
+    if token.is_empty() {
+        return None;
+    }
+    let milliseconds = text_time(token, meridiem)?;
+    let mut date = &rest[..start];
+    if !date.is_empty() {
+        date = date
+            .strip_suffix(' ')
+            .or_else(|| date.strip_suffix('T'))
+            .or_else(|| date.strip_suffix('t'))?;
+        if date.is_empty() {
+            return None;
+        }
+    }
+    Some((date, Some(milliseconds)))
+}
+
+/// The 1900-system serial of an accepted date form, or `None`.
+fn text_date_serial(text: &str) -> Option<i64> {
+    let lowered = text.to_ascii_lowercase();
+    let mut ymd = None;
+    for separator in ['-', '/'] {
+        let parts: Vec<&str> = lowered.split(separator).collect();
+        if parts.len() == 3 && parts.iter().all(|part| ascii_digits(part, 1, 4)) {
+            let (first, second, third) = (parts[0], parts[1], parts[2]);
+            if first.len() == 4 && ascii_digits(second, 1, 2) && ascii_digits(third, 1, 2) {
+                ymd = Some((
+                    first.parse().ok()?,
+                    second.parse().ok()?,
+                    third.parse().ok()?,
+                ));
+            } else if separator == '/'
+                && third.len() == 4
+                && ascii_digits(first, 1, 2)
+                && ascii_digits(second, 1, 2)
+            {
+                // en-US month/day/year, accepted only when no day/month
+                // reading exists: the day is above 12 or equals the month.
+                let (month, day): (i32, i32) = (first.parse().ok()?, second.parse().ok()?);
+                if !(day > 12 || day == month) {
+                    return None;
+                }
+                ymd = Some((third.parse().ok()?, month, day));
+            } else {
+                return None;
+            }
+            break;
+        }
+    }
+    let (year, month, day): (i32, i32, i32) = match ymd {
+        Some(ymd) => ymd,
+        None => {
+            let words: Vec<&str> = if lowered.matches('-').count() == 2 {
+                lowered.split('-').collect()
+            } else {
+                lowered.split(' ').collect()
+            };
+            if words.len() != 3 {
+                return None;
+            }
+            if ascii_digits(words[0], 1, 2)
+                && month_number(words[1]).is_some()
+                && ascii_digits(words[2], 4, 4)
+            {
+                (
+                    words[2].parse().ok()?,
+                    month_number(words[1])?,
+                    words[0].parse().ok()?,
+                )
+            } else {
+                let day_word = words[1].strip_suffix(',').unwrap_or(words[1]);
+                if !lowered.contains('-')
+                    && month_number(words[0]).is_some()
+                    && ascii_digits(day_word, 1, 2)
+                    && ascii_digits(words[2], 4, 4)
+                {
+                    (
+                        words[2].parse().ok()?,
+                        month_number(words[0])?,
+                        day_word.parse().ok()?,
+                    )
+                } else {
+                    return None;
+                }
+            }
+        }
+    };
+    if !(1900..=9999).contains(&year) {
+        return None;
+    }
+    excel_ymd_to_serial(year, month, day).ok()
+}
+
+/// DATEVALUE and TIMEVALUE over the documented unambiguous text forms.
+fn date_time_text(name: &str, value: &Value) -> Result<Value, FormulaError> {
+    let text = match value {
+        Value::Error(error) => return Err(error.clone()),
+        Value::Text(text) => text.trim_matches(|c| c == ' ' || c == '\t'),
+        _ => return Err(FormulaError::Value),
+    };
+    if text.is_empty() || text.chars().count() > 255 {
+        return Err(FormulaError::Value);
+    }
+    let (date, milliseconds) = split_date_time(text).ok_or(FormulaError::Value)?;
+    let serial = if date.is_empty() {
+        None
+    } else {
+        Some(text_date_serial(date).ok_or(FormulaError::Value)?)
+    };
+    if name == "DATEVALUE" {
+        return serial
+            .map(|serial| Value::Number(serial as f64))
+            .ok_or(FormulaError::Value);
+    }
+    Ok(Value::Number(
+        milliseconds.unwrap_or(0) as f64 / 86_400_000.0,
+    ))
+}
+
+fn datedif_serial(value: &Value) -> Result<i64, FormulaError> {
+    if let Value::Error(error) = value {
+        return Err(error.clone());
+    }
+    if let Value::Text(text) = value {
+        let text = text.trim_matches(|c| c == ' ' || c == '\t');
+        if let Some((date, _)) = split_date_time(text).filter(|(date, _)| !date.is_empty())
+            && let Some(serial) = text_date_serial(date)
+        {
+            return Ok(serial);
+        }
+    }
+    let number = to_number(value)?;
+    if !number.is_finite() {
+        return Err(FormulaError::Num);
+    }
+    let day = number.floor();
+    if day < 0.0 || day > MAX_EXCEL_DATE_SERIAL as f64 {
+        return Err(FormulaError::Num);
+    }
+    Ok(day as i64)
+}
+
+fn date_serial(year: i32, month: i32, day: i32) -> Result<i64, FormulaError> {
+    match date_value(year, month, day)? {
+        Value::Number(serial) => Ok(serial as i64),
+        _ => Err(FormulaError::Num),
+    }
+}
+
+/// DATEDIF(start, end, unit) with Excel's MD and YD anchoring quirks.
+fn datedif_call(args: &[Expr], env: &Environment<'_>) -> Result<Value, FormulaError> {
+    arity("DATEDIF", args, 3, 3)?;
+    let start = eval_scalar(&args[0], env)?;
+    let end = eval_scalar(&args[1], env)?;
+    let unit = eval_scalar(&args[2], env)?;
+    let start = datedif_serial(&start)?;
+    let end = datedif_serial(&end)?;
+    let unit = match unit {
+        Value::Error(error) => return Err(error),
+        Value::Text(text) => text.to_ascii_uppercase(),
+        _ => return Err(FormulaError::Num),
+    };
+    if !["Y", "M", "D", "MD", "YM", "YD"].contains(&unit.as_str()) {
+        return Err(FormulaError::Num);
+    }
+    if start > end {
+        return Err(FormulaError::Num);
+    }
+    if unit == "D" {
+        return Ok(Value::Number((end - start) as f64));
+    }
+    let (y1, m1, d1) = serial_to_date(start)?;
+    let (y2, m2, d2) = serial_to_date(end)?;
+    let months = (y2 - y1) * 12 + (m2 - m1) - i32::from(d2 < d1);
+    let result = match unit.as_str() {
+        "M" => i64::from(months),
+        "Y" => i64::from(months.div_euclid(12)),
+        "YM" => i64::from(months.rem_euclid(12)),
+        "MD" if d2 >= d1 => i64::from(d2 - d1),
+        "MD" => {
+            // Excel's quirk: count from the start day in the month before the
+            // end month, letting DATE roll an invalid day forward (can be < 0).
+            if y2 < 1900 || (y2, m2) == (1900, 1) {
+                return Err(FormulaError::Num);
+            }
+            end - date_serial(y2, m2 - 1, d1)?
+        }
+        _ => {
+            if y2 < 1900 {
+                return Err(FormulaError::Num);
+            }
+            let mut anchor = date_serial(y2, m1, d1)?;
+            if anchor > end {
+                if y2 - 1 < 1900 {
+                    return Err(FormulaError::Num);
+                }
+                anchor = date_serial(y2 - 1, m1, d1)?;
+            }
+            end - anchor
+        }
+    };
+    Ok(Value::Number(result as f64))
+}
+
 fn read_cell(env: &Environment<'_>, sheet: &str, address: &str) -> Value {
     let actual_sheet = if sheet.is_empty() {
         env.sheet_name
@@ -3495,6 +3794,7 @@ fn eval_call(name: &str, args: &[Expr], env: &Environment<'_>) -> Result<Value, 
         }
         "AND" | "OR" => return and_or_call(name, args, env),
         "COUNT" => return count_call(name, args, env),
+        "DATEDIF" => return datedif_call(args, env),
         _ => {}
     }
     let values: Vec<CalcValue> = args
@@ -3811,6 +4111,13 @@ fn eval_call(name: &str, args: &[Expr], env: &Environment<'_>) -> Result<Value, 
             }
             let values: Vec<&Value> = flat.iter().collect();
             return join_values_bounded(&values, "", false, MAX_TEXT_LENGTH_UNITS).map(Value::Text);
+        }
+        "DATEVALUE" | "TIMEVALUE" => {
+            arity(name, args, 1, 1)?;
+            if matches!(values[0], CalcValue::Range(_)) {
+                return Err(FormulaError::Value);
+            }
+            return date_time_text(name, &flat[0]);
         }
         "DATE" => {
             arity(name, args, 3, 3)?;
