@@ -1,0 +1,632 @@
+{
+  "version": 1,
+  "description": "Defined-name calculation shared by every engine (py_toolkit, py_canonical, rust toolkit, rust canonical). Expected values are independent arithmetic over the listed cells; messages are Workbook Forge's own typed refusals. Each case is one formula cell on its sheet, in its own column of row 10 in case order. A diagnostic case names the toolkit code; the canonical model maps name_cycle to cycle/cycle, resource_limit to resource_limit, parse_error to parse_error unsupported_formula to unsupported_formula/unsupported and invalid_reference to invalid_reference/invalid_reference. XFE1 is cell-shaped past the grid and stays an invalid reference (a recorded call), even when a name of that spelling exists. A case without a message checks the code only (parse messages are engine-specific). See docs/defined-names.md.",
+  "sheets": [
+    "Inputs",
+    "Calc",
+    "Other"
+  ],
+  "cells": {
+    "Inputs!A1": 0.5,
+    "Inputs!A2": 1000,
+    "Inputs!B1": 10,
+    "Inputs!B2": 20,
+    "Inputs!B3": 30,
+    "Calc!A1": 5
+  },
+  "names": [
+    {
+      "name": "Rate",
+      "sheet": null,
+      "formula": "Inputs!$A$1",
+      "hidden": false
+    },
+    {
+      "name": "Principal",
+      "sheet": null,
+      "formula": "Inputs!$A$2",
+      "hidden": false
+    },
+    {
+      "name": "Interest",
+      "sheet": null,
+      "formula": "=Rate*Principal",
+      "hidden": false
+    },
+    {
+      "name": "Tax",
+      "sheet": null,
+      "formula": "0.25",
+      "hidden": false
+    },
+    {
+      "name": "Net",
+      "sheet": null,
+      "formula": "Interest*(1-Tax)",
+      "hidden": false
+    },
+    {
+      "name": "Quarter",
+      "sheet": null,
+      "formula": "Inputs!$B$1:$B$3",
+      "hidden": false
+    },
+    {
+      "name": "Factor",
+      "sheet": null,
+      "formula": "2",
+      "hidden": false
+    },
+    {
+      "name": "Factor",
+      "sheet": "Calc",
+      "formula": "Calc!$A$1",
+      "hidden": false
+    },
+    {
+      "name": "LoopA",
+      "sheet": null,
+      "formula": "LoopB+1",
+      "hidden": false
+    },
+    {
+      "name": "LoopB",
+      "sheet": null,
+      "formula": "LoopA*2",
+      "hidden": false
+    },
+    {
+      "name": "SelfRef",
+      "sheet": null,
+      "formula": "SelfRef",
+      "hidden": false
+    },
+    {
+      "name": "Gone",
+      "sheet": null,
+      "formula": "Inputs!#REF!",
+      "hidden": false
+    },
+    {
+      "name": "GoneAll",
+      "sheet": null,
+      "formula": "#REF!",
+      "hidden": false
+    },
+    {
+      "name": "Relative",
+      "sheet": null,
+      "formula": "Inputs!A1",
+      "hidden": false
+    },
+    {
+      "name": "HalfRelative",
+      "sheet": null,
+      "formula": "Inputs!$A1",
+      "hidden": false
+    },
+    {
+      "name": "Unqualified",
+      "sheet": null,
+      "formula": "$A$1",
+      "hidden": false
+    },
+    {
+      "name": "External",
+      "sheet": null,
+      "formula": "[1]Rates!$B$2",
+      "hidden": false
+    },
+    {
+      "name": "QuotedExternal",
+      "sheet": null,
+      "formula": "'[1]My Rates'!$B$2",
+      "hidden": false
+    },
+    {
+      "name": "Dynamic",
+      "sheet": null,
+      "formula": "OFFSET(Inputs!$A$1,1,0)",
+      "hidden": false
+    },
+    {
+      "name": "Indirect",
+      "sheet": null,
+      "formula": "INDIRECT(\"Inputs!A1\")",
+      "hidden": false
+    },
+    {
+      "name": "Hidden",
+      "sheet": null,
+      "formula": "Inputs!$A$1",
+      "hidden": true
+    },
+    {
+      "name": "_xlnm.Print_Area",
+      "sheet": "Calc",
+      "formula": "Calc!$A$1:$B$2",
+      "hidden": false
+    },
+    {
+      "name": "_xlnm._FilterDatabase",
+      "sheet": "Calc",
+      "formula": "Calc!$A$1:$B$2",
+      "hidden": true
+    },
+    {
+      "name": "Span",
+      "sheet": null,
+      "formula": "Jan:Mar!$B$2",
+      "hidden": false
+    },
+    {
+      "name": "Colors",
+      "sheet": null,
+      "formula": "{\"Red\",\"Green\"}",
+      "hidden": false
+    },
+    {
+      "name": "Broken",
+      "sheet": null,
+      "formula": "Inputs!$A$1+",
+      "hidden": false
+    },
+    {
+      "name": "Empty",
+      "sheet": null,
+      "formula": "",
+      "hidden": false
+    },
+    {
+      "name": "Rate2",
+      "sheet": null,
+      "formula": "rate",
+      "hidden": false
+    },
+    {
+      "name": "C3PO",
+      "sheet": null,
+      "formula": "Inputs!$A$2",
+      "hidden": false
+    },
+    {
+      "name": "Label",
+      "sheet": null,
+      "formula": "\"Rate\"&\"!\"",
+      "hidden": false
+    },
+    {
+      "name": "Twice1",
+      "sheet": null,
+      "formula": "Rate+Rate",
+      "hidden": false
+    },
+    {
+      "name": "Twice2",
+      "sheet": null,
+      "formula": "Twice1+Twice1",
+      "hidden": false
+    },
+    {
+      "name": "Twice3",
+      "sheet": null,
+      "formula": "Twice2+Twice2",
+      "hidden": false
+    },
+    {
+      "name": "Twice4",
+      "sheet": null,
+      "formula": "Twice3+Twice3",
+      "hidden": false
+    },
+    {
+      "name": "Twice5",
+      "sheet": null,
+      "formula": "Twice4+Twice4",
+      "hidden": false
+    },
+    {
+      "name": "Twice6",
+      "sheet": null,
+      "formula": "Twice5+Twice5",
+      "hidden": false
+    },
+    {
+      "name": "Twice7",
+      "sheet": null,
+      "formula": "Twice6+Twice6",
+      "hidden": false
+    },
+    {
+      "name": "Twice8",
+      "sheet": null,
+      "formula": "Twice7+Twice7",
+      "hidden": false
+    },
+    {
+      "name": "XFE1",
+      "sheet": null,
+      "formula": "Inputs!$A$1",
+      "hidden": false
+    }
+  ],
+  "cases": [
+    {
+      "id": "cell_name",
+      "sheet": "Calc",
+      "formula": "=Rate",
+      "expected": {
+        "value": 0.5
+      }
+    },
+    {
+      "id": "case_insensitive",
+      "sheet": "Calc",
+      "formula": "=rate*2",
+      "expected": {
+        "value": 1
+      }
+    },
+    {
+      "id": "formula_name",
+      "sheet": "Calc",
+      "formula": "=Interest",
+      "expected": {
+        "value": 500
+      }
+    },
+    {
+      "id": "chained_names",
+      "sheet": "Calc",
+      "formula": "=Net",
+      "expected": {
+        "value": 375
+      }
+    },
+    {
+      "id": "range_name",
+      "sheet": "Calc",
+      "formula": "=SUM(Quarter)",
+      "expected": {
+        "value": 60
+      }
+    },
+    {
+      "id": "range_name_index",
+      "sheet": "Calc",
+      "formula": "=INDEX(Quarter,2)",
+      "expected": {
+        "value": 20
+      }
+    },
+    {
+      "id": "sheet_scope_wins",
+      "sheet": "Calc",
+      "formula": "=Factor",
+      "expected": {
+        "value": 5
+      }
+    },
+    {
+      "id": "workbook_scope_elsewhere",
+      "sheet": "Other",
+      "formula": "=Factor",
+      "expected": {
+        "value": 2
+      }
+    },
+    {
+      "id": "mixed_scope",
+      "sheet": "Other",
+      "formula": "=Rate+Factor",
+      "expected": {
+        "value": 2.5
+      }
+    },
+    {
+      "id": "constant_name",
+      "sheet": "Calc",
+      "formula": "=Tax+1",
+      "expected": {
+        "value": 1.25
+      }
+    },
+    {
+      "id": "name_to_name_case",
+      "sheet": "Calc",
+      "formula": "=Rate2",
+      "expected": {
+        "value": 0.5
+      }
+    },
+    {
+      "id": "ref_shaped_name",
+      "sheet": "Calc",
+      "formula": "=C3PO",
+      "expected": {
+        "value": 1000
+      }
+    },
+    {
+      "id": "text_name",
+      "sheet": "Calc",
+      "formula": "=Label",
+      "expected": {
+        "value": "Rate!"
+      }
+    },
+    {
+      "id": "name_in_string_untouched",
+      "sheet": "Calc",
+      "formula": "=\"Rate\"",
+      "expected": {
+        "value": "Rate"
+      }
+    },
+    {
+      "id": "unknown_name",
+      "sheet": "Calc",
+      "formula": "=Missing",
+      "expected": {
+        "error": "#NAME?"
+      }
+    },
+    {
+      "id": "unknown_name_caught",
+      "sheet": "Calc",
+      "formula": "=IFERROR(Missing,7)",
+      "expected": {
+        "value": 7
+      }
+    },
+    {
+      "id": "ref_error_sheet",
+      "sheet": "Calc",
+      "formula": "=Gone",
+      "expected": {
+        "error": "#REF!"
+      }
+    },
+    {
+      "id": "ref_error_plain",
+      "sheet": "Calc",
+      "formula": "=GoneAll+1",
+      "expected": {
+        "error": "#REF!"
+      }
+    },
+    {
+      "id": "cycle_pair",
+      "sheet": "Calc",
+      "formula": "=LoopA",
+      "expected": {
+        "code": "name_cycle",
+        "message": "defined names form a cycle: LoopA -> LoopB -> LoopA"
+      }
+    },
+    {
+      "id": "cycle_self",
+      "sheet": "Calc",
+      "formula": "=SelfRef+1",
+      "expected": {
+        "code": "name_cycle",
+        "message": "defined names form a cycle: SelfRef -> SelfRef"
+      }
+    },
+    {
+      "id": "relative_reference",
+      "sheet": "Calc",
+      "formula": "=Relative",
+      "expected": {
+        "code": "unsupported_formula",
+        "message": "defined name Relative uses a relative reference, which is not calculated"
+      }
+    },
+    {
+      "id": "half_relative_reference",
+      "sheet": "Calc",
+      "formula": "=HalfRelative",
+      "expected": {
+        "code": "unsupported_formula",
+        "message": "defined name HalfRelative uses a relative reference, which is not calculated"
+      }
+    },
+    {
+      "id": "unqualified_reference",
+      "sheet": "Calc",
+      "formula": "=Unqualified",
+      "expected": {
+        "code": "unsupported_formula",
+        "message": "defined name Unqualified refers to a cell without a sheet, which is not calculated"
+      }
+    },
+    {
+      "id": "external_workbook",
+      "sheet": "Calc",
+      "formula": "=External*2",
+      "expected": {
+        "code": "unsupported_formula",
+        "message": "defined name External refers to another workbook or a table, which is not calculated"
+      }
+    },
+    {
+      "id": "quoted_external_workbook",
+      "sheet": "Calc",
+      "formula": "=QuotedExternal",
+      "expected": {
+        "code": "unsupported_formula",
+        "message": "defined name QuotedExternal refers to another workbook or a table, which is not calculated"
+      }
+    },
+    {
+      "id": "dynamic_offset",
+      "sheet": "Calc",
+      "formula": "=SUM(Dynamic)",
+      "expected": {
+        "code": "unsupported_formula",
+        "message": "unsupported function OFFSET"
+      }
+    },
+    {
+      "id": "dynamic_indirect",
+      "sheet": "Calc",
+      "formula": "=Indirect",
+      "expected": {
+        "code": "unsupported_formula",
+        "message": "unsupported function INDIRECT"
+      }
+    },
+    {
+      "id": "hidden_name",
+      "sheet": "Calc",
+      "formula": "=Hidden",
+      "expected": {
+        "code": "unsupported_formula",
+        "message": "defined name Hidden is hidden or built-in and is not calculated"
+      }
+    },
+    {
+      "id": "builtin_print_area",
+      "sheet": "Calc",
+      "formula": "=Print_Area",
+      "expected": {
+        "code": "unsupported_formula",
+        "message": "defined name _xlnm.Print_Area is hidden or built-in and is not calculated"
+      }
+    },
+    {
+      "id": "builtin_full_name",
+      "sheet": "Calc",
+      "formula": "=_xlnm._FilterDatabase",
+      "expected": {
+        "code": "unsupported_formula",
+        "message": "defined name _xlnm._FilterDatabase is hidden or built-in and is not calculated"
+      }
+    },
+    {
+      "id": "builtin_other_sheet",
+      "sheet": "Other",
+      "formula": "=Print_Area",
+      "expected": {
+        "error": "#NAME?"
+      }
+    },
+    {
+      "id": "three_d_name",
+      "sheet": "Calc",
+      "formula": "=SUM(Span)",
+      "expected": {
+        "code": "unsupported_formula",
+        "message": "3D reference Jan:Mar: a reference across a range of sheets is not calculated"
+      }
+    },
+    {
+      "id": "array_constant_name",
+      "sheet": "Calc",
+      "formula": "=Colors",
+      "expected": {
+        "code": "parse_error",
+        "message": "defined name Colors could not be parsed"
+      }
+    },
+    {
+      "id": "broken_name",
+      "sheet": "Calc",
+      "formula": "=Broken",
+      "expected": {
+        "code": "parse_error",
+        "message": "defined name Broken could not be parsed"
+      }
+    },
+    {
+      "id": "empty_name",
+      "sheet": "Calc",
+      "formula": "=Empty",
+      "expected": {
+        "code": "parse_error",
+        "message": "defined name Empty could not be parsed"
+      }
+    },
+    {
+      "id": "name_as_range_endpoint",
+      "sheet": "Calc",
+      "formula": "=SUM(Rate:Principal)",
+      "expected": {
+        "code": "parse_error"
+      }
+    },
+    {
+      "id": "cell_then_name_endpoint",
+      "sheet": "Calc",
+      "formula": "=SUM(Inputs!A1:Rate)",
+      "expected": {
+        "code": "parse_error"
+      }
+    },
+    {
+      "id": "expansion_within_limit",
+      "sheet": "Calc",
+      "formula": "=Twice7",
+      "expected": {
+        "value": 64
+      }
+    },
+    {
+      "id": "expansion_limit",
+      "sheet": "Calc",
+      "formula": "=Twice8",
+      "expected": {
+        "code": "resource_limit",
+        "message": "defined names expand past 256 uses in one formula"
+      }
+    },
+    {
+      "id": "grid_shaped_name_stays_a_reference",
+      "sheet": "Calc",
+      "formula": "=XFE1",
+      "expected": {
+        "code": "invalid_reference"
+      }
+    }
+  ],
+  "recalculations": [
+    {
+      "edit": {
+        "sheet": "Inputs",
+        "address": "A1",
+        "value": 0.25
+      },
+      "expected": {
+        "cell_name": 0.25,
+        "case_insensitive": 0.5,
+        "formula_name": 250,
+        "chained_names": 187.5,
+        "name_to_name_case": 0.25,
+        "mixed_scope": 2.25,
+        "expansion_within_limit": 32
+      }
+    },
+    {
+      "edit": {
+        "sheet": "Inputs",
+        "address": "B2",
+        "value": 25
+      },
+      "expected": {
+        "range_name": 65,
+        "range_name_index": 25
+      }
+    },
+    {
+      "edit": {
+        "sheet": "Calc",
+        "address": "A1",
+        "value": 7
+      },
+      "expected": {
+        "sheet_scope_wins": 7,
+        "workbook_scope_elsewhere": 2
+      }
+    }
+  ]
+}

@@ -820,6 +820,8 @@ struct Decoded {
     guard: FeatureGuard,
     /// Lowercased sheet name -> where an inserted cell inherits Text (@).
     text_layouts: BTreeMap<String, TextLayout>,
+    /// Defined names, read-only and calculated (docs/defined-names.md).
+    names: crate::DefinedNames,
 }
 /// Where a newly inserted cell inherits the Text (`@`) number format. An
 /// inserted cell takes its row style when `customFormat` is set, otherwise
@@ -1326,13 +1328,20 @@ fn decode_mode(
         guard.resolve_records(&mut read);
     }
     let pivot_records: Vec<Json> = pivots.iter().map(|p| p.record.clone()).collect();
-    let names: Vec<_> = wb
+    let name_nodes: Vec<_> = wb
         .child(wbroot, "definedNames")
         .into_iter()
         .flat_map(|n| wb.children(n, MAIN, "definedName"))
+        .collect();
+    let defined_names = crate::DefinedNames::from_ooxml(
+        name_nodes.iter().map(|n| (&n.attrs, n.text.as_str())),
+        &sheet_entries,
+    );
+    let names: Vec<_> = name_nodes
+        .iter()
         .map(|n| json!({"attributes":n.attrs,"expression":n.text}))
         .collect();
-    let capabilities = json!({"backend":"rust-ooxml","date_system":if date1904{"1904"}else{"1900"},"styles":styles.len(),"defined_names":names,"tables":table_metadata,"validation":validation_metadata,"data_validations":guard.records(),"text_layouts":text_layouts.values().map(|l| (l.name.clone(), l.public())).collect::<serde_json::Map<_, _>>(),"pivots":pivot_records,"charts":charts,"chartsheets":chartsheets,"supported":["typed data-validation inspection; enforced (stop) rules refuse out-of-rule values","pivot table and chart inspection","UTF-8 macro-free transitional XLSX","scalar cells","normal formulas","basic styles","column widths","existing-cell content edits","absent-cell value/formula insertion within the session grid bound"],"preserved_only":["pivot tables and caches","charts and chartsheets","unknown package parts","unknown worksheet XML","names","tables","imported styles and validation"],"rejected":["pivot refresh and writes into pivot output ranges","structural changes to sheets a chart reads","macros","external execution","insertion into merged non-anchor cells or outside the session grid bound","imported style/layout/validation changes","1904 formula calculation and edits","grouped/table result edits"],"parts":package.parts.keys().collect::<Vec<_>>()});
+    let capabilities = json!({"backend":"rust-ooxml","date_system":if date1904{"1904"}else{"1900"},"styles":styles.len(),"defined_names":names,"tables":table_metadata,"validation":validation_metadata,"data_validations":guard.records(),"text_layouts":text_layouts.values().map(|l| (l.name.clone(), l.public())).collect::<serde_json::Map<_, _>>(),"pivots":pivot_records,"charts":charts,"chartsheets":chartsheets,"supported":["typed data-validation inspection; enforced (stop) rules refuse out-of-rule values","pivot table and chart inspection","UTF-8 macro-free transitional XLSX","scalar cells","normal formulas","defined names, read-only and calculated","basic styles","column widths","existing-cell content edits","absent-cell value/formula insertion within the session grid bound"],"preserved_only":["pivot tables and caches","charts and chartsheets","unknown package parts","unknown worksheet XML","names","tables","imported styles and validation"],"rejected":["pivot refresh and writes into pivot output ranges","structural changes to sheets a chart reads","macros","external execution","insertion into merged non-anchor cells or outside the session grid bound","imported style/layout/validation changes","1904 formula calculation and edits","grouped/table result edits"],"parts":package.parts.keys().collect::<Vec<_>>()});
     Ok(Decoded {
         model,
         workbook_part,
@@ -1344,6 +1353,7 @@ fn decode_mode(
         sheet_entries,
         guard,
         text_layouts,
+        names: defined_names,
     })
 }
 
@@ -1501,7 +1511,7 @@ fn import_package(
         source,
         baseline: package,
         original: decoded.model.clone(),
-        session: Session::new(decoded.model)?,
+        session: Session::with_names(decoded.model, Some(decoded.names))?,
         workbook_part: decoded.workbook_part,
         sheet_parts: decoded.sheet_parts,
         merged: decoded.merged,
@@ -1648,7 +1658,7 @@ impl ImportedWorkbook {
             source: self.source.clone(),
             baseline: self.baseline.clone(),
             original: self.original.clone(),
-            session: Session::new(model)?,
+            session: Session::with_names(model, self.session.names())?,
             workbook_part: self.workbook_part.clone(),
             sheet_parts: self.sheet_parts.clone(),
             merged: self.merged.clone(),
@@ -1663,6 +1673,10 @@ impl ImportedWorkbook {
         .export(path)
     }
 
+    /// The workbook's defined names (read-only).
+    pub fn names(&self) -> Option<crate::DefinedNames> {
+        self.session.names()
+    }
     pub fn snapshot(&self) -> WorkbookModel {
         self.session.snapshot()
     }
@@ -1828,7 +1842,7 @@ impl ImportedWorkbook {
             .filter(|(sheet, reference, _)| self.guard.has_formula_rule(sheet, reference))
             .collect();
         if !entries.is_empty() {
-            let scratch = Session::new(self.session.snapshot())?;
+            let scratch = Session::with_names(self.session.snapshot(), self.session.names())?;
             // An invalid batch fails here exactly as the real apply would.
             scratch.apply(edits.to_vec(), None)?;
             let mut read = |s: &str, a: &str| -> Option<CellValue> {

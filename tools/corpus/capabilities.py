@@ -73,7 +73,7 @@ PRESERVED_ONLY = {
     "structured-refs": "Structured references are kept; none of these formulas are calculated.",
     "3d-references": "3D references (Jan:Mar!B2) are kept with their cached values; calculation reports `unsupported_formula`.",
     "3d-refs": "The 3D formula in `op_sheet_name_quoting.xlsx` is `SUM('Q1 Budget:Σ Totals'!A1)` and its cached value is empty. Calculation reports `unsupported_formula`.",
-    "r1c1-looking-names": "The names are kept. The four formulas are not calculated, and they do not share one outcome: calculation reports `parse_error`, `unsupported_formula`, and `invalid_reference`.",
+    "r1c1-looking-names": "The names are kept and calculated. `XFE1` is shaped like a cell past column XFD, so `XFE1*2` stays `invalid_reference`; the other three formulas calculate through their names.",
     "long-formula": "Kept; the toolkit engine does not calculate a long flat chain (expression depth limit), the canonical model does.",
     "formula-length-limit": "Kept; see long-formula.",
     "print-titles": "Print titles are kept.",
@@ -98,16 +98,25 @@ NOT_FEATURES = {
 SUPPORTED_NOTES = {
     "cross-sheet": (
         "`hb_3d_references.xlsx` reports `unsupported_formula` for its 3D spans "
-        "and for the name `FirstQuarter`. The other files in this category have "
-        "no calculation diagnostics."
+        "and for the name `FirstQuarter`, whose target is a 3D span. The other "
+        "files in this category have no calculation diagnostics."
     ),
     "defined-names": (
-        "3D spans and the name `FirstQuarter` in `hb_3d_references.xlsx` are "
-        "`unsupported_formula`. `op_defined_names.xlsx` reports unsupported names "
-        "`Rate` and `LocalFactor`. `xw_hyperlinks_names.xlsx` reports the "
-        "unsupported name `Answer`. `hb_r1c1_looking_names.xlsx` reports "
-        "`parse_error`, `unsupported_formula`, and `invalid_reference`. "
+        "Names calculate in every engine ([defined names](defined-names.md)). "
+        "`hb_defined_names.xlsx` reports its name cycle (`name_cycle`) and its "
+        "hidden name (`unsupported_formula`), typed refusals by design. 3D spans "
+        "and `FirstQuarter` (a 3D target) in `hb_3d_references.xlsx` are "
+        "`unsupported_formula`. `hb_r1c1_looking_names.xlsx` reports "
+        "`invalid_reference` for the cell-shaped `XFE1`. "
         "`hb_google_sheets_like.xlsx` reports `unsupported_formula` for CONCATENATE."
+    ),
+    "name-cycle": (
+        "`hb_defined_names.xlsx` reports its name cycle as `name_cycle` "
+        "(`cycle` in the canonical model) by design."
+    ),
+    "hidden-names": (
+        "`hb_defined_names.xlsx` reports the formula using a hidden name as "
+        "`unsupported_formula` by design; hidden names are kept, not calculated."
     ),
     "in-cell-array-functions": (
         "`hb_flatten_has_functions.xlsx` reports `unsupported_formula` for HAS, "
@@ -119,8 +128,8 @@ SUPPORTED_NOTES = {
     ),
     "sheet-name-spaces": (
         "`hb_3d_references.xlsx` reports `unsupported_formula` for its 3D spans "
-        "and for the name `FirstQuarter`. The other files in this category have "
-        "no calculation diagnostics."
+        "and for the name `FirstQuarter`, whose target is a 3D span. The other "
+        "files in this category have no calculation diagnostics."
     ),
 }
 

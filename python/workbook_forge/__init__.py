@@ -209,7 +209,258 @@ def _is_unsupported_formula_message(message: str) -> bool:
     """True for parser messages that name syntax Workbook Forge reads but does
     not calculate (a name, a 3D reference, Excel's in-cell array syntax), as
     opposed to a parse error."""
-    return message.startswith(("unsupported name ", "3D reference ", "in-cell array "))
+    return message.startswith(
+        ("unsupported name ", "3D reference ", "in-cell array ", "defined name")
+    )
+
+
+# ----------------------------------------------------------- defined names
+#
+# Excel defined names (``xl/workbook.xml`` ``definedName``) are read-only and
+# calculated by substitution: a name in a formula is parsed into the tree of
+# what it refers to, so dependencies and evaluation follow the target cells.
+# Shared with Rust (``DefinedNames`` in ``rust/src/lib.rs``); a shared fixture
+# (``fixtures/defined-names.v1.json``) holds every engine to the same values
+# and messages. docs/defined-names.md states the rules.
+
+MAX_DEFINED_NAME_USES = 256
+_BUILTIN_NAME_PREFIX = "_xlnm."
+
+
+@dataclass(frozen=True, slots=True)
+class DefinedName:
+    """One defined name: ``sheet`` is its scope sheet, or None for the workbook."""
+
+    name: str
+    sheet: str | None
+    formula: str
+    hidden: bool = False
+
+    @property
+    def builtin(self) -> bool:
+        return self.name.lower().startswith(_BUILTIN_NAME_PREFIX)
+
+    def to_json(self) -> dict:
+        return {"name": self.name, "sheet": self.sheet, "formula": self.formula, "hidden": self.hidden}
+
+
+class DefinedNames:
+    """A read-only defined-name table; lookups ignore case."""
+
+    def __init__(self, entries: Iterable[DefinedName] = ()) -> None:
+        self.entries: tuple[DefinedName, ...] = tuple(entries)
+        self._index: dict[tuple[str | None, str], DefinedName] = {}
+        for entry in self.entries:
+            scope = None if entry.sheet is None else entry.sheet.lower()
+            folded = entry.name.lower()
+            self._index.setdefault((scope, folded), entry)
+            if folded.startswith(_BUILTIN_NAME_PREFIX):
+                self._index.setdefault((scope, folded[len(_BUILTIN_NAME_PREFIX):]), entry)
+
+    @classmethod
+    def from_json(cls, data: object) -> DefinedNames:
+        if not isinstance(data, list):
+            raise ValueError("defined names must be an array")
+        entries = []
+        for item in data:
+            if not isinstance(item, Mapping) or set(item) - {"name", "sheet", "formula", "hidden"}:
+                raise ValueError("a defined name has name, sheet, formula and hidden")
+            name, sheet, formula = item.get("name"), item.get("sheet"), item.get("formula")
+            hidden = item.get("hidden", False)
+            if not isinstance(name, str) or not isinstance(formula, str) or type(hidden) is not bool:
+                raise ValueError("a defined name has name, sheet, formula and hidden")
+            if sheet is not None and not isinstance(sheet, str):
+                raise ValueError("a defined name's sheet is a string or null")
+            entries.append(DefinedName(name, sheet, formula, hidden))
+        return cls(entries)
+
+    @classmethod
+    def from_ooxml(
+        cls, nodes: Iterable[tuple[Mapping[str, str], str]], sheet_names: list[str]
+    ) -> DefinedNames:
+        """Build the table from ``definedName`` attributes and text.
+
+        ``localSheetId`` indexes the workbook's ``sheets`` in order. A name
+        whose ``localSheetId`` names no sheet cannot be scoped and is left out.
+        """
+        entries = []
+        for attributes, text in nodes:
+            name = attributes.get("name")
+            if not name:
+                continue
+            sheet = None
+            local = attributes.get("localSheetId")
+            if local is not None:
+                if not local.isascii() or not local.isdigit() or int(local) >= len(sheet_names):
+                    continue
+                sheet = sheet_names[int(local)]
+            hidden = attributes.get("hidden", "0") in ("1", "true")
+            entries.append(DefinedName(name, sheet, text or "", hidden))
+        return cls(entries)
+
+    def to_json(self) -> list[dict]:
+        return [entry.to_json() for entry in self.entries]
+
+    def lookup(self, identifier: str, sheet: str | None) -> DefinedName | None:
+        folded = identifier.lower()
+        if sheet is not None:
+            entry = self._index.get((sheet.lower(), folded))
+            if entry is not None:
+                return entry
+        return self._index.get((None, folded))
+
+    def scope(self, sheet: str) -> _NameScope:
+        """The resolver a parser uses for formulas on ``sheet``."""
+        return _NameScope(self, sheet, _NameState())
+
+
+@dataclass
+class _NameState:
+    stack: list[DefinedName] = field(default_factory=list)
+    uses: int = 0
+    # Every identifier resolved, known or not.
+    seen: int = 0
+
+
+def defined_name_error_code(message: str) -> str | None:
+    """The diagnostic code of a defined-name message, or None for other text.
+
+    Shared with Rust (``defined_name_error_code``)."""
+    if message.startswith("defined names form a cycle"):
+        return "name_cycle"
+    if message.startswith("defined names expand past"):
+        return "resource_limit"
+    if message.startswith("defined name "):
+        return "parse_error" if message.endswith(" could not be parsed") else "unsupported_formula"
+    return None
+
+
+def _name_has_bracket(text: str) -> bool:
+    """True when ``[`` appears outside a string: a link to another workbook
+    (``[1]Sheet!A1``, ``'[1]My Sheet'!A1``) or a structured reference."""
+    index = 0
+    while index < len(text):
+        character = text[index]
+        if character == '"':
+            index = _skip_quoted(text, index, '"')
+            continue
+        if character == "[":
+            return True
+        index += 1
+    return False
+
+
+def _collapse_sheet_ref_errors(text: str) -> str:
+    """``Sheet!#REF!`` (a name whose cells were deleted) is ``#REF!``."""
+    out: list[str] = []
+    index = 0
+    while index < len(text):
+        character = text[index]
+        if character == '"':
+            end = _skip_quoted(text, index, '"')
+            out.append(text[index:end])
+            index = end
+            continue
+        if character == "'" or character.isascii() and (character.isalpha() or character == "_"):
+            if character == "'":
+                end = _skip_quoted(text, index, "'")
+            else:
+                end = index + 1
+                while end < len(text) and text[end].isascii() and (
+                    text[end].isalnum() or text[end] in "_."
+                ):
+                    end += 1
+            if text[end : end + 6].upper() == "!#REF!":
+                out.append("#REF!")
+                index = end + 6
+            else:
+                out.append(text[index:end])
+                index = end
+            continue
+        out.append(character)
+        index += 1
+    return "".join(out)
+
+
+_ABSOLUTE_CELL = re.compile(r"\$[A-Za-z]{1,3}\$[0-9]+\Z")
+
+
+def _check_name_references(entry: DefinedName, root: _Node) -> None:
+    pending = [root]
+    while pending:
+        node = pending.pop()
+        if node.kind in ("cell", "range"):
+            if node.kind == "cell":
+                addresses, sheet = (node.value[0],), node.value[1]
+            else:
+                addresses, sheet = node.value[:2], node.value[2]
+            if sheet is None:
+                raise _FormulaSyntaxError(
+                    f"defined name {entry.name} refers to a cell without a sheet, which is not calculated"
+                )
+            if not all(_ABSOLUTE_CELL.fullmatch(address) for address in addresses):
+                raise _FormulaSyntaxError(
+                    f"defined name {entry.name} uses a relative reference, which is not calculated"
+                )
+        pending.extend(reversed(node.children))
+
+
+class _NameScope:
+    """Resolves names for one formula: cycle stack and use budget are shared
+    with the names it expands."""
+
+    def __init__(self, table: DefinedNames, sheet: str, state: _NameState) -> None:
+        self.table, self.sheet, self.state = table, sheet, state
+
+    @property
+    def seen(self) -> int:
+        """How many identifiers this formula has resolved so far."""
+        return self.state.seen
+
+    def resolve(self, identifier: str, parser_class: type) -> _Node:
+        self.state.seen += 1
+        entry = self.table.lookup(identifier, self.sheet)
+        if entry is None:
+            return _Node("literal", ErrorValue("#NAME?"))
+        if entry.hidden or entry.builtin:
+            raise _FormulaSyntaxError(
+                f"defined name {entry.name} is hidden or built-in and is not calculated"
+            )
+        stack = self.state.stack
+        for index, seen in enumerate(stack):
+            if seen is entry:
+                chain = [item.name for item in stack[index:]] + [entry.name]
+                raise _FormulaSyntaxError("defined names form a cycle: " + " -> ".join(chain))
+        self.state.uses += 1
+        if self.state.uses > MAX_DEFINED_NAME_USES:
+            raise _FormulaSyntaxError(
+                f"defined names expand past {MAX_DEFINED_NAME_USES} uses in one formula"
+            )
+        text = entry.formula.strip()
+        if text.startswith("="):
+            text = text[1:]
+        if _name_has_bracket(text):
+            raise _FormulaSyntaxError(
+                f"defined name {entry.name} refers to another workbook or a table, which is not calculated"
+            )
+        text = _collapse_sheet_ref_errors(text)
+        unparsed = f"defined name {entry.name} could not be parsed"
+        units = sum(2 if ord(character) > 0xFFFF else 1 for character in text)
+        if not text.strip() or units > MAX_FORMULA_LENGTH_UNITS:
+            raise _FormulaSyntaxError(unparsed)
+        scope = _NameScope(self.table, entry.sheet or self.sheet, self.state)
+        stack.append(entry)
+        try:
+            try:
+                node = parser_class(text, names=scope).parse()
+            except _FormulaSyntaxError as error:
+                if _is_unsupported_formula_message(str(error)):
+                    raise
+                raise _FormulaSyntaxError(unparsed) from None
+        finally:
+            stack.pop()
+        _check_name_references(entry, node)
+        return node
 
 
 # Excel's arrays in cells (Excel Beta, September 2026). Shared with Rust
@@ -355,7 +606,8 @@ def _tokenize(source: str) -> list[_Token]:
 
 
 class _Parser:
-    def __init__(self, source: str) -> None:
+    def __init__(self, source: str, names: _NameScope | None = None) -> None:
+        self.names = names
         units = 0
         for character in source:
             units += 2 if ord(character) > 0xFFFF else 1
@@ -546,6 +798,8 @@ class _Parser:
                             break
                 self.consume(")")
                 return _Node("call", upper, tuple(arguments))
+            if self.names is not None:
+                return self.names.resolve(name, type(self))
             raise _FormulaSyntaxError(f"unsupported name {name!r}")
         if token.kind == "SHEET":
             if self.tokens[self.index + 1].value != "!":
@@ -577,12 +831,14 @@ class _Parser:
         raise _FormulaSyntaxError(f"expected a value at offset {token.position}")
 
 
-def analyze_formula(formula: str) -> FormulaAnalysis:
+def analyze_formula(formula: str, *, names: DefinedNames | None = None, sheet_name: str = "Sheet1") -> FormulaAnalysis:
     """Parse a formula and expose its cell/range references and function names.
 
     Unsupported syntax raises ``ValueError`` instead of becoming an evaluator
     error value. Workbook planning uses this distinction to avoid persisting a
-    syntax boundary as though Excel had calculated it.
+    syntax boundary as though Excel had calculated it. With ``names``, defined
+    names in the formula are expanded for a formula on ``sheet_name``, so the
+    references include what each name refers to.
     """
 
     if not isinstance(formula, str):
@@ -593,7 +849,7 @@ def analyze_formula(formula: str) -> FormulaAnalysis:
     if not source:
         raise ValueError("formula is empty")
     try:
-        root = _Parser(source).parse()
+        root = _Parser(source, None if names is None else names.scope(sheet_name)).parse()
     except (_FormulaSyntaxError, RecursionError) as error:
         raise ValueError(str(error)) from error
 
@@ -5352,6 +5608,7 @@ def evaluate_result(
     *,
     context: CalcContext | None = None,
     cell_key: str = "",
+    names: DefinedNames | None = None,
 ) -> FormulaResult:
     """Evaluate a formula and preserve any rectangular result shape.
 
@@ -5360,7 +5617,8 @@ def evaluate_result(
     The result is a calculation value; worksheet spill placement is not modeled.
     ``context`` is the recalculation's clock and seed; without one a volatile
     function captures one on first use (UTC). ``cell_key`` (canonical
-    ``Sheet!A1``) keys the formula's random streams.
+    ``Sheet!A1``) keys the formula's random streams. ``names`` expands the
+    workbook's defined names; without it a name is refused as unsupported.
     """
 
     if not isinstance(formula, str):
@@ -5397,7 +5655,7 @@ def evaluate_result(
     if not source:
         return ErrorValue("#VALUE!", "formula is empty")
     try:
-        tree = _Parser(source).parse()
+        tree = _Parser(source, None if names is None else names.scope(sheet_name)).parse()
         budget = _WildcardBudget(context=context, cell_key=cell_key)
         _number_random_sites(tree, budget.random_sites)
         value = _dereference(_eval(tree, normalized, sheet_name, budget))
@@ -5428,9 +5686,12 @@ def evaluate(
     *,
     context: CalcContext | None = None,
     cell_key: str = "",
+    names: DefinedNames | None = None,
 ) -> Scalar | ErrorValue:
     """Evaluate a scalar formula; use :func:`evaluate_result` for arrays."""
-    result = evaluate_result(formula, cells, sheet_name, context=context, cell_key=cell_key)
+    result = evaluate_result(
+        formula, cells, sheet_name, context=context, cell_key=cell_key, names=names
+    )
     if isinstance(result, ArrayValue):
         return ErrorValue(
             "#VALUE!", "formula result is an array; use evaluate_result to preserve shape"
@@ -5447,6 +5708,8 @@ __all__ = [
     "Scalar",
     "analyze_formula",
     "CalcContext",
+    "DefinedName",
+    "DefinedNames",
     "evaluate",
     "evaluate_result",
 ]

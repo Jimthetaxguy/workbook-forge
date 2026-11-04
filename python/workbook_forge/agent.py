@@ -200,7 +200,9 @@ class AgentWorkbook:
         document = deepcopy(snapshot)
         if outputs is not None:
             document["outputs"] = deepcopy(outputs)
-        detached = WorkbookModel(document=document, backend=self._model.backend)
+        detached = WorkbookModel(
+            document=document, backend=self._model.backend, _names=self._model._names
+        )
         # Source bytes and their original model are immutable. Keep this same
         # preservation authority on previews and exports instead of reimporting
         # a source path that the host might since have changed.

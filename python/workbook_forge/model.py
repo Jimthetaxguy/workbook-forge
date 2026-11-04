@@ -19,9 +19,12 @@ from typing import Any
 
 from workbook_forge import (
     ArrayValue,
+    DefinedName,
+    DefinedNames,
     ErrorValue,
     _is_unsupported_formula_message,
     analyze_formula,
+    defined_name_error_code,
     evaluate_result,
 )
 from workbook_forge.catalog import function_status
@@ -367,6 +370,7 @@ def calculate(workbook: Workbook, *, context: CalcContext | None = None) -> Work
     in the pass reads; without one the pass captures its own (UTC).
     """
     _require_bindings(workbook)
+    names = workbook_defined_names(workbook)
     if context is None:
         context = CalcContext.capture(0)
     cells = {
@@ -386,7 +390,7 @@ def calculate(workbook: Workbook, *, context: CalcContext | None = None) -> Work
             if cell.formula is None:
                 continue
             key = f"{sheet.name}!{address}"
-            analyzed[key] = _analyze(workbook, sheet.name, address, cell.formula.expression)
+            analyzed[key] = _analyze(workbook, sheet.name, address, cell.formula.expression, names)
 
     formula_keys = set(analyzed)
     pending = {
@@ -452,7 +456,7 @@ def calculate(workbook: Workbook, *, context: CalcContext | None = None) -> Work
             continue
         expression = cells[key].formula.expression if cells[key].formula is not None else ""
         _sheet_name, _address = key.rsplit("!", 1)
-        outcome = _evaluate(workbook, _sheet_name, _address, expression, results, cells, deps, context)
+        outcome = _evaluate(workbook, _sheet_name, _address, expression, results, cells, deps, context, names)
         if isinstance(outcome, Diagnostic):
             diagnostics[key] = outcome
         else:
@@ -700,13 +704,58 @@ def _require_bindings(workbook: Workbook) -> None:
                 )
 
 
+def workbook_defined_names(workbook: Workbook) -> DefinedNames | None:
+    """``metadata["defined_names"]``, which canonical intake fills from
+    ``xl/workbook.xml`` (docs/defined-names.md). Absent means no name table:
+    a name is then refused as unsupported, as before names were read.
+    Shared with Rust (``defined_names`` in ``rust/src/model.rs``)."""
+    items = workbook.metadata.get("defined_names")
+    if items is None:
+        return None
+    invalid = ModelError(
+        "invalid_model",
+        "metadata.defined_names must list objects with name, sheet, formula and hidden",
+    )
+    if not isinstance(items, list):
+        raise invalid
+    entries = []
+    for item in items:
+        if not isinstance(item, dict):
+            raise invalid
+        name, formula = item.get("name"), item.get("formula")
+        sheet, hidden = item.get("sheet"), item.get("hidden", False)
+        if (
+            not isinstance(name, str)
+            or not isinstance(formula, str)
+            or (sheet is not None and not isinstance(sheet, str))
+            or type(hidden) is not bool
+        ):
+            raise invalid
+        entries.append(DefinedName(name, sheet, formula, hidden))
+    return DefinedNames(entries)
+
+
 def _analyze(
-    workbook: Workbook, sheet_name: str, address: str, expression: str
+    workbook: Workbook,
+    sheet_name: str,
+    address: str,
+    expression: str,
+    names: DefinedNames | None = None,
 ) -> tuple[tuple[str, ...], Diagnostic | None]:
     try:
-        analysis = analyze_formula(expression)
+        analysis = analyze_formula(expression, names=names, sheet_name=sheet_name)
     except (TypeError, ValueError, RecursionError) as exc:
         message = str(exc)
+        named = defined_name_error_code(message)
+        if named is not None:
+            # A defined-name refusal keeps its message; a cycle among names is
+            # a cycle (shared with Rust's `model::analyze`).
+            code, classification = {
+                "name_cycle": ("cycle", "cycle"),
+                "resource_limit": ("resource_limit", "resource_limit"),
+                "parse_error": ("parse_error", "parse_error"),
+            }.get(named, ("unsupported_formula", "unsupported"))
+            return (), _cell_diagnostic(code, classification, message, sheet_name, address)
         if _is_unsupported_formula_message(message):
             return (), _cell_diagnostic(
                 "unsupported_formula", "unsupported", message, sheet_name, address
@@ -797,6 +846,7 @@ def _evaluate(
     cells: dict[str, Cell],
     dependencies: tuple[str, ...],
     context: CalcContext,
+    names: DefinedNames | None = None,
 ) -> Any:
     # The environment holds only the cells the formula references. Every
     # reference the evaluator can follow is static, so `_analyze` lists them
@@ -818,7 +868,14 @@ def _evaluate(
         environment[f"{dep_sheet.casefold()}!{other}"] = scalar
         if dep_sheet == sheet_name:
             environment[other] = scalar
-    outcome = evaluate_result(expression, environment, sheet_name, context=context, cell_key=f"{sheet_name}!{address}")
+    outcome = evaluate_result(
+        expression,
+        environment,
+        sheet_name,
+        context=context,
+        cell_key=f"{sheet_name}!{address}",
+        names=names,
+    )
     if isinstance(outcome, ArrayValue):
         return _cell_diagnostic(
             "unsupported_formula",

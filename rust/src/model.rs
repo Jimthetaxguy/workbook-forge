@@ -6,7 +6,9 @@
 
 use crate::toolkit::{Expression, SUPPORTED_FUNCTIONS};
 use crate::volatile::CalcContext;
-use crate::{FormulaError, FormulaResult, Value, evaluate_result_in};
+use crate::{
+    DefinedName, DefinedNames, FormulaError, FormulaResult, Value, evaluate_result_with_names,
+};
 use serde::de::{self, DeserializeSeed, Deserializer, MapAccess, SeqAccess, Visitor};
 use serde_json::{Map, Number, Value as JsonValue, json};
 use std::collections::{BTreeMap, BTreeSet, HashMap};
@@ -216,6 +218,8 @@ pub fn calculate(workbook: &Workbook) -> Result<Workbook, ModelError> {
 /// family. Every formula in the pass reads this one context.
 pub fn calculate_with(workbook: &Workbook, context: &CalcContext) -> Result<Workbook, ModelError> {
     require_bindings(workbook)?;
+    let names = defined_names(workbook)?;
+    let names = names.as_ref();
     let mut cells: BTreeMap<String, Cell> = BTreeMap::new();
     let mut sheet_of: BTreeMap<String, String> = BTreeMap::new();
     for sheet in &workbook.sheets {
@@ -235,7 +239,7 @@ pub fn calculate_with(workbook: &Workbook, context: &CalcContext) -> Result<Work
             let key = format!("{}!{address}", sheet.name);
             analyzed.insert(
                 key,
-                analyze(workbook, &sheet.name, address, &formula.expression),
+                analyze(workbook, &sheet.name, address, &formula.expression, names),
             );
         }
     }
@@ -312,7 +316,9 @@ pub fn calculate_with(workbook: &Workbook, context: &CalcContext) -> Result<Work
             .as_ref()
             .map(|formula| formula.expression.as_str())
             .unwrap_or("");
-        match evaluate(workbook, sheet, address, expression, &results, context) {
+        match evaluate(
+            workbook, sheet, address, expression, &results, context, names,
+        ) {
             Outcome::Diagnostic(diagnostic) => {
                 diagnostics.insert(key.clone(), diagnostic);
             }
@@ -438,14 +444,79 @@ fn require_bindings(workbook: &Workbook) -> Result<(), ModelError> {
     Ok(())
 }
 
+/// `metadata.defined_names`, which canonical intake fills from
+/// `xl/workbook.xml` (docs/defined-names.md). Absent means no name table:
+/// a name is then refused as unsupported, as before names were read.
+fn defined_names(workbook: &Workbook) -> Result<Option<DefinedNames>, ModelError> {
+    let Some(items) = workbook.metadata.get("defined_names") else {
+        return Ok(None);
+    };
+    let invalid = || {
+        ModelError::new(
+            "invalid_model",
+            "metadata.defined_names must list objects with name, sheet, formula and hidden",
+        )
+    };
+    let mut entries = Vec::new();
+    for item in items.as_array().ok_or_else(invalid)? {
+        let name = item
+            .get("name")
+            .and_then(JsonValue::as_str)
+            .ok_or_else(invalid)?;
+        let formula = item
+            .get("formula")
+            .and_then(JsonValue::as_str)
+            .ok_or_else(invalid)?;
+        let sheet = match item.get("sheet") {
+            None | Some(JsonValue::Null) => None,
+            Some(JsonValue::String(sheet)) => Some(sheet.clone()),
+            Some(_) => return Err(invalid()),
+        };
+        let hidden = match item.get("hidden") {
+            None => false,
+            Some(JsonValue::Bool(hidden)) => *hidden,
+            Some(_) => return Err(invalid()),
+        };
+        entries.push(DefinedName {
+            name: name.to_string(),
+            sheet,
+            formula: formula.to_string(),
+            hidden,
+        });
+    }
+    Ok(Some(DefinedNames::new(entries)))
+}
+
 fn analyze(
     workbook: &Workbook,
     sheet_name: &str,
     address: &str,
     expression: &str,
+    names: Option<&DefinedNames>,
 ) -> (Vec<String>, Option<Diagnostic>) {
-    let expression_parsed = match Expression::parse(expression) {
+    let expression_parsed = match Expression::parse_with_names(expression, names, sheet_name) {
         Ok(expression) => expression,
+        // A defined-name refusal keeps its message; a cycle among names is a
+        // cycle (shared with Python's `model._analyze`).
+        Err(e) if e.message.starts_with("defined name") => {
+            let (code, classification) = match e.code.as_str() {
+                "name_cycle" => ("cycle", "cycle"),
+                "resource_limit" => ("resource_limit", "resource_limit"),
+                "parse_error" => ("parse_error", "parse_error"),
+                _ => ("unsupported_formula", "unsupported"),
+            };
+            return (
+                Vec::new(),
+                Some(Diagnostic::cell(
+                    code,
+                    classification,
+                    &e.message,
+                    sheet_name,
+                    address,
+                    None,
+                )),
+            );
+        }
         Err(e) if e.code == "unsupported_formula" => {
             return (
                 Vec::new(),
@@ -568,6 +639,7 @@ fn evaluate(
     expression: &str,
     results: &BTreeMap<String, Scalar>,
     context: &CalcContext,
+    names: Option<&DefinedNames>,
 ) -> Outcome {
     let mut environment = HashMap::new();
     for sheet in &workbook.sheets {
@@ -589,12 +661,13 @@ fn evaluate(
         }
     }
     let cell_key = format!("{sheet_name}!{address}");
-    match evaluate_result_in(
+    match evaluate_result_with_names(
         expression,
         &environment,
         sheet_name,
         Some(context),
         &cell_key,
+        names,
     ) {
         Ok(FormulaResult::Scalar(value)) => match value {
             Value::Number(number) => scalar_from_f64(number),

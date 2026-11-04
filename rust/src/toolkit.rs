@@ -3,7 +3,10 @@
 //! Formulas retain their source text. This module reuses the independent evaluator
 //! and never substitutes an imported cached value for a calculated dependency.
 use crate::volatile::{CalcContext, VOLATILE_FUNCTIONS};
-use crate::{Expr, FormulaError, FormulaResult, Parser, Value, evaluate_result_in};
+use crate::{
+    DefinedNames, Expr, FormulaError, FormulaResult, Parser, Value, defined_name_error_code,
+    evaluate_result_with_names,
+};
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::{Value as JsonValue, json};
 use std::collections::{BTreeMap, BTreeSet, HashMap};
@@ -443,7 +446,9 @@ impl From<FormulaError> for ToolkitError {
     fn from(error: FormulaError) -> Self {
         let code = match &error {
             FormulaError::Parse(_) => "parse_error",
-            FormulaError::Unsupported(_) => "unsupported_formula",
+            FormulaError::Unsupported(reason) => {
+                defined_name_error_code(reason).unwrap_or("unsupported_formula")
+            }
             _ => "invalid_formula",
         };
         // `Display` prefixes an unsupported formula with "unsupported formula: ".
@@ -547,7 +552,16 @@ fn quote_sheet(sheet: &str) -> String {
     format!("'{}'", sheet.replace('\'', "''"))
 }
 fn parse_expr(formula: &str) -> Result<Expr, ToolkitError> {
-    let mut parser = Parser::new(formula)?;
+    parse_expr_named(formula, None, "").map(|(expr, _)| expr)
+}
+/// Parse with defined names expanded for a formula on `sheet`; the flag says
+/// whether the formula named anything (known or not).
+fn parse_expr_named(
+    formula: &str,
+    names: Option<&DefinedNames>,
+    sheet: &str,
+) -> Result<(Expr, bool), ToolkitError> {
+    let mut parser = Parser::with_names(formula, names.map(|names| names.scope(sheet)))?;
     let expr = parser.parse_expression(0)?;
     if parser.peek().is_some() {
         return Err(ToolkitError::new(
@@ -556,7 +570,7 @@ fn parse_expr(formula: &str) -> Result<Expr, ToolkitError> {
         ));
     }
     validate_expression_depth(&expr)?;
-    Ok(expr)
+    Ok((expr, parser.names_seen() > 0))
 }
 fn validate_expression_depth(expr: &Expr) -> Result<(), ToolkitError> {
     // The root is level 1, as in the Python expression validator, so a
@@ -590,6 +604,17 @@ impl Expression {
     pub fn parse(formula: &str) -> Result<Self, ToolkitError> {
         Ok(Self {
             inner: parse_expr(formula)?,
+        })
+    }
+    /// Parse a formula on `sheet`, replacing each defined name with what it
+    /// refers to, so references and functions include the targets.
+    pub fn parse_with_names(
+        formula: &str,
+        names: Option<&DefinedNames>,
+        sheet: &str,
+    ) -> Result<Self, ToolkitError> {
+        Ok(Self {
+            inner: parse_expr_named(formula, names, sheet)?.0,
         })
     }
     pub fn number(value: f64) -> Result<Self, ToolkitError> {
@@ -1196,7 +1221,7 @@ struct Graph {
     volatile: BTreeSet<String>,
 }
 impl Graph {
-    fn build(model: &WorkbookModel) -> Result<Self, ToolkitError> {
+    fn build(model: &WorkbookModel, names: Option<&DefinedNames>) -> Result<Self, ToolkitError> {
         let mut graph = Self::default();
         let mut total = 0usize;
         let mut expanded_references = 0u64;
@@ -1211,26 +1236,27 @@ impl Graph {
                         ToolkitError::new("unsupported_cell", reason),
                     );
                 } else if let Some(formula) = &cell.formula {
-                    let parsed = Expression::parse(formula).and_then(|expression| {
-                        if let Some(name) = expression
-                            .functions()
-                            .iter()
-                            .find(|name| !SUPPORTED_FUNCTIONS.contains(&name.as_str()))
-                        {
-                            return Err(ToolkitError::new(
-                                "unsupported_formula",
-                                format!("unsupported function {name}"),
-                            ));
-                        }
-                        if expression
-                            .functions()
-                            .iter()
-                            .any(|name| VOLATILE_FUNCTIONS.contains(&name.as_str()))
-                        {
-                            volatile = true;
-                        }
-                        expression.references()
-                    });
+                    let parsed = Expression::parse_with_names(formula, names, &sheet.name)
+                        .and_then(|expression| {
+                            if let Some(name) = expression
+                                .functions()
+                                .iter()
+                                .find(|name| !SUPPORTED_FUNCTIONS.contains(&name.as_str()))
+                            {
+                                return Err(ToolkitError::new(
+                                    "unsupported_formula",
+                                    format!("unsupported function {name}"),
+                                ));
+                            }
+                            if expression
+                                .functions()
+                                .iter()
+                                .any(|name| VOLATILE_FUNCTIONS.contains(&name.as_str()))
+                            {
+                                volatile = true;
+                            }
+                            expression.references()
+                        });
                     match parsed {
                         Err(error) => {
                             graph.errors.insert(current.clone(), error);
@@ -1383,10 +1409,14 @@ impl Graph {
 }
 /// Inspect all formulas, including formulas outside the selected output closure.
 pub fn inspect(model: &WorkbookModel) -> JsonValue {
+    inspect_with_names(model, None)
+}
+/// [`inspect`] with the workbook's defined names expanded.
+pub fn inspect_with_names(model: &WorkbookModel, names: Option<&DefinedNames>) -> JsonValue {
     if let Err(error) = model.validate() {
         return json!({"revision":model.revision,"diagnostics":[Diagnostic::for_key(error,None)]});
     }
-    match Graph::build(model) {
+    match Graph::build(model, names) {
         Err(error) => {
             json!({"revision":model.revision,"diagnostics":[Diagnostic::for_key(error,None)]})
         }
@@ -1401,6 +1431,7 @@ fn evaluate_node(
     current: &str,
     values: &BTreeMap<String, CalculatedValue>,
     context: &CalcContext,
+    names: Option<&DefinedNames>,
 ) -> Result<CalculatedValue, ToolkitError> {
     if let Some(error) = graph.errors.get(current) {
         return Err(error.clone());
@@ -1436,7 +1467,7 @@ fn evaluate_node(
         }
     }
     let sheet = current.rsplit_once('!').unwrap().0;
-    match evaluate_result_in(formula, &environment, sheet, Some(context), current) {
+    match evaluate_result_with_names(formula, &environment, sheet, Some(context), current, names) {
         // Excel stores a scalar formula referring to an empty cell as numeric
         // zero. Authored blanks and array blanks remain distinct in the model.
         Ok(FormulaResult::Scalar(Value::Blank)) => {
@@ -1486,7 +1517,7 @@ pub fn calculate_with(
     workers: usize,
     context: &CalcContext,
 ) -> CalculationReport {
-    calculate_inner(model, workers, None, &BTreeSet::new(), context)
+    calculate_inner(model, workers, None, &BTreeSet::new(), context, None)
 }
 fn calculate_inner(
     model: &WorkbookModel,
@@ -1494,6 +1525,7 @@ fn calculate_inner(
     previous: Option<&CalculationReport>,
     dirty: &BTreeSet<String>,
     context: &CalcContext,
+    names: Option<&DefinedNames>,
 ) -> CalculationReport {
     let mut report = CalculationReport {
         revision: model.revision,
@@ -1501,7 +1533,7 @@ fn calculate_inner(
     };
     let graph = match model.validate().and_then(|()| {
         validate_inputs(model, &BTreeMap::new())?;
-        Graph::build(model)
+        Graph::build(model, names)
     }) {
         Ok(graph) => graph,
         Err(error) => {
@@ -1568,7 +1600,7 @@ fn calculate_inner(
             {
                 evaluate.push(current.clone());
             } else {
-                match evaluate_node(model, &graph, current, &report.values, context) {
+                match evaluate_node(model, &graph, current, &report.values, context, names) {
                     Ok(value) => {
                         if let Err(error) = reserve_result(&value, &materialized, &exhausted) {
                             report
@@ -1590,7 +1622,7 @@ fn calculate_inner(
                 if exhausted.load(Ordering::Relaxed) {
                     break;
                 }
-                let result = evaluate_node(model, &graph, current, &report.values, context)
+                let result = evaluate_node(model, &graph, current, &report.values, context, names)
                     .and_then(|value| {
                         reserve_result(&value, &materialized, &exhausted)?;
                         Ok(value)
@@ -1694,6 +1726,8 @@ struct SessionState {
     dirty: BTreeSet<String>,
     /// Offset from UTC, in minutes, for NOW and TODAY (default 0: UTC).
     utc_offset_minutes: i32,
+    /// The imported workbook's defined names: read-only, never edited.
+    names: Option<Arc<DefinedNames>>,
 }
 /// Clones share one synchronized transient session. Calculation holds no write
 /// lock while evaluating; publication checks the source revision again.
@@ -1715,6 +1749,14 @@ impl Session {
             .unwrap_or_else(|poisoned| poisoned.into_inner())
     }
     pub fn new(model: WorkbookModel) -> Result<Self, ToolkitError> {
+        Self::with_names(model, None)
+    }
+    /// A session whose formulas may use the workbook's defined names. The
+    /// names are read-only: no edit adds, changes or removes one.
+    pub fn with_names(
+        model: WorkbookModel,
+        names: Option<DefinedNames>,
+    ) -> Result<Self, ToolkitError> {
         model.validate()?;
         Ok(Self {
             state: Arc::new(Mutex::new(SessionState {
@@ -1722,8 +1764,13 @@ impl Session {
                 published: None,
                 dirty: BTreeSet::new(),
                 utc_offset_minutes: 0,
+                names: names.map(Arc::new),
             })),
         })
+    }
+    /// The session's defined names, if it has any table.
+    pub fn names(&self) -> Option<DefinedNames> {
+        self.state().names.as_deref().cloned()
     }
     pub fn snapshot(&self) -> WorkbookModel {
         self.state().model.clone()
@@ -1827,7 +1874,7 @@ impl Session {
                 cell.cached_value = None;
             }
             if let Some(formula) = edit.formula {
-                Expression::parse(&formula)?;
+                Expression::parse_with_names(&formula, state.names.as_deref(), sheet_name)?;
                 cell.value = CellValue::Blank;
                 cell.formula = Some(formula);
                 cell.cached_value = None;
@@ -1838,7 +1885,7 @@ impl Session {
         }
         candidate.validate()?;
         validate_inputs(&candidate, &BTreeMap::new())?;
-        Graph::build(&candidate)?;
+        Graph::build(&candidate, state.names.as_deref())?;
         candidate.revision = candidate
             .revision
             .checked_add(1)
@@ -1865,15 +1912,23 @@ impl Session {
     }
     /// Calculate with a pinned clock and seed (replay, undo, tests).
     pub fn calculate_with(&self, workers: usize, context: &CalcContext) -> CalculationReport {
-        let (model, previous, dirty) = {
+        let (model, previous, dirty, names) = {
             let state = self.state();
             (
                 state.model.clone(),
                 state.published.clone(),
                 state.dirty.clone(),
+                state.names.clone(),
             )
         };
-        let report = calculate_inner(&model, workers, previous.as_ref(), &dirty, context);
+        let report = calculate_inner(
+            &model,
+            workers,
+            previous.as_ref(),
+            &dirty,
+            context,
+            names.as_deref(),
+        );
         self.publish(report)
     }
     fn publish(&self, mut report: CalculationReport) -> CalculationReport {

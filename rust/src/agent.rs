@@ -31,6 +31,12 @@ enum OwnedWorkbook {
     Imported(Box<ImportedWorkbook>),
 }
 impl OwnedWorkbook {
+    fn names(&self) -> Option<crate::DefinedNames> {
+        match self {
+            Self::Authored(session) => session.names(),
+            Self::Imported(imported) => imported.names(),
+        }
+    }
     fn snapshot(&self) -> WorkbookModel {
         match self {
             Self::Authored(session) => session.snapshot(),
@@ -426,7 +432,7 @@ fn validate_candidate(
     model: &WorkbookModel,
     edits: &[Edit],
 ) -> Result<WorkbookModel> {
-    let candidate = Session::new(model.clone())?;
+    let candidate = Session::with_names(model.clone(), workbook.names())?;
     candidate.apply(edits.to_vec(), Some(model.revision))?;
     workbook.validate_imported(edits)?;
     Ok(candidate.snapshot())

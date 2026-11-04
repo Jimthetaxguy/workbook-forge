@@ -54,6 +54,20 @@
         "data-table"
       ]
     },
+    "hb_defined_names.xlsx": {
+      "writer": "handbuilt",
+      "categories": [
+        "defined-names",
+        "sheet-scoped-names",
+        "constant-names",
+        "formula-names",
+        "chained-names",
+        "name-cycle",
+        "ref-error-names",
+        "hidden-names",
+        "builtin-names"
+      ]
+    },
     "hb_dropdown_formulas.xlsx": {
       "writer": "handbuilt",
       "categories": [

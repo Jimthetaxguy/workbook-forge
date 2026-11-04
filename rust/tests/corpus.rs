@@ -405,27 +405,24 @@ fn compatibility_version_3_snapshot_export_refuses_new_formulas() {
 }
 
 #[test]
-fn names_that_look_like_references_are_typed_as_names() {
+fn names_that_look_like_references_calculate_as_names() {
+    // docs/defined-names.md: the names calculate; XFE1 is shaped like a cell
+    // past column XFD and stays an invalid reference.
     let imported = import_xlsx_bytes(
         &corpus("hb_r1c1_looking_names.xlsx"),
         BTreeMap::new(),
         BTreeMap::new(),
     )
     .expect("import");
-    let report = imported.calculate(1);
-    for (address, name) in [("A2", "R1C1Total"), ("B2", "rate_R2"), ("D2", "R1C1Total")] {
-        let diagnostic = report
-            .diagnostics
-            .iter()
-            .find(|d| d.address.as_deref() == Some(address))
-            .unwrap_or_else(|| panic!("no diagnostic for {address}: {:?}", report.diagnostics));
-        assert_eq!(diagnostic.code, "unsupported_formula", "{address}");
-        assert!(
-            diagnostic
-                .message
-                .contains(&format!("unsupported name '{name}'")),
-            "{address}: {}",
-            diagnostic.message
-        );
+    let report = serde_json::to_value(imported.calculate(1)).unwrap();
+    for (address, value) in [("A2", 5.0), ("B2", 3.05), ("D2", 200.0)] {
+        let got = report["values"][format!("Calc!{address}")]
+            .as_f64()
+            .unwrap();
+        assert!((got - value).abs() < 1e-12, "{address}: {got}");
     }
+    let diagnostics = report["diagnostics"].as_array().unwrap();
+    assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+    assert_eq!(diagnostics[0]["address"], "C2");
+    assert_eq!(diagnostics[0]["code"], "invalid_reference");
 }

@@ -290,7 +290,8 @@ imported export follows the same insertion rules against Excel's grid; its
 agent reports an address outside the grid as `invalid_reference`. An inserted
 cell grows the worksheet dimension and row spans and takes the row or column
 style; it does not extend a table, defined name, merged range, or validation
-range to cover it.
+range to cover it. Defined names are read-only and calculated
+([docs/defined-names.md](docs/defined-names.md)).
 
 In this older toolkit form, imported packages retain an immutable baseline.
 Supported edits and results are patched into a private reconstruction,
@@ -360,6 +361,8 @@ archives are ignored; they are not part of the distributed source.
 | Direct Excel Desktop observations | the SDK export round trip of 12 of 12 cell checks (2026-09-28) has no receipt in this tree; the canonical-fixture receipt is outstanding |
 
 The Python and Rust evaluators currently cover 123 functions, including scalar arithmetic, references, text and logical functions, the periodic financial functions FV, PV, PMT, NPER, IPMT, PPMT, CUMIPMT, CUMPRINC, SLN, SYD, DB, DDB, VDB, AMORLINC, and AMORDEGRC (deprecated legacy), dates, lookups, `TEXTBEFORE`/`TEXTAFTER`, error predicates (`ISNA`, `ISERR`, `ISERROR`), `NA`, `COUNTBLANK`, six conditional aggregations (`COUNTIF(S)`, `SUMIF(S)`, `AVERAGEIF(S)`), conditional extrema (`MINIFS`, `MAXIFS`), date/time functions (`HOUR`, `MINUTE`, `SECOND`, `TIME`, `WEEKDAY`, `WEEKNUM`, `ISOWEEKNUM`, `DAYS360`, `YEARFRAC`, `WORKDAY`, `NETWORKDAYS`, `WORKDAY.INTL`, `NETWORKDAYS.INTL`, `COUPDAYBS`, `COUPDAYS`, `COUPDAYSNC`, `COUPNCD`, `COUPNUM`, `COUPPCD`), `DATEDIF` and the text readers `DATEVALUE` and `TIMEVALUE` (unambiguous forms only, see [docs/date-text-functions.md](docs/date-text-functions.md)), the volatile `NOW`, `TODAY`, `RAND`, `RANDBETWEEN` and `RANDARRAY` (one pinned clock and seed per recalculation, see [docs/volatile-functions.md](docs/volatile-functions.md)), and scalar rounding/remainder functions (`EVEN`, `ODD`, `INT`, `TRUNC`, `ROUND`, `ROUNDUP`, `ROUNDDOWN`, `MOD`, and `QUOTIENT`), plus parity predicates (`ISEVEN` and `ISODD`), plus factorial and combinatorics (`FACT`, `FACTDOUBLE`, `COMBIN`, `COMBINA`, `PERMUT`, and `PERMUTATIONA`), plus integer math (`GCD` and `LCM`), and bounded array generation with `SEQUENCE`, row/column ordering with `SORT`, and stable distinct-row/column selection with `UNIQUE`.
+
+Formulas may use the workbook's Excel defined names. Every engine (Python and Rust toolkit, Python and Rust canonical model) reads `definedName` from `xl/workbook.xml`, resolves workbook and sheet scopes case-insensitively, and calculates names that refer to absolute sheet-qualified cells or ranges, constants, formulas or other names, with dependencies through the name. Cycles, hidden and built-in `_xlnm.` names, external links, relative references and dynamic `OFFSET`/`INDIRECT` names are typed refusals; `#REF!` targets give `#REF!` and unknown names `#NAME?`. Names are read-only: no edit or protocol operation changes them, and export writes them back unchanged. See [docs/defined-names.md](docs/defined-names.md).
 
 Catalog status means:
 
