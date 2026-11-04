@@ -6,7 +6,7 @@
   "inventory_retrieved": "2026-09-24",
   "inventory_sha256": "d4f612b6ff7697538902aaf203703b395980ee5eecbf58b26ba8e1dcb8d38e68",
   "inventory_refresh_required": true,
-  "formula_fixture_sha256": "e140b144acd603efcb3c76e4b4e22e142bd15865565dc4509856a619f5f5a547",
+  "formula_fixture_sha256": "ec0e7aa5a91f55a1f548b3b18b0cdf922f540f0dc9d0b9553d55ecc3426bfdd8",
   "primary_source": "https://support.microsoft.com/en-us/excel/excel-functions-alphabetical",
   "target_build": "Microsoft 365 desktop; build/channel availability unverified",
   "udfs": "arbitrary add-ins/UDFs are in long-term scope through explicit typed bindings; not enumerable built-ins",
@@ -11373,7 +11373,7 @@
           "unsupported_now": false
         }
       },
-      "runtime_contract": "explicit_provider_binding_planned"
+      "runtime_contract": "pass_context_profile"
     },
     {
       "name": "NPER",
@@ -12937,7 +12937,7 @@
           "unsupported_now": false
         }
       },
-      "runtime_contract": "explicit_provider_binding_planned"
+      "runtime_contract": "pass_context_profile"
     },
     {
       "name": "RANDARRAY",
@@ -12980,7 +12980,7 @@
           "unsupported_now": false
         }
       },
-      "runtime_contract": "explicit_provider_binding_planned"
+      "runtime_contract": "pass_context_profile"
     },
     {
       "name": "RANDBETWEEN",
@@ -13022,7 +13022,7 @@
           "unsupported_now": false
         }
       },
-      "runtime_contract": "explicit_provider_binding_planned"
+      "runtime_contract": "pass_context_profile"
     },
     {
       "name": "RANK",
@@ -16196,7 +16196,7 @@
           "unsupported_now": false
         }
       },
-      "runtime_contract": "explicit_provider_binding_planned"
+      "runtime_contract": "pass_context_profile"
     },
     {
       "name": "TOROW",

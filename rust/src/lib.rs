@@ -1914,7 +1914,7 @@ fn date_serial(year: i32, month: i32, day: i32) -> Result<i64, FormulaError> {
     }
 }
 
-/// DATEDIF(start, end, unit) with Excel's MD and YD anchoring quirks.
+/// DATEDIF(start, end, unit). The MD and YD anchors are a Workbook Forge profile.
 fn datedif_call(args: &[Expr], env: &Environment<'_>) -> Result<Value, FormulaError> {
     arity("DATEDIF", args, 3, 3)?;
     let start = eval_scalar(&args[0], env)?;
@@ -1945,8 +1945,9 @@ fn datedif_call(args: &[Expr], env: &Environment<'_>) -> Result<Value, FormulaEr
         "YM" => i64::from(months.rem_euclid(12)),
         "MD" if d2 >= d1 => i64::from(d2 - d1),
         "MD" => {
-            // Excel's quirk: count from the start day in the month before the
-            // end month, letting DATE roll an invalid day forward (can be < 0).
+            // Workbook Forge profile: count from the start day in the month
+            // before the end month, letting DATE roll an invalid day forward.
+            // The result can be negative. This is not an Excel observation.
             if y2 < 1900 || (y2, m2) == (1900, 1) {
                 return Err(FormulaError::Num);
             }
