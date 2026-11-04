@@ -58,6 +58,16 @@ fn the_session_offset_moves_today_across_local_midnight() {
     assert_eq!(number(report.values.get("Sheet1!A1")), 46_329.0);
     let report = s.calculate_with(1, &CalcContext::new(before + 1, -300, 0));
     assert_eq!(number(report.values.get("Sheet1!A1")), 46_330.0);
+    // calculate() takes the session offset alone: no caller-supplied context.
+    let live = s.calculate(1);
+    let captured = live.calc.expect("TODAY records its pass");
+    assert_eq!(captured.utc_offset_minutes, -300);
+    let local_ms = captured
+        .now_ms
+        .saturating_add(i64::from(captured.utc_offset_minutes) * 60_000);
+    let serial =
+        (workbook_forge::volatile::UNIX_EPOCH_SERIAL + local_ms.div_euclid(86_400_000)) as f64;
+    assert_eq!(number(live.values.get("Sheet1!A1")), serial);
 }
 
 #[test]
@@ -146,14 +156,27 @@ fn the_log_records_each_pass_context_and_replay_reuses_it() {
     // The first command calculated its own baseline, so that is logged too.
     assert!(calcs[0]["base_calc_context"].is_object());
     assert!(calcs[1].get("base_calc_context").is_none());
-    // Each edit captured a new clock: A1 changed on every pass.
-    assert_ne!(calcs[1]["calc_context"], calcs[2]["calc_context"]);
+    // A pinned clock and seed make every capture identical. Without those
+    // pins each edit takes a new clock, so A1 changes on every pass.
+    let pinned = std::env::var_os("FORGE_CALC_NOW").is_some()
+        && std::env::var_os("FORGE_CALC_SEED").is_some();
+    if pinned {
+        assert_eq!(calcs[1]["calc_context"], calcs[2]["calc_context"]);
+    } else {
+        assert_ne!(calcs[1]["calc_context"], calcs[2]["calc_context"]);
+    }
     let ndjson = commands.export_log_ndjson(s.revision(), None);
     let first = replay(&[], &ndjson).expect("replay");
     let second = replay(&[], &ndjson).expect("replay again");
     assert_eq!(first["ok"], true);
     assert_eq!(first["calcs_checked"], 3);
     assert_eq!(first["calc_events"], second["calc_events"]);
+    // Returned values are the last logged pass (offset -300), not a fresh
+    // capture at offset 0.
+    let last: CalcContext = serde_json::from_value(calcs[2]["calc_context"].clone()).unwrap();
+    let expected = json!(s.calculate_with(1, &last).values);
+    assert_eq!(first["values"], expected);
+    assert_eq!(second["values"], expected);
 }
 
 #[test]
@@ -168,6 +191,9 @@ fn undo_and_redo_restore_volatile_values_instead_of_rerolling() {
         pause();
         serde_json::from_str(&commands.apply_and_calculate(&s, &envelope(id, base, op))).unwrap()
     };
+    // The second pass uses a different session offset, so the two values
+    // differ even when FORGE_CALC_NOW and FORGE_CALC_SEED pin the clock.
+    s.set_utc_offset_minutes(-300).unwrap();
     run("c1", "0", set("A1", "NOW()+RAND()"));
     let calc_value = |events: &[Json], key: &str| -> f64 {
         let calc = events.iter().rev().find(|e| e["kind"] == "calc").unwrap();
@@ -175,6 +201,7 @@ fn undo_and_redo_restore_volatile_values_instead_of_rerolling() {
         number(s.calculate_with(1, &context).values.get(key))
     };
     let after_first = calc_value(&commands.events(), "Sheet1!A1");
+    s.set_utc_offset_minutes(0).unwrap();
     run("c2", "1", set("B1", "1"));
     let after_second = calc_value(&commands.events(), "Sheet1!A1");
     assert_ne!(after_first, after_second);

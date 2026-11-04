@@ -11,6 +11,7 @@
 import type {
   CalculatedValue,
   Calculation,
+  CalcContext,
   CommandMeta,
   Edit,
   EventMessage,
@@ -455,11 +456,19 @@ export class ForgeEngine {
       values: Record<string, CalculatedValue>;
       stale: boolean;
       diagnostics: unknown[];
+      calc?: CalcContext | null;
     };
     const revision = wb.revisionString();
     if (String(report.revision) !== revision) {
       return fail('stale_calculation', 'calculation does not match the current revision', { current_revision: revision });
     }
-    return { ok: true, value: { revision, values: report.values, stale: report.stale, diagnostics: report.diagnostics } };
+    const value: Calculation = {
+      revision,
+      values: report.values,
+      stale: report.stale,
+      diagnostics: report.diagnostics,
+    };
+    if (report.calc != null) value.calc = report.calc;
+    return { ok: true, value };
   }
 }

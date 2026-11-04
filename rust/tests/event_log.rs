@@ -498,6 +498,8 @@ fn replay_reproduces_the_final_state_and_every_recorded_delta() {
         assert_json(&replayed["deltas"], &logged["deltas"]);
     }
     assert_eq!(result["snapshot"], json!(workbook.snapshot()));
+    // Non-volatile cells match a fresh pass. A volatile replay must instead
+    // return the last logged pass; see the NOW()+RAND() test below.
     assert_eq!(result["values"], json!(workbook.calculate(1).values));
     // Deterministic: a second replay (and a JSON-array log that a JavaScript
     // host re-serialized, turning 20.0 into 20) gives the same answer.
@@ -547,4 +549,59 @@ fn replay_rejects_a_changed_baseline_and_a_tampered_delta() {
         .collect::<Vec<_>>()
         .join("\n");
     assert_eq!(replay(&bytes, &gap).unwrap_err().code, "invalid_log");
+}
+
+/// `NOW()+RAND()` under a non-UTC session offset. Replay must return that
+/// logged pass (its clock, seed and offset), not a fresh capture at offset 0.
+#[test]
+fn replay_of_now_plus_rand_returns_the_logged_pass_under_a_non_utc_offset() {
+    use workbook_forge::toolkit::{Session, Sheet};
+    use workbook_forge::{CalcContext, WorkbookModel};
+
+    let mut model = WorkbookModel::default();
+    model.sheets.push(Sheet::new("Sheet1"));
+    let session = Session::new(model).unwrap();
+    session.set_utc_offset_minutes(-300).unwrap();
+    let commands = CommandSession::new();
+    commands.set_baseline(Baseline::blank("Sheet1"));
+    commands.start_log(None, json!({}), 0);
+    let envelope = json!({
+        "v": 1,
+        "command_id": "c1",
+        "client_id": "client-ui",
+        "client_seq": "1",
+        "idempotency_key": null,
+        "actor": {"kind": "human", "id": "ui", "on_behalf_of": null},
+        "base_revision": "0",
+        "mode": "strict",
+        "preconditions": [],
+        "op": {"type": "set_cells", "edits": [
+            {"sheet": "Sheet1", "address": "A1", "formula": "NOW()+RAND()"}
+        ]},
+    });
+    let applied: Json =
+        serde_json::from_str(&commands.apply_and_calculate(&session, &envelope.to_string()))
+            .unwrap();
+    assert_eq!(applied["status"], "applied", "{applied}");
+    let calc = commands
+        .events()
+        .into_iter()
+        .find(|event| event["kind"] == "calc")
+        .unwrap();
+    let context: CalcContext = serde_json::from_value(calc["calc_context"].clone()).unwrap();
+    assert_eq!(context.utc_offset_minutes, -300);
+    assert!(calc["calc_context"]["seed"].is_string());
+    let logged = session.calculate_with(1, &context);
+    let utc = session.calculate_with(1, &CalcContext::new(context.now_ms, 0, context.seed));
+    assert_ne!(
+        logged.values.get("Sheet1!A1"),
+        utc.values.get("Sheet1!A1"),
+        "the non-UTC offset must change NOW()+RAND()"
+    );
+    let ndjson = commands.export_log_ndjson(session.revision(), None);
+    let first = replay(&[], &ndjson).expect("replay");
+    let second = replay(&[], &ndjson).expect("replay again");
+    assert_eq!(first["ok"], true);
+    assert_eq!(first["values"], json!(logged.values));
+    assert_eq!(second["values"], first["values"]);
 }
