@@ -738,3 +738,83 @@ test('text columns: a cell typed where none existed inherits its Text (@) row or
   expect(notices.filter((n: string) => n.startsWith('Forge rejected'))).toEqual([]);
   expect(errors).toEqual([]);
 });
+
+// The default URL is the user view: plain labels, no engine names, no raw
+// revision, no mode selector. `?dev=1` (or any non-default `?mode=`) adds the
+// Developer panel with those controls.
+test('toolbar: the default view hides developer controls and ?dev=1 shows them', async ({ page }) => {
+  const userView = async () => {
+    const bar = (await page.locator('#bar').innerText()) + '\n' + (await page.locator('#privacy').innerText());
+    return {
+      bar,
+      modeVisible: await page.locator('#mode').isVisible(),
+      developerVisible: await page.locator('#developer').isVisible(),
+      issuesVisible: await page.locator('#formula-issues').isVisible(),
+      xlookupNoteVisible: await page.locator('#formula-support').isVisible(),
+      title: await page.title(),
+    };
+  };
+  await page.goto('/');
+  await page.evaluate(() => (window as any).__spike.then(() => undefined));
+  await expect(page.locator('#status')).toHaveText('univer-spike-chain.xlsx · All changes calculated · Version 0');
+  const plain = await userView();
+  expect(plain.modeVisible, 'mode selector').toBe(false);
+  expect(plain.developerVisible, 'Developer panel').toBe(false);
+  expect(plain.xlookupNoteVisible, 'XLOOKUP subset note').toBe(false);
+  expect(plain.issuesVisible, 'Formula issues with no issues').toBe(false);
+  expect(plain.bar).not.toContain('(Forge)');
+  expect(plain.bar).not.toMatch(/\br\d+\b/);
+  expect(plain.bar).not.toContain('not-execute');
+  expect(plain.title).toBe('Workbook Forge');
+  for (const label of ['Workbook Forge', 'New workbook', 'Download .xlsx', 'Undo', 'Redo', 'Your workbook stays on this device. Use Download to save a copy.']) {
+    expect(plain.bar).toContain(label);
+  }
+  expect(await page.evaluate(() => (window as any).__spike.then((s: any) => s.mode))).toBe('not-execute');
+
+  // ?mode=not-execute is the same user view.
+  await page.goto('/?mode=not-execute');
+  await page.evaluate(() => (window as any).__spike.then(() => undefined));
+  expect(await page.locator('#developer').isVisible()).toBe(false);
+
+  for (const url of ['/?dev=1', '/?mode=load-only']) {
+    await page.goto(url);
+    await page.evaluate(() => (window as any).__spike.then(() => undefined));
+    await expect(page.locator('#developer')).toBeVisible();
+    expect(await page.locator('#mode').isVisible(), `${url}: mode selector before opening`).toBe(false);
+    await page.locator('#developer > summary').click();
+    await expect(page.locator('#mode')).toBeVisible();
+    const expectedMode = url.includes('load-only') ? 'load-only' : 'not-execute';
+    await expect(page.locator('#mode')).toHaveValue(expectedMode);
+    await expect(page.locator('#dev-revision')).toHaveText(`Forge r0 · mode ${expectedMode}`);
+    await expect(page.locator('#dev-source')).toContainText('univer-spike-chain.xlsx');
+    await expect(page.locator('#formula-support')).toContainText('XLOOKUP subset');
+    // The user-facing labels stay plain in dev mode too.
+    expect(await page.locator('#bar').innerText()).not.toContain('(Forge)');
+  }
+});
+
+// Formula issues lists Forge's calculation diagnostics, e.g. an XLOOKUP mode
+// outside the supported subset, and hides again once the formula is fixed.
+test('formula issues: an unsupported XLOOKUP mode is listed with a count, and the section hides when fixed', async ({ page }) => {
+  await boot(page, 'not-execute');
+  await page.locator('#new').click();
+  await page.waitForFunction(
+    () => (window as any).__spike.then((s: any) => s.adapter.docUnitIds().length === 2),
+    null,
+    { timeout: 15_000 },
+  );
+  await page.waitForTimeout(400);
+  await expect(page.locator('#status')).toHaveText('New workbook · All changes calculated · Version 0');
+  await expect(page.locator('#formula-issues')).toBeHidden();
+  await typeInto(page, 'C1', 'pear');
+  await typeInto(page, 'D1', '3');
+  await typeInto(page, 'E1', '=XLOOKUP("p*",C1:C2,D1:D2,,2)');
+  await expect(page.locator('#formula-issues')).toBeVisible();
+  await expect(page.locator('#formula-issue-count')).toHaveText('1');
+  await page.locator('#formula-issues > summary').click();
+  await expect(page.locator('#formula-issue-list')).toContainText('Sheet1!E1');
+  await expect(page.locator('#formula-issue-list')).toContainText('match_mode');
+  await typeInto(page, 'E1', '=XLOOKUP("pear",C1:C2,D1:D2)');
+  await expect(page.locator('#formula-issues')).toBeHidden();
+  await expect(page.locator('#status')).toHaveText(/^New workbook · All changes calculated · Version \d+$/);
+});

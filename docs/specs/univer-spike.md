@@ -55,8 +55,8 @@ the overwriting event) if those cells changed since.
 
 The demo keeps no workbook session on Railway. The blank-workbook author/edit/
 calculate/export/reopen path uses only static GET requests with no request
-bodies in Playwright. The user may open a local `.xlsx`, and **Export** saves
-the bytes Forge produces. Univer's model is never serialized. This is scoped
+bodies in Playwright. The user may open a local `.xlsx`, and **Download .xlsx**
+saves the bytes Forge produces. Univer's model is never serialized. This is scoped
 network evidence for the tested path, not a formal privacy audit; remotely
 served JavaScript remains part of the trust boundary.
 
@@ -379,5 +379,21 @@ cd web/forge-engine && npm test          # in-process engine tests (Node)
 cd web/univer-spike && npm ci
 npm run typecheck && npm run check:licenses
 CHROMIUM_PATH=/usr/bin/chromium npm run test:e2e   # builds, serves dist/, runs Playwright
-npm run dev                              # interactive demo; default ?mode=not-execute
+npm run dev                              # interactive demo; always not-execute (?dev=1 for the Developer panel)
 ```
+
+### Page chrome
+
+The default URL is the user view and always runs `not-execute`. Its toolbar
+has New workbook, Open .xlsx, Download .xlsx, Undo and Redo, and a status line
+such as `univer-spike-chain.xlsx · All changes calculated · Version 0` (the
+version is the Forge revision). A one-line note says the workbook stays on the
+device. **Formula issues** lists Forge's calculation diagnostics (for example
+an XLOOKUP match mode outside the subset above, or an unsupported function),
+with a count badge; it is hidden when there are none.
+
+`?dev=1`, or any `?mode=` other than `not-execute`, adds a collapsed
+**Developer** panel: the mode selector, the raw revision (`Forge r0 · mode
+…`), the source state (built-in sample, opened file or new workbook), and the
+XLOOKUP subset note. The Playwright suite boots the comparison modes with
+`?mode=<mode>`.

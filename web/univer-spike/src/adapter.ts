@@ -168,6 +168,8 @@ export class ForgeUniverAdapter {
   readonly audit: Audit = { calcRequests: [], calcOutputs: [], facadeEvents: [], foreignWrites: [], blocked: [], routed: [] };
   readonly notices: string[] = [];
   revision: Revision = '0';
+  /** Queued Forge round trips not yet finished (edits, undo, redo, patches). */
+  pending = 0;
   /** One per tab; client_seq counts this tab's envelopes. */
   readonly clientId: string = crypto.randomUUID();
   private clientSeq = 0;
@@ -361,7 +363,13 @@ export class ForgeUniverAdapter {
   }
 
   private enqueue(task: () => Promise<unknown>) {
-    const next = this.queue.then(task).catch((error) => this.notice(`Adapter error: ${String(error)}`));
+    this.pending += 1;
+    const next = this.queue
+      .then(task)
+      .catch((error) => this.notice(`Adapter error: ${String(error)}`))
+      .finally(() => {
+        this.pending -= 1;
+      });
     this.queue = next;
     return next;
   }
