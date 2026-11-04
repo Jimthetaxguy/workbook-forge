@@ -379,11 +379,46 @@ test('NOW and TODAY follow the host time zone; calc events log the pass context'
   const before = Date.now();
   assert.equal(call(engine, 'applyAndCalculate', { envelope }).ok, true);
   const after = Date.now();
-  const values = call(engine, 'calculate').value.values;
+  const calculated = call(engine, 'calculate').value;
+  const values = calculated.values;
   const serial = (ms) => 25569 + (ms + 330 * 60000) / 86400000;
   assert.ok(values['Sheet1!A1'] >= serial(before - 1) && values['Sheet1!A1'] <= serial(after + 1000));
   assert.equal(values['Sheet1!B1'], Math.floor(values['Sheet1!A1']));
+  assert.equal(calculated.calc.utc_offset_minutes, 330);
+  assert.equal(typeof calculated.calc.now_ms, 'number');
+  assert.match(calculated.calc.seed, /^\d+$/);
   const calc = call(engine, 'log', { fromSeq: 0, limit: 100 }).value.events.find((event) => event.kind === 'calc');
   assert.equal(calc.calc_context.utc_offset_minutes, 330);
   assert.equal(typeof calc.calc_context.seed, 'string');
+});
+
+test('replay of NOW()+RAND() returns the logged pass under a non-UTC zone', () => {
+  const engine = new ForgeEngine(
+    { openXlsx, createBlankWorkbook, sha256Hex, replayJson },
+    { timeZone: 'America/New_York' },
+  );
+  call(engine, 'newWorkbook', { sheetName: 'Sheet1' });
+  const envelope = {
+    v: 1, command_id: 'volatile-1', client_id: 'c', client_seq: '1', idempotency_key: null,
+    actor: { kind: 'human', id: 'ui', on_behalf_of: null }, base_revision: '0', mode: 'strict', preconditions: [],
+    op: { type: 'set_cells', edits: [{ sheet: 'Sheet1', address: 'A1', formula: 'NOW()+RAND()' }] },
+  };
+  assert.equal(call(engine, 'applyAndCalculate', { envelope }).ok, true);
+  const events = call(engine, 'log', { fromSeq: 0, limit: 100 }).value.events;
+  const calc = events.find((event) => event.kind === 'calc');
+  const offset = utcOffsetMinutes('America/New_York', calc.calc_context.now_ms);
+  assert.notEqual(offset, 0);
+  assert.equal(calc.calc_context.utc_offset_minutes, offset);
+  assert.match(calc.calc_context.seed, /^\d+$/);
+  const logged = calc.deltas.find((row) => row[0] === 'Sheet1!A1')[2];
+  const exported = call(engine, 'export', { includeLog: true }).value;
+  const replayed = call(engine, 'replay', { baseline: new Uint8Array(), events: exported.log });
+  assert.equal(replayed.ok, true, JSON.stringify(replayed.error));
+  assert.equal(replayed.value.values['Sheet1!A1'], logged);
+  const again = call(engine, 'replay', { baseline: new Uint8Array(), events: exported.log });
+  assert.equal(again.value.values['Sheet1!A1'], logged);
+  const painted = call(engine, 'calculate').value;
+  assert.equal(painted.calc.utc_offset_minutes, utcOffsetMinutes('America/New_York', painted.calc.now_ms));
+  assert.equal(typeof painted.calc.now_ms, 'number');
+  assert.match(painted.calc.seed, /^\d+$/);
 });

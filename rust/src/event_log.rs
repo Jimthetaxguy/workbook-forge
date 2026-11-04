@@ -258,9 +258,14 @@ impl EventLog {
     /// The context an undo or redo recalculates with: the one in effect in
     /// the state it returns to. Undoing an intent returns to the state before
     /// it (its calc event's baseline context, else the previous calc event's);
-    /// redoing returns to the state after the original intent. `None` when
-    /// the log holds no context for that state.
-    pub fn history_context(&self, plan: &HistoryPlan) -> Option<CalcContext> {
+    /// redoing returns to the state after the original intent. `Ok(None)` when
+    /// the log holds no context for that state, which is right for a log
+    /// written before volatile functions. A context that is present but not
+    /// the logged shape is `invalid_log`, the same refusal replay uses.
+    pub fn history_context(
+        &self,
+        plan: &HistoryPlan,
+    ) -> Result<Option<CalcContext>, ContractError> {
         let calc_of = |intent: &str| {
             self.events.iter().position(|event| {
                 event["kind"] == "calc"
@@ -269,22 +274,38 @@ impl EventLog {
                         .is_some_and(|causes| causes.iter().any(|cause| cause == intent))
             })
         };
-        let parse = |value: &Json| serde_json::from_value::<CalcContext>(value.clone()).ok();
-        match plan.kind {
-            HistoryKind::Redo => {
-                let at = calc_of(&plan.target_id)?;
-                parse(&self.events[at]["calc_context"])
+        let read = |at: usize, key: &str| -> Result<Option<CalcContext>, ContractError> {
+            match self.events[at].get(key) {
+                None | Some(Json::Null) => Ok(None),
+                Some(value) => serde_json::from_value(value.clone())
+                    .map(Some)
+                    .map_err(|error| {
+                        ContractError::new("invalid_log", format!("event {at}: {key}: {error}"))
+                    }),
             }
+        };
+        match plan.kind {
+            HistoryKind::Redo => match calc_of(&plan.target_id) {
+                Some(at) => read(at, "calc_context"),
+                None => Ok(None),
+            },
             HistoryKind::Undo => {
-                let at = calc_of(&plan.source_id)?;
-                if let Some(base) = parse(&self.events[at]["base_calc_context"]) {
-                    return Some(base);
+                let Some(at) = calc_of(&plan.source_id) else {
+                    return Ok(None);
+                };
+                if self.events[at]
+                    .get("base_calc_context")
+                    .is_some_and(|value| !value.is_null())
+                {
+                    return read(at, "base_calc_context");
                 }
-                self.events[..at]
+                match self.events[..at]
                     .iter()
-                    .rev()
-                    .find(|event| event["kind"] == "calc")
-                    .and_then(|event| parse(&event["calc_context"]))
+                    .rposition(|event| event["kind"] == "calc")
+                {
+                    Some(prev) => read(prev, "calc_context"),
+                    None => Ok(None),
+                }
             }
         }
     }
@@ -578,6 +599,9 @@ pub fn replay_json(bytes: &[u8], events_text: &str) -> String {
 /// length (`replay_mismatch`; `bytes.len()` must equal `baseline.bytes`, 0
 /// for a blank open) and must name a known sheet. A delta mismatch is
 /// `replay_mismatch`. A missing or unknown blank sheet is `invalid_log`.
+/// `values` are the last logged pass when the last applied intent has a
+/// fresh calc event, so that pass's clock, seed and offset stay with the
+/// returned values. Otherwise the result is calculated once at the end.
 pub fn replay(bytes: &[u8], events_text: &str) -> Result<Json, ContractError> {
     let events = parse_events(events_text)?;
     let opened = events
@@ -610,7 +634,9 @@ pub fn replay(bytes: &[u8], events_text: &str) -> Result<Json, ContractError> {
                 .map_err(|e| replay_error("open_failed", e.to_string()))?;
             let mut summary = replay_on(&workbook, &events)?;
             summary["snapshot"] = json!(workbook.snapshot());
-            summary["values"] = json!(workbook.calculate(1).values);
+            if summary.get("values").is_none() {
+                summary["values"] = json!(workbook.calculate(1).values);
+            }
             Ok(summary)
         }
         Some("blank") => {
@@ -647,7 +673,9 @@ pub fn replay(bytes: &[u8], events_text: &str) -> Result<Json, ContractError> {
             })?;
             let mut summary = replay_on(&session, &events)?;
             summary["snapshot"] = json!(session.snapshot());
-            summary["values"] = json!(session.calculate(1).values);
+            if summary.get("values").is_none() {
+                summary["values"] = json!(session.calculate(1).values);
+            }
             Ok(summary)
         }
         _ => Err(replay_error("invalid_log", "unknown baseline kind")),
@@ -666,6 +694,8 @@ pub fn replay_on<W: CommandTarget + ?Sized>(
         error
     };
     let mut cache: Option<(u64, BTreeMap<String, crate::toolkit::CalculatedValue>)> = None;
+    // Values from the last calc event, computed with that event's context.
+    let mut logged_values: Option<BTreeMap<String, crate::toolkit::CalculatedValue>> = None;
     let mut computed: HashMap<String, (u64, Vec<Json>)> = HashMap::new();
     let mut calc_events = Vec::new();
     let mut intents = 0usize;
@@ -789,9 +819,15 @@ pub fn replay_on<W: CommandTarget + ?Sized>(
                     }
                     computed.insert(id, (revision, applied.deltas));
                     if applied.report.revision == revision && !applied.report.stale {
-                        cache = Some((revision, applied.report.values));
+                        cache = Some((revision, applied.report.values.clone()));
+                        logged_values = Some(applied.report.values);
+                    } else {
+                        logged_values = None;
                     }
                 } else {
+                    // A later intent without a calc event makes the last
+                    // logged pass stale; calculate once at the end instead.
+                    logged_values = None;
                     let reached = apply_parsed(workbook, edits, expected).map_err(|error| {
                         mismatch(
                             event,
@@ -840,13 +876,17 @@ pub fn replay_on<W: CommandTarget + ?Sized>(
             }
         }
     }
-    Ok(json!({
+    let mut summary = json!({
         "ok": true,
         "revision": workbook.revision().to_string(),
         "intents_applied": intents,
         "calcs_checked": calc_events.len(),
         "calc_events": calc_events,
-    }))
+    });
+    if let Some(values) = logged_values {
+        summary["values"] = json!(values);
+    }
+    Ok(summary)
 }
 
 // ---- Clock ----------------------------------------------------------------
@@ -1018,6 +1058,143 @@ mod tests {
             clock::iso_utc(1_761_409_200_000.0),
             "2025-10-25T16:20:00.000Z"
         );
+    }
+
+    fn history_plan(kind: HistoryKind, source_id: &str, target_id: &str) -> HistoryPlan {
+        HistoryPlan {
+            kind,
+            source_seq: 0,
+            source_id: source_id.to_string(),
+            target_id: target_id.to_string(),
+            edits: Vec::new(),
+        }
+    }
+
+    /// Two applied edits, each with a calc event. The second calc records a
+    /// baseline context, which is what undoing it restores.
+    fn two_calc_log() -> (EventLog, String, String) {
+        let mut log = EventLog::default();
+        log.set_baseline(Baseline::blank("Sheet1"));
+        log.start(None, json!({}), 0);
+        let inputs = vec![json!({
+            "sheet": "Sheet1",
+            "address": "A1",
+            "before": {"absent": true},
+            "after": {"formula": "NOW()+RAND()"}
+        })];
+        let (_seq, first) = log.record_intent(
+            json!({"type": "human", "id": "ui"}),
+            json!({"name": "edits"}),
+            json!({"mode": "strict", "expectedRevision": "0"}),
+            true,
+            1,
+            inputs.clone(),
+            None,
+        );
+        log.record_calc(
+            &first,
+            1,
+            1,
+            0.0,
+            vec![],
+            json!([]),
+            &CalcContext::new(1_768_478_400_000_i64, -300, 7),
+            Some(&CalcContext::new(1_768_478_400_000_i64, -300, 1)),
+        );
+        let (_seq, second) = log.record_intent(
+            json!({"type": "human", "id": "ui"}),
+            json!({"name": "edits"}),
+            json!({"mode": "strict", "expectedRevision": "1"}),
+            true,
+            2,
+            inputs,
+            None,
+        );
+        log.record_calc(
+            &second,
+            2,
+            1,
+            0.0,
+            vec![],
+            json!([]),
+            &CalcContext::new(1_768_478_400_000_i64, 60, 9),
+            Some(&CalcContext::new(1_768_478_400_000_i64, -300, 7)),
+        );
+        (log, first, second)
+    }
+
+    #[test]
+    fn undo_and_redo_reject_a_present_but_unparseable_calc_context() {
+        let (mut log, first, second) = two_calc_log();
+        let undo = history_plan(HistoryKind::Undo, &second, &second);
+        let restored = log.history_context(&undo).unwrap().unwrap();
+        assert_eq!(restored.utc_offset_minutes, -300);
+        assert_eq!(restored.seed, 7);
+        let redo = history_plan(HistoryKind::Redo, "ev_undo", &first);
+        let redone = log.history_context(&redo).unwrap().unwrap();
+        assert_eq!(redone.utc_offset_minutes, -300);
+        assert_eq!(redone.seed, 7);
+
+        let calc_at = |log: &EventLog, id: &str| {
+            log.events
+                .iter()
+                .position(|event| {
+                    event["kind"] == "calc"
+                        && event["caused_by"]
+                            .as_array()
+                            .is_some_and(|causes| causes.iter().any(|cause| cause == id))
+                })
+                .unwrap()
+        };
+        let first_at = calc_at(&log, &first);
+        let second_at = calc_at(&log, &second);
+        // A missing baseline is "no context" only when no earlier pass has
+        // one either. Null is the same as absent.
+        log.events[second_at]
+            .as_object_mut()
+            .unwrap()
+            .remove("base_calc_context");
+        let from_previous = log.history_context(&undo).unwrap().unwrap();
+        assert_eq!(from_previous.seed, 7);
+        log.events[first_at]["calc_context"] = Json::Null;
+        assert_eq!(log.history_context(&undo).unwrap(), None);
+
+        // A seed stored as a JSON number is present, but it is not the
+        // decimal-string shape the log writes. Replay refuses that event.
+        log.events[second_at]["base_calc_context"] = json!({
+            "now_ms": 1_768_478_400_000_i64,
+            "utc_offset_minutes": -300,
+            "seed": 7
+        });
+        let error = log.history_context(&undo).unwrap_err();
+        assert_eq!(error.code, "invalid_log");
+        assert!(
+            error.message.contains("base_calc_context"),
+            "{}",
+            error.message
+        );
+        log.events[second_at]
+            .as_object_mut()
+            .unwrap()
+            .remove("base_calc_context");
+        log.events[first_at]["calc_context"] = json!({
+            "now_ms": 1_768_478_400_000_i64,
+            "utc_offset_minutes": -300,
+            "seed": 7
+        });
+        let error = log.history_context(&undo).unwrap_err();
+        assert_eq!(error.code, "invalid_log");
+        assert!(error.message.contains("calc_context"), "{}", error.message);
+
+        log.events[first_at]["calc_context"] = json!({
+            "now_ms": 1_768_478_400_000_i64,
+            "utc_offset_minutes": -300,
+            "seed": "7"
+        });
+        log.events[first_at]["calc_context"]["seed"] = json!(7);
+        let error = log.history_context(&redo).unwrap_err();
+        assert_eq!(error.code, "invalid_log");
+        assert!(error.message.contains("calc_context"), "{}", error.message);
     }
 
     #[test]

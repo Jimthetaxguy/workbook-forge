@@ -1022,10 +1022,18 @@ fn execute<W: CommandTarget + ?Sized>(
     };
     // Undo and redo restore the clock and seed of the state they return to,
     // so they never re-roll volatile values; edits capture a new context.
-    let context = plan
-        .as_ref()
-        .and_then(|plan| inner.log.history_context(plan))
-        .unwrap_or_else(|| CalcContext::capture(workbook.utc_offset_minutes()));
+    // A present but unreadable context is refused, as replay refuses it.
+    let from_history = match plan.as_ref() {
+        Some(plan) => Some(inner.log.history_context(plan)),
+        None => None,
+    };
+    let context = match from_history {
+        Some(Ok(Some(context))) => context,
+        Some(Ok(None)) | None => CalcContext::capture(workbook.utc_offset_minutes()),
+        Some(Err(error)) => {
+            return log_rejection(inner, envelope, command, base, current, requested, error);
+        }
+    };
     let applied = match apply_calculate_diff(workbook, baseline, edits, expected, &context) {
         Ok(applied) => applied,
         Err((error, baseline)) => {
