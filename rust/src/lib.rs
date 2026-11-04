@@ -1791,7 +1791,11 @@ fn text_date_serial(text: &str) -> Option<i64> {
         if parts.len() == 3 && parts.iter().all(|part| ascii_digits(part, 1, 4)) {
             let (first, second, third) = (parts[0], parts[1], parts[2]);
             if first.len() == 4 && ascii_digits(second, 1, 2) && ascii_digits(third, 1, 2) {
-                ymd = Some((first.parse().ok()?, second.parse().ok()?, third.parse().ok()?));
+                ymd = Some((
+                    first.parse().ok()?,
+                    second.parse().ok()?,
+                    third.parse().ok()?,
+                ));
             } else if separator == '/'
                 && third.len() == 4
                 && ascii_digits(first, 1, 2)
