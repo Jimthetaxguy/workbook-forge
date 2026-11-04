@@ -599,9 +599,9 @@ pub fn replay_json(bytes: &[u8], events_text: &str) -> String {
 /// length (`replay_mismatch`; `bytes.len()` must equal `baseline.bytes`, 0
 /// for a blank open) and must name a known sheet. A delta mismatch is
 /// `replay_mismatch`. A missing or unknown blank sheet is `invalid_log`.
-/// `values` are the last logged pass when the log has one, so that pass's
-/// clock, seed and offset stay with the returned values. A log with no calc
-/// event is calculated once at the end.
+/// `values` are the last logged pass when the last applied intent has a
+/// fresh calc event, so that pass's clock, seed and offset stay with the
+/// returned values. Otherwise the result is calculated once at the end.
 pub fn replay(bytes: &[u8], events_text: &str) -> Result<Json, ContractError> {
     let events = parse_events(events_text)?;
     let opened = events
@@ -820,9 +820,14 @@ pub fn replay_on<W: CommandTarget + ?Sized>(
                     computed.insert(id, (revision, applied.deltas));
                     if applied.report.revision == revision && !applied.report.stale {
                         cache = Some((revision, applied.report.values.clone()));
+                        logged_values = Some(applied.report.values);
+                    } else {
+                        logged_values = None;
                     }
-                    logged_values = Some(applied.report.values);
                 } else {
+                    // A later intent without a calc event makes the last
+                    // logged pass stale; calculate once at the end instead.
+                    logged_values = None;
                     let reached = apply_parsed(workbook, edits, expected).map_err(|error| {
                         mismatch(
                             event,
