@@ -25,7 +25,13 @@ Structural reimport before Excel: match `true`. Formula rewrites: `[]`.
 
 Excel was not invoked; no recalculation or compatibility claim is made
 
-## Engine values
+## Engine values (2026-09-29 preflight)
+
+These tables are the 2026-09-29 preflight. `unsupported_probe` is `Forecast!J1`,
+formula `=NOW()`, and it is null here because this scan predates calculation of
+NOW. `=NOW()` now calculates under a pinned calculation context
+(`docs/volatile-functions.md`). These values were not regenerated from the wall
+clock.
 
 Before the input change, Python/Rust match: `true`.
 

@@ -399,3 +399,34 @@ def test_receipt_outside_the_checkout_stores_a_fingerprint_instead_of_a_path(tmp
     assert "fixtures/operating-scenario.workbook.json" in markdown
     assert "Excel was not run." in markdown
     _assert_no_machine_path(json.loads(raw))
+
+
+def test_committed_preflight_receipt_keeps_the_historical_now_null():
+    """The 2026-09-29 scan still records =NOW() as null, and says so.
+
+    A calculation under the suite pin is 46037.5. This file is that preflight,
+    not a later wall-clock run, and the binding name stays unsupported_probe.
+    """
+    directory = ROOT / "receipts" / "canonical-operating-scenario"
+    markdown = (directory / "receipt.md").read_text(encoding="utf-8")
+    receipt = json.loads((directory / "receipt.json").read_text(encoding="utf-8"))
+    assert receipt["recorded_at_utc"].startswith("2026-09-29")
+    assert "## Engine values (2026-09-29 preflight)" in markdown
+    note = receipt["engines"]["note"]
+    for text in (markdown, note):
+        assert "=NOW()" in text
+        assert "pinned calculation context" in text
+        assert "docs/volatile-functions.md" in text
+    assert markdown.count("| unsupported_probe | `null` |") == 2
+    for phase in ("before_input_change", "after_input_change_preview"):
+        assert receipt["engines"][phase]["outputs"]["unsupported_probe"] == {
+            "sheet": "Forecast",
+            "address": "J1",
+            "result": None,
+        }
+    before = receipt["engines"]["before_input_change"]["outputs"]
+    preview = receipt["engines"]["after_input_change_preview"]["outputs"]
+    assert before["revenue"]["result"] == 7400
+    assert before["profit"]["result"] == 1440
+    assert preview["revenue"]["result"] == 9250
+    assert preview["profit"]["result"] == 3290

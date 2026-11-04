@@ -347,6 +347,30 @@ def test_nonfinite_json_input_cannot_enter_a_session(engine, nonfinite):
         engine.Session(source)
 
 
+_CALC_ENV = (
+    "FORGE_CALC_NOW",
+    "FORGE_CALC_SEED",
+    "FORGE_CALC_UTC_OFFSET_MINUTES",
+)
+
+
+def _pin_case_context(context):
+    """Point both engines at one fixture context, and return the previous values."""
+    previous = {name: os.environ.get(name) for name in _CALC_ENV}
+    os.environ["FORGE_CALC_NOW"] = str(context["now_ms"])
+    os.environ["FORGE_CALC_SEED"] = str(context["seed"])
+    os.environ["FORGE_CALC_UTC_OFFSET_MINUTES"] = str(context["utc_offset_minutes"])
+    return previous
+
+
+def _restore_calc_env(previous):
+    for name, value in previous.items():
+        if value is None:
+            os.environ.pop(name, None)
+        else:
+            os.environ[name] = value
+
+
 def _assert_fixture_value(actual, expected):
     if type(expected) in (int, float):
         assert type(actual) in (int, float)
@@ -361,6 +385,29 @@ def _assert_fixture_value(actual, expected):
             _assert_fixture_value(actual[key], expected[key])
     else:
         assert type(actual) is type(expected) and actual == expected
+
+
+def _assert_workbook_formula_result(case, report):
+    assert report["diagnostics"] == [], case["id"]
+    expected = case["expected"]
+    kind, target = next(iter(expected.items()))
+    if kind == "array":
+        target = {"rows": target}
+    elif kind == "error":
+        target = {"error": target}
+    elif kind == "blank":
+        # A scalar blank formula result is stored as zero in a worksheet.
+        target = 0
+    elif kind == "exact_number":
+        actual = report["outputs"]["result"]
+        assert type(actual) in (int, float) and actual == int(target), case["id"]
+        return
+    else:
+        assert kind in {"number", "text", "bool"}, case["id"]
+    try:
+        _assert_fixture_value(report["outputs"]["result"], target)
+    except AssertionError as error:
+        raise AssertionError(f"workbook corpus case {case['id']}: {error}") from error
 
 
 def test_formula_corpus_survives_workbook_model_boundaries(engine):
@@ -378,10 +425,42 @@ def test_formula_corpus_survives_workbook_model_boundaries(engine):
     }
     seen_refusals = set()
     cases = [json.loads(line) for line in (ROOT / "fixtures/formula-cases.jsonl").read_text().splitlines()]
+    context_ids = [case["id"] for case in cases if "context" in case]
+    assert len(context_ids) == 44
+    suite_pin = {name: os.environ.get(name) for name in _CALC_ENV}
+    ran_context = []
     for case in cases:
         if "context" in case:
-            # Volatile cases pin a clock, seed and cell key; the engines' pass
-            # context is covered by test_volatile.py.
+            # Workbook calculate() takes no context argument. The pass reads
+            # FORGE_CALC_NOW, FORGE_CALC_SEED and FORGE_CALC_UTC_OFFSET_MINUTES.
+            # The formula sits on context.cell because random streams are keyed
+            # by that address. The three variables are restored after the case.
+            pinned = case["context"]
+            sheet, address = pinned["cell"].rsplit("!", 1)
+            previous = _pin_case_context(pinned)
+            try:
+                sheets = {}
+                for reference, value in case["cells"].items():
+                    cell_sheet, cell_address = (
+                        reference.rsplit("!", 1) if "!" in reference else ("Data", reference)
+                    )
+                    sheets.setdefault(cell_sheet, {})[cell_address] = {"value": value}
+                formula_cells = sheets.setdefault(sheet, {})
+                assert address not in formula_cells, case["id"]
+                formula_cells[address] = {"formula": case["formula"]}
+                document = {
+                    "schema_version": 1,
+                    "sheets": [
+                        {"id": str(index), "name": name, "cells": cells}
+                        for index, (name, cells) in enumerate(sheets.items())
+                    ],
+                    "outputs": {"result": {"sheet": sheet, "address": address}},
+                }
+                report = json.loads(engine.calculate(json.dumps(document)))
+                _assert_workbook_formula_result(case, report)
+            finally:
+                _restore_calc_env(previous)
+            ran_context.append(case["id"])
             continue
         sheets = {"Data": {}}
         for reference, value in case["cells"].items():
@@ -406,26 +485,9 @@ def test_formula_corpus_survives_workbook_model_boundaries(engine):
             assert report["outputs"] == {}, case["id"]
             seen_refusals.add(case["id"])
             continue
-        assert report["diagnostics"] == [], case["id"]
-        expected = case["expected"]
-        kind, target = next(iter(expected.items()))
-        if kind == "array":
-            target = {"rows": target}
-        elif kind == "error":
-            target = {"error": target}
-        elif kind == "blank":
-            # A scalar blank formula result is stored as zero in a worksheet.
-            target = 0
-        elif kind == "exact_number":
-            actual = report["outputs"]["result"]
-            assert type(actual) in (int, float) and actual == int(target), case["id"]
-            continue
-        else:
-            assert kind in {"number", "text", "bool"}, case["id"]
-        try:
-            _assert_fixture_value(report["outputs"]["result"], target)
-        except AssertionError as error:
-            raise AssertionError(f"workbook corpus case {case['id']}: {error}") from error
+        _assert_workbook_formula_result(case, report)
+    assert ran_context == context_ids
+    assert {name: os.environ.get(name) for name in _CALC_ENV} == suite_pin
     assert seen_refusals == model_refusals | graph_refusals
 
 

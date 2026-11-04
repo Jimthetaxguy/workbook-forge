@@ -96,6 +96,7 @@
     "receipt": "receipts/canonical-operating-scenario/red-flag-roundtrip.json"
   },
   "engines": {
+    "note": "2026-09-29 preflight. unsupported_probe is Forecast!J1, formula =NOW(), and it is null in this scan because the run predates calculation of NOW. =NOW() now calculates under a pinned calculation context (docs/volatile-functions.md). These engine values were not regenerated from the wall clock.",
     "before_input_change": {
       "python_rust_match": true,
       "outputs": {
