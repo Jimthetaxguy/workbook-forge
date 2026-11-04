@@ -356,13 +356,12 @@ def _tokenize(source: str) -> list[_Token]:
 
 class _Parser:
     def __init__(self, source: str) -> None:
-        source = source.lstrip()
         units = 0
         for character in source:
             units += 2 if ord(character) > 0xFFFF else 1
             if units > MAX_FORMULA_LENGTH_UNITS:
                 raise _FormulaSyntaxError(
-                    f"formula exceeds Excel's {MAX_FORMULA_LENGTH_UNITS}-character limit"
+                    f"formula exceeds {MAX_FORMULA_LENGTH_UNITS} UTF-16 code units"
                 )
         in_cell_array = _in_cell_array_syntax(source)
         if in_cell_array is not None:
@@ -3006,8 +3005,8 @@ def _datedif_call(args: tuple[object, ...], budget: _WildcardBudget) -> object:
             return d2 - d1
         if y2 < 1900 or (y2, m2) == (1900, 1):
             return ErrorValue("#NUM!", "DATEDIF MD anchor is before the 1900 date system")
-        # Excel's quirk: count from the start day in the month before the
-        # end month, letting DATE roll an invalid day forward (can be < 0).
+        # Workbook Forge's profile: count from the start day in the month before
+        # the end month, letting DATE roll an invalid day forward (can be < 0).
         anchor = _function("DATE", (y2, m2 - 1, d1), budget)
         return anchor if isinstance(anchor, ErrorValue) else end - anchor
     if y2 < 1900:

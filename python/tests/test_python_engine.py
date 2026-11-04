@@ -5,6 +5,7 @@ from threading import Event, Thread
 
 import pytest
 
+from workbook_forge import ErrorValue, analyze_formula, evaluate
 from workbook_forge import python_engine as engine
 
 
@@ -299,3 +300,15 @@ def test_the_formula_length_limit_counts_the_body_with_or_without_equals(prefix)
         engine.calculate(model({"A1": {"formula": prefix + body(8193)}}, {"out": "A1"}))
     assert error.value.code == "resource_limit"
     assert "formula exceeds 8192 UTF-16 code units" in str(error.value)
+
+
+def test_the_formula_length_limit_counts_one_space_after_equals():
+    def body(units):
+        return 'LEN("' + "x" * (units - 7) + '")'
+
+    assert evaluate("= SUM(1)") == 1
+    assert evaluate("= " + body(8191)) == 8184
+    over = "= " + body(8192)
+    with pytest.raises(ValueError, match="formula exceeds 8192 UTF-16 code units"):
+        analyze_formula(over)
+    assert evaluate(over) == ErrorValue("#VALUE!", "formula exceeds 8192 UTF-16 code units")

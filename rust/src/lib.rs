@@ -8023,6 +8023,20 @@ mod tests {
     }
 
     #[test]
+    fn the_formula_length_limit_counts_spaces_after_equals() {
+        // Python counts the same way: only the leading '=' is not counted.
+        let body = |units: usize| format!("LEN(\"{}\")", "x".repeat(units - 7));
+        assert_eq!(
+            evaluate(&format!("= {}", body(8191)), &HashMap::new(), "S"),
+            Ok(Value::Number(8184.0))
+        );
+        assert_eq!(
+            evaluate(&format!("= {}", body(8192)), &HashMap::new(), "S"),
+            Err(FormulaError::Value)
+        );
+    }
+
+    #[test]
     fn wildcard_matching_stops_at_the_formula_work_budget() {
         let formula = format!("=COUNTIF(A1,\"{}\")", "a*".repeat(2_000));
         let input = cells(&[("A1", Value::Text("a".repeat(2_000)))]);
