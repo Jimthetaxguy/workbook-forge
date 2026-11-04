@@ -733,6 +733,8 @@ fn evaluate_ast(expression: &Expr) -> Result<FormulaResult> {
         wildcard_work_remaining: std::cell::Cell::new(crate::MAX_WILDCARD_WORK),
         primitive_value_profile: true,
         context: std::cell::Cell::new(None),
+        cell_key: "",
+        random_sites: HashMap::new(),
     };
     match crate::eval(expression, &environment) {
         Ok(CalcValue::Scalar(value) | CalcValue::Referenced(value)) => {

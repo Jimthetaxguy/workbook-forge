@@ -352,7 +352,7 @@ toolkit adds model and adapter capabilities without expanding the function count
 
 | Measure | Count |
 |---|---|
-| Functions implemented and conformance-tested in both engines | 117 |
+| Functions implemented and conformance-tested in both engines | 120 |
 | Inventory functions that are still catalog-only | 406 of 521 |
 | Shared fixture cases | 1,572 |
 | Native primitive interface | 9 functions and 10 binary operators in each language |
@@ -362,7 +362,7 @@ toolkit adds model and adapter capabilities without expanding the function count
 | Formula and compatibility source records | 116 |
 | Direct Excel Desktop observations | the SDK export round trip of 12 of 12 cell checks (2026-09-28) has no receipt in this tree; the canonical-fixture receipt is outstanding |
 
-The Python and Rust evaluators currently cover 117 functions, including scalar arithmetic, references, text and logical functions, the periodic financial functions FV, PV, PMT, NPER, IPMT, PPMT, CUMIPMT, CUMPRINC, SLN, SYD, DB, DDB, VDB, AMORLINC, and AMORDEGRC (deprecated legacy), dates, lookups, `TEXTBEFORE`/`TEXTAFTER`, error predicates (`ISNA`, `ISERR`, `ISERROR`), `NA`, `COUNTBLANK`, six conditional aggregations (`COUNTIF(S)`, `SUMIF(S)`, `AVERAGEIF(S)`), conditional extrema (`MINIFS`, `MAXIFS`), date/time functions (`HOUR`, `MINUTE`, `SECOND`, `TIME`, `WEEKDAY`, `WEEKNUM`, `ISOWEEKNUM`, `DAYS360`, `YEARFRAC`, `WORKDAY`, `NETWORKDAYS`, `WORKDAY.INTL`, `NETWORKDAYS.INTL`, `COUPDAYBS`, `COUPDAYS`, `COUPDAYSNC`, `COUPNCD`, `COUPNUM`, `COUPPCD`), the volatile `NOW` and `TODAY` (one pinned clock per recalculation, see [docs/volatile-functions.md](docs/volatile-functions.md)), and scalar rounding/remainder functions (`EVEN`, `ODD`, `INT`, `TRUNC`, `ROUND`, `ROUNDUP`, `ROUNDDOWN`, `MOD`, and `QUOTIENT`), plus parity predicates (`ISEVEN` and `ISODD`), plus factorial and combinatorics (`FACT`, `FACTDOUBLE`, `COMBIN`, `COMBINA`, `PERMUT`, and `PERMUTATIONA`), plus integer math (`GCD` and `LCM`), and bounded array generation with `SEQUENCE`, row/column ordering with `SORT`, and stable distinct-row/column selection with `UNIQUE`.
+The Python and Rust evaluators currently cover 120 functions, including scalar arithmetic, references, text and logical functions, the periodic financial functions FV, PV, PMT, NPER, IPMT, PPMT, CUMIPMT, CUMPRINC, SLN, SYD, DB, DDB, VDB, AMORLINC, and AMORDEGRC (deprecated legacy), dates, lookups, `TEXTBEFORE`/`TEXTAFTER`, error predicates (`ISNA`, `ISERR`, `ISERROR`), `NA`, `COUNTBLANK`, six conditional aggregations (`COUNTIF(S)`, `SUMIF(S)`, `AVERAGEIF(S)`), conditional extrema (`MINIFS`, `MAXIFS`), date/time functions (`HOUR`, `MINUTE`, `SECOND`, `TIME`, `WEEKDAY`, `WEEKNUM`, `ISOWEEKNUM`, `DAYS360`, `YEARFRAC`, `WORKDAY`, `NETWORKDAYS`, `WORKDAY.INTL`, `NETWORKDAYS.INTL`, `COUPDAYBS`, `COUPDAYS`, `COUPDAYSNC`, `COUPNCD`, `COUPNUM`, `COUPPCD`), the volatile `NOW`, `TODAY`, `RAND`, `RANDBETWEEN` and `RANDARRAY` (one pinned clock and seed per recalculation, see [docs/volatile-functions.md](docs/volatile-functions.md)), and scalar rounding/remainder functions (`EVEN`, `ODD`, `INT`, `TRUNC`, `ROUND`, `ROUNDUP`, `ROUNDDOWN`, `MOD`, and `QUOTIENT`), plus parity predicates (`ISEVEN` and `ISODD`), plus factorial and combinatorics (`FACT`, `FACTDOUBLE`, `COMBIN`, `COMBINA`, `PERMUT`, and `PERMUTATIONA`), plus integer math (`GCD` and `LCM`), and bounded array generation with `SEQUENCE`, row/column ordering with `SORT`, and stable distinct-row/column selection with `UNIQUE`.
 
 Catalog status means:
 

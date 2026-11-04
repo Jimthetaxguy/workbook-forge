@@ -2515,6 +2515,8 @@ def _eval(
             if not 0 <= day <= _MAX_EXCEL_DATE_SERIAL:
                 return ErrorValue("#NUM!", "TODAY is outside the 1900 date system")
             return day
+        if name in _RANDOM_FUNCTIONS:
+            return _random_call(name, node, cells, sheet_name, budget)
         if name == "SEQUENCE":
             return _sequence_call(node.children, cells, sheet_name, budget)
         if name == "FILTER":
@@ -2710,6 +2712,94 @@ def _eval(
             )
         return _function(name, args, budget)
     return ErrorValue("#VALUE!", f"unsupported syntax node {node.kind!r}")
+
+
+def _random_number_argument(
+    child: _Node, cells: Mapping[str, Scalar], sheet_name: str, budget: _WildcardBudget
+) -> float | int | ErrorValue:
+    value = _dereference(_eval(child, cells, sheet_name, budget))
+    if isinstance(value, ErrorValue):
+        return value
+    if isinstance(value, (_Range, ArrayValue)):
+        return ErrorValue("#VALUE!", "argument must be a single value")
+    number = _number(value)
+    if isinstance(number, ErrorValue):
+        return number
+    if not math.isfinite(number):
+        return ErrorValue("#NUM!", "argument is not finite")
+    return number
+
+
+def _random_call(
+    name: str, node: _Node, cells: Mapping[str, Scalar], sheet_name: str, budget: _WildcardBudget
+) -> object:
+    """RAND, RANDBETWEEN and RANDARRAY; draws come from the pass context."""
+    calc = budget.calc_context()
+    site = budget.random_sites.get(id(node), 0)
+    children = node.children
+    if name == "RAND":
+        if children:
+            return _arity(name, "0", len(children))
+        return calc.uniform(budget.cell_key, site, 0)
+    if name == "RANDBETWEEN":
+        if len(children) != 2:
+            return _arity(name, "2", len(children))
+        if any(child.kind == "missing" for child in children):
+            return ErrorValue("#VALUE!", "required argument was omitted")
+        bounds = []
+        for child in children:
+            number = _random_number_argument(child, cells, sheet_name, budget)
+            if isinstance(number, ErrorValue):
+                return number
+            bounds.append(float(number))
+        bottom, top = math.ceil(bounds[0]), math.floor(bounds[1])
+        if bottom > top:
+            return ErrorValue("#NUM!", "RANDBETWEEN bottom exceeds top")
+        span = float(top - bottom) + 1.0
+        return min(float(bottom) + math.floor(calc.uniform(budget.cell_key, site, 0) * span), float(top))
+    if len(children) > 5:
+        return _arity(name, "0 through 5", len(children))
+    numbers: list[float | None] = [None, None, None, None]
+    for index, child in enumerate(children[:4]):
+        if child.kind == "missing":
+            continue
+        number = _random_number_argument(child, cells, sheet_name, budget)
+        if isinstance(number, ErrorValue):
+            return number
+        numbers[index] = float(number)
+    whole = False
+    if len(children) == 5 and children[4].kind != "missing":
+        flag = _dereference(_eval(children[4], cells, sheet_name, budget))
+        if isinstance(flag, (_Range, ArrayValue)):
+            return ErrorValue("#VALUE!", "whole_number must be a single value")
+        truth = _truth(flag)
+        if isinstance(truth, ErrorValue):
+            return truth
+        whole = truth
+    rows_number = math.trunc(numbers[0] if numbers[0] is not None else 1.0)
+    columns_number = math.trunc(numbers[1] if numbers[1] is not None else 1.0)
+    low = numbers[2] if numbers[2] is not None else 0.0
+    high = numbers[3] if numbers[3] is not None else 1.0
+    if rows_number <= 0 or columns_number <= 0:
+        return ErrorValue("#NUM!", "RANDARRAY rows and columns must be positive")
+    if rows_number * columns_number > 100_000:
+        return ErrorValue("#NUM!", "RANDARRAY result exceeds the array cell limit")
+    if low > high or (whole and (not float(low).is_integer() or not float(high).is_integer())):
+        return ErrorValue("#VALUE!", "RANDARRAY min must not exceed max, and whole bounds must be integers")
+    rows = []
+    for row in range(rows_number):
+        values = []
+        for column in range(columns_number):
+            u = calc.uniform(budget.cell_key, site, row * columns_number + column)
+            if whole:
+                value = min(low + math.floor(u * (high - low + 1.0)), high)
+            else:
+                value = low + u * (high - low)
+            if not math.isfinite(value):
+                return ErrorValue("#NUM!", "RANDARRAY value is not finite")
+            values.append(value)
+        rows.append(tuple(values))
+    return ArrayValue(tuple(rows))
 
 
 def _returns_reference(node: _Node) -> bool:

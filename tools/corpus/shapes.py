@@ -724,14 +724,16 @@ def long_formula():
 
 
 def volatile_formulas():
-    """Volatile formulas (NOW, TODAY) with stale authored caches, a dependent
+    """Volatile formulas (NOW, TODAY, RAND, RANDBETWEEN, RANDARRAY) with stale authored caches, a dependent
     of a volatile cell, and a plain formula beside them. The caches are from
     an older day on purpose: Forge must calculate fresh values, never trust
     them, and export its own."""
     rows = ('<row r="1"><c r="A1"><f>NOW()</f><v>45000.25</v></c><c r="B1"><f>TODAY()</f><v>45000</v></c>'
             '<c r="C1"><f>A1+1</f><v>45001.25</v></c><c r="D1"><f>INT(NOW())-TODAY()</f><v>0</v></c>'
-            '<c r="E1"><f>2+3</f><v>5</v></c></row>')
-    return simple({"Clock": sheet_xml(rows, dimension="A1:E1")}, styles=minimal_styles())
+            '<c r="E1"><f>2+3</f><v>5</v></c></row>'
+            '<row r="2"><c r="A2"><f>RAND()</f><v>0.5</v></c><c r="B2"><f>RANDBETWEEN(1,6)</f><v>3</v></c>'
+            '<c r="C2"><f>SUM(RANDARRAY(2,2,1,1,TRUE))</f><v>4</v></c><c r="D2"><f>A2*0+1</f><v>1</v></c></row>')
+    return simple({"Clock": sheet_xml(rows, dimension="A1:E2")}, styles=minimal_styles())
 
 
 BUILDERS = {
@@ -755,7 +757,7 @@ BUILDERS = {
     "hb_long_formula": (long_formula, ["long-formula", "formula-length-limit"]),
     "hb_text_columns": (text_columns, ["text", "text-format", "column-styles", "row-styles", "insert-inherits-style"]),
     "hb_dropdown_formulas": (dropdown_formulas, ["data-validation", "dropdowns", "formula-in-validated-cell"]),
-    "hb_volatile_formulas": (volatile_formulas, ["volatile", "now-today", "stale-cache"]),
+    "hb_volatile_formulas": (volatile_formulas, ["volatile", "now-today", "rand", "stale-cache"]),
 }
 STORED: set[str] = set()
 

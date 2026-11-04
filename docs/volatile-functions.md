@@ -58,6 +58,23 @@ the first call), and `draw` counts values within one call (`RANDARRAY` fills
 row-major). A draw therefore does not depend on evaluation order, laziness or
 the worker count.
 
+## Random functions
+
+- `RAND()` is the call's first draw.
+- `RANDBETWEEN(bottom, top)` rounds `bottom` up and `top` down to integers and
+  returns `bottom + floor(u·(top − bottom + 1))`. No integer between them is
+  `#NUM!`; text that is not a number is `#VALUE!`; errors propagate.
+- `RANDARRAY([rows], [columns], [min], [max], [whole_number])` defaults to
+  1, 1, 0, 1, FALSE and returns a bounded array (no worksheet spill, as for
+  `SEQUENCE`). Dimensions truncate and must be positive (`#NUM!` otherwise,
+  the `SEQUENCE` profile), within the 100,000-cell array cap; `min > max` is
+  `#VALUE!`, and so is a fractional bound with `whole_number` TRUE. Whole
+  numbers are `min + floor(u·(max − min + 1))`, others `min + u·(max − min)`.
+
+The rounding of RANDBETWEEN's bounds and the RANDARRAY error codes are
+Workbook Forge profiles from Microsoft's documentation; they have not been
+spot-checked in Excel.
+
 ## Volatility
 
 A formula calling a volatile function is dirty on every pass, and so is
