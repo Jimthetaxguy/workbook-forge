@@ -240,7 +240,7 @@ def _expected_document() -> dict:
         "schema_version": 1,
         "model_version": 1,
         "provenance": {"origin": "imported", "source": "xl/workbook.xml"},
-        "metadata": {"intake": {"not_carried": []}},
+        "metadata": {"defined_names": [], "intake": {"not_carried": []}},
         "sheets": [
             {
                 "name": "Inputs",
@@ -462,7 +462,6 @@ def test_what_a_row_or_a_cell_holds_beyond_its_value_is_listed(tmp_path, cells, 
 @pytest.mark.parametrize(
     ("markup", "what", "count"),
     [
-        ('<definedNames><definedName name="Rate">Shown!$A$1</definedName><definedName name="_xlnm.Print_Area">Shown!$A$1</definedName></definedNames>', "definedNames", 2),
         ('<calcPr calcMode="manual" iterate="1"/>', "calcPr", 1),
         ('<workbookProtection lockStructure="1"/>', "workbookProtection", 1),
         ('<externalReferences><externalReference xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" r:id="rId9"/></externalReferences>', "externalReferences", 1),
@@ -472,6 +471,19 @@ def test_what_a_row_or_a_cell_holds_beyond_its_value_is_listed(tmp_path, cells, 
 )
 def test_whatever_else_the_workbook_part_holds_is_listed(tmp_path, markup, what, count):
     assert _listed(tmp_path, in_workbook=markup) == [("workbook", None, what, count)]
+
+
+def test_defined_names_are_carried_unless_scoped_to_a_sheet_the_model_lacks(tmp_path):
+    # Names are carried in metadata.defined_names (docs/defined-names.md); one
+    # whose localSheetId names no sheet stays listed.
+    markup = (
+        '<definedNames><definedName name="Rate">Shown!$A$1</definedName>'
+        '<definedName name="_xlnm.Print_Area" localSheetId="0">Shown!$A$1</definedName>'
+        '<definedName name="Lost" localSheetId="5">Shown!$A$1</definedName></definedNames>'
+    )
+    assert _listed(tmp_path, in_workbook=markup) == [
+        ("workbook", None, "definedName scoped to a sheet the model does not carry", 1)
+    ]
 
 
 @pytest.mark.parametrize("state", ["hidden", "veryHidden"])

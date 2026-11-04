@@ -693,6 +693,51 @@ def r1c1_looking_names():
     return simple({"Calc": sheet_xml(rows, dimension="A1:D2")}, styles=minimal_styles(), wb_extra=names)
 
 
+def defined_names_calculated():
+    """Defined names the engines calculate: workbook- and sheet-scoped names
+    (the sheet scope wins on its sheet), a constant, formula names, a chain, a
+    range, a cycle, a #REF! target, an unknown name, and hidden and built-in
+    names (kept, never calculated). Caches are Workbook Forge's arithmetic."""
+    inputs = ('<row r="1"><c r="A1"><v>0.5</v></c><c r="B1"><v>10</v></c></row>'
+              '<row r="2"><c r="A2"><v>1000</v></c><c r="B2"><v>20</v></c></row>'
+              '<row r="3"><c r="B3"><v>30</v></c></row>')
+    calc = ('<row r="1"><c r="A1"><v>5</v></c><c r="B1"><f>Interest</f><v>500</v></c></row>'
+            '<row r="2"><c r="B2"><f>Net</f><v>375</v></c></row>'
+            '<row r="3"><c r="B3"><f>SUM(Quarter)</f><v>60</v></c></row>'
+            '<row r="4"><c r="B4"><f>Factor</f><v>5</v></c></row>'
+            '<row r="5"><c r="B5"><f>Tax*100</f><v>25</v></c></row>'
+            '<row r="6"><c r="B6" t="e"><f>Gone</f><v>#REF!</v></c></row>'
+            '<row r="7"><c r="B7"><f>LoopA</f><v>0</v></c></row>'
+            '<row r="8"><c r="B8" t="e"><f>Missing</f><v>#NAME?</v></c></row>')
+    report = ('<row r="1"><c r="A1"><f>Factor</f><v>2</v></c></row>'
+              '<row r="2"><c r="A2"><f>Hidden+1</f><v>1.5</v></c></row>')
+    names = ('<definedNames>'
+             '<definedName name="_xlnm._FilterDatabase" localSheetId="0" hidden="1">Inputs!$A$1:$B$3</definedName>'
+             '<definedName name="_xlnm.Print_Area" localSheetId="1">Calc!$A$1:$B$8</definedName>'
+             '<definedName name="Factor">2</definedName>'
+             '<definedName name="Factor" localSheetId="1">Calc!$A$1</definedName>'
+             '<definedName name="Gone">Inputs!#REF!</definedName>'
+             '<definedName name="Hidden" hidden="1">Inputs!$A$1</definedName>'
+             '<definedName name="Interest">Rate*Principal</definedName>'
+             '<definedName name="LoopA">LoopB+1</definedName>'
+             '<definedName name="LoopB">LoopA*2</definedName>'
+             '<definedName name="Net">Interest*(1-Tax)</definedName>'
+             '<definedName name="Principal">Inputs!$A$2</definedName>'
+             '<definedName name="Quarter">Inputs!$B$1:$B$3</definedName>'
+             '<definedName name="Rate">Inputs!$A$1</definedName>'
+             '<definedName name="Tax">0.25</definedName>'
+             '</definedNames>')
+    return simple(
+        {
+            "Inputs": sheet_xml(inputs, dimension="A1:B3"),
+            "Calc": sheet_xml(calc, dimension="A1:B8"),
+            "Report": sheet_xml(report, dimension="A1:A2"),
+        },
+        styles=minimal_styles(),
+        wb_extra=names,
+    )
+
+
 def long_formula():
     """Formulas at Excel's 8,192-character limit, as a flat chain of additions
     (no function argument limit applies): one exactly 8,192 characters as
@@ -754,6 +799,7 @@ BUILDERS = {
     "hb_table_totals_calculated": (table_totals_calculated, ["tables", "totals-row", "calculated-columns", "structured-refs"]),
     "hb_3d_references": (three_d_references, ["3d-references", "cross-sheet", "defined-names", "sheet-name-spaces"]),
     "hb_r1c1_looking_names": (r1c1_looking_names, ["defined-names", "r1c1-looking-names"]),
+    "hb_defined_names": (defined_names_calculated, ["defined-names", "sheet-scoped-names", "constant-names", "formula-names", "chained-names", "name-cycle", "ref-error-names", "hidden-names", "builtin-names"]),
     "hb_long_formula": (long_formula, ["long-formula", "formula-length-limit"]),
     "hb_text_columns": (text_columns, ["text", "text-format", "column-styles", "row-styles", "insert-inherits-style"]),
     "hb_dropdown_formulas": (dropdown_formulas, ["data-validation", "dropdowns", "formula-in-validated-cell"]),

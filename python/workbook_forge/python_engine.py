@@ -18,7 +18,14 @@ from threading import Lock, RLock
 from typing import Any
 import unicodedata
 
-from . import ArrayValue, ErrorValue, _is_unsupported_formula_message, evaluate_result
+from . import (
+    ArrayValue,
+    DefinedNames,
+    ErrorValue,
+    _is_unsupported_formula_message,
+    defined_name_error_code,
+    evaluate_result,
+)
 from .catalog import _catalog_file
 from .expressions import analyze_formula as _analyze_formula, copy_formula
 from .volatile import VOLATILE_FUNCTIONS, CalcContext, check_offset
@@ -321,12 +328,16 @@ def _supported_functions() -> frozenset[str]:
     return frozenset(item["name"] for item in catalog["functions"] if item["status"].get("python") in {"evaluated", "conformance-tested"})
 
 
-def _formula_analysis(formula: str) -> dict:
+def _formula_analysis(formula: str, names: Any = None) -> dict:
+    """``names`` is a defined-name scope for the formula's sheet, or None."""
     try:
-        return _analyze_formula(formula)
+        return _analyze_formula(formula, names)
     except (ValueError, TypeError, RecursionError) as error:
         message = str(error)
-        if _is_unsupported_formula_message(message):
+        named = defined_name_error_code(message)
+        if named is not None:
+            code = named
+        elif _is_unsupported_formula_message(message):
             code = "unsupported_formula"
         elif any(word in message.lower() for word in ("limit", "nesting", "depth", "8192")):
             code = "resource_limit"
@@ -345,10 +356,14 @@ class _Graph:
     formulas: dict[str, str]
     # Formula cells calling a volatile function: dirty on every pass.
     volatile: set[str]
+    # The workbook's defined names, and the formula cells that name anything:
+    # those evaluate their source formula with the names, not a rendering.
+    names: DefinedNames | None = None
+    named: set[str] | None = None
 
     @classmethod
-    def build(cls, model: dict) -> _Graph:
-        graph = cls({}, {}, _cells(model), {}, set())
+    def build(cls, model: dict, names: DefinedNames | None = None) -> _Graph:
+        graph = cls({}, {}, _cells(model), {}, set(), names, set())
         expanded = 0
         for current, cell in graph.cells.items():
             dependencies: set[str] = set()
@@ -359,8 +374,13 @@ class _Graph:
             if "formula" not in cell:
                 continue
             try:
-                analysis = _formula_analysis(cell["formula"])
-                graph.formulas[current] = analysis["rendered"]
+                scope = None if names is None else names.scope(current.rsplit("!", 1)[0])
+                analysis = _formula_analysis(cell["formula"], scope)
+                if "rendered" in analysis:
+                    graph.formulas[current] = analysis["rendered"]
+                else:
+                    graph.formulas[current] = cell["formula"]
+                    graph.named.add(current)
                 unknown = set(analysis["functions"]) - _supported_functions()
                 if unknown:
                     _fail("unsupported_formula", f"unsupported function {min(unknown)}")
@@ -459,7 +479,8 @@ def _evaluate_node(graph: _Graph, current: str, values: dict, context: CalcConte
         if isinstance(value, dict) and "rows" in value:
             _fail("unsupported_array_reference", f"worksheet dependency {dependency} is an array; spill projection is unsupported")
         environment[dependency] = _engine_scalar(value)
-    result = evaluate_result(graph.formulas[current], environment, current.rsplit("!", 1)[0], context=context, cell_key=current)
+    names = graph.names if graph.named and current in graph.named else None
+    result = evaluate_result(graph.formulas[current], environment, current.rsplit("!", 1)[0], context=context, cell_key=current, names=names)
     if isinstance(result, ErrorValue) and (result.message.startswith("unsupported function ") or "supports exact match_mode=0 only" in result.message or "search_mode must be 1 or -1" in result.message):
         _fail("unsupported_formula", result.message)
     if isinstance(result, ArrayValue):
@@ -490,12 +511,12 @@ def _workers(workers: int) -> int:
     return max(1, min(workers, MAX_WORKERS))
 
 
-def _calculate_document(model: dict, workers: int = 1, previous: dict | None = None, dirty: set[str] | None = None, context: CalcContext | None = None) -> dict:
+def _calculate_document(model: dict, workers: int = 1, previous: dict | None = None, dirty: set[str] | None = None, context: CalcContext | None = None, names: DefinedNames | None = None) -> dict:
     workers = _workers(workers)
     report = {"revision": model["revision"], "outputs": {}, "values": {}, "diagnostics": [], "evaluated_cells": [], "stale": False}
     try:
         _input_edits(model, {})
-        graph = _Graph.build(model)
+        graph = _Graph.build(model, names)
     except ToolkitError as error:
         report["diagnostics"].append(_diagnostic(error))
         return report
@@ -602,8 +623,11 @@ def _calculate_document(model: dict, workers: int = 1, previous: dict | None = N
 class Session:
     """Thread-safe transient Python session; snapshots are detached JSON data."""
 
-    def __init__(self, model_json: str):
+    def __init__(self, model_json: str, names_json: str | None = None):
+        """``names_json`` is the workbook's defined-name table (read-only): a
+        JSON array of ``{name, sheet, formula, hidden}``."""
         self._model = _normalize_model(_decode(model_json))
+        self._names = _names(names_json)
         self._published: dict | None = None
         self._dirty: set[str] = set()
         self._lock = RLock()
@@ -661,14 +685,14 @@ class Session:
                     cell.pop("cached_value", None)
                 if has_formula:
                     formula = _string(edit["formula"], "formula")
-                    _formula_analysis(formula)
+                    _formula_analysis(formula, None if self._names is None else self._names.scope(sheet))
                     cell["formula"], cell["value"] = formula, None
                     cell.pop("cached_value", None)
                 if has_style:
                     cell["style"] = _style(edit["style"])
             candidate = _normalize_model(candidate)
             _input_edits(candidate, {})
-            _Graph.build(candidate)
+            _Graph.build(candidate, self._names)
             if candidate["revision"] == _UINT64_MAX:
                 _fail("resource_limit", "revision counter exhausted")
             candidate["revision"] += 1
@@ -693,7 +717,7 @@ class Session:
             offset = self._utc_offset_minutes
         if context is None:
             context = CalcContext.capture(offset)
-        report = _calculate_document(model, workers, previous, dirty, context)
+        report = _calculate_document(model, workers, previous, dirty, context, self._names)
         with self._lock:
             if self._model["revision"] != report["revision"]:
                 report["stale"] = True
@@ -712,11 +736,20 @@ def calculate(model_json: str, workers: int = 1, context: CalcContext | None = N
     return _encode(_calculate_document(_normalize_model(_decode(model_json)), workers, context=context))
 
 
-def inspect(model_json: str) -> str:
+def _names(names_json: str | None) -> DefinedNames | None:
+    if names_json is None:
+        return None
+    try:
+        return DefinedNames.from_json(_decode(names_json))
+    except ValueError as error:
+        _fail("invalid_model", str(error))
+
+
+def inspect(model_json: str, names_json: str | None = None) -> str:
     """Inspect structure and unsupported features without evaluating formulas."""
     model = _normalize_model(_decode(model_json))
     try:
-        graph = _Graph.build(model)
+        graph = _Graph.build(model, _names(names_json))
     except ToolkitError as error:
         return _encode({"revision": model["revision"], "diagnostics": [_diagnostic(error)]})
     return _encode({"revision": model["revision"], "sheets": [{"id": sheet["id"], "name": sheet["name"], "populated_cells": len(sheet["cells"])} for sheet in model["sheets"]], "dependencies": {current: sorted(dependencies) for current, dependencies in sorted(graph.dependencies.items())}, "diagnostics": [_diagnostic(error, current) for current, error in sorted(graph.errors.items())], "inputs": model["inputs"], "outputs": model["outputs"]})

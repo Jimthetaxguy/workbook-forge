@@ -11,6 +11,7 @@ pub mod event_log;
 pub mod evidence;
 pub mod extraction;
 pub mod model;
+pub mod names;
 pub mod primitives;
 pub mod toolkit;
 pub mod volatile;
@@ -18,6 +19,7 @@ pub mod volatile;
 pub mod wasm;
 pub mod xlsx;
 pub mod xml_patterns;
+pub use names::{DefinedName, DefinedNames, defined_name_error_code};
 pub use toolkit::{
     CalculationReport, CellAddress, CellValue, Edit, InputBinding, Session, Sheet, Style,
     ToolkitError, WorkbookModel, analyze_formula, calculate, copy_formula, inspect,
@@ -168,7 +170,21 @@ pub fn evaluate_result_in(
     context: Option<&CalcContext>,
     cell_key: &str,
 ) -> Result<FormulaResult, FormulaError> {
-    let mut parser = Parser::new(formula)?;
+    evaluate_result_with_names(formula, cells, sheet_name, context, cell_key, None)
+}
+
+/// [`evaluate_result_in`] with the workbook's defined names: each name in the
+/// formula is replaced by what it refers to. Without `names` a name is refused
+/// as unsupported.
+pub fn evaluate_result_with_names(
+    formula: &str,
+    cells: &HashMap<String, Value>,
+    sheet_name: &str,
+    context: Option<&CalcContext>,
+    cell_key: &str,
+    names: Option<&DefinedNames>,
+) -> Result<FormulaResult, FormulaError> {
+    let mut parser = Parser::with_names(formula, names.map(|names| names.scope(sheet_name)))?;
     let expression = parser.parse_expression(0)?;
     if parser.peek().is_some() {
         return Err(FormulaError::Parse("unexpected trailing input".into()));
@@ -492,13 +508,17 @@ impl<'a> Lexer<'a> {
     }
 }
 
-struct Parser {
+struct Parser<'n> {
     tokens: Vec<Token>,
     pos: usize,
+    names: Option<names::NameScope<'n>>,
 }
 
-impl Parser {
-    fn new(formula: &str) -> Result<Self, FormulaError> {
+impl<'n> Parser<'n> {
+    fn with_names(
+        formula: &str,
+        names: Option<names::NameScope<'n>>,
+    ) -> Result<Self, FormulaError> {
         let source = formula.trim().strip_prefix('=').unwrap_or(formula.trim());
         if source
             .encode_utf16()
@@ -521,7 +541,11 @@ impl Parser {
                 break;
             }
         }
-        let parser = Self { tokens, pos: 0 };
+        let parser = Self {
+            tokens,
+            pos: 0,
+            names,
+        };
         parser.validate_nesting()?;
         Ok(parser)
     }
@@ -567,7 +591,12 @@ impl Parser {
         t
     }
 
+    fn names_seen(&self) -> usize {
+        self.names.as_ref().map_or(0, names::NameScope::seen)
+    }
+
     fn parse_expression(&mut self, min_bp: u8) -> Result<Expr, FormulaError> {
+        let names_before = self.names_seen();
         let mut lhs = match self.take() {
             Token::Number(n, source) => Expr::Number(n, source),
             Token::Text(s) => Expr::Text(s),
@@ -594,7 +623,8 @@ impl Parser {
             }
             Token::Ident(name) if name.eq_ignore_ascii_case("TRUE") => Expr::Bool(true),
             Token::Ident(name) if name.eq_ignore_ascii_case("FALSE") => Expr::Bool(false),
-            Token::Ident(name) | Token::QuotedSheet(name) => self.parse_name_or_call(name)?,
+            Token::Ident(name) => self.parse_name_or_call(name, false)?,
+            Token::QuotedSheet(name) => self.parse_name_or_call(name, true)?,
             other => {
                 return Err(FormulaError::Parse(format!(
                     "expected value, found {other:?}"
@@ -620,6 +650,13 @@ impl Parser {
             self.take();
             let rhs = self.parse_expression(right_bp)?;
             if op == ":" {
+                // A defined name is not a range endpoint here, as in Python's
+                // parser, which reads only cells on either side of ':'.
+                if self.names_seen() != names_before {
+                    return Err(FormulaError::Parse(
+                        "range endpoint must be a cell reference".into(),
+                    ));
+                }
                 lhs = match (lhs, rhs) {
                     (Expr::Ref(s1, a), Expr::Ref(s2, b)) => {
                         if !s1.is_empty() && !s2.is_empty() && !s1.eq_ignore_ascii_case(&s2) {
@@ -660,7 +697,7 @@ impl Parser {
         }
     }
 
-    fn parse_name_or_call(&mut self, mut name: String) -> Result<Expr, FormulaError> {
+    fn parse_name_or_call(&mut self, mut name: String, quoted: bool) -> Result<Expr, FormulaError> {
         // A 3D reference spans a run of sheets: `Jan:Mar!B2` lexes as
         // name, colon, name, bang; `'Q2 Apr:Q2 May'!B2` as one quoted name
         // holding the colon (Excel forbids ':' in a sheet name).
@@ -730,6 +767,9 @@ impl Parser {
         // shape; anything else (R1C1Total, C3PO, RC_Rate) is a name, reported
         // with the same words as Python.
         if validate_cell_ref(&name).is_err() {
+            if !quoted && let Some(scope) = &self.names {
+                return scope.resolve(&name);
+            }
             return Err(FormulaError::Unsupported(format!(
                 "unsupported name '{name}'"
             )));
@@ -961,11 +1001,15 @@ fn validate_cell_ref(address: &str) -> Result<(), FormulaError> {
         .find(|c: char| c.is_ascii_digit())
         .ok_or_else(|| FormulaError::Unsupported(format!("name/reference {address}")))?;
     let (col, row) = clean.split_at(split);
+    // The shape Python's lexer reads as a cell: one to three column letters
+    // and a row without a leading zero. `RATE2` or `Tax2026` cannot be a cell
+    // in any grid, so it is a name (as `XFE1`, three letters, is not).
     if col.is_empty()
+        || col.len() > 3
         || !col.chars().all(|c| c.is_ascii_alphabetic())
         || row.is_empty()
         || !row.chars().all(|c| c.is_ascii_digit())
-        || row == "0"
+        || row.starts_with('0')
     {
         return Err(FormulaError::Unsupported(format!(
             "only A1 cell references are supported: {address}"

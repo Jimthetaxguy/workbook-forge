@@ -100,8 +100,8 @@ class _ExpressionParser(_Parser):
     the source token; evaluation remains the independent evaluator's job.
     """
 
-    def __init__(self, source: str) -> None:
-        super().__init__(source)
+    def __init__(self, source: str, names: Any = None) -> None:
+        super().__init__(source, names)
         # A cell-shaped token followed by ! is a sheet name; followed by (
         # it is a function name. Reclassify only these unambiguous contexts.
         for index, token in enumerate(self.tokens[:-1]):
@@ -134,15 +134,18 @@ def _validate_tree(root: _Node) -> None:
         pending.extend((child, depth + 1, function_depth) for child in node.children)
 
 
-def parse_expression(formula: str) -> _Node:
-    """Parse and validate a Python AST, including grid and construction limits."""
+def parse_expression(formula: str, names: Any = None) -> _Node:
+    """Parse and validate a Python AST, including grid and construction limits.
+
+    ``names`` is a defined-name scope (``DefinedNames.scope(sheet)``); each
+    name in the formula is replaced by the tree of what it refers to."""
     if not isinstance(formula, str):
         raise TypeError("formula must be a string")
     source = formula.strip().removeprefix("=")
     if not source:
         raise ValueError("formula is empty")
     try:
-        root = _ExpressionParser(source).parse()
+        root = _ExpressionParser(source, names).parse()
     except RecursionError as error:
         raise ValueError("formula exceeds the Python parser nesting limit") from error
     _validate_tree(root)
@@ -229,9 +232,13 @@ def copy_formula(formula: str, row_delta: int = 0, column_delta: int = 0) -> str
     return _render(parse_expression(formula), row_delta, column_delta)
 
 
-def analyze_formula(formula: str) -> dict[str, Any]:
-    """Return typed references and function names using the Python parser only."""
-    root = parse_expression(formula)
+def analyze_formula(formula: str, names: Any = None) -> dict[str, Any]:
+    """Return typed references and function names using the Python parser only.
+
+    With a defined-name scope ``names`` the analysis covers what each name
+    refers to and leaves out ``rendered``: an expansion is evaluated from the
+    source formula, not from a rendering of it."""
+    root = parse_expression(formula, names)
     functions = set()
     pending = [root]
     while pending:
@@ -239,6 +246,12 @@ def analyze_formula(formula: str) -> dict[str, Any]:
         if node.kind == "call":
             functions.add(_canonical_function_name(str(node.value)))
         pending.extend(node.children)
+    if names is not None and names.seen:
+        return {
+            "formula": formula,
+            "references": expression_references(root),
+            "functions": sorted(functions),
+        }
     return {
         "formula": formula,
         "rendered": _render(root),

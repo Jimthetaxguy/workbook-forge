@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Any
 from xml.etree import ElementTree as ET
 
-from . import ErrorValue
+from . import DefinedNames, ErrorValue
 from . import xlsx_features as features
 from .toolkit import WorkbookModel, _digest
 from .workbook import (
@@ -318,6 +318,7 @@ def import_xlsx(
             "supported": [
                 "scalar cells",
                 "normal formulas",
+                "defined names, read-only and calculated",
                 "basic style inspection",
                 "column widths",
                 "absent-cell value/formula insertion within the session grid bound",
@@ -525,7 +526,18 @@ def import_xlsx(
             "pivot refresh and writes into pivot output ranges",
             "structural changes to sheets a chart reads",
         ]
-        model = WorkbookModel(document=document, backend=backend)
+        defined = DefinedNames.from_ooxml(
+            (
+                (item["attributes"], item["expression"])
+                for item in metadata["defined_names"]
+            ),
+            list(workbook.sheet_entry_names),
+        )
+        model = WorkbookModel(
+            document=document,
+            backend=backend,
+            _names=json.dumps(defined.to_json(), ensure_ascii=False),
+        )
         model._feature_guard = features.FeatureGuard(validations, pivots, charts)
         model._text_cells = frozenset(
             (item["name"].casefold(), address)
@@ -1028,7 +1040,9 @@ def export_snapshot(imported: WorkbookModel, document: dict[str, Any], output: s
     if imported._source_baseline is None:
         raise WorkbookError("snapshot export requires an imported package baseline")
     original = json.loads(imported._source_baseline.document_json)
-    transferred = WorkbookModel(document=document, backend=imported.backend)
+    transferred = WorkbookModel(
+        document=document, backend=imported.backend, _names=imported._names
+    )
     current = transferred.to_dict()
     _check_chart_sheets(imported._feature_guard, original, current)
     if len(original["sheets"]) != len(current["sheets"]) or any(

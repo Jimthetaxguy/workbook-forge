@@ -18,9 +18,9 @@ Excel observation and does not show Excel equivalence.
 
 | Engine | pass | refuse | untyped | crash | corrupt | lossy |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| py_toolkit | 81 | 9 | 0 | 0 | 0 | 0 |
-| py_canonical | 72 | 18 | 0 | 0 | 0 | 0 |
-| rust | 81 | 9 | 0 | 0 | 0 | 0 |
+| py_toolkit | 82 | 9 | 0 | 0 | 0 | 0 |
+| py_canonical | 73 | 18 | 0 | 0 | 0 | 0 |
+| rust | 82 | 9 | 0 | 0 | 0 | 0 |
 
 ## Matrix
 
@@ -33,6 +33,7 @@ Excel observation and does not show Excel equivalence.
 | `hb_connections_query.xlsx` | handbuilt | connections, power-query, query-table, custom-xml, tables | pass | pass | pass |
 | `hb_custom_xml.xlsx` | handbuilt | custom-xml | pass | pass | pass |
 | `hb_data_table_formula.xlsx` | handbuilt | data-table | pass | refuse `unsupported_formula_group` | pass |
+| `hb_defined_names.xlsx` | handbuilt | defined-names, sheet-scoped-names, constant-names, formula-names, chained-names, name-cycle, ref-error-names, hidden-names, builtin-names | pass | pass | pass |
 | `hb_dropdown_formulas.xlsx` | handbuilt | data-validation, dropdowns, formula-in-validated-cell | pass | pass | pass |
 | `hb_dropdown_rules.xlsx` | handbuilt | data-validation, dropdowns, error-styles, sheet-scoped-names, text-length, custom-validation, formula-list | pass | pass | pass |
 | `hb_dynamic_array_cached.xlsx` | handbuilt | dynamic-array, spill, metadata | pass | refuse `array_spill_refused` | pass |
@@ -221,25 +222,24 @@ until the formulas are supported. Counts are calculation diagnostics.
 | `hb_3d_references.xlsx` | 5 | 5 |
 | `hb_compat_version_3.xlsx` | 2 | 2 |
 | `hb_data_table_formula.xlsx` | 2 | 2 |
+| `hb_defined_names.xlsx` | 2 | 2 |
 | `hb_dynamic_array_cached.xlsx` | 4 | 4 |
 | `hb_external_link.xlsx` | 1 | 1 |
 | `hb_flatten_has_functions.xlsx` | 4 | 4 |
 | `hb_google_sheets_like.xlsx` | 2 | 2 |
 | `hb_layout_protection.xlsx` | 1 | 1 |
 | `hb_long_formula.xlsx` | 2 | 2 |
-| `hb_r1c1_looking_names.xlsx` | 4 | 4 |
+| `hb_r1c1_looking_names.xlsx` | 1 | 1 |
 | `hb_shared_formulas.xlsx` | 7 | 7 |
 | `hb_table_totals_calculated.xlsx` | 7 | 7 |
 | `op_1904_dates.xlsx` | 1 | 1 |
 | `op_array_formulas.xlsx` | 5 | 5 |
-| `op_defined_names.xlsx` | 2 | 2 |
 | `op_sheet_name_quoting.xlsx` | 1 | 1 |
 | `op_table_structured_refs.xlsx` | 5 | 5 |
 | `op_text_cells.xlsx` | 1 | 1 |
 | `xw_1904_dates.xlsx` | 1 | 1 |
 | `xw_array_formula.xlsx` | 1 | 1 |
 | `xw_dynamic_arrays.xlsx` | 9 | 9 |
-| `xw_hyperlinks_names.xlsx` | 1 | 1 |
 | `xw_table_totals.xlsx` | 3 | 3 |
 
 ## Expectation mismatches

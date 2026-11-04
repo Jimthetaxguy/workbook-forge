@@ -17,7 +17,9 @@ import zipfile
 from pathlib import Path
 from typing import Any, Iterable, Mapping
 
-from workbook_forge import ErrorValue, analyze_formula
+from xml.etree import ElementTree as ET
+
+from workbook_forge import DefinedNames, ErrorValue, analyze_formula
 from workbook_forge.evidence import EvidenceRefusal, FunctionEvidence, gate_refusals
 from workbook_forge.model import (
     SCHEMA_VERSION,
@@ -28,13 +30,14 @@ from workbook_forge.model import (
     Sheet,
     Workbook,
     calculate,
+    workbook_defined_names,
 )
 from workbook_forge.workbook import (
     Workbook as Package,
     _cell_position,
     _q,
 )
-from workbook_forge.xlsx import _fresh_parts, _styles
+from workbook_forge.xlsx import _fresh_parts, _styles, _xml
 
 _GENERAL_FORMATS = frozenset({None, "General"})
 
@@ -110,6 +113,7 @@ def export_canonical(
         raise FileExistsError(target)
     target.parent.mkdir(parents=True, exist_ok=True)
     parts = _fresh_parts(_ooxml_buffer(workbook))
+    _write_defined_names(parts, workbook)
     caches = _scalar_caches(calculated)
     with tempfile.TemporaryDirectory(prefix=".workbook-forge-", dir=target.parent) as folder:
         seed, staged = Path(folder) / "seed.xlsx", Path(folder) / "result.xlsx"
@@ -196,7 +200,7 @@ def import_canonical(path: str | Path) -> Workbook:
     return Workbook(
         SCHEMA_VERSION,
         MODEL_VERSION,
-        {},
+        {"defined_names": stored["defined_names"]},
         tuple(sheets),
         stored["source"],
         Provenance("imported", stored["workbook_part"]),
@@ -249,6 +253,7 @@ def read_package(path: str | Path) -> dict[str, Any]:
         sheet_names = list(package.sheet_names)
         sheet_parts = dict(package._sheet_parts)
         workbook_part = package._workbook_part
+        defined_names = _read_defined_names(package, sheet_names)
     for item in cells:
         item["part"] = sheet_parts[item["sheet"]]
     return {
@@ -258,7 +263,69 @@ def read_package(path: str | Path) -> dict[str, Any]:
         "compatibility_version": compatibility_version,
         "sheet_names": sheet_names,
         "cells": cells,
+        "defined_names": defined_names,
     }
+
+
+def _read_defined_names(package: Package, sheet_names: list[str]) -> list[dict[str, Any]]:
+    """The workbook's ``definedName`` elements for ``metadata["defined_names"]``.
+
+    Each keeps its attributes and text for export, plus the scope sheet by
+    name (``localSheetId`` counts chartsheets too, and the fresh package
+    renumbers). A name scoped to a sheet the model does not carry is left out
+    and stays listed as not carried by intake."""
+    root = package._parts[package._workbook_part]
+    from workbook_forge.workbook import _safe_xml
+
+    book = _safe_xml(root, package._workbook_part)
+    entries = list(package.sheet_entry_names)
+    names: list[dict[str, Any]] = []
+    for node in book.findall(f"{_q('definedNames')}/{_q('definedName')}"):
+        attributes = dict(node.attrib)
+        table = DefinedNames.from_ooxml([(attributes, node.text or "")], entries)
+        if not table.entries or (
+            table.entries[0].sheet is not None and table.entries[0].sheet not in sheet_names
+        ):
+            continue
+        entry = table.entries[0]
+        names.append(
+            {
+                "name": entry.name,
+                "sheet": entry.sheet,
+                "formula": entry.formula,
+                "hidden": entry.hidden,
+                "attributes": attributes,
+            }
+        )
+    return names
+
+
+def _write_defined_names(parts: dict[str, bytes], workbook: Workbook) -> None:
+    """Write ``metadata["defined_names"]`` back as ``definedNames``: the same
+    attributes and text, ``localSheetId`` renumbered to the fresh sheet order."""
+    names = workbook_defined_names(workbook)
+    if not names or not names.entries:
+        return
+    order = [sheet.name for sheet in workbook.sheets]
+    root = ET.fromstring(parts["xl/workbook.xml"])
+    group = ET.Element(_q("definedNames"))
+    for item, entry in zip(workbook.metadata["defined_names"], names.entries, strict=True):
+        attributes = dict(item.get("attributes") or {"name": entry.name})
+        if entry.sheet is not None:
+            if entry.sheet not in order:
+                raise CanonicalPackageError(
+                    "unsupported_package",
+                    f"defined name {entry.name} is scoped to sheet {entry.sheet}, which the workbook no longer has",
+                )
+            attributes["localSheetId"] = str(order.index(entry.sheet))
+        else:
+            attributes.pop("localSheetId", None)
+        node = ET.SubElement(group, _q("definedName"), attributes)
+        node.text = entry.formula
+    sheets = root.find(_q("sheets"))
+    index = list(root).index(sheets) + 1 if sheets is not None else len(root)
+    root.insert(index, group)
+    parts["xl/workbook.xml"] = _xml(root)
 
 
 def compare_structure(source: Workbook, imported: Workbook) -> dict[str, Any]:
@@ -368,12 +435,17 @@ def _require_excel_evidence(
     }
     root = Path(evidence_root) if evidence_root is not None else catalog.evidence_root()
     formula_cells: list[tuple[str, str, tuple[str, ...]]] = []
+    defined = workbook_defined_names(workbook)
     for sheet in workbook.sheets:
         for address, cell in sheet.cells.items():
             if cell.formula is None:
                 continue
             try:
-                names = analyze_formula(cell.formula.expression).functions
+                names = analyze_formula(
+                    cell.formula.expression,
+                    names=defined,
+                    sheet_name=sheet.name,
+                ).functions
             except (TypeError, ValueError, RecursionError):
                 # Forge cannot parse it, so it calculates nothing and the
                 # export writes the formula text without a cache: no Forge

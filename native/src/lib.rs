@@ -35,11 +35,15 @@ struct NativeSession {
 
 #[pymethods]
 impl NativeSession {
+    /// `names_json` is the workbook's defined-name table (read-only), a JSON
+    /// array of `{name, sheet, formula, hidden}`.
     #[new]
-    fn new(model_json: &str) -> PyResult<Self> {
+    #[pyo3(signature = (model_json, names_json=None))]
+    fn new(model_json: &str, names_json: Option<&str>) -> PyResult<Self> {
         let model = decode(model_json)?;
+        let names = names_json.map(names).transpose()?;
         Ok(Self {
-            inner: toolkit::Session::new(model).map_err(invalid)?,
+            inner: toolkit::Session::with_names(model, names).map_err(invalid)?,
         })
     }
 
@@ -90,11 +94,18 @@ fn scenario() -> PyResult<String> {
     encode(&toolkit::operating_scenario())
 }
 
+fn names(source: &str) -> PyResult<workbook_forge::DefinedNames> {
+    let entries: Vec<workbook_forge::DefinedName> = decode(source)?;
+    Ok(workbook_forge::DefinedNames::new(entries))
+}
+
 #[pyfunction]
-fn inspect(model_json: &str) -> PyResult<String> {
+#[pyo3(signature = (model_json, names_json=None))]
+fn inspect(model_json: &str, names_json: Option<&str>) -> PyResult<String> {
     let model: toolkit::WorkbookModel = decode(model_json)?;
     model.validate().map_err(invalid)?;
-    encode(&toolkit::inspect(&model))
+    let names = names_json.map(names).transpose()?;
+    encode(&toolkit::inspect_with_names(&model, names.as_ref()))
 }
 
 #[pyfunction]

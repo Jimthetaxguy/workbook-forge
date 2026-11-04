@@ -36,7 +36,7 @@ from .xlsx import _BUILTIN_FORMATS, STYLES_CONTENT_TYPE
 _MAIN = f"{{{MAIN}}}"
 # What version 1 carries. Everything else a workbook holds is listed as not
 # carried, so content this reader has never heard of is listed too.
-_CARRIED_IN_WORKBOOK = {"sheets"}
+_CARRIED_IN_WORKBOOK = {"sheets", "definedNames"}
 _CARRIED_IN_SHEET = {"sheetData", "dimension"}
 _CARRIED_ON_ROW = {"r", "spans"}
 _CARRIED_ON_CELL = {"r", "s", "t"}
@@ -63,7 +63,7 @@ def intake_workbook_model(path: str | Path) -> Workbook:
         raise WorkbookError(f"workbook not found: {source}")
     try:
         workbook = import_canonical(source)
-        not_carried = _not_carried(source)
+        not_carried = _not_carried(source, workbook.metadata)
     except (zipfile.BadZipFile, zlib.error, EOFError) as error:
         raise WorkbookError(f"the workbook package is damaged: {type(error).__name__}") from None
     metadata = dict(workbook.metadata)
@@ -115,7 +115,7 @@ class _Tally:
         return entries
 
 
-def _not_carried(source: Path) -> list[dict[str, Any]]:
+def _not_carried(source: Path, carried: dict[str, Any]) -> list[dict[str, Any]]:
     """What the workbook holds that the version 1 model has no place for."""
     tally = _Tally()
     with Package.open(source) as package:
@@ -124,6 +124,12 @@ def _not_carried(source: Path) -> list[dict[str, Any]]:
             name = _name(element.tag)
             if name not in _CARRIED_IN_WORKBOOK:
                 tally.add("workbook", None, name, max(1, len(element)))
+        carried_names = {
+            (item["name"], item["formula"]) for item in carried.get("defined_names", [])
+        }
+        for node in book.findall(f"{_MAIN}definedNames/{_MAIN}definedName"):
+            if (node.attrib.get("name", ""), node.text or "") not in carried_names:
+                tally.add("workbook", None, "definedName scoped to a sheet the model does not carry")
         for sheet in book.findall(f"{_MAIN}sheets/{_MAIN}sheet"):
             state = sheet.attrib.get("state", "visible")
             if state != "visible":

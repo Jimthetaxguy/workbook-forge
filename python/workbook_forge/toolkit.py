@@ -63,6 +63,7 @@ class WorkbookModel:
         inputs: Mapping[str, Any] | None = None,
         outputs: Mapping[str, Any] | None = None,
         backend: str = "python",
+        _names: str | None = None,
     ):
         if document is not None and sheets is not None:
             raise ValueError("specify sheets or document, not both")
@@ -87,7 +88,10 @@ class WorkbookModel:
             data["outputs"] = dict(outputs)
         self._engine = _engine(backend)
         self._backend = backend
-        self._session = self._engine.Session(_encode(data))
+        # The imported workbook's defined names, as the engines' JSON table
+        # (read-only; docs/defined-names.md). None: no table, names refused.
+        self._names = _names
+        self._session = self._new_session(_encode(data))
         self._source_baseline = None
         self._import_metadata = None
         # Imported drop-down, pivot and chart rules (xlsx_features.FeatureGuard).
@@ -98,6 +102,11 @@ class WorkbookModel:
         # (xlsx.TextLayout), and the cells the import held there.
         self._text_layouts: dict[str, Any] = {}
         self._imported_addresses: frozenset[tuple[str, str]] = frozenset()
+
+    def _new_session(self, model_json: str):
+        if self._names is None:
+            return self._engine.Session(model_json)
+        return self._engine.Session(model_json, self._names)
 
     @property
     def backend(self) -> str:
@@ -201,7 +210,7 @@ class WorkbookModel:
             for edit in writes if edit.get("formula") is not None
         ]
         if entries and any(self._feature_guard.formula_rule(s, a) for s, a, _ in entries):
-            scratch = self._engine.Session(_encode(self.to_dict()))
+            scratch = self._new_session(_encode(self.to_dict()))
             scratch.apply(_encode(batch), None)  # an invalid batch fails the same way below
             refusal = self._feature_guard.check_formula_results(
                 self._engine, json.loads(scratch.snapshot()), entries, read
@@ -233,7 +242,10 @@ class WorkbookModel:
         return report
 
     def inspect(self) -> dict[str, Any]:
-        report = json.loads(self._engine.inspect(_encode(self.to_dict())))
+        if self._names is None:
+            report = json.loads(self._engine.inspect(_encode(self.to_dict())))
+        else:
+            report = json.loads(self._engine.inspect(_encode(self.to_dict()), self._names))
         report["backend"] = self.backend
         if self._import_metadata is not None:
             report["xlsx"] = json.loads(_encode(self._import_metadata))
