@@ -933,15 +933,15 @@
       "name": "DATEDIF",
       "known": true,
       "category": "Date and time",
-      "python": "catalogued",
-      "rust": "catalogued"
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
     },
     "DATEVALUE": {
       "name": "DATEVALUE",
       "known": true,
       "category": "Date and time",
-      "python": "catalogued",
-      "rust": "catalogued"
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
     },
     "DAVERAGE": {
       "name": "DAVERAGE",
@@ -3439,8 +3439,8 @@
       "name": "TIMEVALUE",
       "known": true,
       "category": "Date and time",
-      "python": "catalogued",
-      "rust": "catalogued"
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
     },
     "TINV": {
       "name": "TINV",
