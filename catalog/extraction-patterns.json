@@ -2487,8 +2487,8 @@
       "name": "NOW",
       "known": true,
       "category": "Date and time",
-      "python": "catalogued",
-      "rust": "catalogued"
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
     },
     "NPER": {
       "name": "NPER",
@@ -3460,8 +3460,8 @@
       "name": "TODAY",
       "known": true,
       "category": "Date and time",
-      "python": "catalogued",
-      "rust": "catalogued"
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
     },
     "TOROW": {
       "name": "TOROW",

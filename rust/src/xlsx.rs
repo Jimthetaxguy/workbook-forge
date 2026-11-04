@@ -1684,6 +1684,24 @@ impl ImportedWorkbook {
     pub fn calculate(&self, workers: usize) -> CalculationReport {
         self.session.calculate(workers)
     }
+    /// Calculate with a pinned clock and seed for volatile functions.
+    pub fn calculate_with(
+        &self,
+        workers: usize,
+        context: &crate::volatile::CalcContext,
+    ) -> CalculationReport {
+        self.session.calculate_with(workers, context)
+    }
+    /// The session's offset from UTC in minutes, for NOW and TODAY.
+    pub fn utc_offset_minutes(&self) -> i32 {
+        self.session.utc_offset_minutes()
+    }
+    /// Set the session's offset from UTC (within +/-14:00).
+    pub fn set_utc_offset_minutes(&self, minutes: i32) -> Result<()> {
+        self.session
+            .set_utc_offset_minutes(minutes)
+            .map_err(|error| err(format!("{}: {}", error.code, error.message)))
+    }
     /// Declare a smaller grid for this session: absent cells may only be
     /// inserted at rows `1..=rows` and columns `1..=columns`. Cells the
     /// workbook already holds stay editable wherever they are.

@@ -21,6 +21,7 @@ import unicodedata
 from . import ArrayValue, ErrorValue, _is_unsupported_formula_message, evaluate_result
 from .catalog import _catalog_file
 from .expressions import analyze_formula as _analyze_formula, copy_formula
+from .volatile import VOLATILE_FUNCTIONS, CalcContext, check_offset
 
 MAX_REQUEST_BYTES = 128 * 1024 * 1024
 MAX_WORKBOOK_CELLS = 100_000
@@ -342,10 +343,12 @@ class _Graph:
     errors: dict[str, ToolkitError]
     cells: dict[str, dict]
     formulas: dict[str, str]
+    # Formula cells calling a volatile function: dirty on every pass.
+    volatile: set[str]
 
     @classmethod
     def build(cls, model: dict) -> _Graph:
-        graph = cls({}, {}, _cells(model), {})
+        graph = cls({}, {}, _cells(model), {}, set())
         expanded = 0
         for current, cell in graph.cells.items():
             dependencies: set[str] = set()
@@ -361,6 +364,8 @@ class _Graph:
                 unknown = set(analysis["functions"]) - _supported_functions()
                 if unknown:
                     _fail("unsupported_formula", f"unsupported function {min(unknown)}")
+                if VOLATILE_FUNCTIONS.intersection(analysis["functions"]):
+                    graph.volatile.add(current)
                 for reference in analysis["references"]:
                     start, end = reference["start"], reference.get("end", reference["start"])
                     first_row, last_row = sorted((start["row"], end["row"]))
@@ -440,7 +445,7 @@ def _wire_scalar(value: Any) -> Any:
     return value
 
 
-def _evaluate_node(graph: _Graph, current: str, values: dict) -> Any:
+def _evaluate_node(graph: _Graph, current: str, values: dict, context: CalcContext | None = None) -> Any:
     if current in graph.errors:
         raise graph.errors[current]
     cell = graph.cells.get(current, {})
@@ -454,7 +459,7 @@ def _evaluate_node(graph: _Graph, current: str, values: dict) -> Any:
         if isinstance(value, dict) and "rows" in value:
             _fail("unsupported_array_reference", f"worksheet dependency {dependency} is an array; spill projection is unsupported")
         environment[dependency] = _engine_scalar(value)
-    result = evaluate_result(graph.formulas[current], environment, current.rsplit("!", 1)[0])
+    result = evaluate_result(graph.formulas[current], environment, current.rsplit("!", 1)[0], context=context, cell_key=current)
     if isinstance(result, ErrorValue) and (result.message.startswith("unsupported function ") or "supports exact match_mode=0 only" in result.message or "search_mode must be 1 or -1" in result.message):
         _fail("unsupported_formula", result.message)
     if isinstance(result, ArrayValue):
@@ -485,7 +490,7 @@ def _workers(workers: int) -> int:
     return max(1, min(workers, MAX_WORKERS))
 
 
-def _calculate_document(model: dict, workers: int = 1, previous: dict | None = None, dirty: set[str] | None = None) -> dict:
+def _calculate_document(model: dict, workers: int = 1, previous: dict | None = None, dirty: set[str] | None = None, context: CalcContext | None = None) -> dict:
     workers = _workers(workers)
     report = {"revision": model["revision"], "outputs": {}, "values": {}, "diagnostics": [], "evaluated_cells": [], "stale": False}
     try:
@@ -495,7 +500,13 @@ def _calculate_document(model: dict, workers: int = 1, previous: dict | None = N
         report["diagnostics"].append(_diagnostic(error))
         return report
     selected, reverse = graph.closure(model), graph.reverse()
-    invalidated, pending = set(dirty or ()), list(dirty or ())
+    # A volatile formula is dirty on every pass; one context serves the pass.
+    if graph.volatile & selected:
+        if context is None:
+            context = CalcContext.capture(0)
+        report["calc"] = context.to_dict()
+    dirty = set(dirty or ()) | graph.volatile
+    invalidated, pending = set(dirty), list(dirty)
     while pending:
         for dependent in reverse.get(pending.pop(), ()):
             if dependent not in invalidated:
@@ -521,7 +532,7 @@ def _calculate_document(model: dict, workers: int = 1, previous: dict | None = N
                     evaluate.append(current)
                 else:
                     try:
-                        value = _evaluate_node(graph, current, report["values"])
+                        value = _evaluate_node(graph, current, report["values"], context)
                         budget.reserve(value)
                         report["values"][current] = value
                     except ToolkitError as error:
@@ -535,7 +546,7 @@ def _calculate_document(model: dict, workers: int = 1, previous: dict | None = N
                     if budget.exhausted:
                         break
                     try:
-                        value = _evaluate_node(graph, current, report["values"])
+                        value = _evaluate_node(graph, current, report["values"], context)
                         budget.reserve(value)
                         results.append((current, value, None))
                     except ToolkitError as error:
@@ -596,6 +607,21 @@ class Session:
         self._published: dict | None = None
         self._dirty: set[str] = set()
         self._lock = RLock()
+        self._utc_offset_minutes = 0
+
+    @property
+    def utc_offset_minutes(self) -> int:
+        """The session's offset from UTC for NOW and TODAY (default 0, UTC)."""
+        return self._utc_offset_minutes
+
+    @utc_offset_minutes.setter
+    def utc_offset_minutes(self, minutes: int) -> None:
+        try:
+            check_offset(minutes)
+        except ValueError as error:
+            _fail("invalid_request", str(error))
+        with self._lock:
+            self._utc_offset_minutes = minutes
 
     def snapshot(self) -> str:
         with self._lock:
@@ -660,10 +686,14 @@ class Session:
             edits = _input_edits(self._model, values)
             return self.apply(_encode(edits), expected_revision=self._model["revision"])
 
-    def calculate(self, workers: int = 1) -> str:
+    def calculate(self, workers: int = 1, context: CalcContext | None = None) -> str:
+        """Calculate the current revision; ``context`` pins the clock and seed."""
         with self._lock:
             model, previous, dirty = deepcopy(self._model), deepcopy(self._published), self._dirty.copy()
-        report = _calculate_document(model, workers, previous, dirty)
+            offset = self._utc_offset_minutes
+        if context is None:
+            context = CalcContext.capture(offset)
+        report = _calculate_document(model, workers, previous, dirty, context)
         with self._lock:
             if self._model["revision"] != report["revision"]:
                 report["stale"] = True
@@ -673,9 +703,13 @@ class Session:
         return _encode(report)
 
 
-def calculate(model_json: str, workers: int = 1) -> str:
-    """Calculate a detached model with the independent Python formula engine."""
-    return _encode(_calculate_document(_normalize_model(_decode(model_json)), workers))
+def calculate(model_json: str, workers: int = 1, context: CalcContext | None = None) -> str:
+    """Calculate a detached model with the independent Python formula engine.
+
+    ``context`` pins the clock and seed of volatile functions; without one the
+    pass captures its own (see :meth:`CalcContext.capture`).
+    """
+    return _encode(_calculate_document(_normalize_model(_decode(model_json)), workers, context=context))
 
 
 def inspect(model_json: str) -> str:

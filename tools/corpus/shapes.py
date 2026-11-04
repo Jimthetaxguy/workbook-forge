@@ -723,6 +723,17 @@ def long_formula():
     return simple({"Long": sheet_xml(rows, dimension="A1:C9")}, styles=minimal_styles())
 
 
+def volatile_formulas():
+    """Volatile formulas (NOW, TODAY) with stale authored caches, a dependent
+    of a volatile cell, and a plain formula beside them. The caches are from
+    an older day on purpose: Forge must calculate fresh values, never trust
+    them, and export its own."""
+    rows = ('<row r="1"><c r="A1"><f>NOW()</f><v>45000.25</v></c><c r="B1"><f>TODAY()</f><v>45000</v></c>'
+            '<c r="C1"><f>A1+1</f><v>45001.25</v></c><c r="D1"><f>INT(NOW())-TODAY()</f><v>0</v></c>'
+            '<c r="E1"><f>2+3</f><v>5</v></c></row>')
+    return simple({"Clock": sheet_xml(rows, dimension="A1:E1")}, styles=minimal_styles())
+
+
 BUILDERS = {
     "hb_wide_sheet": (wide_sheet, ["scale", "wide-sheet", "xfd-column"]),
     "hb_many_sheets": (many_sheets, ["scale", "many-sheets", "cross-sheet"]),
@@ -744,6 +755,7 @@ BUILDERS = {
     "hb_long_formula": (long_formula, ["long-formula", "formula-length-limit"]),
     "hb_text_columns": (text_columns, ["text", "text-format", "column-styles", "row-styles", "insert-inherits-style"]),
     "hb_dropdown_formulas": (dropdown_formulas, ["data-validation", "dropdowns", "formula-in-validated-cell"]),
+    "hb_volatile_formulas": (volatile_formulas, ["volatile", "now-today", "stale-cache"]),
 }
 STORED: set[str] = set()
 

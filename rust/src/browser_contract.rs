@@ -7,6 +7,7 @@
 
 use crate::event_log::{Baseline, EventLog, HistoryKind, HistoryPlan, clock};
 use crate::toolkit::{CalculatedValue, CalculationReport, CellValue, Edit, Session};
+use crate::volatile::CalcContext;
 use crate::xlsx::ImportedWorkbook;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value as Json, json};
@@ -133,8 +134,14 @@ pub trait CommandTarget {
     fn read_cells(&self, keys: &[String]) -> Vec<Option<crate::toolkit::Cell>>;
     /// Apply edits at an expected revision, mapping failures to contract codes.
     fn apply_edits(&self, edits: Vec<Edit>, expected: u64) -> Result<u64, ContractError>;
-    /// Calculate the current revision.
-    fn calculate_report(&self) -> CalculationReport;
+    /// Calculate the current revision with a freshly captured context.
+    fn calculate_report(&self) -> CalculationReport {
+        self.calculate_report_with(&CalcContext::capture(self.utc_offset_minutes()))
+    }
+    /// Calculate the current revision with a pinned clock and seed.
+    fn calculate_report_with(&self, context: &CalcContext) -> CalculationReport;
+    /// The session's offset from UTC in minutes, for NOW and TODAY.
+    fn utc_offset_minutes(&self) -> i32;
 }
 
 impl CommandTarget for ImportedWorkbook {
@@ -151,8 +158,11 @@ impl CommandTarget for ImportedWorkbook {
         self.apply(edits, Some(expected))
             .map_err(|e| classify_edit_error(&e.to_string()))
     }
-    fn calculate_report(&self) -> CalculationReport {
-        self.calculate(1)
+    fn calculate_report_with(&self, context: &CalcContext) -> CalculationReport {
+        self.calculate_with(1, context)
+    }
+    fn utc_offset_minutes(&self) -> i32 {
+        Self::utc_offset_minutes(self)
     }
 }
 
@@ -170,8 +180,11 @@ impl CommandTarget for Session {
         self.apply(edits, Some(expected))
             .map_err(|e| ContractError::new(e.code, e.message))
     }
-    fn calculate_report(&self) -> CalculationReport {
-        self.calculate(1)
+    fn calculate_report_with(&self, context: &CalcContext) -> CalculationReport {
+        self.calculate_with(1, context)
+    }
+    fn utc_offset_minutes(&self) -> i32 {
+        Self::utc_offset_minutes(self)
     }
 }
 
@@ -817,6 +830,7 @@ pub fn apply_calculate_diff<W: CommandTarget + ?Sized>(
     baseline: BTreeMap<String, CalculatedValue>,
     edits: Vec<Edit>,
     expected: u64,
+    context: &CalcContext,
 ) -> Result<Applied, (ContractError, BTreeMap<String, CalculatedValue>)> {
     // Edited cells, for input-only changes (formula text with the same value).
     let targets = resolve_targets(workbook, &edits);
@@ -826,7 +840,7 @@ pub fn apply_calculate_diff<W: CommandTarget + ?Sized>(
         Err(error) => return Err((error, baseline)),
     };
     let started = clock::mono_ms();
-    let report = workbook.calculate_report();
+    let report = workbook.calculate_report_with(context);
     let calc_ms = (clock::mono_ms() - started).max(0.0);
     let mut keys: BTreeSet<String> = report
         .values
@@ -995,11 +1009,24 @@ fn execute<W: CommandTarget + ?Sized>(
     let requested = requested_inputs(&edits);
     // Calculated values at the current revision. Reused from the previous
     // command unless another path (applyEditsJson) moved the revision.
+    // A baseline calculated here is logged with its own context, so replay
+    // can recompute the same `before` values of volatile cells.
+    let mut base_context = None;
     let baseline = match inner.baseline.take() {
         Some((revision, values)) if revision == current => values,
-        _ => workbook.calculate_report().values,
+        _ => {
+            let context = CalcContext::capture(workbook.utc_offset_minutes());
+            base_context = Some(context);
+            workbook.calculate_report_with(&context).values
+        }
     };
-    let applied = match apply_calculate_diff(workbook, baseline, edits, expected) {
+    // Undo and redo restore the clock and seed of the state they return to,
+    // so they never re-roll volatile values; edits capture a new context.
+    let context = plan
+        .as_ref()
+        .and_then(|plan| inner.log.history_context(plan))
+        .unwrap_or_else(|| CalcContext::capture(workbook.utc_offset_minutes()));
+    let applied = match apply_calculate_diff(workbook, baseline, edits, expected, &context) {
         Ok(applied) => applied,
         Err((error, baseline)) => {
             inner.baseline = Some((current, baseline));
@@ -1027,6 +1054,8 @@ fn execute<W: CommandTarget + ?Sized>(
         applied.calc_ms,
         applied.deltas,
         json!(applied.report.diagnostics),
+        &context,
+        base_context.as_ref(),
     );
     let response = json!({
         "v": ENVELOPE_VERSION,

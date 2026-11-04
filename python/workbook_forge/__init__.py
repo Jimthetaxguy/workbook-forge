@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import calendar
 from bisect import bisect_left, bisect_right
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, timedelta
 import decimal
 import math
@@ -16,6 +16,8 @@ import re
 import struct
 from collections.abc import Iterable, Mapping
 from typing import TypeAlias
+
+from .volatile import RANDOM_FUNCTIONS as _RANDOM_FUNCTIONS, CalcContext
 
 MAX_FORMULA_LENGTH_UNITS = 8_192
 MAX_FUNCTION_NESTING = 64
@@ -138,6 +140,16 @@ class _WildcardPattern:
 @dataclass(slots=True)
 class _WildcardBudget:
     remaining: int = MAX_WILDCARD_WORK
+    # The recalculation's clock and seed (captured on first use when absent),
+    # the formula's canonical Sheet!A1 key and its RAND-family call sites.
+    context: CalcContext | None = None
+    cell_key: str = ""
+    random_sites: dict[int, int] = field(default_factory=dict)
+
+    def calc_context(self) -> CalcContext:
+        if self.context is None:
+            self.context = CalcContext.capture(0)
+        return self.context
 
     def consume(self, amount: int) -> bool:
         if amount > self.remaining:
@@ -2490,6 +2502,19 @@ def _eval(
         return left
     if node.kind == "call":
         name = _canonical_function_name(str(node.value))
+        if name in {"NOW", "TODAY"}:
+            if node.children:
+                return _arity(name, "0", len(node.children))
+            calc = budget.calc_context()
+            if name == "NOW":
+                serial = calc.now_serial()
+                if not 0.0 <= serial < float(_MAX_EXCEL_DATE_SERIAL + 1):
+                    return ErrorValue("#NUM!", "NOW is outside the 1900 date system")
+                return serial
+            day = calc.today_serial()
+            if not 0 <= day <= _MAX_EXCEL_DATE_SERIAL:
+                return ErrorValue("#NUM!", "TODAY is outside the 1900 date system")
+            return day
         if name == "SEQUENCE":
             return _sequence_call(node.children, cells, sheet_name, budget)
         if name == "FILTER":
@@ -4989,16 +5014,33 @@ def _log1mexp_negative(value: float) -> float:
     return math.log1p(-math.exp(-value))
 
 
+def _number_random_sites(root: _Node, sites: dict[int, int]) -> None:
+    # Pre-order is source order for a parse tree, so a draw does not depend
+    # on which branches were evaluated. Iterative: flat chains are deep trees.
+    pending = [root]
+    while pending:
+        node = pending.pop()
+        if node.kind == "call" and _canonical_function_name(str(node.value)) in _RANDOM_FUNCTIONS:
+            sites[id(node)] = len(sites)
+        pending.extend(reversed(node.children))
+
+
 def evaluate_result(
     formula: str,
     cells: Mapping[str, Scalar] | None = None,
     sheet_name: str = "Sheet1",
+    *,
+    context: CalcContext | None = None,
+    cell_key: str = "",
 ) -> FormulaResult:
     """Evaluate a formula and preserve any rectangular result shape.
 
     ``cells`` maps A1 addresses on ``sheet_name`` to scalar values. Unknown
     cells behave as blank cells (zero in scalar arithmetic, blank in ranges).
     The result is a calculation value; worksheet spill placement is not modeled.
+    ``context`` is the recalculation's clock and seed; without one a volatile
+    function captures one on first use (UTC). ``cell_key`` (canonical
+    ``Sheet!A1``) keys the formula's random streams.
     """
 
     if not isinstance(formula, str):
@@ -5035,8 +5077,10 @@ def evaluate_result(
     if not source:
         return ErrorValue("#VALUE!", "formula is empty")
     try:
-        budget = _WildcardBudget()
-        value = _dereference(_eval(_Parser(source).parse(), normalized, sheet_name, budget))
+        tree = _Parser(source).parse()
+        budget = _WildcardBudget(context=context, cell_key=cell_key)
+        _number_random_sites(tree, budget.random_sites)
+        value = _dereference(_eval(tree, normalized, sheet_name, budget))
         if isinstance(value, ArrayValue):
             return _check_text_result(value)
         if isinstance(value, _Range):
@@ -5061,9 +5105,12 @@ def evaluate(
     formula: str,
     cells: Mapping[str, Scalar] | None = None,
     sheet_name: str = "Sheet1",
+    *,
+    context: CalcContext | None = None,
+    cell_key: str = "",
 ) -> Scalar | ErrorValue:
     """Evaluate a scalar formula; use :func:`evaluate_result` for arrays."""
-    result = evaluate_result(formula, cells, sheet_name)
+    result = evaluate_result(formula, cells, sheet_name, context=context, cell_key=cell_key)
     if isinstance(result, ArrayValue):
         return ErrorValue(
             "#VALUE!", "formula result is an array; use evaluate_result to preserve shape"
@@ -5079,6 +5126,7 @@ __all__ = [
     "FormulaResult",
     "Scalar",
     "analyze_formula",
+    "CalcContext",
     "evaluate",
     "evaluate_result",
 ]

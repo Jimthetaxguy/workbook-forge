@@ -51,12 +51,46 @@ export interface ForgeWorkbook {
   exportLogNdjson(xlsxSha256: string): string;
   calculateJson(): string;
   exportXlsx(): Uint8Array;
+  /** NOW/TODAY read the clock at this offset from UTC (absent on older builds and mocks). */
+  setUtcOffsetMinutes?(minutes: number): void;
   free(): void;
 }
 
 export interface EngineOptions {
   /** sha256 of the loaded .wasm, recorded in session.opened. */
   wasmSha256?: string | null;
+  /**
+   * IANA time zone NOW and TODAY follow, e.g. the worker's
+   * Intl.DateTimeFormat().resolvedOptions().timeZone. Its offset is resolved
+   * before every command, so a daylight-saving change is followed. Absent:
+   * UTC, the engine default.
+   */
+  timeZone?: string;
+}
+
+/**
+ * Minutes east of UTC that `timeZone` is at the instant `at` (ms), from Intl
+ * alone. An unknown zone is UTC (0) rather than a guess.
+ */
+export function utcOffsetMinutes(timeZone: string, at: number): number {
+  try {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone,
+      hourCycle: 'h23',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+    }).formatToParts(new Date(at));
+    const field = (type: string) => Number(parts.find((part) => part.type === type)?.value);
+    const local = Date.UTC(field('year'), field('month') - 1, field('day'), field('hour'), field('minute'), field('second'));
+    const minutes = Math.round((local - Math.floor(at / 1000) * 1000) / 60000);
+    return Number.isFinite(minutes) && Math.abs(minutes) <= 840 ? minutes : 0;
+  } catch {
+    return 0;
+  }
 }
 
 const fail = (code: string, message: string, extra: Partial<EngineError> = {}): Result<never> => ({
@@ -227,7 +261,16 @@ export class ForgeEngine {
     next.startLog(name, JSON.stringify({ wasm_sha256: this.options.wasmSha256 ?? null }));
   }
 
+  /** Follow the host's zone: set the session offset before each command. */
+  private syncClock() {
+    const zone = this.options.timeZone;
+    if (zone && this.workbook?.setUtcOffsetMinutes) {
+      this.workbook.setUtcOffsetMinutes(utcOffsetMinutes(zone, Date.now()));
+    }
+  }
+
   private dispatch(command: CommandName, args: unknown): Result<unknown> {
+    this.syncClock();
     switch (command) {
       case 'open': {
         const { bytes, name } = args as Commands['open']['args'];

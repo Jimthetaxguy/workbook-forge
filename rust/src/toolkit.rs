@@ -2,7 +2,8 @@
 //!
 //! Formulas retain their source text. This module reuses the independent evaluator
 //! and never substitutes an imported cached value for a calculated dependency.
-use crate::{Expr, FormulaError, FormulaResult, Parser, Value, evaluate_result};
+use crate::volatile::{CalcContext, VOLATILE_FUNCTIONS};
+use crate::{Expr, FormulaError, FormulaResult, Parser, Value, evaluate_result_in};
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::{Value as JsonValue, json};
 use std::collections::{BTreeMap, BTreeSet, HashMap};
@@ -93,6 +94,7 @@ pub const SUPPORTED_FUNCTIONS: &[&str] = &[
     "NETWORKDAYS",
     "NETWORKDAYS.INTL",
     "NOT",
+    "NOW",
     "NPER",
     "ODD",
     "OR",
@@ -121,6 +123,7 @@ pub const SUPPORTED_FUNCTIONS: &[&str] = &[
     "TEXTBEFORE",
     "TEXTJOIN",
     "TIME",
+    "TODAY",
     "TRIM",
     "TRUNC",
     "UNIQUE",
@@ -1173,12 +1176,18 @@ pub struct CalculationReport {
     pub diagnostics: Vec<Diagnostic>,
     pub evaluated_cells: Vec<String>,
     pub stale: bool,
+    /// The clock and seed of this pass, present when it evaluated a volatile
+    /// function (NOW, TODAY, the RAND family).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub calc: Option<CalcContext>,
 }
 
 #[derive(Default)]
 struct Graph {
     dependencies: BTreeMap<String, BTreeSet<String>>,
     errors: BTreeMap<String, ToolkitError>,
+    /// Formula cells calling a volatile function: dirty on every pass.
+    volatile: BTreeSet<String>,
 }
 impl Graph {
     fn build(model: &WorkbookModel) -> Result<Self, ToolkitError> {
@@ -1189,6 +1198,7 @@ impl Graph {
             for (address, cell) in &sheet.cells {
                 let current = key(&sheet.name, address);
                 let mut deps = BTreeSet::new();
+                let mut volatile = false;
                 if let Some(reason) = &cell.blocked_reason {
                     graph.errors.insert(
                         current.clone(),
@@ -1205,6 +1215,13 @@ impl Graph {
                                 "unsupported_formula",
                                 format!("unsupported function {name}"),
                             ));
+                        }
+                        if expression
+                            .functions()
+                            .iter()
+                            .any(|name| VOLATILE_FUNCTIONS.contains(&name.as_str()))
+                        {
+                            volatile = true;
                         }
                         expression.references()
                     });
@@ -1278,6 +1295,9 @@ impl Graph {
                             }
                         }
                     }
+                }
+                if volatile && !graph.errors.contains_key(&current) {
+                    graph.volatile.insert(current.clone());
                 }
                 total = total.saturating_add(deps.len());
                 if total > MAX_DEPENDENCIES {
@@ -1374,6 +1394,7 @@ fn evaluate_node(
     graph: &Graph,
     current: &str,
     values: &BTreeMap<String, CalculatedValue>,
+    context: &CalcContext,
 ) -> Result<CalculatedValue, ToolkitError> {
     if let Some(error) = graph.errors.get(current) {
         return Err(error.clone());
@@ -1409,7 +1430,7 @@ fn evaluate_node(
         }
     }
     let sheet = current.rsplit_once('!').unwrap().0;
-    match evaluate_result(formula, &environment, sheet) {
+    match evaluate_result_in(formula, &environment, sheet, Some(context), current) {
         // Excel stores a scalar formula referring to an empty cell as numeric
         // zero. Authored blanks and array blanks remain distinct in the model.
         Ok(FormulaResult::Scalar(Value::Blank)) => {
@@ -1451,13 +1472,22 @@ fn reserve_result(
     Ok(())
 }
 pub fn calculate(model: &WorkbookModel, workers: usize) -> CalculationReport {
-    calculate_inner(model, workers, None, &BTreeSet::new())
+    calculate_with(model, workers, &CalcContext::capture(0))
+}
+/// [`calculate`] with a pinned clock and seed for volatile functions.
+pub fn calculate_with(
+    model: &WorkbookModel,
+    workers: usize,
+    context: &CalcContext,
+) -> CalculationReport {
+    calculate_inner(model, workers, None, &BTreeSet::new(), context)
 }
 fn calculate_inner(
     model: &WorkbookModel,
     workers: usize,
     previous: Option<&CalculationReport>,
     dirty: &BTreeSet<String>,
+    context: &CalcContext,
 ) -> CalculationReport {
     let mut report = CalculationReport {
         revision: model.revision,
@@ -1480,7 +1510,17 @@ fn calculate_inner(
             return report;
         }
     };
-    let invalidated = graph.invalidated(dirty);
+    // A volatile formula is dirty on every pass; one context serves the pass.
+    if graph
+        .volatile
+        .iter()
+        .any(|current| selected.contains(current))
+    {
+        report.calc = Some(*context);
+    }
+    let mut dirty = dirty.clone();
+    dirty.extend(graph.volatile.iter().cloned());
+    let invalidated = graph.invalidated(&dirty);
     let reverse = graph.reverse();
     let mut remaining: BTreeMap<String, usize> = selected
         .iter()
@@ -1522,7 +1562,7 @@ fn calculate_inner(
             {
                 evaluate.push(current.clone());
             } else {
-                match evaluate_node(model, &graph, current, &report.values) {
+                match evaluate_node(model, &graph, current, &report.values, context) {
                     Ok(value) => {
                         if let Err(error) = reserve_result(&value, &materialized, &exhausted) {
                             report
@@ -1544,8 +1584,8 @@ fn calculate_inner(
                 if exhausted.load(Ordering::Relaxed) {
                     break;
                 }
-                let result =
-                    evaluate_node(model, &graph, current, &report.values).and_then(|value| {
+                let result = evaluate_node(model, &graph, current, &report.values, context)
+                    .and_then(|value| {
                         reserve_result(&value, &materialized, &exhausted)?;
                         Ok(value)
                     });
@@ -1646,6 +1686,8 @@ struct SessionState {
     model: WorkbookModel,
     published: Option<CalculationReport>,
     dirty: BTreeSet<String>,
+    /// Offset from UTC, in minutes, for NOW and TODAY (default 0: UTC).
+    utc_offset_minutes: i32,
 }
 /// Clones share one synchronized transient session. Calculation holds no write
 /// lock while evaluating; publication checks the source revision again.
@@ -1673,6 +1715,7 @@ impl Session {
                 model,
                 published: None,
                 dirty: BTreeSet::new(),
+                utc_offset_minutes: 0,
             })),
         })
     }
@@ -1798,7 +1841,24 @@ impl Session {
         state.dirty.extend(changed);
         Ok(state.model.revision)
     }
+    /// The session's offset from UTC in minutes (east positive).
+    pub fn utc_offset_minutes(&self) -> i32 {
+        self.state().utc_offset_minutes
+    }
+    /// Set the offset NOW and TODAY read the clock at, within +/-14:00.
+    pub fn set_utc_offset_minutes(&self, minutes: i32) -> Result<(), ToolkitError> {
+        crate::volatile::check_offset(minutes)
+            .map_err(|message| ToolkitError::new("invalid_request", message))?;
+        self.state().utc_offset_minutes = minutes;
+        Ok(())
+    }
+    /// Capture a context at the session offset and calculate.
     pub fn calculate(&self, workers: usize) -> CalculationReport {
+        let context = CalcContext::capture(self.utc_offset_minutes());
+        self.calculate_with(workers, &context)
+    }
+    /// Calculate with a pinned clock and seed (replay, undo, tests).
+    pub fn calculate_with(&self, workers: usize, context: &CalcContext) -> CalculationReport {
         let (model, previous, dirty) = {
             let state = self.state();
             (
@@ -1807,7 +1867,7 @@ impl Session {
                 state.dirty.clone(),
             )
         };
-        let report = calculate_inner(&model, workers, previous.as_ref(), &dirty);
+        let report = calculate_inner(&model, workers, previous.as_ref(), &dirty, context);
         self.publish(report)
     }
     fn publish(&self, mut report: CalculationReport) -> CalculationReport {

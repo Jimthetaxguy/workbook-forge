@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from workbook_forge import ArrayValue, ErrorValue, evaluate, evaluate_result
+from workbook_forge import ArrayValue, CalcContext, ErrorValue, evaluate, evaluate_result
 
 
 @pytest.mark.parametrize(
@@ -75,10 +75,20 @@ _GOLDEN_CASES = [
 def test_shared_golden_fixture(case):
     cells = {address: _fixture_value(value) for address, value in case.get("cells", {}).items()}
     expected = case["expected"]
+    # A volatile case pins its clock and seed; ``cell`` keys its random streams.
+    pinned = case.get("context")
+    options = (
+        {
+            "context": CalcContext(pinned["now_ms"], pinned["utc_offset_minutes"], int(pinned["seed"])),
+            "cell_key": pinned.get("cell", ""),
+        }
+        if pinned
+        else {}
+    )
     value = (
-        evaluate_result(case["formula"], cells)
+        evaluate_result(case["formula"], cells, **options)
         if "array" in expected
-        else evaluate(case["formula"], cells)
+        else evaluate(case["formula"], cells, **options)
     )
     if "array" in expected:
         target = expected["array"]

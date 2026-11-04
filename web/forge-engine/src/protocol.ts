@@ -272,6 +272,17 @@ export interface CalcEvent extends LogEventBase {
   /** `[key, before, after]` for every formula cell whose value changed. */
   deltas: [key: string, before: CalculatedValue, after: CalculatedValue][];
   diagnostics: unknown[];
+  /** The pass's clock and seed (NOW, TODAY, RAND family); replay reuses them. */
+  calc_context?: CalcContext;
+  /** Present when the command calculated its own baseline first. */
+  base_calc_context?: CalcContext;
+}
+
+/** One recalculation's clock and seed. The seed is a decimal u64 string. */
+export interface CalcContext {
+  now_ms: number;
+  utc_offset_minutes: number;
+  seed: string;
 }
 
 export type LogEvent = SessionOpenedEvent | SessionExportedEvent | IntentEvent | CalcEvent;
