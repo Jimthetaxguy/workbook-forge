@@ -3,29 +3,64 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Workbook Forge × Univer spike</title>
+    <title>Workbook Forge</title>
     <style>
-      html, body { margin: 0; height: 100%; font: 13px system-ui, sans-serif; }
-      #bar { display: flex; gap: 8px; align-items: center; padding: 6px 10px; border-bottom: 1px solid #ddd; }
-      #notices { padding: 4px 10px; min-height: 18px; color: #8a1c1c; background: #fff4f4; border-bottom: 1px solid #f1caca; }
+      html, body { margin: 0; height: 100%; font: 13px system-ui, sans-serif; color: #1f2933; }
+      body { display: flex; flex-direction: column; }
+      [hidden] { display: none !important; }
+      #bar { display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; padding: 6px 10px; border-bottom: 1px solid #ddd; }
+      #bar strong { font-size: 14px; margin-right: 6px; white-space: nowrap; }
+      #bar button, #bar .file { white-space: nowrap; }
+      #bar .file input { display: none; }
+      #bar .file { display: inline-block; padding: 1px 6px; border: 1px solid #767676; border-radius: 3px; background: #efefef; cursor: pointer; }
+      #bar .sep { width: 1px; align-self: stretch; background: #e3e5e8; margin: 0 2px; }
+      #status { margin-left: auto; color: #4b5563; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
       #privacy { padding: 4px 10px; color: #365a44; background: #f2faf4; border-bottom: 1px solid #d8eadc; }
-      #formula-support { padding: 4px 10px; color: #4b5563; background: #f7f8fa; border-bottom: 1px solid #e3e5e8; }
-      #app { height: calc(100% - 148px); }
+      #notices { padding: 4px 10px; color: #8a1c1c; background: #fff4f4; border-bottom: 1px solid #f1caca; }
+      #notices:empty { display: none; }
+      #formula-issues { padding: 4px 10px; background: #fffbea; border-bottom: 1px solid #f0e2a8; }
+      #formula-issues summary { cursor: pointer; }
+      #formula-issues ul { margin: 4px 0 2px; padding-left: 20px; }
+      .badge { display: inline-block; min-width: 16px; padding: 0 5px; margin-left: 4px; border-radius: 8px; background: #8a1c1c; color: #fff; font-size: 11px; line-height: 16px; text-align: center; }
+      #developer { padding: 4px 10px; background: #f7f8fa; border-bottom: 1px solid #e3e5e8; color: #4b5563; }
+      #developer summary { cursor: pointer; }
+      #developer dl { display: grid; grid-template-columns: max-content 1fr; gap: 2px 12px; margin: 6px 0 2px; }
+      #developer dt { font-weight: 600; }
+      #developer dd { margin: 0; }
+      #app { flex: 1; min-height: 0; }
     </style>
   </head>
   <body>
     <div id="bar">
-      <strong>Workbook Forge · Browser demo</strong>
-      <label>Mode <select id="mode"></select></label>
+      <strong id="title">Workbook Forge</strong>
       <button id="new">New workbook</button>
-      <input id="file" type="file" accept=".xlsx" />
-      <button id="undo">Undo (Forge)</button>
-      <button id="redo">Redo (Forge)</button>
-      <button id="export">Export .xlsx</button>
-      <span id="status"></span>
+      <label class="file" title="Open an .xlsx file from this device">Open .xlsx…<input id="file" type="file" accept=".xlsx" /></label>
+      <button id="export">Download .xlsx</button>
+      <span class="sep"></span>
+      <button id="undo">Undo</button>
+      <button id="redo">Redo</button>
+      <span id="status" role="status"></span>
     </div>
-    <div id="privacy">Workbook data is processed in this browser tab. Opened files are not uploaded by the demo; use Export .xlsx to save a copy.</div>
-    <div id="formula-support">Formula Lab XLOOKUP subset: blank or scalar lookup values, one-dimensional ranges, exact matches, forward/reverse search, and optional if_not_found. Approximate/wildcard/binary modes and multi-cell return arrays are not covered by this demo.</div>
+    <div id="privacy">Your workbook stays on this device. Use Download to save a copy.</div>
+    <details id="formula-issues" data-testid="formula-issues" hidden>
+      <summary>Formula issues<span class="badge" id="formula-issue-count" data-testid="formula-issue-count">0</span></summary>
+      <ul id="formula-issue-list"></ul>
+    </details>
+    <details id="developer" data-testid="developer" hidden>
+      <summary>Developer</summary>
+      <dl>
+        <dt>Mode</dt>
+        <dd><select id="mode" data-testid="mode"></select></dd>
+        <dt>Revision</dt>
+        <dd id="dev-revision" data-testid="dev-revision"></dd>
+        <dt>Source</dt>
+        <dd id="dev-source" data-testid="dev-source"></dd>
+        <dt>Calculator</dt>
+        <dd id="dev-calculator">Forge WASM in a Web Worker; Univer is the view.</dd>
+        <dt>Formula Lab</dt>
+        <dd id="formula-support">XLOOKUP subset: blank or scalar lookup values, one-dimensional ranges, exact matches, forward/reverse search, and optional if_not_found. Approximate/wildcard/binary modes and multi-cell return arrays are refused and listed under Formula issues.</dd>
+      </dl>
+    </details>
     <div id="notices" role="status" aria-live="polite"></div>
     <div id="app"></div>
     <script type="module" src="/src/main.ts"></script>
