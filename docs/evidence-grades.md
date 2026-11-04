@@ -38,7 +38,7 @@ The schema (`catalog/formula-support.schema.json`), the Python loader
 (`workbook_forge.catalog`, through `workbook_forge.evidence`) and the Rust
 module (`workbook_forge::evidence`) enforce the same rules independently.
 
-**Current values.** All 120 implemented functions are `conformance-tested` in
+**Current values.** All 123 implemented functions are `conformance-tested` in
 both engines, so each is graded `dual_engine` and `unclassified`. None is
 `excel_observed`: no Excel receipt for a function family is committed (the
 targeted observations in [excel-observations.md](excel-observations.md) have

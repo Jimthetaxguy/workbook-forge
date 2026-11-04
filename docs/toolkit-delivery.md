@@ -63,7 +63,7 @@ integration gap is an explicit path from a named native composition into a
 workbook model. That path is a proposed next milestone, not a delivered feature.
 
 The coverage counts describe different things: 521 inventoried functions,
-120 implemented formula functions, nine directly callable primitive functions,
+123 implemented formula functions, nine directly callable primitive functions,
 ten primitive binary operators, ten XML extraction patterns and nine workbook
 agent operations. None of these counts implies complete Excel support.
 

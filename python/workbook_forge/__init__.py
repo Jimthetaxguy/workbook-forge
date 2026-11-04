@@ -2802,6 +2802,228 @@ def _random_call(
     return ArrayValue(tuple(rows))
 
 
+_MONTH_NAMES = {
+    name: index
+    for index, names in enumerate(
+        (
+            ("january", "jan"),
+            ("february", "feb"),
+            ("march", "mar"),
+            ("april", "apr"),
+            ("may",),
+            ("june", "jun"),
+            ("july", "jul"),
+            ("august", "aug"),
+            ("september", "sep", "sept"),
+            ("october", "oct"),
+            ("november", "nov"),
+            ("december", "dec"),
+        ),
+        start=1,
+    )
+    for name in names
+}
+_TIME_CHARS = frozenset("0123456789:.")
+
+
+def _ascii_digits(text: str, low: int, high: int) -> bool:
+    return low <= len(text) <= high and text.isascii() and text.isdigit()
+
+
+def _text_time(token: str, meridiem: str | None) -> int | None:
+    """Milliseconds of day for H[:MM[:SS[.fff]]] (+ AM/PM), or None."""
+    parts = token.split(":")
+    if len(parts) > 3 or (meridiem is None and len(parts) < 2):
+        return None
+    fraction = 0
+    if "." in parts[-1]:
+        if len(parts) != 3:
+            return None
+        parts[-1], digits = parts[-1].split(".", 1)
+        if not _ascii_digits(digits, 1, 3):
+            return None
+        fraction = int((digits + "00")[:3])
+    if not _ascii_digits(parts[0], 1, 2) or not all(_ascii_digits(part, 2, 2) for part in parts[1:]):
+        return None
+    hour = int(parts[0])
+    minute = int(parts[1]) if len(parts) > 1 else 0
+    second = int(parts[2]) if len(parts) > 2 else 0
+    if meridiem is None:
+        if hour > 23:
+            return None
+    else:
+        if not 1 <= hour <= 12:
+            return None
+        hour = hour % 12 + (12 if meridiem == "pm" else 0)
+    if minute > 59 or second > 59:
+        return None
+    return ((hour * 60 + minute) * 60 + second) * 1000 + fraction
+
+
+def _split_date_time(text: str) -> tuple[str, int | None] | None:
+    """Split trimmed text into its date part and optional time of day (ms).
+
+    None means the text is not an accepted date/time form.
+    """
+    rest, meridiem = text, None
+    if len(rest) >= 2 and rest[-2:].lower() in {"am", "pm"}:
+        meridiem = rest[-2:].lower()
+        rest = rest[:-2]
+        if rest.endswith(" "):
+            rest = rest[:-1]
+    start = len(rest)
+    while start > 0 and rest[start - 1] in _TIME_CHARS:
+        start -= 1
+    token = rest[start:]
+    if meridiem is None and ":" not in token:
+        return text, None
+    if not token:
+        return None
+    milliseconds = _text_time(token, meridiem)
+    if milliseconds is None:
+        return None
+    date_part = rest[:start]
+    if date_part:
+        if date_part[-1] not in " Tt":
+            return None
+        date_part = date_part[:-1]
+        if not date_part:
+            return None
+    return date_part, milliseconds
+
+
+def _text_date_serial(text: str) -> int | None:
+    """The 1900-system serial of an accepted date form, or None."""
+    lowered = text.lower()
+    year = month = day = None
+    for separator in "-/":
+        parts = lowered.split(separator)
+        if len(parts) == 3 and all(_ascii_digits(part, 1, 4) for part in parts):
+            first, second, third = parts
+            if len(first) == 4 and _ascii_digits(second, 1, 2) and _ascii_digits(third, 1, 2):
+                year, month, day = int(first), int(second), int(third)
+            elif separator == "/" and len(third) == 4 and _ascii_digits(first, 1, 2) and _ascii_digits(second, 1, 2):
+                # en-US month/day/year, accepted only when no day/month
+                # reading exists: the day is above 12 or equals the month.
+                month, day, year = int(first), int(second), int(third)
+                if not (day > 12 or day == month):
+                    return None
+            else:
+                return None
+            break
+    else:
+        words = lowered.split("-") if lowered.count("-") == 2 else lowered.split(" ")
+        if len(words) != 3:
+            return None
+        if _ascii_digits(words[0], 1, 2) and words[1] in _MONTH_NAMES and _ascii_digits(words[2], 4, 4):
+            day, month, year = int(words[0]), _MONTH_NAMES[words[1]], int(words[2])
+        elif (
+            "-" not in lowered
+            and words[0] in _MONTH_NAMES
+            and _ascii_digits(words[1].removesuffix(","), 1, 2)
+            and _ascii_digits(words[2], 4, 4)
+        ):
+            month, day, year = _MONTH_NAMES[words[0]], int(words[1].removesuffix(",")), int(words[2])
+        else:
+            return None
+    if not 1900 <= year <= 9999 or not 1 <= month <= 12 or not 1 <= day <= _days_in_month(year, month):
+        return None
+    return _excel_ymd_to_serial(year, month, day)
+
+
+def _date_time_text_call(name: str, value: object) -> object:
+    """DATEVALUE and TIMEVALUE over the documented unambiguous text forms."""
+    if isinstance(value, ErrorValue):
+        return value
+    if not isinstance(value, str):
+        return ErrorValue("#VALUE!", f"{name} requires date or time text")
+    text = value.strip(" \t")
+    if not text or len(text) > 255:
+        return ErrorValue("#VALUE!", f"{name} text is not a recognized date or time")
+    split = _split_date_time(text)
+    if split is None:
+        return ErrorValue("#VALUE!", f"{name} text is not a recognized date or time")
+    date_part, milliseconds = split
+    serial = _text_date_serial(date_part) if date_part else None
+    if date_part and serial is None:
+        return ErrorValue("#VALUE!", f"{name} text is not a recognized or unambiguous date")
+    if name == "DATEVALUE":
+        if serial is None:
+            return ErrorValue("#VALUE!", "DATEVALUE text has no date")
+        return serial
+    return (milliseconds or 0) / 86_400_000.0
+
+
+def _datedif_serial(value: object) -> int | ErrorValue:
+    if isinstance(value, ErrorValue):
+        return value
+    if isinstance(value, str):
+        text = value.strip(" \t")
+        split = _split_date_time(text) if text else None
+        serial = _text_date_serial(split[0]) if split and split[0] else None
+        if serial is not None:
+            return serial
+    number = _number(value)
+    if isinstance(number, ErrorValue):
+        return number
+    if not math.isfinite(number):
+        return ErrorValue("#NUM!", "DATEDIF date is not finite")
+    day = math.floor(number)
+    if not 0 <= day <= _MAX_EXCEL_DATE_SERIAL:
+        return ErrorValue("#NUM!", "DATEDIF date is outside the 1900 date system")
+    return int(day)
+
+
+def _datedif_call(args: tuple[object, ...], budget: _WildcardBudget) -> object:
+    for value in args:
+        if isinstance(value, ErrorValue):
+            return value
+        if isinstance(value, (_Range, ArrayValue)):
+            return ErrorValue("#VALUE!", "DATEDIF arguments must be single values")
+    start, end, unit = args
+    start, end = _datedif_serial(start), _datedif_serial(end)
+    for value in (start, end, unit):
+        if isinstance(value, ErrorValue):
+            return value
+    if not isinstance(unit, str) or unit.upper() not in {"Y", "M", "D", "MD", "YM", "YD"}:
+        return ErrorValue("#NUM!", "DATEDIF unit must be Y, M, D, MD, YM or YD")
+    if start > end:
+        return ErrorValue("#NUM!", "DATEDIF start date is after the end date")
+    unit = unit.upper()
+    if unit == "D":
+        return end - start
+    y1, m1, d1 = _excel_serial_ymd(start)
+    y2, m2, d2 = _excel_serial_ymd(end)
+    months = (y2 - y1) * 12 + (m2 - m1) - (1 if d2 < d1 else 0)
+    if unit == "M":
+        return months
+    if unit == "Y":
+        return months // 12
+    if unit == "YM":
+        return months % 12
+    if unit == "MD":
+        if d2 >= d1:
+            return d2 - d1
+        if y2 < 1900 or (y2, m2) == (1900, 1):
+            return ErrorValue("#NUM!", "DATEDIF MD anchor is before the 1900 date system")
+        # Excel's quirk: count from the start day in the month before the
+        # end month, letting DATE roll an invalid day forward (can be < 0).
+        anchor = _function("DATE", (y2, m2 - 1, d1), budget)
+        return anchor if isinstance(anchor, ErrorValue) else end - anchor
+    if y2 < 1900:
+        return ErrorValue("#NUM!", "DATEDIF YD anchor is before the 1900 date system")
+    anchor = _function("DATE", (y2, m1, d1), budget)
+    if isinstance(anchor, ErrorValue):
+        return anchor
+    if anchor > end:
+        if y2 - 1 < 1900:
+            return ErrorValue("#NUM!", "DATEDIF YD anchor is before the 1900 date system")
+        anchor = _function("DATE", (y2 - 1, m1, d1), budget)
+        if isinstance(anchor, ErrorValue):
+            return anchor
+    return end - anchor
+
+
 def _returns_reference(node: _Node) -> bool:
     """Whether this expression always returns a reference in Excel.
 
@@ -3357,6 +3579,9 @@ def _function(
         "MID": (3, 3),
         "LEN": (1, 1),
         "DATE": (3, 3),
+        "DATEDIF": (3, 3),
+        "DATEVALUE": (1, 1),
+        "TIMEVALUE": (1, 1),
         "HOUR": (1, 1),
         "MINUTE": (1, 1),
         "SECOND": (1, 1),
@@ -3497,6 +3722,12 @@ def _function(
                 "#VALUE!", f"{name} does not accept a range argument in this evaluator"
             )
         return _test_integer_parity(args[0], odd=name == "ISODD")
+    if name == "DATEDIF":
+        return _datedif_call(args, budget)
+    if name in {"DATEVALUE", "TIMEVALUE"}:
+        if isinstance(args[0], (_Range, ArrayValue)):
+            return ErrorValue("#VALUE!", f"{name} requires date or time text")
+        return _date_time_text_call(name, args[0])
     if name == "NA":
         return ErrorValue("#N/A", "NA returns the #N/A error value")
     if name == "COUNTBLANK":
