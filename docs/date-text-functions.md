@@ -52,12 +52,15 @@ ranges are checked in argument order first.
   day, Workbook Forge counts from `DATE(end year, end month − 1, start day)`
   and lets DATE roll an impossible day forward. That roll can make the count
   negative: `=DATEDIF(DATE(2015,1,31),DATE(2015,3,1),"MD")` is -2. This is a
-  Workbook Forge profile, not an Excel result.
+  Workbook Forge profile, not an Excel observation.
 - `YD`: days from the most recent anniversary of the start date (built with
   DATE, so a 29 February start rolls to 1 March in a common year).
 
 ## Evidence
 
-The units, the accepted text forms, the refusals, and the `MD`/`YD` anchoring
-are Workbook Forge profiles. They have not been spot-checked in Excel Desktop,
-and this tree has no receipt for them in `docs/excel-observations.md`.
+Microsoft's DATEDIF page documents the units, `#NUM!` when the start date is
+after the end date, and that `MD` can give a negative, zero or inaccurate
+result. The accepted text forms, the refusals, and the exact `MD`/`YD`
+anchoring are Workbook Forge profiles. They have not been spot-checked in
+Excel Desktop, and this tree has no receipt for them in
+`docs/excel-observations.md`.
