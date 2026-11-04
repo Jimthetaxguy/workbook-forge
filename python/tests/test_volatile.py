@@ -144,3 +144,45 @@ def test_canonical_calculation_takes_one_context_for_the_pass():
     calculated = canonical_calculate(workbook, context=pinned)
     assert calculated.sheet("Forecast").cells["J1"].formula.result == 46329.99999998843
     assert canonical_calculate(calculated, context=pinned).to_json() == calculated.to_json()
+
+
+def _reference_uniform(seed, key, site, draw):
+    """docs/volatile-functions.md's stream, written out independently."""
+    mask, golden = (1 << 64) - 1, 0x9E3779B97F4A7C15
+
+    def mix(z):
+        z = ((z ^ (z >> 30)) * 0xBF58476D1CE4E5B9) & mask
+        z = ((z ^ (z >> 27)) * 0x94D049BB133111EB) & mask
+        return z ^ (z >> 31)
+
+    z = 0xCBF29CE484222325
+    for byte in key.encode():
+        z = ((z ^ byte) * 0x100000001B3) & mask
+    z = mix(((seed ^ z) + golden * (site + 1)) & mask)
+    z = mix((z + golden * (draw + 1)) & mask)
+    return (z >> 11) / 2**53
+
+
+def test_random_draws_agree_across_engines_and_follow_the_documented_stream():
+    document = _document({"A1": "=RAND()", "B1": "=RANDBETWEEN(1,6)", "C1": "=SUM(RANDARRAY(2,2))", "D1": "=A1+0"})
+    seed = 20260115
+    expected_a1 = _reference_uniform(seed, "Sheet1!A1", 0, 0)
+    reports = [json.loads(engine.calculate(document)) for engine in _engines()]
+    for report in reports:
+        assert report["values"]["Sheet1!A1"] == expected_a1
+        assert report["values"]["Sheet1!D1"] == expected_a1
+        assert report["values"]["Sheet1!B1"] == 1 + int(_reference_uniform(seed, "Sheet1!B1", 0, 0) * 6)
+        assert report["values"]["Sheet1!C1"] == pytest.approx(
+            sum(_reference_uniform(seed, "Sheet1!C1", 0, draw) for draw in range(4)), abs=1e-12
+        )
+    assert all(report["values"] == reports[0]["values"] for report in reports)
+
+
+def test_a_new_seed_rerolls_and_the_same_seed_repeats():
+    session = python_engine.Session(_document({"A1": "=RAND()", "B1": "=A1*2"}))
+    first = json.loads(session.calculate(context=CalcContext(NOON, 0, 1)))["values"]
+    again = json.loads(session.calculate(context=CalcContext(NOON, 0, 1)))["values"]
+    other = json.loads(session.calculate(context=CalcContext(NOON, 0, 2)))["values"]
+    assert first == again
+    assert other["Sheet1!A1"] != first["Sheet1!A1"]
+    assert other["Sheet1!B1"] == other["Sheet1!A1"] * 2

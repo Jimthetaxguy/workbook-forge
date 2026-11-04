@@ -446,6 +446,7 @@
       "categories": [
         "volatile",
         "now-today",
+        "rand",
         "stale-cache"
       ]
     },

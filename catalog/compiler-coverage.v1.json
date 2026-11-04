@@ -6,7 +6,7 @@
   "inventory_retrieved": "2026-09-24",
   "inventory_sha256": "d4f612b6ff7697538902aaf203703b395980ee5eecbf58b26ba8e1dcb8d38e68",
   "inventory_refresh_required": true,
-  "formula_fixture_sha256": "4c79e613a342ea22069b11c8e06f52acea77a881864a311b9b3306396d6322fc",
+  "formula_fixture_sha256": "dbfd3f7e0de96a5f7feb22804d7ca304b8497548fcac1262cfe8d7fa95f77158",
   "primary_source": "https://support.microsoft.com/en-us/excel/excel-functions-alphabetical",
   "target_build": "Microsoft 365 desktop; build/channel availability unverified",
   "udfs": "arbitrary add-ins/UDFs are in long-term scope through explicit typed bindings; not enumerable built-ins",
@@ -2795,6 +2795,7 @@
         "counting-err-count-ms-example",
         "counting-err-count-ms-example-extra-argument",
         "counting-err-count-ms-example-no-numbers",
+        "randarray-truncates-dimensions",
         "sequence-count-array-consumer-profile"
       ],
       "languages": {
@@ -7431,6 +7432,7 @@
         "if-lazy-true-division",
         "if-selected-sequence-preserves-array-profile",
         "if-true-explicitly-omitted-value-profile",
+        "rand-site-is-source-order-not-evaluation-order",
         "sum-consumes-selected-if-array-profile",
         "worksheet-comparison-v4-literal-12",
         "worksheet-comparison-v4-literal-13"
@@ -12821,27 +12823,35 @@
       "category": "Math and trigonometry",
       "availability": "unknown",
       "introduced_version_marker": null,
-      "shared_case_ids": [],
+      "shared_case_ids": [
+        "rand-max-seed",
+        "rand-pinned-other-seed",
+        "rand-pinned-seed",
+        "rand-rejects-arguments",
+        "rand-site-is-source-order-not-evaluation-order",
+        "rand-stream-keyed-by-cell",
+        "rand-two-call-sites-differ"
+      ],
       "languages": {
         "python": {
           "recognized": "catalogued",
           "parsed_syntax_probe": true,
           "preserved": "generic_normal_formula_path; per_function_unverified",
           "translated_source": "not_implemented",
-          "executable": "planned",
-          "tested_against_reference": "not_established",
+          "executable": "implemented_profile",
+          "tested_against_reference": "shared_expected_fixtures",
           "excel_observed": "not_established_by_this_mapping",
-          "unsupported_now": true
+          "unsupported_now": false
         },
         "rust": {
           "recognized": "catalogued",
           "parsed_syntax_probe": true,
           "preserved": "generic_normal_formula_path; per_function_unverified",
           "translated_source": "not_implemented",
-          "executable": "planned",
-          "tested_against_reference": "not_established",
+          "executable": "implemented_profile",
+          "tested_against_reference": "shared_expected_fixtures",
           "excel_observed": "not_established_by_this_mapping",
-          "unsupported_now": true
+          "unsupported_now": false
         }
       },
       "runtime_contract": "explicit_provider_binding_planned"
@@ -12851,27 +12861,40 @@
       "category": "Math and trigonometry",
       "availability": "unknown",
       "introduced_version_marker": "2021",
-      "shared_case_ids": [],
+      "shared_case_ids": [
+        "randarray-default-one-cell",
+        "randarray-equal-whole-bounds-sum",
+        "randarray-fractional-whole-bound-is-value",
+        "randarray-min-above-max-is-value",
+        "randarray-min-max",
+        "randarray-omitted-slots-default",
+        "randarray-over-cell-cap-is-num",
+        "randarray-shape-row-major",
+        "randarray-too-many-arguments-is-value",
+        "randarray-truncates-dimensions",
+        "randarray-whole-numbers",
+        "randarray-zero-rows-is-num"
+      ],
       "languages": {
         "python": {
           "recognized": "catalogued",
           "parsed_syntax_probe": true,
           "preserved": "generic_normal_formula_path; per_function_unverified",
           "translated_source": "not_implemented",
-          "executable": "planned",
-          "tested_against_reference": "not_established",
+          "executable": "implemented_profile",
+          "tested_against_reference": "shared_expected_fixtures",
           "excel_observed": "not_established_by_this_mapping",
-          "unsupported_now": true
+          "unsupported_now": false
         },
         "rust": {
           "recognized": "catalogued",
           "parsed_syntax_probe": true,
           "preserved": "generic_normal_formula_path; per_function_unverified",
           "translated_source": "not_implemented",
-          "executable": "planned",
-          "tested_against_reference": "not_established",
+          "executable": "implemented_profile",
+          "tested_against_reference": "shared_expected_fixtures",
           "excel_observed": "not_established_by_this_mapping",
-          "unsupported_now": true
+          "unsupported_now": false
         }
       },
       "runtime_contract": "explicit_provider_binding_planned"
@@ -12881,27 +12904,39 @@
       "category": "Math and trigonometry",
       "availability": "unknown",
       "introduced_version_marker": null,
-      "shared_case_ids": [],
+      "shared_case_ids": [
+        "randbetween-die",
+        "randbetween-error-propagates",
+        "randbetween-negative-range",
+        "randbetween-no-integer-between-is-num",
+        "randbetween-numeric-text-coerces",
+        "randbetween-omitted-argument-is-value",
+        "randbetween-one-argument-is-value",
+        "randbetween-reversed-is-num",
+        "randbetween-rounds-bottom-up-top-down",
+        "randbetween-single-value",
+        "randbetween-text-is-value"
+      ],
       "languages": {
         "python": {
           "recognized": "catalogued",
           "parsed_syntax_probe": true,
           "preserved": "generic_normal_formula_path; per_function_unverified",
           "translated_source": "not_implemented",
-          "executable": "planned",
-          "tested_against_reference": "not_established",
+          "executable": "implemented_profile",
+          "tested_against_reference": "shared_expected_fixtures",
           "excel_observed": "not_established_by_this_mapping",
-          "unsupported_now": true
+          "unsupported_now": false
         },
         "rust": {
           "recognized": "catalogued",
           "parsed_syntax_probe": true,
           "preserved": "generic_normal_formula_path; per_function_unverified",
           "translated_source": "not_implemented",
-          "executable": "planned",
-          "tested_against_reference": "not_established",
+          "executable": "implemented_profile",
+          "tested_against_reference": "shared_expected_fixtures",
           "excel_observed": "not_established_by_this_mapping",
-          "unsupported_now": true
+          "unsupported_now": false
         }
       },
       "runtime_contract": "explicit_provider_binding_planned"
@@ -14925,6 +14960,7 @@
       "shared_case_ids": [
         "counting-err-sum-still-propagates-error",
         "quoted-sheet-qualified-range",
+        "randarray-equal-whole-bounds-sum",
         "sequence-100000-cell-limit-profile",
         "sequence-sum-array-consumer-profile",
         "sum-binary64-left-fold-source-profile",

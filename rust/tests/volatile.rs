@@ -168,7 +168,7 @@ fn undo_and_redo_restore_volatile_values_instead_of_rerolling() {
         pause();
         serde_json::from_str(&commands.apply_and_calculate(&s, &envelope(id, base, op))).unwrap()
     };
-    run("c1", "0", set("A1", "NOW()"));
+    run("c1", "0", set("A1", "NOW()+RAND()"));
     let calc_value = |events: &[Json], key: &str| -> f64 {
         let calc = events.iter().rev().find(|e| e["kind"] == "calc").unwrap();
         let context: CalcContext = serde_json::from_value(calc["calc_context"].clone()).unwrap();
@@ -187,4 +187,39 @@ fn undo_and_redo_restore_volatile_values_instead_of_rerolling() {
     assert_eq!(calc_value(&commands.events(), "Sheet1!A1"), after_second);
     let ndjson = commands.export_log_ndjson(s.revision(), None);
     assert_eq!(replay(&[], &ndjson).expect("replay")["ok"], true);
+}
+
+#[test]
+fn random_draws_repeat_for_a_seed_and_reroll_for_another() {
+    let s = session(&[
+        ("A1", "=RAND()"),
+        ("B1", "=A1*2"),
+        ("C1", "=RANDBETWEEN(1,6)"),
+    ]);
+    let first = s.calculate_with(1, &CalcContext::new(NOON, 0, 1));
+    let again = s.calculate_with(1, &CalcContext::new(NOON, 0, 1));
+    let other = s.calculate_with(1, &CalcContext::new(NOON, 0, 2));
+    assert_eq!(first.values, again.values);
+    let a1 = number(first.values.get("Sheet1!A1"));
+    assert!((0.0..1.0).contains(&a1));
+    assert_eq!(a1, CalcContext::new(NOON, 0, 1).uniform("Sheet1!A1", 0, 0));
+    assert_eq!(number(first.values.get("Sheet1!B1")), a1 * 2.0);
+    assert_ne!(number(other.values.get("Sheet1!A1")), a1);
+    let die = number(first.values.get("Sheet1!C1"));
+    assert!((1.0..=6.0).contains(&die) && die.fract() == 0.0);
+}
+
+#[test]
+fn worker_count_does_not_change_random_draws() {
+    let cells: Vec<(String, String)> = (1..=40)
+        .map(|row| (format!("A{row}"), "=RAND()+RANDBETWEEN(1,100)".to_string()))
+        .collect();
+    let refs: Vec<(&str, &str)> = cells
+        .iter()
+        .map(|(a, f)| (a.as_str(), f.as_str()))
+        .collect();
+    let context = CalcContext::new(NOON, 0, 99);
+    let one = session(&refs).calculate_with(1, &context);
+    let many = session(&refs).calculate_with(4, &context);
+    assert_eq!(one.values, many.values);
 }

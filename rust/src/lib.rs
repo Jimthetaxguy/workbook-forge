@@ -173,14 +173,17 @@ pub fn evaluate_result_in(
     if parser.peek().is_some() {
         return Err(FormulaError::Parse("unexpected trailing input".into()));
     }
+    let mut random_sites = HashMap::new();
+    number_random_sites(&expression, &mut random_sites);
     let env = Environment {
         cells,
         sheet_name,
         wildcard_work_remaining: Cell::new(MAX_WILDCARD_WORK),
         primitive_value_profile: false,
         context: Cell::new(context.copied()),
+        cell_key,
+        random_sites,
     };
-    let _ = cell_key;
     match eval(&expression, &env)? {
         CalcValue::Scalar(value) | CalcValue::Referenced(value) => {
             validate_text_value(&value)?;
@@ -258,9 +261,24 @@ struct Environment<'a> {
     primitive_value_profile: bool,
     /// The pass's clock and seed; captured on first use when absent.
     context: Cell<Option<CalcContext>>,
+    /// Canonical `Sheet!A1` of the formula, keying its random streams.
+    cell_key: &'a str,
+    /// RAND-family call node address -> its source-order ordinal.
+    random_sites: HashMap<usize, u64>,
 }
 
 impl Environment<'_> {
+    fn random_site(&self, expr: &Expr) -> u64 {
+        self.random_sites
+            .get(&(expr as *const Expr as usize))
+            .copied()
+            .unwrap_or(0)
+    }
+    /// The `draw`-th uniform value of the RAND-family call `expr`.
+    fn uniform(&self, expr: &Expr, draw: u64) -> f64 {
+        self.calc_context()
+            .uniform(self.cell_key, self.random_site(expr), draw)
+    }
     fn calc_context(&self) -> CalcContext {
         if let Some(context) = self.context.get() {
             return context;
@@ -268,6 +286,30 @@ impl Environment<'_> {
         let context = CalcContext::capture(0);
         self.context.set(Some(context));
         context
+    }
+}
+
+/// Number RAND-family calls in source order (pre-order is source order for a
+/// parse tree), so a draw does not depend on which branches were evaluated.
+fn number_random_sites(root: &Expr, sites: &mut HashMap<usize, u64>) {
+    // Iterative: a flat operator chain is a deep tree.
+    let mut pending = vec![root];
+    while let Some(expr) = pending.pop() {
+        match expr {
+            Expr::Unary(_, inner) => pending.push(inner),
+            Expr::Binary(_, left, right) => {
+                pending.push(right);
+                pending.push(left);
+            }
+            Expr::Call(name, args) => {
+                if volatile::RANDOM_FUNCTIONS.contains(&canonical_function_name(name)) {
+                    let next = sites.len() as u64;
+                    sites.insert(expr as *const Expr as usize, next);
+                }
+                pending.extend(args.iter().rev());
+            }
+            _ => {}
+        }
     }
 }
 
@@ -1016,6 +1058,8 @@ fn eval(expr: &Expr, env: &Environment<'_>) -> Result<CalcValue, FormulaError> {
             let name = canonical_function_name(source_name);
             match name {
                 "SEQUENCE" => sequence_call(args, env).map(CalcValue::Array),
+                "RAND" | "RANDBETWEEN" => random_call(name, expr, args, env).map(scalar),
+                "RANDARRAY" => randarray_call(expr, args, env).map(CalcValue::Array),
                 "FILTER" => filter_call(args, env),
                 "SORT" => sort_call(args, env),
                 "UNIQUE" => unique_call(args, env),
@@ -1518,6 +1562,110 @@ fn sequence_call(args: &[Expr], env: &Environment<'_>) -> Result<ArrayValue, For
             row.push(Value::Number(value));
         }
         result.push(row);
+    }
+    ArrayValue::new(result)
+}
+
+/// A scalar numeric argument: errors propagate, ranges and arrays are #VALUE!.
+fn random_number_argument(arg: &Expr, env: &Environment<'_>) -> Result<f64, FormulaError> {
+    let value = match eval(arg, env)? {
+        CalcValue::Scalar(value) | CalcValue::Referenced(value) => value,
+        CalcValue::Range(_) | CalcValue::Array(_) => return Err(FormulaError::Value),
+    };
+    let number = to_number(&value)?;
+    if number.is_finite() {
+        Ok(number)
+    } else {
+        Err(FormulaError::Num)
+    }
+}
+
+/// RAND() and RANDBETWEEN(bottom, top). RANDBETWEEN rounds bottom up and top
+/// down to integers; an empty integer range is #NUM!.
+fn random_call(
+    name: &str,
+    expr: &Expr,
+    args: &[Expr],
+    env: &Environment<'_>,
+) -> Result<Value, FormulaError> {
+    if name == "RAND" {
+        arity(name, args, 0, 0)?;
+        return Ok(Value::Number(env.uniform(expr, 0)));
+    }
+    arity(name, args, 2, 2)?;
+    if args.iter().any(|arg| matches!(arg, Expr::Missing)) {
+        return Err(FormulaError::Value);
+    }
+    let bottom = random_number_argument(&args[0], env)?.ceil();
+    let top = random_number_argument(&args[1], env)?.floor();
+    if bottom > top {
+        return Err(FormulaError::Num);
+    }
+    let span = top - bottom + 1.0;
+    let value = (bottom + (env.uniform(expr, 0) * span).floor()).min(top);
+    Ok(Value::Number(value))
+}
+
+/// RANDARRAY([rows], [columns], [min], [max], [whole_number]) with the
+/// SEQUENCE shape rules: dimensions truncate, must be positive and stay within
+/// the array cell cap. min > max is #VALUE!, and so is a fractional bound with
+/// whole_number TRUE. Values fill row-major, one draw per cell.
+fn randarray_call(
+    expr: &Expr,
+    args: &[Expr],
+    env: &Environment<'_>,
+) -> Result<ArrayValue, FormulaError> {
+    arity("RANDARRAY", args, 0, 5)?;
+    let mut numbers = [None; 4];
+    for (slot, arg) in numbers.iter_mut().zip(args) {
+        if !matches!(arg, Expr::Missing) {
+            *slot = Some(random_number_argument(arg, env)?);
+        }
+    }
+    let whole = match args.get(4) {
+        None | Some(Expr::Missing) => false,
+        Some(arg) => match eval(arg, env)? {
+            CalcValue::Scalar(value) | CalcValue::Referenced(value) => truthy(&value)?,
+            CalcValue::Range(_) | CalcValue::Array(_) => return Err(FormulaError::Value),
+        },
+    };
+    let rows_number = numbers[0].unwrap_or(1.0).trunc();
+    let columns_number = numbers[1].unwrap_or(1.0).trunc();
+    let min = numbers[2].unwrap_or(0.0);
+    let max = numbers[3].unwrap_or(1.0);
+    if rows_number <= 0.0 || columns_number <= 0.0 {
+        return Err(FormulaError::Num);
+    }
+    if rows_number > MAX_ARRAY_CELLS as f64 || columns_number > MAX_ARRAY_CELLS as f64 {
+        return Err(FormulaError::Num);
+    }
+    let rows = rows_number as usize;
+    let columns = columns_number as usize;
+    if rows
+        .checked_mul(columns)
+        .is_none_or(|count| count > MAX_ARRAY_CELLS)
+    {
+        return Err(FormulaError::Num);
+    }
+    if min > max || (whole && (min.fract() != 0.0 || max.fract() != 0.0)) {
+        return Err(FormulaError::Value);
+    }
+    let mut result = Vec::with_capacity(rows);
+    for row in 0..rows {
+        let mut values = Vec::with_capacity(columns);
+        for column in 0..columns {
+            let u = env.uniform(expr, (row * columns + column) as u64);
+            let value = if whole {
+                (min + (u * (max - min + 1.0)).floor()).min(max)
+            } else {
+                min + u * (max - min)
+            };
+            if !value.is_finite() {
+                return Err(FormulaError::Num);
+            }
+            values.push(Value::Number(value));
+        }
+        result.push(values);
     }
     ArrayValue::new(result)
 }
