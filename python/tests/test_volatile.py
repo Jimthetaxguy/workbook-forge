@@ -8,6 +8,7 @@ Expected serials are independent arithmetic: 2026-01-15 is 1900-system serial
 import importlib
 import importlib.util
 import json
+import time
 
 import pytest
 
@@ -27,6 +28,27 @@ def _engines():
     if importlib.util.find_spec("workbook_forge._native") is not None:
         engines.append(importlib.import_module("workbook_forge._native"))
     return engines
+
+
+def _both_engines():
+    # A test named for both engines must not pass on the Python engine alone.
+    if importlib.util.find_spec("workbook_forge._native") is None:
+        pytest.skip("optional Rust extension is not installed")
+    engines = _engines()
+    assert [module.__name__ for module in engines] == [
+        python_engine.__name__,
+        "workbook_forge._native",
+    ]
+    return engines
+
+
+# A few seconds: long enough for a slow call, short enough that a later constant fails.
+_WALL_CLOCK_TOLERANCE_MS = 5_000
+
+
+def _assert_near_wall_clock(now_ms):
+    wall_ms = time.time_ns() // 1_000_000
+    assert abs(now_ms - wall_ms) <= _WALL_CLOCK_TOLERANCE_MS
 
 
 def _document(cells):
@@ -75,7 +97,7 @@ def test_unpinned_capture_reads_the_clock_and_a_fresh_seed(monkeypatch):
         monkeypatch.delenv(name, raising=False)
     first, second = CalcContext.capture(-300), CalcContext.capture(-300)
     assert first.utc_offset_minutes == -300
-    assert first.now_ms > NOON
+    _assert_near_wall_clock(first.now_ms)
     assert first.seed != second.seed
     monkeypatch.setenv("FORGE_CALC_NOW", "2026-01-15T12:00:00Z")
     monkeypatch.setenv("FORGE_CALC_SEED", "9")
@@ -85,11 +107,12 @@ def test_unpinned_capture_reads_the_clock_and_a_fresh_seed(monkeypatch):
     monkeypatch.setenv("FORGE_CALC_NOW", "2026-01-15T12:00:00")
     monkeypatch.setenv("FORGE_CALC_UTC_OFFSET_MINUTES", "9999")
     captured = CalcContext.capture(-300)
-    assert captured.now_ms > NOON and captured.utc_offset_minutes == -300
+    _assert_near_wall_clock(captured.now_ms)
+    assert captured.utc_offset_minutes == -300
 
 
 def test_the_suite_pins_the_clock_for_both_engines():
-    for engine in _engines():
+    for engine in _both_engines():
         report = json.loads(engine.calculate(_document({"A1": "=NOW()", "B1": "=TODAY()"})))
         assert report["values"] == {"Sheet1!A1": 46037.5, "Sheet1!B1": 46037.0}, engine.__name__
         assert report["calc"] == {"now_ms": NOON, "utc_offset_minutes": 0, "seed": "20260115"}
@@ -107,15 +130,24 @@ def test_every_now_in_one_pass_reads_the_same_instant():
     assert evaluate("=NOW()-NOW()", context=CalcContext(NOON, 0, 1)) == 0
 
 
-def test_the_session_offset_moves_today_across_local_midnight():
+def test_the_session_offset_moves_today_across_local_midnight(monkeypatch):
+    # No context argument: the offset has to come from the session field.
+    # The instant is 1 ms before midnight at UTC-05:00, so offset -300 is
+    # still 3 November and offset 0 is 4 November.
+    monkeypatch.setenv("FORGE_CALC_NOW", str(BEFORE_MIDNIGHT))
+    monkeypatch.delenv("FORGE_CALC_UTC_OFFSET_MINUTES", raising=False)
     session = python_engine.Session(_document({"A1": "=TODAY()"}))
     session.utc_offset_minutes = -300
     assert session.utc_offset_minutes == -300
     with pytest.raises(python_engine.ToolkitError):
         session.utc_offset_minutes = 841
-    before = json.loads(session.calculate(context=CalcContext(BEFORE_MIDNIGHT, -300, 0)))
-    after = json.loads(session.calculate(context=CalcContext(BEFORE_MIDNIGHT + 1, -300, 0)))
+    before = json.loads(session.calculate())
+    assert before["calc"]["now_ms"] == BEFORE_MIDNIGHT
+    assert before["calc"]["utc_offset_minutes"] == -300
     assert before["values"]["Sheet1!A1"] == 46329.0
+    session.utc_offset_minutes = 0
+    after = json.loads(session.calculate())
+    assert after["calc"]["utc_offset_minutes"] == 0
     assert after["values"]["Sheet1!A1"] == 46330.0
 
 
@@ -167,7 +199,7 @@ def test_random_draws_agree_across_engines_and_follow_the_documented_stream():
     document = _document({"A1": "=RAND()", "B1": "=RANDBETWEEN(1,6)", "C1": "=SUM(RANDARRAY(2,2))", "D1": "=A1+0"})
     seed = 20260115
     expected_a1 = _reference_uniform(seed, "Sheet1!A1", 0, 0)
-    reports = [json.loads(engine.calculate(document)) for engine in _engines()]
+    reports = [json.loads(engine.calculate(document)) for engine in _both_engines()]
     for report in reports:
         assert report["values"]["Sheet1!A1"] == expected_a1
         assert report["values"]["Sheet1!D1"] == expected_a1
