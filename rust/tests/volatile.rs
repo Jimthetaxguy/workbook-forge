@@ -191,7 +191,11 @@ fn undo_and_redo_restore_volatile_values_instead_of_rerolling() {
 
 #[test]
 fn random_draws_repeat_for_a_seed_and_reroll_for_another() {
-    let s = session(&[("A1", "=RAND()"), ("B1", "=A1*2"), ("C1", "=RANDBETWEEN(1,6)")]);
+    let s = session(&[
+        ("A1", "=RAND()"),
+        ("B1", "=A1*2"),
+        ("C1", "=RANDBETWEEN(1,6)"),
+    ]);
     let first = s.calculate_with(1, &CalcContext::new(NOON, 0, 1));
     let again = s.calculate_with(1, &CalcContext::new(NOON, 0, 1));
     let other = s.calculate_with(1, &CalcContext::new(NOON, 0, 2));
@@ -210,7 +214,10 @@ fn worker_count_does_not_change_random_draws() {
     let cells: Vec<(String, String)> = (1..=40)
         .map(|row| (format!("A{row}"), "=RAND()+RANDBETWEEN(1,100)".to_string()))
         .collect();
-    let refs: Vec<(&str, &str)> = cells.iter().map(|(a, f)| (a.as_str(), f.as_str())).collect();
+    let refs: Vec<(&str, &str)> = cells
+        .iter()
+        .map(|(a, f)| (a.as_str(), f.as_str()))
+        .collect();
     let context = CalcContext::new(NOON, 0, 99);
     let one = session(&refs).calculate_with(1, &context);
     let many = session(&refs).calculate_with(4, &context);

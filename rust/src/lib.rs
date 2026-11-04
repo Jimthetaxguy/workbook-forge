@@ -1641,7 +1641,10 @@ fn randarray_call(
     }
     let rows = rows_number as usize;
     let columns = columns_number as usize;
-    if rows.checked_mul(columns).is_none_or(|count| count > MAX_ARRAY_CELLS) {
+    if rows
+        .checked_mul(columns)
+        .is_none_or(|count| count > MAX_ARRAY_CELLS)
+    {
         return Err(FormulaError::Num);
     }
     if min > max || (whole && (min.fract() != 0.0 || max.fract() != 0.0)) {
