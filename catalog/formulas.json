@@ -3875,7 +3875,7 @@
         "definition": "end_date minus start_date",
         "fractional_serials": "numeric serial fractions are preserved in the subtraction",
         "invalid_serial": "numeric date serials outside the evaluator's supported date range return #NUM!",
-        "text_dates": "locale-dependent DATEVALUE parsing is not implemented; numeric text follows the shared scalar number-coercion profile",
+        "text_dates": "DAYS does not parse date text. DATEVALUE parses unambiguous date text; see docs/date-text-functions.md. Numeric text follows the shared scalar number-coercion profile",
         "date_system": "assumes the 1900 date system; the workbook-specific 1904 date system is not modeled",
         "serial_60": "numeric serial 60 is accepted as the fictitious 1900-02-29 compatibility date",
         "serial_range": "the date portion must be within 0 through 2958465"
@@ -4371,7 +4371,7 @@
       "semantics": {
         "result": "hour as an integer from 0 through 23",
         "serial_input": "The time is read from the fractional day of a finite 1900-system serial; a date portion is allowed. Numeric text follows the shared locale-independent numeric coercion.",
-        "text_time_parsing": "Locale-dependent strings such as 6:45 PM are accepted by Microsoft Excel but are not parsed here; TIMEVALUE is outside this evaluator slice.",
+        "text_time_parsing": "Locale-dependent strings such as 6:45 PM are not parsed here. TIMEVALUE parses unambiguous time text; see docs/date-text-functions.md.",
         "whole_second_profile": "Fractions are converted to seconds, snapped to a whole second only within half a representable serial ULP, then truncated; this precision rule has not been spot-checked in Excel.",
         "serial_range": "this evaluator requires the floored serial to be from 0 through 2958465; negative, non-finite, or greater serials return #NUM! in this profile. Microsoft's HOUR page does not state this ceiling or error behavior, so they are unverified profile rules",
         "date_system": "assumes the 1900 date system; the workbook-specific 1904 date system is not modeled"
@@ -4854,7 +4854,7 @@
       "semantics": {
         "result": "minute as an integer from 0 through 59",
         "serial_input": "The time is read from the fractional day of a finite 1900-system serial; a date portion is allowed. Numeric text follows the shared locale-independent numeric coercion.",
-        "text_time_parsing": "Locale-dependent strings such as 6:45 PM are accepted by Microsoft Excel but are not parsed here; TIMEVALUE is outside this evaluator slice.",
+        "text_time_parsing": "Locale-dependent strings such as 6:45 PM are not parsed here. TIMEVALUE parses unambiguous time text; see docs/date-text-functions.md.",
         "whole_second_profile": "Fractions are converted to seconds, snapped to a whole second only within half a representable serial ULP, then truncated; this precision rule has not been spot-checked in Excel.",
         "serial_range": "this evaluator requires the floored serial to be from 0 through 2958465; negative, non-finite, or greater serials return #NUM! in this profile. Microsoft's MINUTE page does not state this ceiling or error behavior, so they are unverified profile rules",
         "date_system": "assumes the 1900 date system; the workbook-specific 1904 date system is not modeled"
@@ -5515,7 +5515,7 @@
       "semantics": {
         "result": "second as an integer from 0 through 59",
         "serial_input": "The time is read from the fractional day of a finite 1900-system serial; a date portion is allowed. Numeric text follows the shared locale-independent numeric coercion.",
-        "text_time_parsing": "Locale-dependent strings such as 6:45 PM are accepted by Microsoft Excel but are not parsed here; TIMEVALUE is outside this evaluator slice.",
+        "text_time_parsing": "Locale-dependent strings such as 6:45 PM are not parsed here. TIMEVALUE parses unambiguous time text; see docs/date-text-functions.md.",
         "whole_second_profile": "Fractions are converted to seconds, snapped to a whole second only within half a representable serial ULP, then truncated; this precision rule has not been spot-checked in Excel.",
         "serial_range": "this evaluator requires the floored serial to be from 0 through 2958465; negative, non-finite, or greater serials return #NUM! in this profile. Microsoft's SECOND page does not state this ceiling or error behavior, so they are unverified profile rules",
         "date_system": "assumes the 1900 date system; the workbook-specific 1904 date system is not modeled"

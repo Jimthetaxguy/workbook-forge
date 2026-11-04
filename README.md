@@ -347,14 +347,11 @@ archives are ignored; they are not part of the distributed source.
 
 ## Status
 
-Formula coverage retains the Run 24 checkpoint (commit `42126ef`); the workbook
-toolkit adds model and adapter capabilities without expanding the function count.
-
 | Measure | Count |
 |---|---|
 | Functions implemented and conformance-tested in both engines | 123 |
-| Inventory functions that are still catalog-only | 406 of 521 |
-| Shared fixture cases | 1,572 |
+| Inventory functions that are still catalog-only | 398 of 521 |
+| Shared fixture cases | 1,691 |
 | Native primitive interface | 9 functions and 10 binary operators in each language |
 | Agent workbook operations | 9 |
 | XML extraction patterns | 10 |

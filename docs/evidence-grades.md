@@ -126,7 +126,7 @@ formula cell calls a function that is:
   (`no_excel_observation`);
 - `excel_observed` but its receipt is stale or missing
   (`excel_observation_stale`, `excel_observation_missing`);
-- not in the implementation catalog at all (`uncatalogued`, for example `NOW`).
+- not in the implementation catalog at all (`uncatalogued`, for example `LET`).
 
 The error is `EvidenceGateRefused`, a `CanonicalPackageError` with code
 `evidence_insufficient`; its `refusals` list one record per cell and function

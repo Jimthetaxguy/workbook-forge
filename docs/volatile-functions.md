@@ -20,7 +20,8 @@ Each `calculate` (toolkit sessions, the canonical model, the browser command
 it, so every `NOW()` in one recalculation agrees, also across cells and worker
 threads. A toolkit calculation report carries the context as `calc` when the
 pass evaluated a volatile formula; a report without volatile formulas is
-unchanged.
+unchanged. The canonical calculation report does not carry the pass context;
+the toolkit report and the event log do.
 
 - `NOW()` = `25569 + (now_ms + utc_offset_minutes·60000) / 86400000`, the
   1900-system serial with the time of day as a fraction (25569 is

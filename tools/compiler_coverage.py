@@ -64,13 +64,18 @@ def build(binary: Path) -> dict:
                 "excel_observed": "not_established_by_this_mapping",
                 "unsupported_now": not executable,
             }
+        if name in {"NOW", "TODAY", "RAND", "RANDBETWEEN", "RANDARRAY"}:
+            # Calculated from the pass context. Not Excel's clock or generator.
+            runtime_contract = "pass_context_profile"
+        elif entry["category"] in {"Add-in and Automation", "Cube", "Web"} or name in {"RTD", "INDIRECT", "OFFSET"}:
+            runtime_contract = "explicit_provider_binding_planned"
+        else:
+            runtime_contract = "deterministic_excel_semantics_target"
         rows.append({"name": name, "category": entry["category"],
                      "availability": entry["excel_365_desktop_availability"],
                      "introduced_version_marker": entry["introduced_version_marker"],
                      "shared_case_ids": sorted(cases[name]), "languages": languages,
-                     "runtime_contract": "explicit_provider_binding_planned" if entry["category"] in
-                     {"Add-in and Automation", "Cube", "Web"} or name in {"NOW", "TODAY", "RAND", "RANDBETWEEN", "RANDARRAY", "RTD", "INDIRECT", "OFFSET"}
-                     else "deterministic_excel_semantics_target"})
+                     "runtime_contract": runtime_contract})
     assert len(rows) == inventory["function_count"]
     assert len({r["name"] for r in rows}) == len(rows)
     return {"mapping_version": 1, "target": "full custom Excel language and runtime coverage",
