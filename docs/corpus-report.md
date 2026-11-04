@@ -18,9 +18,9 @@ Excel observation and does not show Excel equivalence.
 
 | Engine | pass | refuse | untyped | crash | corrupt | lossy |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| py_toolkit | 80 | 9 | 0 | 0 | 0 | 0 |
-| py_canonical | 71 | 18 | 0 | 0 | 0 | 0 |
-| rust | 80 | 9 | 0 | 0 | 0 | 0 |
+| py_toolkit | 81 | 9 | 0 | 0 | 0 | 0 |
+| py_canonical | 72 | 18 | 0 | 0 | 0 | 0 |
+| rust | 81 | 9 | 0 | 0 | 0 | 0 |
 
 ## Matrix
 
@@ -79,6 +79,7 @@ Excel observation and does not show Excel equivalence.
 | `hb_text_edge_cases.xlsx` | handbuilt | text, text-format, quote-prefix, leading-zeros, long-strings, unicode, rtl, rich-text, whitespace, escaped-chars | pass | pass | pass |
 | `hb_threaded_comments.xlsx` | handbuilt | threaded-comments, comments, vml | pass | pass | pass |
 | `hb_timelines.xlsx` | handbuilt | timelines, pivot, extlst | pass | pass | pass |
+| `hb_volatile_formulas.xlsx` | handbuilt | volatile, now-today, stale-cache | pass | pass | pass |
 | `hb_wide_sheet.xlsx` | handbuilt | scale, wide-sheet, xfd-column | pass | pass | pass |
 | `op_1904_dates.xlsx` | openpyxl | date-1904, dates, formulas | pass | refuse `unsupported_package` | pass |
 | `op_array_formulas.xlsx` | openpyxl | array-formulas, cse | pass | refuse `array_spill_refused` | pass |

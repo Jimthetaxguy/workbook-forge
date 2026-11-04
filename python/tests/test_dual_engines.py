@@ -379,6 +379,10 @@ def test_formula_corpus_survives_workbook_model_boundaries(engine):
     seen_refusals = set()
     cases = [json.loads(line) for line in (ROOT / "fixtures/formula-cases.jsonl").read_text().splitlines()]
     for case in cases:
+        if "context" in case:
+            # Volatile cases pin a clock, seed and cell key; the engines' pass
+            # context is covered by test_volatile.py.
+            continue
         sheets = {"Data": {}}
         for reference, value in case["cells"].items():
             sheet, address = reference.rsplit("!", 1) if "!" in reference else ("Data", reference)

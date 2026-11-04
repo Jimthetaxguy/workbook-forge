@@ -25,6 +25,7 @@ from workbook_forge import (
     evaluate_result,
 )
 from workbook_forge.catalog import function_status
+from workbook_forge.volatile import CalcContext
 
 SCHEMA_VERSION = 1
 MODEL_VERSION = 1
@@ -357,13 +358,17 @@ def hydrate(document: bytes | str) -> Workbook:
     return _workbook(parsed)
 
 
-def calculate(workbook: Workbook) -> Workbook:
+def calculate(workbook: Workbook, *, context: CalcContext | None = None) -> Workbook:
     """Calculate formula results on a hydrated workbook.
 
     Bindings already name canonical cells. This does not build a second
     calculation document. Unsupported formulas are classified, not guessed.
+    ``context`` pins the clock and seed every NOW, TODAY and RAND-family call
+    in the pass reads; without one the pass captures its own (UTC).
     """
     _require_bindings(workbook)
+    if context is None:
+        context = CalcContext.capture(0)
     cells = {
         f"{sheet.name}!{address}": cell
         for sheet in workbook.sheets
@@ -447,7 +452,7 @@ def calculate(workbook: Workbook) -> Workbook:
             continue
         expression = cells[key].formula.expression if cells[key].formula is not None else ""
         _sheet_name, _address = key.rsplit("!", 1)
-        outcome = _evaluate(workbook, _sheet_name, _address, expression, results, cells, deps)
+        outcome = _evaluate(workbook, _sheet_name, _address, expression, results, cells, deps, context)
         if isinstance(outcome, Diagnostic):
             diagnostics[key] = outcome
         else:
@@ -791,6 +796,7 @@ def _evaluate(
     results: dict[str, Any],
     cells: dict[str, Cell],
     dependencies: tuple[str, ...],
+    context: CalcContext,
 ) -> Any:
     # The environment holds only the cells the formula references. Every
     # reference the evaluator can follow is static, so `_analyze` lists them
@@ -812,7 +818,7 @@ def _evaluate(
         environment[f"{dep_sheet.casefold()}!{other}"] = scalar
         if dep_sheet == sheet_name:
             environment[other] = scalar
-    outcome = evaluate_result(expression, environment, sheet_name)
+    outcome = evaluate_result(expression, environment, sheet_name, context=context, cell_key=f"{sheet_name}!{address}")
     if isinstance(outcome, ArrayValue):
         return _cell_diagnostic(
             "unsupported_formula",

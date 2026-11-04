@@ -33,6 +33,7 @@ use crate::browser_contract::{
     parse_revision,
 };
 use crate::toolkit::{Cell, Edit, Session, Sheet, WorkbookModel};
+use crate::volatile::CalcContext;
 use serde::Serialize;
 use serde_json::{Map, Value as Json, json};
 use std::collections::{BTreeMap, HashMap, HashSet};
@@ -222,6 +223,7 @@ impl EventLog {
     }
 
     /// Append the calc event an applied intent caused.
+    #[allow(clippy::too_many_arguments)]
     pub fn record_calc(
         &mut self,
         caused_by: &str,
@@ -230,6 +232,8 @@ impl EventLog {
         calc_ms: f64,
         deltas: Vec<Json>,
         diagnostics: Json,
+        context: &CalcContext,
+        base_context: Option<&CalcContext>,
     ) -> String {
         self.ensure_started(revision);
         let seq = self.events.len();
@@ -242,8 +246,47 @@ impl EventLog {
         event.insert("calc_ms".into(), json!(round3(calc_ms)));
         event.insert("deltas".into(), Json::Array(deltas));
         event.insert("diagnostics".into(), diagnostics);
+        // The clock and seed of this recalculation; replay reuses them.
+        event.insert("calc_context".into(), json!(context));
+        if let Some(base) = base_context {
+            event.insert("base_calc_context".into(), json!(base));
+        }
         self.events.push(Json::Object(event));
         event_id(seq)
+    }
+
+    /// The context an undo or redo recalculates with: the one in effect in
+    /// the state it returns to. Undoing an intent returns to the state before
+    /// it (its calc event's baseline context, else the previous calc event's);
+    /// redoing returns to the state after the original intent. `None` when
+    /// the log holds no context for that state.
+    pub fn history_context(&self, plan: &HistoryPlan) -> Option<CalcContext> {
+        let calc_of = |intent: &str| {
+            self.events.iter().position(|event| {
+                event["kind"] == "calc"
+                    && event["caused_by"]
+                        .as_array()
+                        .is_some_and(|causes| causes.iter().any(|cause| cause == intent))
+            })
+        };
+        let parse = |value: &Json| serde_json::from_value::<CalcContext>(value.clone()).ok();
+        match plan.kind {
+            HistoryKind::Redo => {
+                let at = calc_of(&plan.target_id)?;
+                parse(&self.events[at]["calc_context"])
+            }
+            HistoryKind::Undo => {
+                let at = calc_of(&plan.source_id)?;
+                if let Some(base) = parse(&self.events[at]["base_calc_context"]) {
+                    return Some(base);
+                }
+                self.events[..at]
+                    .iter()
+                    .rev()
+                    .find(|event| event["kind"] == "calc")
+                    .and_then(|event| parse(&event["calc_context"]))
+            }
+        }
     }
 
     /// Append `session.exported` and return the whole log as NDJSON.
@@ -693,28 +736,48 @@ pub fn replay_on<W: CommandTarget + ?Sized>(
                     .transpose()?
                     .unwrap_or_default();
                 let id = event["id"].as_str().unwrap_or("").to_string();
-                let has_calc = events[index + 1..]
+                let calc_event = events[index + 1..]
                     .iter()
                     .take_while(|e| e["kind"] != "intent")
-                    .any(|e| {
+                    .find(|e| {
                         e["kind"] == "calc"
                             && e["caused_by"]
                                 .as_array()
                                 .is_some_and(|c| c.iter().any(|x| x == id.as_str()))
                     });
-                if has_calc {
+                if let Some(calc_event) = calc_event {
+                    // Reuse the logged clock and seed so volatile values
+                    // recompute exactly. A log without them predates
+                    // volatile functions, whose values it cannot hold.
+                    let context_of = |key: &str| -> Result<Option<CalcContext>, ContractError> {
+                        match calc_event.get(key) {
+                            None | Some(Json::Null) => Ok(None),
+                            Some(value) => serde_json::from_value::<CalcContext>(value.clone())
+                                .map(Some)
+                                .map_err(|error| {
+                                    replay_error(
+                                        "invalid_log",
+                                        format!("event {index}: {key}: {error}"),
+                                    )
+                                }),
+                        }
+                    };
+                    let context = context_of("calc_context")?
+                        .unwrap_or_else(|| CalcContext::capture(workbook.utc_offset_minutes()));
                     let base = match cache.take() {
                         Some((at, values)) if at == expected => values,
-                        _ => workbook.calculate_report().values,
-                    };
-                    let applied = apply_calculate_diff(workbook, base, edits, expected).map_err(
-                        |(error, _)| {
-                            mismatch(
-                                event,
-                                format!("reapply failed: {}: {}", error.code, error.message),
-                            )
+                        _ => match context_of("base_calc_context")? {
+                            Some(base) => workbook.calculate_report_with(&base).values,
+                            None => workbook.calculate_report().values,
                         },
-                    )?;
+                    };
+                    let applied = apply_calculate_diff(workbook, base, edits, expected, &context)
+                        .map_err(|(error, _)| {
+                        mismatch(
+                            event,
+                            format!("reapply failed: {}: {}", error.code, error.message),
+                        )
+                    })?;
                     if applied.revision != revision {
                         return Err(mismatch(
                             event,

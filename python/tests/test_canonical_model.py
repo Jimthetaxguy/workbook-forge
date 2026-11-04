@@ -183,9 +183,10 @@ def test_operating_scenario_calculation_keeps_versions_and_classifications():
         "Forecast!B2",
     )
     assert [(item.address, item.code, item.classification, item.function) for item in calculated.diagnostics] == [
-        ("J1", "unsupported_formula", "unsupported", "NOW"),
         ("J2", "parse_error", "parse_error", None),
     ]
+    # NOW is volatile; the suite pins its clock at 2026-01-15T12:00:00Z (conftest).
+    assert calculated.sheet("Forecast").cells["J1"].formula.result == 46037.5
     jsonschema.validate(calculated.to_dict(), _schema())
     assert calculate(calculated).to_json() == calculated.to_json()
     # The authored cache is not the calculated result.
@@ -375,14 +376,14 @@ def test_imported_formula_cache_is_not_reported_as_calculated(tmp_path):
     forecast["F2"]["value"] = 111
     forecast["F2"]["data_type"] = "number"
     forecast["F2"]["provenance"] = {"origin": "imported", "source": "xl/worksheets/sheet2.xml"}
-    forecast["J1"]["value"] = 222
-    forecast["J1"]["data_type"] = "number"
-    forecast["J1"]["provenance"] = {"origin": "imported", "source": "xl/worksheets/sheet2.xml"}
+    forecast["J2"]["value"] = 222
+    forecast["J2"]["data_type"] = "number"
+    forecast["J2"]["provenance"] = {"origin": "imported", "source": "xl/worksheets/sheet2.xml"}
     raw = json.dumps(document).encode("utf-8")
     calculated = calculate(hydrate(raw))
     python_outputs = {row["name"]: row for row in calculation_report(calculated, raw)["outputs"]}
     revenue = calculated.sheet("Forecast").cells["F2"]
-    probe = calculated.sheet("Forecast").cells["J1"]
+    probe = calculated.sheet("Forecast").cells["J2"]
     assert revenue.value == 111
     assert revenue.provenance is not None and revenue.provenance.origin == "imported"
     assert revenue.formula is not None and _close(
@@ -394,8 +395,8 @@ def test_imported_formula_cache_is_not_reported_as_calculated(tmp_path):
     assert probe.value == 222
     assert probe.provenance is not None and probe.provenance.origin == "imported"
     assert probe.formula is not None and probe.formula.result is None
-    assert python_outputs["unsupported_probe"]["origin"] == "not_calculated"
-    assert python_outputs["unsupported_probe"]["result"] is None
+    assert python_outputs["parse_probe"]["origin"] == "not_calculated"
+    assert python_outputs["parse_probe"]["result"] is None
 
     planted = tmp_path / "imported-cache.workbook.json"
     planted.write_bytes(raw)
@@ -404,8 +405,8 @@ def test_imported_formula_cache_is_not_reported_as_calculated(tmp_path):
     rust_outputs = {row["name"]: row for row in _rust_path(planted, "report")["report"]["outputs"]}
     assert rust_outputs["revenue"]["origin"] == "calculated"
     assert _close(rust_outputs["revenue"]["result"], expected_revenue, tolerance)
-    assert rust_outputs["unsupported_probe"]["origin"] == "not_calculated"
-    assert rust_outputs["unsupported_probe"]["result"] is None
+    assert rust_outputs["parse_probe"]["origin"] == "not_calculated"
+    assert rust_outputs["parse_probe"]["result"] is None
 
 
 def test_calculation_report_agrees_except_for_the_engine_name():
@@ -424,8 +425,9 @@ def test_calculation_report_agrees_except_for_the_engine_name():
     assert outputs["profit"]["result"] == 1440
     assert outputs["division_error"]["origin"] == "calculated"
     assert outputs["division_error"]["result"]["error"] == "#DIV/0!"
-    assert outputs["unsupported_probe"]["origin"] == "not_calculated"
-    assert outputs["unsupported_probe"]["result"] is None
+    # The probe's NOW() is volatile and now calculates (clock pinned in conftest).
+    assert outputs["unsupported_probe"]["origin"] == "calculated"
+    assert outputs["unsupported_probe"]["result"] == 46037.5
     assert outputs["parse_probe"]["origin"] == "not_calculated"
     inputs = {row["name"]: row for row in python_report["inputs"]}
     assert inputs["unit_price"]["origin"] == "authored"

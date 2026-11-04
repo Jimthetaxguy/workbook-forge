@@ -13,6 +13,7 @@ pub mod extraction;
 pub mod model;
 pub mod primitives;
 pub mod toolkit;
+pub mod volatile;
 #[cfg(target_arch = "wasm32")]
 pub mod wasm;
 pub mod xlsx;
@@ -22,6 +23,7 @@ pub use toolkit::{
     ToolkitError, WorkbookModel, analyze_formula, calculate, copy_formula, inspect,
     operating_scenario, validate_inputs,
 };
+pub use volatile::CalcContext;
 
 use std::cell::Cell;
 use std::collections::{HashMap, HashSet};
@@ -151,6 +153,21 @@ pub fn evaluate_result(
     cells: &HashMap<String, Value>,
     sheet_name: &str,
 ) -> Result<FormulaResult, FormulaError> {
+    evaluate_result_in(formula, cells, sheet_name, None, "")
+}
+
+/// [`evaluate_result`] inside one recalculation's [`CalcContext`].
+///
+/// `cell_key` (canonical `Sheet!A1`) keys the random streams of the formula's
+/// RAND-family call sites. Without a context, a volatile function captures one
+/// on first use with [`CalcContext::capture`] at UTC.
+pub fn evaluate_result_in(
+    formula: &str,
+    cells: &HashMap<String, Value>,
+    sheet_name: &str,
+    context: Option<&CalcContext>,
+    cell_key: &str,
+) -> Result<FormulaResult, FormulaError> {
     let mut parser = Parser::new(formula)?;
     let expression = parser.parse_expression(0)?;
     if parser.peek().is_some() {
@@ -161,7 +178,9 @@ pub fn evaluate_result(
         sheet_name,
         wildcard_work_remaining: Cell::new(MAX_WILDCARD_WORK),
         primitive_value_profile: false,
+        context: Cell::new(context.copied()),
     };
+    let _ = cell_key;
     match eval(&expression, &env)? {
         CalcValue::Scalar(value) | CalcValue::Referenced(value) => {
             validate_text_value(&value)?;
@@ -237,6 +256,19 @@ struct Environment<'a> {
     sheet_name: &'a str,
     wildcard_work_remaining: Cell<usize>,
     primitive_value_profile: bool,
+    /// The pass's clock and seed; captured on first use when absent.
+    context: Cell<Option<CalcContext>>,
+}
+
+impl Environment<'_> {
+    fn calc_context(&self) -> CalcContext {
+        if let Some(context) = self.context.get() {
+            return context;
+        }
+        let context = CalcContext::capture(0);
+        self.context.set(Some(context));
+        context
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -3107,6 +3139,22 @@ fn truthy(v: &Value) -> Result<bool, FormulaError> {
 #[allow(clippy::needless_return)]
 fn eval_call(name: &str, args: &[Expr], env: &Environment<'_>) -> Result<Value, FormulaError> {
     match name {
+        "NOW" => {
+            arity(name, args, 0, 0)?;
+            let serial = env.calc_context().now_serial();
+            if !(0.0..(MAX_EXCEL_DATE_SERIAL + 1) as f64).contains(&serial) {
+                return Err(FormulaError::Num);
+            }
+            return Ok(Value::Number(serial));
+        }
+        "TODAY" => {
+            arity(name, args, 0, 0)?;
+            let serial = env.calc_context().today_serial();
+            if !(0..=MAX_EXCEL_DATE_SERIAL).contains(&serial) {
+                return Err(FormulaError::Num);
+            }
+            return Ok(Value::Number(serial as f64));
+        }
         "SUM" => {
             arity(name, args, 1, 255)?;
             let mut numbers = Vec::new();
@@ -7431,10 +7479,38 @@ mod tests {
                 .map(|(key, value)| (key.clone(), json_value(value)))
                 .collect();
             let expected = case.get("expected").expect("fixture expected result");
+            // A volatile case pins its clock and seed; `cell` keys its streams.
+            let context = case.get("context").map(|context| {
+                let number = |key: &str| {
+                    context
+                        .get(key)
+                        .and_then(JsonValue::as_f64)
+                        .unwrap_or_else(|| panic!("fixture context {key}"))
+                };
+                CalcContext::new(
+                    number("now_ms") as i64,
+                    number("utc_offset_minutes") as i32,
+                    context
+                        .get("seed")
+                        .and_then(JsonValue::as_str)
+                        .and_then(|seed| volatile::parse_seed(seed).ok())
+                        .expect("fixture context seed"),
+                )
+            });
+            let cell_key = case
+                .get("context")
+                .and_then(|context| context.get("cell"))
+                .and_then(JsonValue::as_str)
+                .unwrap_or("");
+            let actual =
+                evaluate_result_in(formula, &cells, sheet_name, context.as_ref(), cell_key);
             let actual = if expected.get("array").is_some() {
-                evaluate_result(formula, &cells, sheet_name)
+                actual
             } else {
-                evaluate(formula, &cells, sheet_name).map(FormulaResult::Scalar)
+                actual.and_then(|result| match result {
+                    FormulaResult::Scalar(value) => Ok(FormulaResult::Scalar(value)),
+                    FormulaResult::Array(_) => Err(FormulaError::Value),
+                })
             };
             assert!(
                 matches_expected(actual.clone(), expected),

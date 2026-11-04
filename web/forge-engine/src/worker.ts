@@ -10,14 +10,16 @@ import { ForgeEngine } from './engine';
 import type { RequestMessage } from './protocol';
 
 const wasm = { openXlsx, createBlankWorkbook, sha256Hex, replayJson };
+// NOW and TODAY follow the user's zone; the engine resolves its offset per command.
+const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 const ready = (async () => {
   try {
     const bytes = new Uint8Array(await (await fetch(new URL('../pkg/workbook_forge_bg.wasm', import.meta.url))).arrayBuffer());
     await init({ module_or_path: bytes });
-    return new ForgeEngine(wasm, { wasmSha256: sha256Hex(bytes) });
+    return new ForgeEngine(wasm, { wasmSha256: sha256Hex(bytes), timeZone });
   } catch {
     await init();
-    return new ForgeEngine(wasm, { wasmSha256: null });
+    return new ForgeEngine(wasm, { wasmSha256: null, timeZone });
   }
 })();
 let queue: Promise<unknown> = Promise.resolve();

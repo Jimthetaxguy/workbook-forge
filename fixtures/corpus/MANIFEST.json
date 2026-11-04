@@ -441,6 +441,14 @@
         "extlst"
       ]
     },
+    "hb_volatile_formulas.xlsx": {
+      "writer": "handbuilt",
+      "categories": [
+        "volatile",
+        "now-today",
+        "stale-cache"
+      ]
+    },
     "hb_wide_sheet.xlsx": {
       "writer": "handbuilt",
       "categories": [

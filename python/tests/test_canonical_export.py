@@ -89,9 +89,10 @@ def test_canonical_fixture_exports_and_reimports_formula_text(tmp_path):
     assert restored.sheet("Forecast").cells["F5"].formula.result == {"error": "#DIV/0!", "message": None}
     assert restored.sheet("Forecast").cells["F2"].value == 7400
     assert [(item.address, item.classification) for item in restored.diagnostics] == [
-        ("J1", "unsupported"),
         ("J2", "parse_error"),
     ]
+    # NOW is volatile and calculates; the suite pins its clock (conftest).
+    assert restored.sheet("Forecast").cells["J1"].formula.result == 46037.5
     assert imported.sheet("Forecast").cells["J1"].formula.expression == "=NOW()"
     assert imported.sheet("Forecast").cells["J2"].formula.expression == "=1+"
     assert imported.sheet("Forecast").cells["F5"].value == {"error": "#DIV/0!", "message": None}

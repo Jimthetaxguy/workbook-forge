@@ -36,6 +36,17 @@ impl WorkbookSession {
         }
     }
 
+    fn set_utc_offset_minutes(&self, minutes: i32) -> Result<(), String> {
+        match self {
+            Self::Imported(workbook) => workbook
+                .set_utc_offset_minutes(minutes)
+                .map_err(|error| error.to_string()),
+            Self::Authored(session) => session
+                .set_utc_offset_minutes(minutes)
+                .map_err(|error| error.to_string()),
+        }
+    }
+
     fn export_xlsx(&self) -> Result<Vec<u8>, String> {
         match self {
             Self::Imported(workbook) => workbook
@@ -67,6 +78,17 @@ impl BrowserWorkbook {
 
 #[wasm_bindgen]
 impl BrowserWorkbook {
+    /// Set the offset from UTC, in minutes east, that NOW and TODAY read the
+    /// clock at (default 0: UTC). The worker resolves the user's IANA zone
+    /// (`Intl.DateTimeFormat().resolvedOptions().timeZone`) to its current
+    /// offset and sets it before each command, so a DST change is followed.
+    #[wasm_bindgen(js_name = setUtcOffsetMinutes)]
+    pub fn set_utc_offset_minutes(&self, minutes: i32) -> Result<(), JsValue> {
+        self.session
+            .set_utc_offset_minutes(minutes)
+            .map_err(js_error)
+    }
+
     /// Return the current versioned workbook model as JSON for the browser UI.
     #[wasm_bindgen(js_name = snapshotJson)]
     pub fn snapshot_json(&self) -> Result<String, JsValue> {

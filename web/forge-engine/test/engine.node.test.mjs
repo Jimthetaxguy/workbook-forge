@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createBlankWorkbook, initSync, openXlsx, replayJson, sha256Hex } from '../pkg/workbook_forge.js';
-import { ForgeEngine } from '../src/engine.ts';
+import { ForgeEngine, utcOffsetMinutes } from '../src/engine.ts';
 
 const wasmBytes = readFileSync(new URL('../pkg/workbook_forge_bg.wasm', import.meta.url));
 initSync({ module: wasmBytes });
@@ -355,4 +355,35 @@ test('a Compatibility Version 3 workbook reads values and refuses formula edits 
   assert.equal(exported.error.refusal, 'compat_version_3');
   assert.ok(exported.error.message.includes('Compatibility Version 3'), exported.error.message);
   assert.equal(call(engine, 'snapshot').value.sheets[0].cells.B1.formula, 'LEN(A1)');
+});
+
+test('NOW and TODAY follow the host time zone; calc events log the pass context', () => {
+  // 2026-11-04T04:59:59Z is 23:59:59 on Nov 3 in New York (EST, UTC-05:00).
+  assert.equal(utcOffsetMinutes('America/New_York', Date.UTC(2026, 10, 4, 4, 59, 59)), -300);
+  assert.equal(utcOffsetMinutes('America/New_York', Date.UTC(2026, 6, 1, 12)), -240);
+  assert.equal(utcOffsetMinutes('Asia/Kolkata', Date.UTC(2026, 0, 15, 12)), 330);
+  assert.equal(utcOffsetMinutes('UTC', Date.UTC(2026, 0, 15, 12)), 0);
+  assert.equal(utcOffsetMinutes('Not/AZone', Date.UTC(2026, 0, 15, 12)), 0);
+
+  const engine = new ForgeEngine({ openXlsx, createBlankWorkbook }, { timeZone: 'Asia/Kolkata' });
+  call(engine, 'newWorkbook', { sheetName: 'Sheet1' });
+  const envelope = {
+    v: 1, command_id: 'now-1', client_id: 'c', client_seq: '1', idempotency_key: null,
+    actor: { kind: 'human', id: 'ui', on_behalf_of: null }, base_revision: '0', mode: 'strict', preconditions: [],
+    op: { type: 'set_cells', edits: [
+      { sheet: 'Sheet1', address: 'A1', formula: 'NOW()' },
+      { sheet: 'Sheet1', address: 'B1', formula: 'TODAY()' },
+      { sheet: 'Sheet1', address: 'C1', formula: 'A1-INT(A1)' },
+    ] },
+  };
+  const before = Date.now();
+  assert.equal(call(engine, 'applyAndCalculate', { envelope }).ok, true);
+  const after = Date.now();
+  const values = call(engine, 'calculate').value.values;
+  const serial = (ms) => 25569 + (ms + 330 * 60000) / 86400000;
+  assert.ok(values['Sheet1!A1'] >= serial(before - 1) && values['Sheet1!A1'] <= serial(after + 1000));
+  assert.equal(values['Sheet1!B1'], Math.floor(values['Sheet1!A1']));
+  const calc = call(engine, 'log', { fromSeq: 0, limit: 100 }).value.events.find((event) => event.kind === 'calc');
+  assert.equal(calc.calc_context.utc_offset_minutes, 330);
+  assert.equal(typeof calc.calc_context.seed, 'string');
 });

@@ -384,11 +384,10 @@ def test_strict_export_refuses_semantic_rule_without_excel_observation(tmp_path)
     assert isinstance(error, CanonicalPackageError)
     assert error.code == "evidence_insufficient"
     by_function = {item.function: item for item in error.refusals}
-    # SUM, IF and NA are catalogued as dual_engine/unclassified; NOW (volatile)
-    # has no implementation entry at all.
-    assert {by_function[name].reason for name in ("SUM", "IF", "NA")} == {"no_excel_observation"}
-    assert {by_function[name].evidence_grade for name in ("SUM", "IF", "NA")} == {"dual_engine"}
-    assert by_function["NOW"].reason == "uncatalogued"
+    # SUM, IF, NA and the volatile NOW are catalogued as dual_engine/unclassified.
+    names = ("SUM", "IF", "NA", "NOW")
+    assert {by_function[name].reason for name in names} == {"no_excel_observation"}
+    assert {by_function[name].evidence_grade for name in names} == {"dual_engine"}
     assert {item.profile_class for item in error.refusals} == {"unclassified"}
     assert "Forecast!F2" in error.message
     assert not target.exists()

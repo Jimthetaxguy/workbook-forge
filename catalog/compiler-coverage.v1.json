@@ -6,7 +6,7 @@
   "inventory_retrieved": "2026-09-24",
   "inventory_sha256": "d4f612b6ff7697538902aaf203703b395980ee5eecbf58b26ba8e1dcb8d38e68",
   "inventory_refresh_required": true,
-  "formula_fixture_sha256": "681e095111e1ad0ea9c11170047737978c0f1cbd6932a7f011019f43ecbee6f2",
+  "formula_fixture_sha256": "4c79e613a342ea22069b11c8e06f52acea77a881864a311b9b3306396d6322fc",
   "primary_source": "https://support.microsoft.com/en-us/excel/excel-functions-alphabetical",
   "target_build": "Microsoft 365 desktop; build/channel availability unverified",
   "udfs": "arbitrary add-ins/UDFs are in long-term scope through explicit typed bindings; not enumerable built-ins",
@@ -3875,6 +3875,7 @@
         "networkdays-subtracts-holiday",
         "networkdays-unique-weekday-holidays-only",
         "second-date-time-high-boundary",
+        "today-minus-date",
         "weekday-fractional-selector-truncates-profile",
         "weekday-ignores-time-fraction",
         "weekday-invalid-selector-four",
@@ -7270,7 +7271,8 @@
         "hour-rejects-range-input",
         "hour-rejects-underscore-numeric-text",
         "hour-time-function-last-second",
-        "hour-time-text-locale-gap"
+        "hour-time-text-locale-gap",
+        "now-session-offset-minus-five-hours-hour"
       ],
       "languages": {
         "python": {
@@ -8460,7 +8462,8 @@
         "int-ignores-binary-noise-in-a-product",
         "int-negative-ignores-binary-noise-in-a-product",
         "int-of-cents-gives-back-the-amount",
-        "int-takes-the-value-next-to-one-as-one"
+        "int-takes-the-value-next-to-one-as-one",
+        "now-one-ms-before-local-midnight-is-same-day"
       ],
       "languages": {
         "python": {
@@ -11254,27 +11257,35 @@
       "category": "Date and time",
       "availability": "unknown",
       "introduced_version_marker": null,
-      "shared_case_ids": [],
+      "shared_case_ids": [
+        "now-before-1900-is-num",
+        "now-minus-now-one-pass",
+        "now-one-ms-before-local-midnight-is-same-day",
+        "now-pinned-utc-noon",
+        "now-rejects-arguments",
+        "now-session-offset-minus-five-hours-hour",
+        "now-session-offset-plus-six-hours"
+      ],
       "languages": {
         "python": {
           "recognized": "catalogued",
           "parsed_syntax_probe": true,
           "preserved": "generic_normal_formula_path; per_function_unverified",
           "translated_source": "not_implemented",
-          "executable": "planned",
-          "tested_against_reference": "not_established",
+          "executable": "implemented_profile",
+          "tested_against_reference": "shared_expected_fixtures",
           "excel_observed": "not_established_by_this_mapping",
-          "unsupported_now": true
+          "unsupported_now": false
         },
         "rust": {
           "recognized": "catalogued",
           "parsed_syntax_probe": true,
           "preserved": "generic_normal_formula_path; per_function_unverified",
           "translated_source": "not_implemented",
-          "executable": "planned",
-          "tested_against_reference": "not_established",
+          "executable": "implemented_profile",
+          "tested_against_reference": "shared_expected_fixtures",
           "excel_observed": "not_established_by_this_mapping",
-          "unsupported_now": true
+          "unsupported_now": false
         }
       },
       "runtime_contract": "explicit_provider_binding_planned"
@@ -16017,27 +16028,35 @@
       "category": "Date and time",
       "availability": "unknown",
       "introduced_version_marker": null,
-      "shared_case_ids": [],
+      "shared_case_ids": [
+        "today-at-local-midnight",
+        "today-minus-date",
+        "today-one-ms-before-local-midnight",
+        "today-pinned-utc-noon",
+        "today-rejects-arguments",
+        "today-same-instant-utc",
+        "year-of-today"
+      ],
       "languages": {
         "python": {
           "recognized": "catalogued",
           "parsed_syntax_probe": true,
           "preserved": "generic_normal_formula_path; per_function_unverified",
           "translated_source": "not_implemented",
-          "executable": "planned",
-          "tested_against_reference": "not_established",
+          "executable": "implemented_profile",
+          "tested_against_reference": "shared_expected_fixtures",
           "excel_observed": "not_established_by_this_mapping",
-          "unsupported_now": true
+          "unsupported_now": false
         },
         "rust": {
           "recognized": "catalogued",
           "parsed_syntax_probe": true,
           "preserved": "generic_normal_formula_path; per_function_unverified",
           "translated_source": "not_implemented",
-          "executable": "planned",
-          "tested_against_reference": "not_established",
+          "executable": "implemented_profile",
+          "tested_against_reference": "shared_expected_fixtures",
           "excel_observed": "not_established_by_this_mapping",
-          "unsupported_now": true
+          "unsupported_now": false
         }
       },
       "runtime_contract": "explicit_provider_binding_planned"
@@ -17455,6 +17474,7 @@
         "excel-1900-year-sixty",
         "excel-negative-date-serial",
         "year",
+        "year-of-today",
         "year-serial-zero"
       ],
       "languages": {

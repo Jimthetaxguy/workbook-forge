@@ -5,7 +5,8 @@
 //! `model_version` is the semantic interpretation.
 
 use crate::toolkit::{Expression, SUPPORTED_FUNCTIONS};
-use crate::{FormulaError, FormulaResult, Value, evaluate_result};
+use crate::volatile::CalcContext;
+use crate::{FormulaError, FormulaResult, Value, evaluate_result_in};
 use serde::de::{self, DeserializeSeed, Deserializer, MapAccess, SeqAccess, Visitor};
 use serde_json::{Map, Number, Value as JsonValue, json};
 use std::collections::{BTreeMap, BTreeSet, HashMap};
@@ -208,6 +209,12 @@ pub fn hydrate(bytes: &[u8]) -> Result<Workbook, ModelError> {
 /// Bindings already name canonical cells. Unsupported formulas are classified
 /// and are not evaluated. Imported cell values are not used as formula results.
 pub fn calculate(workbook: &Workbook) -> Result<Workbook, ModelError> {
+    calculate_with(workbook, &CalcContext::capture(0))
+}
+
+/// [`calculate`] with a pinned clock and seed for NOW, TODAY and the RAND
+/// family. Every formula in the pass reads this one context.
+pub fn calculate_with(workbook: &Workbook, context: &CalcContext) -> Result<Workbook, ModelError> {
     require_bindings(workbook)?;
     let mut cells: BTreeMap<String, Cell> = BTreeMap::new();
     let mut sheet_of: BTreeMap<String, String> = BTreeMap::new();
@@ -305,7 +312,7 @@ pub fn calculate(workbook: &Workbook) -> Result<Workbook, ModelError> {
             .as_ref()
             .map(|formula| formula.expression.as_str())
             .unwrap_or("");
-        match evaluate(workbook, sheet, address, expression, &results) {
+        match evaluate(workbook, sheet, address, expression, &results, context) {
             Outcome::Diagnostic(diagnostic) => {
                 diagnostics.insert(key.clone(), diagnostic);
             }
@@ -560,6 +567,7 @@ fn evaluate(
     address: &str,
     expression: &str,
     results: &BTreeMap<String, Scalar>,
+    context: &CalcContext,
 ) -> Outcome {
     let mut environment = HashMap::new();
     for sheet in &workbook.sheets {
@@ -580,7 +588,14 @@ fn evaluate(
             }
         }
     }
-    match evaluate_result(expression, &environment, sheet_name) {
+    let cell_key = format!("{sheet_name}!{address}");
+    match evaluate_result_in(
+        expression,
+        &environment,
+        sheet_name,
+        Some(context),
+        &cell_key,
+    ) {
         Ok(FormulaResult::Scalar(value)) => match value {
             Value::Number(number) => scalar_from_f64(number),
             Value::Text(text) => Outcome::Value(Scalar::Text(text)),
@@ -2097,7 +2112,10 @@ mod tests {
 
     #[test]
     fn operating_scenario_values_errors_and_classifications() {
-        let calculated = calculate(&hydrate(&fixture()).unwrap()).unwrap();
+        // 2026-01-15T12:00:00Z: NOW (Forecast!J1) is volatile, so the pass
+        // pins its clock to compare two calculations.
+        let context = CalcContext::new(1_768_478_400_000, 0, 7);
+        let calculated = calculate_with(&hydrate(&fixture()).unwrap(), &context).unwrap();
         assert_eq!(calculated.schema_version, 1);
         assert_eq!(calculated.model_version, 1);
         assert_eq!(result_number(&calculated, "Forecast", "F2"), 7400.0);
@@ -2157,15 +2175,9 @@ mod tests {
                 )
             })
             .collect();
-        assert_eq!(
-            codes,
-            vec![
-                ("J1", "unsupported_formula", "unsupported"),
-                ("J2", "parse_error", "parse_error"),
-            ]
-        );
-        assert_eq!(calculated.diagnostics[0].function.as_deref(), Some("NOW"));
-        let again = calculate(&calculated).unwrap();
+        assert_eq!(codes, vec![("J2", "parse_error", "parse_error")]);
+        assert_eq!(result_number(&calculated, "Forecast", "J1"), 46_037.5);
+        let again = calculate_with(&calculated, &context).unwrap();
         assert_eq!(again.to_json().unwrap(), calculated.to_json().unwrap());
     }
 
