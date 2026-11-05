@@ -23,7 +23,7 @@ A category is a shape or feature a corpus file exercises; one file has several.
 This is a robustness statement about Workbook Forge's readers and writers, not an
 Excel observation.
 
-## Supported (54)
+## Supported (55)
 
 | Category | Files |
 | --- | ---: |
@@ -65,6 +65,7 @@ Excel observation.
 | phonetic | 1 |
 | quote-prefix | 2 |
 | quoting | 1 |
+| r1c1-looking-names | 1 |
 | rand | 1 |
 | range-list | 2 |
 | ref-error-names | 1 |
@@ -92,7 +93,7 @@ Formulas a full calculation does not cover in these categories:
 - **new-functions**: `hb_flatten_has_functions.xlsx` reports `unsupported_formula` for HAS, HASANY, HASALL, and FLATTEN.
 - **sheet-name-spaces**: `hb_3d_references.xlsx` reports `unsupported_formula` for its 3D spans and for the name `FirstQuarter`, whose target is a 3D span. The other files in this category have no calculation diagnostics.
 
-## Preserved only (53)
+## Preserved only (52)
 
 | Category | Files | What is kept |
 | --- | ---: | --- |
@@ -137,7 +138,6 @@ Formulas a full calculation does not cover in these categories:
 | print-titles | 1 | Print titles are kept. |
 | protection | 1 | Sheet and workbook protection is kept; hashes are never checked. |
 | query-table | 1 | Query-table parts are kept; never refreshed. |
-| r1c1-looking-names | 1 | The names are kept and calculated. `XFE1` is shaped like a cell past column XFD, so `XFE1*2` stays `invalid_reference`; the other three formulas calculate through their names. |
 | scatter-chart | 1 | Chart parts are kept byte-for-byte; inspect reports type, anchor and series refs. |
 | slicers | 1 | Slicer and slicer-cache parts are kept; never applied. |
 | sparklines | 1 | x14 sparkline groups are kept in the worksheet extLst. |

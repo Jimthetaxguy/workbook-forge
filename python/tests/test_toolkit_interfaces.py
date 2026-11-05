@@ -14,7 +14,7 @@ def test_capability_map_distinguishes_backends_and_preserved_content():
     assert set(catalog["backends"]) == {"python-reference", "python", "rust", "python-native", "python-ooxml", "rust-ooxml"}
     primitives = {entry["id"]: entry for entry in catalog["primitives"]}
     assert primitives["arrays"]["calculate"] and not primitives["arrays"]["export"]
-    assert primitives["names-and-tables"]["read"] and not primitives["names-and-tables"]["calculate"]
+    assert primitives["names-and-tables"]["read"] and primitives["names-and-tables"]["calculate"]
 
 
 def test_python_expression_builder_preserves_copy_anchors():

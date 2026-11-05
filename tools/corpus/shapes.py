@@ -697,7 +697,7 @@ def defined_names_calculated():
     """Defined names the engines calculate: workbook- and sheet-scoped names
     (the sheet scope wins on its sheet), a constant, formula names, a chain, a
     range, a cycle, a #REF! target, an unknown name, and hidden and built-in
-    names (kept, never calculated). Caches are Workbook Forge's arithmetic."""
+    names (kept, never calculated)."""
     inputs = ('<row r="1"><c r="A1"><v>0.5</v></c><c r="B1"><v>10</v></c></row>'
               '<row r="2"><c r="A2"><v>1000</v></c><c r="B2"><v>20</v></c></row>'
               '<row r="3"><c r="B3"><v>30</v></c></row>')

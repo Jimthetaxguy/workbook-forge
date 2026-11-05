@@ -261,7 +261,9 @@ placeholder cells, and the UI has no special path for it.
 
 `web/univer-spike/tests/acceptance.spec.ts`, headless Chromium (Playwright
 1.64.1 driving system Chromium 156), production build served statically:
-**15 passed** (2026-10-27).
+**15 passed** on 2026-10-27. That figure is the snapshot from that day's run.
+The suite in this file now defines 19 tests, including the toolbar test and
+the formula-issues test.
 
 For `not-execute` and `load-only`:
 

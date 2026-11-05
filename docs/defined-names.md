@@ -57,9 +57,8 @@ of what it refers to, as if that text stood there in parentheses. So:
 | a 3D span (`Jan:Mar!$B$2`) | `unsupported_formula`, the shared 3D message |
 | an array constant, an empty or malformed target | `parse_error`: `defined name X could not be parsed` |
 
-Excel resolves a relative reference inside a name against the cell that uses
-the name. Workbook Forge refuses those names with a typed code rather than
-guess the anchor; they are uncommon in workbooks and easy to misread.
+Workbook Forge refuses those names with a typed code rather than guess the
+anchor; they are uncommon in workbooks and easy to misread.
 
 A name cannot be a range endpoint here (`SUM(Rate:Principal)`, `A1:Rate`): both
 parsers report `parse_error`. One formula may expand at most 256 names,
