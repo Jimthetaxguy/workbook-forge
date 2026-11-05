@@ -1,6 +1,7 @@
 //! The shared defined-name fixture (`fixtures/defined-names.v1.json`) in the
 //! Rust toolkit session and the Rust canonical model. Python runs the same
-//! fixture in `python/tests/test_defined_names.py`.
+//! fixture in `python/tests/test_defined_names.py`. The agent test imports
+//! `fixtures/corpus/op_defined_names.xlsx`.
 
 use serde_json::{Map, Value as Json, json};
 use std::collections::BTreeMap;
@@ -365,4 +366,131 @@ fn imported_names_calculate_and_export_keeps_workbook_xml() {
         text[start..end].to_string()
     };
     assert_eq!(workbook_xml(&exported), workbook_xml(&bytes));
+}
+
+#[test]
+fn the_agent_calculates_an_imported_defined_name() {
+    use workbook_forge::agent::AgentWorkbook;
+    use workbook_forge::xlsx::import_xlsx_bytes;
+    use workbook_forge::{CellAddress, InputBinding};
+
+    let path = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../fixtures/corpus/op_defined_names.xlsx"
+    );
+    let bytes = std::fs::read(path).unwrap();
+    let outputs = BTreeMap::from([("interest".into(), CellAddress::new("Calc", "A1"))]);
+    let root = std::env::temp_dir().join(format!(
+        "workbook-forge-agent-names-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    std::fs::create_dir_all(&root).unwrap();
+    let agent = AgentWorkbook::from_imported(
+        import_xlsx_bytes(&bytes, BTreeMap::new(), outputs.clone()).unwrap(),
+        &root,
+    )
+    .unwrap();
+    let call = |operation: &str, arguments: Json| {
+        agent.handle(json!({
+            "id": "names",
+            "operation": operation,
+            "arguments": arguments
+        }))
+    };
+
+    let calculate = call("calculate", json!({}));
+    assert_eq!(calculate["ok"], true, "{calculate}");
+    assert_eq!(calculate["result"]["diagnostic_count"], 0);
+    assert!(same(
+        &calculate["result"]["outputs"]["interest"],
+        &json!(120.0)
+    ));
+
+    let read = call("read", json!({"output": "interest"}));
+    assert_eq!(read["ok"], true, "{read}");
+    let dependencies = |page: &Json| {
+        page["result"]["cells"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|cell| cell["sheet"] == "Calc" && cell["address"] == "A1")
+            .unwrap()["dependencies"]
+            .as_array()
+            .unwrap()
+            .clone()
+    };
+    let read_dependencies = dependencies(&read);
+    assert!(read_dependencies.iter().any(|item| item == "Inputs!A1"));
+    assert!(read_dependencies.iter().any(|item| item == "Inputs!A2"));
+
+    let explain = call("explain", json!({"output": "interest"}));
+    assert_eq!(explain["ok"], true, "{explain}");
+    assert!(same(&explain["result"]["value"], &json!(120.0)));
+    let explain_dependencies = dependencies(&explain);
+    assert!(explain_dependencies.iter().any(|item| item == "Inputs!A1"));
+    assert!(explain_dependencies.iter().any(|item| item == "Inputs!A2"));
+
+    let exported = call(
+        "export",
+        json!({"filename": "named.xlsx", "expected_revision": 0}),
+    );
+    assert_eq!(exported["ok"], true, "{exported}");
+    assert!(exported["result"]["bytes"].as_u64().unwrap() > 0);
+
+    let edit = call(
+        "edit",
+        json!({
+            "edits": [{"sheet": "Calc", "address": "A1", "formula": "=Rate"}],
+            "expected_revision": 0
+        }),
+    );
+    assert_eq!(edit["ok"], true, "{edit}");
+    let calculated = call("calculate", json!({}));
+    assert_eq!(calculated["ok"], true, "{calculated}");
+    assert_eq!(calculated["result"]["diagnostic_count"], 0);
+    assert!(same(
+        &calculated["result"]["outputs"]["interest"],
+        &json!(0.08)
+    ));
+
+    // A bound input is a separate preservation check on export, so preview
+    // uses its own import. Principal is Inputs!A2 (1500); Rate stays 0.08.
+    let preview_agent = AgentWorkbook::from_imported(
+        import_xlsx_bytes(
+            &bytes,
+            BTreeMap::from([(
+                "principal".into(),
+                InputBinding::number("Inputs", "A2", None, None),
+            )]),
+            outputs,
+        )
+        .unwrap(),
+        &root,
+    )
+    .unwrap();
+    let preview = preview_agent.handle(json!({
+        "id": "names",
+        "operation": "preview_inputs",
+        "arguments": {"values": {"principal": 1000}, "expected_revision": 0}
+    }));
+    assert_eq!(preview["ok"], true, "{preview}");
+    assert_eq!(preview["result"]["applied"], false);
+    assert_eq!(preview["result"]["before"]["diagnostic_count"], 0);
+    assert_eq!(preview["result"]["after"]["diagnostic_count"], 0);
+    assert!(same(
+        &preview["result"]["before"]["outputs"]["interest"],
+        &json!(120.0)
+    ));
+    assert!(same(
+        &preview["result"]["after"]["outputs"]["interest"],
+        &json!(80.0)
+    ));
+    assert_eq!(
+        preview_agent.handle(json!({"id": "names", "operation": "describe", "arguments": {}}))["revision"],
+        0
+    );
 }

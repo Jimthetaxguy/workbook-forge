@@ -159,7 +159,9 @@ impl AgentWorkbook {
                     "source":{"kind":if matches!(workbook,OwnedWorkbook::Imported(_)){"xlsx"}else{"authored"}}
                 }))
             }
-            "read" | "explain" => read_page(model, arguments, operation == "explain"),
+            "read" | "explain" => {
+                read_page(model, workbook.names(), arguments, operation == "explain")
+            }
             "calculate" => {
                 only(arguments, &["outputs", "workers"])?;
                 let workers = integer(arguments, "workers", Some(1), "invalid_request")?;
@@ -167,10 +169,11 @@ impl AgentWorkbook {
                     return Err(error("invalid_request", "workers must be between 1 and 8"));
                 }
                 let selected = select_outputs(model, arguments.get("outputs"))?;
-                Ok(compact_report(&toolkit::calculate(
-                    &selected,
+                Ok(compact_report(&calculate_with_names(
+                    selected,
+                    workbook.names(),
                     workers as usize,
-                )))
+                )?))
             }
             "preview_inputs" | "set_inputs" => {
                 let preview = operation == "preview_inputs";
@@ -193,8 +196,11 @@ impl AgentWorkbook {
                         let (sheet,address) = resolve(model, &edit.sheet, &edit.address).expect("validated input binding");
                         json!({"sheet":sheet.name,"address":address,"before":sheet.cells.get(&address).map(|cell| &cell.value).unwrap_or(&CellValue::Blank),"after":edit.value})
                     }).collect::<Vec<_>>();
+                    let names = workbook.names();
+                    let before_report = calculate_with_names(before, names.clone(), 1)?;
+                    let after_report = calculate_with_names(after, names, 1)?;
                     Ok(
-                        json!({"applied":false,"base_revision":model.revision,"proposed_revision":candidate.revision,"changes":changes,"before":compact_report(&toolkit::calculate(&before,1)),"after":compact_report(&toolkit::calculate(&after,1))}),
+                        json!({"applied":false,"base_revision":model.revision,"proposed_revision":candidate.revision,"changes":changes,"before":compact_report(&before_report),"after":compact_report(&after_report)}),
                     )
                 } else {
                     self.commit(
@@ -274,7 +280,10 @@ impl AgentWorkbook {
                 }
                 // No file is created if any required result is unavailable.
                 let selected = select_outputs(model, None)?;
-                if !toolkit::calculate(&selected, 1).diagnostics.is_empty() {
+                if !calculate_with_names(selected, workbook.names(), 1)?
+                    .diagnostics
+                    .is_empty()
+                {
                     return Err(error("export_error", "required calculation is unsupported"));
                 }
                 let path = match workbook {
@@ -506,7 +515,21 @@ fn label(model: &WorkbookModel, sheet: &str, address: &str) -> Result<String> {
     let (sheet, address) = resolve(model, sheet, address)?;
     Ok(format!("{}!{}", sheet.name, address))
 }
-fn read_page(model: &WorkbookModel, arguments: &Arguments, explain: bool) -> Result<Value> {
+/// Calculate a detached copy with the workbook's defined-name table.
+/// The copy itself does not carry the table.
+fn calculate_with_names(
+    model: WorkbookModel,
+    names: Option<crate::DefinedNames>,
+    workers: usize,
+) -> Result<CalculationReport> {
+    Ok(Session::with_names(model, names)?.calculate(workers))
+}
+fn read_page(
+    model: &WorkbookModel,
+    names: Option<crate::DefinedNames>,
+    arguments: &Arguments,
+    explain: bool,
+) -> Result<Value> {
     only(
         arguments,
         if explain {
@@ -537,7 +560,7 @@ fn read_page(model: &WorkbookModel, arguments: &Arguments, explain: bool) -> Res
     if arguments.contains_key("range") && !arguments.contains_key("sheet") {
         return Err(error("invalid_request", "range requires sheet"));
     }
-    let inspection = toolkit::inspect(model);
+    let inspection = toolkit::inspect_with_names(model, names.as_ref());
     let dependencies = inspection.get("dependencies").and_then(Value::as_object);
     let mut selected = BTreeSet::new();
     let mut report = None;
@@ -565,7 +588,7 @@ fn read_page(model: &WorkbookModel, arguments: &Arguments, explain: bool) -> Res
         }
         if explain {
             let selected_model = select_outputs(model, Some(&json!([output])))?;
-            report = Some(toolkit::calculate(&selected_model, 1));
+            report = Some(calculate_with_names(selected_model, names, 1)?);
         }
     } else {
         let sheet_name = text(arguments, "sheet", "invalid_reference")?;
