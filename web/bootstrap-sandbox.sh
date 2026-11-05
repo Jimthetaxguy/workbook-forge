@@ -17,9 +17,14 @@ fi
 pinned="$(grep -A1 '^name = "wasm-bindgen"$' "$ROOT/rust/Cargo.lock" | sed -n 's/^version = "\(.*\)"/\1/p')"
 if [ "$(wasm-bindgen --version 2>/dev/null | awk '{print $2}')" != "$pinned" ]; then
   arch="$(uname -m)"
+  # The published assets are an x86_64 musl build and an aarch64 gnu build.
+  case "$arch" in
+    x86_64) triple=x86_64-unknown-linux-musl ;;
+    *) triple="$arch-unknown-linux-gnu" ;;
+  esac
   tmp="$(mktemp -d)"
   curl -sSLf -o "$tmp/wb.tgz" \
-    "https://github.com/wasm-bindgen/wasm-bindgen/releases/download/$pinned/wasm-bindgen-$pinned-$arch-unknown-linux-gnu.tar.gz"
+    "https://github.com/wasm-bindgen/wasm-bindgen/releases/download/$pinned/wasm-bindgen-$pinned-$triple.tar.gz"
   tar xzf "$tmp/wb.tgz" -C "$tmp"
   mkdir -p "$HOME/.local/bin"
   cp "$tmp"/wasm-bindgen-"$pinned"-*/wasm-bindgen* "$HOME/.local/bin/"

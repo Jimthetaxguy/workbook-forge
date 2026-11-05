@@ -100,8 +100,7 @@ export interface Calculation {
   diagnostics: unknown[];
   /**
    * The pass's clock and seed when that pass evaluated a volatile function.
-   * Same object as a calc event's `calc_context`. Absent when the pass
-   * evaluated none.
+   * Absent when the pass evaluated none.
    */
   calc?: CalcContext;
 }
