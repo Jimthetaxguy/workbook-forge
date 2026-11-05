@@ -118,11 +118,23 @@ fn analyze_formula(formula: &str) -> PyResult<String> {
     encode(&toolkit::analyze_formula(formula).map_err(invalid)?)
 }
 
+/// `names_json` is the workbook's defined-name table, the same JSON array
+/// `Session` takes. Without it, a name in a formula is refused as unsupported.
 #[pyfunction]
-#[pyo3(signature = (model_json, workers=1))]
-fn calculate(py: Python<'_>, model_json: &str, workers: usize) -> PyResult<String> {
+#[pyo3(signature = (model_json, workers=1, names_json=None))]
+fn calculate(
+    py: Python<'_>,
+    model_json: &str,
+    workers: usize,
+    names_json: Option<&str>,
+) -> PyResult<String> {
     let model: toolkit::WorkbookModel = decode(model_json)?;
     model.validate().map_err(invalid)?;
+    if let Some(source) = names_json {
+        let table = names(source)?;
+        let session = toolkit::Session::with_names(model, Some(table)).map_err(invalid)?;
+        return encode(&py.detach(|| session.calculate(workers)));
+    }
     encode(&py.detach(|| toolkit::calculate(&model, workers)))
 }
 

@@ -519,3 +519,163 @@ fn grammar_cases_match_the_shared_table() {
         assert_eq!(got, case["expect"].as_str().unwrap(), "{id} {result:?}");
     }
 }
+
+fn one_sheet(names: &str, sheet: &str) -> Vec<u8> {
+    let content_types = r#"<?xml version="1.0"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+<Default Extension="xml" ContentType="application/xml"/>
+<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+</Types>"#;
+    let root_rels = r#"<?xml version="1.0"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
+</Relationships>"#;
+    let workbook_rels = r#"<?xml version="1.0"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
+</Relationships>"#;
+    let workbook = format!(
+        r#"<?xml version="1.0"?>
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+<sheets><sheet name="Sheet1" sheetId="1" r:id="rId1"/></sheets>{names}</workbook>"#
+    );
+    zip_stored(&[
+        ("[Content_Types].xml", content_types.into()),
+        ("_rels/.rels", root_rels.into()),
+        ("xl/workbook.xml", workbook),
+        ("xl/_rels/workbook.xml.rels", workbook_rels.into()),
+        ("xl/worksheets/sheet1.xml", sheet.into()),
+    ])
+}
+
+fn list_rules(formulas: &[&str]) -> String {
+    let items: String = formulas
+        .iter()
+        .enumerate()
+        .map(|(index, formula)| {
+            format!(
+                r#"<dataValidation type="list" allowBlank="1" showErrorMessage="1" sqref="C{row}"><formula1>{formula}</formula1></dataValidation>"#,
+                row = index + 1
+            )
+        })
+        .collect();
+    format!(
+        r#"<?xml version="1.0"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+<sheetData><row r="1"><c r="A1"><v>1</v></c></row></sheetData>
+<dataValidations count="{count}">{items}</dataValidations></worksheet>"#,
+        count = formulas.len()
+    )
+}
+
+#[test]
+fn dropdown_names_follow_the_calculation_table() {
+    let names = r#"<definedNames>
+<definedName name="First">{"Red","Green"}</definedName>
+<definedName name="FIRST">{"Blue"}</definedName>
+<definedName name="Shadow">{"Good"}</definedName>
+<definedName name="Shadow" localSheetId="9">{"Bad"}</definedName>
+<definedName name="Lost" localSheetId="7">{"Pink"}</definedName>
+<definedName name="Odd" localSheetId="٢">{"Amber"}</definedName>
+<definedName name="Plus" localSheetId="+0">{"Plus"}</definedName>
+<definedName name="BlankId" localSheetId="">{"Blank"}</definedName>
+<definedName name="Huge" localSheetId="999999">{"Huge"}</definedName>
+<definedName name="Local" localSheetId="0">{"Ok"}</definedName>
+<definedName name="Local" localSheetId="0">{"Later"}</definedName>
+<definedName name="Local">{"No"}</definedName>
+</definedNames>"#;
+    let formulas = [
+        "First", "Shadow", "Lost", "Odd", "Plus", "BlankId", "Huge", "Local",
+    ];
+    let imported = import_xlsx_bytes(
+        &one_sheet(names, &list_rules(&formulas)),
+        BTreeMap::new(),
+        BTreeMap::new(),
+    )
+    .unwrap();
+    let caps = imported.capabilities();
+    let preserved = caps["preserved_only"].as_array().unwrap();
+    assert!(preserved.iter().all(|item| item != "names"));
+    assert!(
+        caps["supported"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|item| item == "defined names, read-only and calculated")
+    );
+    let rules = caps["data_validations"].as_array().unwrap();
+    let rule = |formula: &str| {
+        rules
+            .iter()
+            .find(|rule| rule["formula1"] == formula)
+            .unwrap_or_else(|| panic!("missing {formula}"))
+    };
+    assert_eq!(
+        rule("First")["allowed_values"],
+        serde_json::json!(["Red", "Green"])
+    );
+    assert_eq!(
+        rule("Shadow")["allowed_values"],
+        serde_json::json!(["Good"])
+    );
+    assert_eq!(rule("Local")["allowed_values"], serde_json::json!(["Ok"]));
+    for formula in ["Lost", "Odd", "Plus", "BlankId", "Huge"] {
+        let found = rule(formula);
+        assert!(found["allowed_values"].is_null(), "{formula}");
+        assert_eq!(found["enforced"], false, "{formula}");
+        assert!(found["source"]["resolves_to"].is_null(), "{formula}");
+    }
+}
+
+#[test]
+fn a_defined_name_under_a_stop_rule_uses_the_calculation_table() {
+    let names =
+        r#"<definedNames><definedName name="Rate">Sheet1!$A$1</definedName></definedNames>"#;
+    let sheet = r#"<?xml version="1.0"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+<sheetData><row r="1"><c r="A1"><v>10</v></c><c r="B1"><v>0</v></c></row></sheetData>
+<dataValidations count="1">
+<dataValidation type="whole" operator="equal" allowBlank="1" showErrorMessage="1" sqref="B1">
+<formula1>10</formula1></dataValidation></dataValidations></worksheet>"#;
+    let imported =
+        import_xlsx_bytes(&one_sheet(names, sheet), BTreeMap::new(), BTreeMap::new()).unwrap();
+    imported
+        .apply(vec![Edit::formula("Sheet1", "B1", "Rate")], None)
+        .unwrap();
+    let dir = std::env::temp_dir().join(format!("wf-name-rule-{}", std::process::id()));
+    std::fs::remove_dir_all(&dir).ok();
+    std::fs::create_dir_all(&dir).unwrap();
+    imported.export(dir.join("ok.xlsx")).unwrap();
+    let refused = imported
+        .apply(vec![Edit::formula("Sheet1", "B1", "Rate+1")], None)
+        .unwrap_err();
+    assert_eq!(refused.code(), "validation_failed");
+    assert!(
+        !refused.to_string().contains("could not be calculated"),
+        "{refused}"
+    );
+    assert!(refused.to_string().contains("not met"), "{refused}");
+
+    let fresh =
+        import_xlsx_bytes(&one_sheet(names, sheet), BTreeMap::new(), BTreeMap::new()).unwrap();
+    let mut model = fresh.snapshot();
+    let cell = model.sheets[0].cells.get_mut("B1").unwrap();
+    cell.value = CellValue::Blank;
+    cell.formula = Some("Rate".into());
+    fresh
+        .export_snapshot(model.clone(), dir.join("snap-ok.xlsx"))
+        .unwrap();
+    let cell = model.sheets[0].cells.get_mut("B1").unwrap();
+    cell.formula = Some("Rate+1".into());
+    let refused = fresh
+        .export_snapshot(model, dir.join("snap-bad.xlsx"))
+        .unwrap_err();
+    assert_eq!(refused.code(), "validation_failed", "{refused}");
+    assert!(
+        !refused.to_string().contains("could not be calculated"),
+        "{refused}"
+    );
+    std::fs::remove_dir_all(&dir).ok();
+}

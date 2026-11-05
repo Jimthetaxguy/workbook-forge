@@ -282,3 +282,104 @@ def test_a_broken_pivot_part_is_package_damaged(tmp_path):
     with pytest.raises(WorkbookError) as caught:
         import_xlsx(path)
     assert caught.value.code == "package_damaged"
+
+
+def _one_sheet(path: Path, names_xml: str, sheet_xml: str) -> None:
+    workbook = (
+        '<?xml version="1.0"?>'
+        '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" '
+        'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
+        '<sheets><sheet name="Sheet1" sheetId="1" r:id="rId1"/></sheets>'
+        f"{names_xml}</workbook>"
+    )
+    _write_zip(path, {
+        "[Content_Types].xml": _CONTENT_TYPES,
+        "_rels/.rels": _ROOT_RELS,
+        "xl/workbook.xml": workbook,
+        "xl/_rels/workbook.xml.rels": _WORKBOOK_RELS,
+        "xl/worksheets/sheet1.xml": sheet_xml,
+    })
+
+
+def _list_rules(formulas: list[str]) -> str:
+    items = "".join(
+        f'<dataValidation type="list" allowBlank="1" showErrorMessage="1" sqref="C{index}">'
+        f"<formula1>{formula}</formula1></dataValidation>"
+        for index, formula in enumerate(formulas, 1)
+    )
+    return (
+        '<?xml version="1.0"?>'
+        '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+        '<sheetData><row r="1"><c r="A1"><v>1</v></c></row></sheetData>'
+        f'<dataValidations count="{len(formulas)}">{items}</dataValidations></worksheet>'
+    )
+
+
+_NAME_INDEX = """<definedNames>
+<definedName name="First">{"Red","Green"}</definedName>
+<definedName name="FIRST">{"Blue"}</definedName>
+<definedName name="Shadow">{"Good"}</definedName>
+<definedName name="Shadow" localSheetId="9">{"Bad"}</definedName>
+<definedName name="Lost" localSheetId="7">{"Pink"}</definedName>
+<definedName name="Odd" localSheetId="٢">{"Amber"}</definedName>
+<definedName name="Plus" localSheetId="+0">{"Plus"}</definedName>
+<definedName name="BlankId" localSheetId="">{"Blank"}</definedName>
+<definedName name="Huge" localSheetId="999999">{"Huge"}</definedName>
+<definedName name="Local" localSheetId="0">{"Ok"}</definedName>
+<definedName name="Local" localSheetId="0">{"Later"}</definedName>
+<definedName name="Local">{"No"}</definedName>
+</definedNames>"""
+
+
+def test_dropdown_names_follow_the_calculation_table(tmp_path):
+    """A bad localSheetId is not read, and the first spelling wins.
+
+    The same rule as DefinedNames.from_ooxml. A Unicode digit is not an index.
+    """
+    path = tmp_path / "names.xlsx"
+    formulas = ["First", "Shadow", "Lost", "Odd", "Plus", "BlankId", "Huge", "Local"]
+    _one_sheet(path, _NAME_INDEX, _list_rules(formulas))
+    model = import_xlsx(path)
+    metadata = model.inspect()["xlsx"]
+    assert "defined names" not in metadata["preserved_only"]
+    assert "defined names, read-only and calculated" in metadata["supported"]
+    rules = {rule["formula1"]: rule for rule in metadata["data_validations"]}
+    assert rules["First"]["allowed_values"] == ["Red", "Green"]
+    assert rules["Shadow"]["allowed_values"] == ["Good"]
+    assert rules["Local"]["allowed_values"] == ["Ok"]
+    for formula in ("Lost", "Odd", "Plus", "BlankId", "Huge"):
+        assert rules[formula]["allowed_values"] is None, formula
+        assert rules[formula]["enforced"] is False, formula
+        assert rules[formula]["source"]["resolves_to"] is None, formula
+
+
+_RATE_NAMES = '<definedNames><definedName name="Rate">Sheet1!$A$1</definedName></definedNames>'
+_RATE_SHEET = """<?xml version="1.0"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+<sheetData><row r="1"><c r="A1"><v>10</v></c><c r="B1"><v>0</v></c></row></sheetData>
+<dataValidations count="1">
+<dataValidation type="whole" operator="equal" allowBlank="1" showErrorMessage="1" sqref="B1">
+<formula1>10</formula1></dataValidation></dataValidations></worksheet>"""
+
+
+@pytest.mark.parametrize("backend", ["python", "rust"])
+def test_a_defined_name_under_a_stop_rule_uses_the_calculation_table(backend, tmp_path):
+    path = tmp_path / "rate.xlsx"
+    _one_sheet(path, _RATE_NAMES, _RATE_SHEET)
+    model = import_xlsx(path, backend=backend)
+    model.set_formula("Sheet1", "B1", "Rate")
+    export_xlsx(model, tmp_path / "ok.xlsx")
+    fresh = import_xlsx(path, backend=backend)
+    with pytest.raises(WorkbookError) as caught:
+        fresh.set_formula("Sheet1", "B1", "Rate+1")
+    assert caught.value.code == "validation_failed"
+    assert "could not be calculated" not in str(caught.value)
+    assert "not met" in str(caught.value)
+    document = fresh.to_dict()
+    document["sheets"][0]["cells"]["B1"] = {"formula": "Rate", "value": None}
+    export_snapshot(fresh, document, tmp_path / "snap-ok.xlsx")
+    document["sheets"][0]["cells"]["B1"] = {"formula": "Rate+1", "value": None}
+    with pytest.raises(WorkbookError) as caught:
+        export_snapshot(fresh, document, tmp_path / "snap-bad.xlsx")
+    assert caught.value.code == "validation_failed"
+    assert "could not be calculated" not in str(caught.value)
