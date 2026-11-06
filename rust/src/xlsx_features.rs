@@ -244,15 +244,28 @@ pub(crate) fn defined_names(wb: &Xml, root: &Node, entries: &[String]) -> Names 
     let mut names = Names::new();
     for group in wb.children(root, MAIN, "definedNames") {
         for node in wb.children(group, MAIN, "definedName") {
-            let Some(name) = node.attrs.get("name") else {
+            let Some(name) = node.attrs.get("name").filter(|name| !name.is_empty()) else {
                 continue;
             };
-            let scope = node
-                .attrs
-                .get("localSheetId")
-                .and_then(|id| id.parse::<usize>().ok())
-                .and_then(|id| entries.get(id).cloned());
-            names.insert((scope, name.to_lowercase()), node.text.trim().to_string());
+            // Same rule as DefinedNames::from_ooxml: a localSheetId that is
+            // not an index of `entries` drops the name, and the first
+            // spelling wins. ASCII digits only, so a Unicode digit is not
+            // an index.
+            let scope = match node.attrs.get("localSheetId") {
+                None => None,
+                Some(local) => {
+                    if local.is_empty() || !local.bytes().all(|byte| byte.is_ascii_digit()) {
+                        continue;
+                    }
+                    match local.parse::<usize>().ok().and_then(|id| entries.get(id)) {
+                        Some(sheet) => Some(sheet.clone()),
+                        None => continue,
+                    }
+                }
+            };
+            names
+                .entry((scope, name.to_lowercase()))
+                .or_insert_with(|| node.text.trim().to_string());
         }
     }
     names
@@ -1046,6 +1059,7 @@ impl FeatureGuard {
         model: &crate::toolkit::WorkbookModel,
         entries: &[(String, String, String)],
         read: &mut dyn FnMut(&str, &str) -> Option<CellValue>,
+        names: Option<&crate::DefinedNames>,
     ) -> std::result::Result<(), String> {
         let targets: Vec<&(String, String, String)> = entries
             .iter()
@@ -1066,7 +1080,17 @@ impl FeatureGuard {
                 )
             })
             .collect();
-        let report = crate::toolkit::calculate(&detached, 1);
+        // The detached copy has no session of its own. Pass the workbook's
+        // name table so a formula under the rule is checked with the same
+        // names calculation uses.
+        let report = match names {
+            Some(table) => {
+                let session = crate::toolkit::Session::with_names(detached, Some(table.clone()))
+                    .map_err(|error| error.to_string())?;
+                session.calculate(1)
+            }
+            None => crate::toolkit::calculate(&detached, 1),
+        };
         let whole = report.diagnostics.iter().find(|d| d.address.is_none());
         for (index, (sheet, address, formula)) in targets.into_iter().enumerate() {
             let rule = self.formula_rule(sheet, address).expect("filtered above");

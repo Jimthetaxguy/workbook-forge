@@ -727,13 +727,23 @@ class Session:
         return _encode(report)
 
 
-def calculate(model_json: str, workers: int = 1, context: CalcContext | None = None) -> str:
+def calculate(
+    model_json: str,
+    workers: int = 1,
+    context: CalcContext | None = None,
+    *,
+    names_json: str | None = None,
+) -> str:
     """Calculate a detached model with the independent Python formula engine.
 
     ``context`` pins the clock and seed of volatile functions; without one the
-    pass captures its own (see :meth:`CalcContext.capture`).
+    pass captures its own (see :meth:`CalcContext.capture`). ``names_json`` is
+    the workbook's defined-name table, the same JSON array a session takes.
+    Without it, a name in a formula is refused as unsupported.
     """
-    return _encode(_calculate_document(_normalize_model(_decode(model_json)), workers, context=context))
+    return _encode(_calculate_document(
+        _normalize_model(_decode(model_json)), workers, context=context, names=_names(names_json)
+    ))
 
 
 def _names(names_json: str | None) -> DefinedNames | None:

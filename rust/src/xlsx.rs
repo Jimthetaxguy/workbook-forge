@@ -1341,7 +1341,7 @@ fn decode_mode(
         .iter()
         .map(|n| json!({"attributes":n.attrs,"expression":n.text}))
         .collect();
-    let capabilities = json!({"backend":"rust-ooxml","date_system":if date1904{"1904"}else{"1900"},"styles":styles.len(),"defined_names":names,"tables":table_metadata,"validation":validation_metadata,"data_validations":guard.records(),"text_layouts":text_layouts.values().map(|l| (l.name.clone(), l.public())).collect::<serde_json::Map<_, _>>(),"pivots":pivot_records,"charts":charts,"chartsheets":chartsheets,"supported":["typed data-validation inspection; enforced (stop) rules refuse out-of-rule values","pivot table and chart inspection","UTF-8 macro-free transitional XLSX","scalar cells","normal formulas","defined names, read-only and calculated","basic styles","column widths","existing-cell content edits","absent-cell value/formula insertion within the session grid bound"],"preserved_only":["pivot tables and caches","charts and chartsheets","unknown package parts","unknown worksheet XML","names","tables","imported styles and validation"],"rejected":["pivot refresh and writes into pivot output ranges","structural changes to sheets a chart reads","macros","external execution","insertion into merged non-anchor cells or outside the session grid bound","imported style/layout/validation changes","1904 formula calculation and edits","grouped/table result edits"],"parts":package.parts.keys().collect::<Vec<_>>()});
+    let capabilities = json!({"backend":"rust-ooxml","date_system":if date1904{"1904"}else{"1900"},"styles":styles.len(),"defined_names":names,"tables":table_metadata,"validation":validation_metadata,"data_validations":guard.records(),"text_layouts":text_layouts.values().map(|l| (l.name.clone(), l.public())).collect::<serde_json::Map<_, _>>(),"pivots":pivot_records,"charts":charts,"chartsheets":chartsheets,"supported":["typed data-validation inspection; enforced (stop) rules refuse out-of-rule values","pivot table and chart inspection","UTF-8 macro-free transitional XLSX","scalar cells","normal formulas","defined names, read-only and calculated","basic styles","column widths","existing-cell content edits","absent-cell value/formula insertion within the session grid bound"],"preserved_only":["pivot tables and caches","charts and chartsheets","unknown package parts","unknown worksheet XML","tables","imported styles and validation"],"rejected":["pivot refresh and writes into pivot output ranges","structural changes to sheets a chart reads","macros","external execution","insertion into merged non-anchor cells or outside the session grid bound","imported style/layout/validation changes","1904 formula calculation and edits","grouped/table result edits"],"parts":package.parts.keys().collect::<Vec<_>>()});
     Ok(Decoded {
         model,
         workbook_part,
@@ -1650,8 +1650,9 @@ impl ImportedWorkbook {
                     _ => cell.value.clone(),
                 })
             };
+            let names = self.session.names();
             self.guard
-                .check_formula_results(&model, &entries, &mut read)
+                .check_formula_results(&model, &entries, &mut read, names.as_ref())
                 .map_err(err)?;
         }
         Self {
@@ -1842,7 +1843,8 @@ impl ImportedWorkbook {
             .filter(|(sheet, reference, _)| self.guard.has_formula_rule(sheet, reference))
             .collect();
         if !entries.is_empty() {
-            let scratch = Session::with_names(self.session.snapshot(), self.session.names())?;
+            let names = self.session.names();
+            let scratch = Session::with_names(self.session.snapshot(), names.clone())?;
             // An invalid batch fails here exactly as the real apply would.
             scratch.apply(edits.to_vec(), None)?;
             let mut read = |s: &str, a: &str| -> Option<CellValue> {
@@ -1854,7 +1856,7 @@ impl ImportedWorkbook {
                 })
             };
             self.guard
-                .check_formula_results(&scratch.snapshot(), &entries, &mut read)
+                .check_formula_results(&scratch.snapshot(), &entries, &mut read, names.as_ref())
                 .map_err(err)?;
         }
         Ok(())

@@ -213,7 +213,7 @@ class WorkbookModel:
             scratch = self._new_session(_encode(self.to_dict()))
             scratch.apply(_encode(batch), None)  # an invalid batch fails the same way below
             refusal = self._feature_guard.check_formula_results(
-                self._engine, json.loads(scratch.snapshot()), entries, read
+                self._engine, json.loads(scratch.snapshot()), entries, read, self._names
             )
             if refusal is not None:
                 raise UnsupportedWorkbook(refusal[1], code=refusal[0])

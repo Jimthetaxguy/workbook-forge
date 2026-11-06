@@ -215,15 +215,25 @@ def _number(text: str | None) -> float | None:
 
 
 def defined_names(workbook_root: ET.Element, sheet_entries: list[str]) -> dict[tuple[str | None, str], str]:
-    """(scope sheet or None, casefolded name) -> expression."""
+    """(scope sheet or None, casefolded name) -> expression.
+
+    A ``localSheetId`` that is not an index of ``sheet_entries`` drops the
+    name, and the first spelling wins, matching ``DefinedNames.from_ooxml``.
+    ASCII digits only: a Unicode digit is not an index.
+    """
     names: dict[tuple[str | None, str], str] = {}
     for node in workbook_root.findall("m:definedNames/m:definedName", NS):
-        name = node.attrib.get("name", "")
-        scope = None
+        name = node.attrib.get("name") or ""
+        if not name:
+            continue
         local = node.attrib.get("localSheetId")
-        if local is not None and local.isdigit() and int(local) < len(sheet_entries):
+        if local is None:
+            scope = None
+        elif not local.isascii() or not local.isdigit() or int(local) >= len(sheet_entries):
+            continue
+        else:
             scope = sheet_entries[int(local)]
-        names[(scope, name.casefold())] = (node.text or "").strip()
+        names.setdefault((scope, name.casefold()), (node.text or "").strip())
     return names
 
 
@@ -710,12 +720,16 @@ class FeatureGuard:
             f"(result {result!r}) is refused by the data validation on {where}: {why}",
         )
 
-    def check_formula_results(self, engine, document: dict[str, Any], entries, read) -> tuple[str, str] | None:
+    def check_formula_results(
+        self, engine, document: dict[str, Any], entries, read, names_json: str | None = None
+    ) -> tuple[str, str] | None:
         """Check formula entries by their results in ``document`` (edits already applied).
 
         ``entries`` is ``[(sheet, address, formula)]``. Only entries under an
         enforced rule are calculated, each bound as an output of a detached
-        copy of the document so nothing else is evaluated.
+        copy of the document so nothing else is evaluated. ``names_json`` is
+        the workbook's defined-name table, so a formula under a rule is
+        checked with the same names calculation uses.
         """
         import json
 
@@ -729,7 +743,9 @@ class FeatureGuard:
             for index, (sheet, address, _) in enumerate(targets)
         }
         detached["inputs"] = {}
-        report = json.loads(engine.calculate(json.dumps(detached, allow_nan=False, ensure_ascii=False), 1))
+        report = json.loads(engine.calculate(
+            json.dumps(detached, allow_nan=False, ensure_ascii=False), 1, names_json=names_json
+        ))
         failures = {
             (str(item.get("sheet", "")).casefold(), str(item.get("address", "")).upper()): item
             for item in report.get("diagnostics", [])
