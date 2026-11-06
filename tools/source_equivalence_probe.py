@@ -125,18 +125,30 @@ def error(code):
 
 # Fruit lookup vectors from fixtures/xlookup-source-cases.v1.json, shared with
 # python/tests/test_source_graph_v6.py so the XLOOKUP rows read against the same data.
-FRUIT = {"A1": "Pear", "A2": "pear", "A3": None, "A4": "Apple", "B1": 10, "B2": 20, "B3": 30, "B4": 40}
+FRUIT = {
+    "A1": "Pear", "A2": "pear", "A3": None, "A4": "Apple", "B1": 10, "B2": 20, "B3": 30, "B4": 40
+}
 MIXED = {"A1": 1, "A2": "7", "A3": None, "A4": True, "A5": 2.5}
 ZERO = {"A1": 0}
 SUM_REMARK = (
-    "Microsoft SUM: text, logical values and empty cells in a referenced range are ignored; "
-    "numbers and numeric text typed directly are added"
+    "Microsoft WorksheetFunction.Sum remarks: numbers, logical values and numeric text typed "
+    "directly are counted; in an array or reference only numbers count and empty cells, "
+    "logical values and text are ignored; text that cannot be read as a number is an error"
 )
-AVERAGE_REMARK = (
-    "Microsoft AVERAGE remarks: in a range, text, logical values and empty cells are ignored "
-    "and zero is included; logical values and numeric text typed directly are counted; text "
-    "that cannot be read as a number is an error"
+AVERAGE_RANGE = (
+    "Microsoft AVERAGE remarks: in a range or reference, text, logical values and empty cells "
+    "are ignored and cells holding zero are included"
 )
+AVERAGE_DIRECT = (
+    "Microsoft's two references disagree on direct arguments: WorksheetFunction.Average says "
+    "logical values and numeric text typed directly are counted, the Excel AVERAGE page says "
+    "they are not; the expectation follows the counted rule, which the compiler manifest "
+    "marks provisional, and an Excel observation would settle it"
+)
+AVERAGE_TEXT_ERROR = (
+    "Microsoft AVERAGE remarks: text that cannot be translated into a number causes an error"
+)
+REPORTED = "reported Excel behavior, not stated on the Microsoft page; unverified here"
 SORT_ORDER = (
     "Excel default sort order places numbers before text before logical values, so the "
     "comparison operators rank them in that order and never coerce across types"
@@ -145,7 +157,9 @@ XLOOKUP_MODES = (
     "Microsoft documents match_mode -1, 0, 1, 2 and search_mode 1, -1, 2, -2; a value outside "
     "those lists is an invalid argument, and the exact Excel error code is unverified"
 )
-PROFILE_COMPARISON = "Workbook Forge binary comparison profile (CONTEXT.md), not an Excel observation"
+PROFILE_COMPARISON = (
+    "Workbook Forge binary comparison profile (CONTEXT.md), not an Excel observation"
+)
 SIGNED_ZERO = (
     "IEEE 754 binary64 arithmetic; Excel displays every zero without a sign, so the sign is "
     "unobservable there"
@@ -160,7 +174,7 @@ CASES = [
     Case("SUM", "cell_reference_text_is_skipped", "=SUM(A2)", MIXED, 0.0,
          "a referenced cell holding the text 7 is ignored; " + SUM_REMARK),
     Case("SUM", "direct_non_numeric_text", '=SUM("abc",1)', MIXED, error("#VALUE!"),
-         "Microsoft: text that cannot be translated into a number causes an error"),
+         SUM_REMARK),
     Case("SUM", "error_in_range_propagates", "=SUM(A1:A3)", {"A1": 1, "A2": error("#N/A"), "A3": 2},
          error("#N/A"), "Microsoft general rule: an error value in an argument is the result"),
     Case("SUM", "blank_only_range", "=SUM(A3:A4)", {"A3": None, "A4": None}, 0.0,
@@ -171,15 +185,17 @@ CASES = [
     Case("IF", "taken_error_branch", "=IF(A1>0,1/0,5)", {"A1": 3}, error("#DIV/0!"),
          "the taken branch divides by zero"),
     Case("IF", "two_arguments_false_default", "=IF(A1>5,1)", {"A1": 3}, False,
-         "Microsoft IF: with value_if_false omitted, a false test returns FALSE"),
+         "with value_if_false omitted a false test returns FALSE (" + REPORTED + "; the IF page "
+         "only marks the argument optional)"),
     Case("IF", "blank_condition_is_false", "=IF(A3,1,2)", {"A3": None}, 2.0,
          "a blank test is FALSE, so the third argument is returned"),
     Case("IF", "numeric_condition_nonzero_is_true", "=IF(A1,1,2)", {"A1": 3}, 1.0,
          "a nonzero number is TRUE"),
     Case("IF", "text_condition_is_value_error", '=IF("abc",1,2)', {}, error("#VALUE!"),
-         "Microsoft IF: a logical_test that is text returns #VALUE!"),
+         "text has no truth value, so logical_test is #VALUE! (" + REPORTED + ")"),
     Case("IF", "numeric_text_cell_condition_is_value_error", "=IF(A2,1,2)", MIXED,
-         error("#VALUE!"), "a cell holding the text 7 is text, not a logical value"),
+         error("#VALUE!"), "a cell holding the text 7 is text, not a logical value (" + REPORTED
+         + ")"),
     Case("IF", "error_condition_propagates", "=IF(1/0,1,2)", {}, error("#DIV/0!"),
          "an error in logical_test is the result"),
     Case("IF", "blank_cell_branch_result", "=IF(A1>0,A3,1)", {"A1": 3, "A3": None}, 0.0,
@@ -204,21 +220,21 @@ CASES = [
     # AVERAGE
     Case("AVERAGE", "range_skips_text_logical_blank_keeps_zero", "=AVERAGE(A1:A5)",
          {"A1": 4, "A2": 0, "A3": "8", "A4": True, "A5": None}, 2.0,
-         "(4 + 0) / 2 = 2; " + AVERAGE_REMARK),
+         "(4 + 0) / 2 = 2; " + AVERAGE_RANGE),
     Case("AVERAGE", "microsoft_example_range_plus_direct", "=AVERAGE(A2:A6,5)",
          {"A2": 10, "A3": 7, "A4": 9, "A5": 27, "A6": 2}, 10.0,
          "Microsoft AVERAGE example: (10 + 7 + 9 + 27 + 2 + 5) / 6 = 10"),
     Case("AVERAGE", "direct_numeric_text_counted", '=AVERAGE("8",4)', {}, 6.0,
-         "(8 + 4) / 2 = 6; " + AVERAGE_REMARK),
+         "(8 + 4) / 2 = 6 under the counted rule; " + AVERAGE_DIRECT),
     Case("AVERAGE", "direct_logical_counted", "=AVERAGE(TRUE,3)", {}, 2.0,
-         "(1 + 3) / 2 = 2; " + AVERAGE_REMARK),
+         "(1 + 3) / 2 = 2 under the counted rule; " + AVERAGE_DIRECT),
     Case("AVERAGE", "direct_non_numeric_text", '=AVERAGE("abc",3)', {}, error("#VALUE!"),
-         AVERAGE_REMARK),
+         AVERAGE_TEXT_ERROR),
     Case("AVERAGE", "direct_logical_text_is_not_numeric", '=AVERAGE("TRUE",3)', {},
          error("#VALUE!"), "the text TRUE is not a text representation of a number; "
-         + AVERAGE_REMARK),
+         + AVERAGE_TEXT_ERROR),
     Case("AVERAGE", "cell_reference_text_skipped", "=AVERAGE(A3,4)", {"A3": "8"}, 4.0,
-         "the referenced text 8 is ignored, so 4 / 1 = 4; " + AVERAGE_REMARK),
+         "the referenced text 8 is ignored, so 4 / 1 = 4; " + AVERAGE_RANGE),
     Case("AVERAGE", "blank_only_is_div0", "=AVERAGE(A3:A4)", {"A3": None, "A4": None},
          error("#DIV/0!"), "no numeric value to average divides by a zero count"),
     Case("AVERAGE", "error_in_range_propagates", "=AVERAGE(A1:A3)",
@@ -226,7 +242,8 @@ CASES = [
          "Microsoft general rule: an error value in an argument is the result"),
     # XLOOKUP
     Case("XLOOKUP", "exact_forward", '=XLOOKUP("PEAR",A1:A4,B1:B4)', FRUIT, 10.0,
-         "first case-insensitive match of PEAR is row 1; Microsoft: XLOOKUP is not case-sensitive"),
+         "the first match of PEAR without regard to case is row 1 (case-insensitive lookup "
+         "text matching is " + REPORTED + ")"),
     Case("XLOOKUP", "exact_reverse", '=XLOOKUP("pear",A1:A4,B1:B4,,,-1)', FRUIT, 20.0,
          "search_mode -1 searches from the last item, so the row 2 duplicate wins"),
     Case("XLOOKUP", "if_not_found_taken", '=XLOOKUP("missing",A1:A4,B1:B4,"not found")', FRUIT,
@@ -306,12 +323,13 @@ CASES = [
          "0 * -1 is -0 in " + SIGNED_ZERO),
     Case("OPERATORS", "unary_plus_leaves_text", "=+A2", MIXED, "7",
          "unary plus is the identity and does not coerce its operand, so the text 7 stays text "
-         "(reported Excel behavior; unverified here)"),
+         "(" + REPORTED + ")"),
     Case("OPERATORS", "overflow_is_num_error", "=1E308*10", {}, error("#NUM!"),
          "Microsoft documents 9.99999999999999E+307 as the largest number; the #NUM! code is "
          "a Workbook Forge profile (docs/behavior-profiles.md, General)"),
     Case("OPERATORS", "text_equality_ascii_case_insensitive", '="Pear"="PEAR"', {}, True,
-         "Microsoft EXACT remarks: the = operator is not case-sensitive"),
+         "the = operator compares text without regard to case (" + REPORTED + "; Microsoft's "
+         "EXACT page offers EXACT as the case-sensitive comparison)"),
     Case("OPERATORS", "text_relational_order", '="apple"<"Banana"', {}, True,
          "case-insensitive text order: a precedes b"),
     Case("OPERATORS", "number_text_equality_is_false", '=1="1"', {}, False, SORT_ORDER),
@@ -473,8 +491,12 @@ def generated_programs(case, directory, languages):
                 code, _ = g.compile_workbook(source, language, version=SOURCE_PROFILE)
             else:
                 node = g.from_excel(g.parse_expression(case.formula), SHEET, version=SOURCE_PROFILE)
-                defaults = {prefix + address: g.scalar(value) for address, value in case.cells.items()}
-                program = g.Program(SHEET, defaults, {prefix + TARGET: node}, (SHEET,), SOURCE_PROFILE)
+                defaults = {
+                    prefix + address: g.scalar(value) for address, value in case.cells.items()
+                }
+                program = g.Program(
+                    SHEET, defaults, {prefix + TARGET: node}, (SHEET,), SOURCE_PROFILE
+                )
                 code = g.generate(program, language)
             path = directory / ("program.py" if language == "python" else "program.rs")
             path.write_text(code, encoding="utf-8")
@@ -487,7 +509,10 @@ def generated_programs(case, directory, languages):
 
 
 def implementations_agree(row):
-    """Cell-layer columns agree, and the formula API shows that value or its layer form."""
+    """Cell-layer columns agree, the formula API shows that value or its layer form, and
+    the generated programs came from the route the session's verdict calls for."""
+    if row["generated_route"] != row["expected_route"]:
+        return False
     values = {row[column] for column in CELL_COLUMNS if row[column] != UNAVAILABLE}
     if len(values) != 1:
         return False
@@ -524,12 +549,14 @@ def classify(row, case):
         row["note"] = divergence.note
     else:
         observed = {column: row[column] for column in COLUMNS}
+        observed["generated_route"] = row["generated_route"]
         row["classification"] = "unclassified"
         row["note"] = "not pinned in DIVERGENCES: " + json.dumps(observed, ensure_ascii=False)
     return row
 
 
 def run_case(case, directory, *, rust_engine=True, generated_rust=True):
+    python_session = session(case, "python")
     row = {
         "function": case.function,
         "mode": case.mode,
@@ -538,13 +565,18 @@ def run_case(case, directory, *, rust_engine=True, generated_rust=True):
         "expected_formula_api": render(case.expected_formula_api),
         "basis": case.basis,
         "python_engine": render(python_engine(case)),
-        "python_session": render(session(case, "python")),
+        "python_session": render(python_session),
         "rust_engine": render(session(case, "rust")) if rust_engine else UNAVAILABLE,
     }
     languages = ("python", "rust") if generated_rust else ("python",)
     programs, route = generated_programs(case, directory, languages)
     row["generated_python"] = render(programs["python"])
     row["generated_rust"] = render(programs["rust"]) if generated_rust else UNAVAILABLE
+    # Export refuses a workbook whose Python session reported a diagnostic, and
+    # only then; any other route switch is a change in export that must show.
+    row["expected_route"] = (
+        "program_api" if isinstance(python_session, Refused) else "compile_workbook"
+    )
     row["generated_route"] = route
     return classify(row, case)
 
@@ -600,7 +632,8 @@ def main(argv=None):
         generated_rust=rustc_available() and not args.no_generated_rust,
     )
     args.output.parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_text(json.dumps(matrix, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    encoded = json.dumps(matrix, indent=2, ensure_ascii=False) + "\n"
+    args.output.write_text(encoded, encoding="utf-8")
     print(json.dumps({"cases": matrix["cases"], **matrix["summary"],
                       "rust_engine": matrix["rust_engine"],
                       "generated_rust": matrix["generated_rust"]}))

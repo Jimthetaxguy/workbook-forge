@@ -42,6 +42,7 @@ def test_engine_and_generated_runtime_agree(tmp_path, case):
     observed = {column: row[column] for column in probe.COLUMNS}
     assert row["classification"] != "unclassified", (observed, row["note"])
     pinned = DIVERGENCES.get((case.function, case.mode))
+    assert row["generated_route"] == row["expected_route"], observed
     if pinned is None:
         assert row["agreement"] and row["matches_expectation"], observed
         assert row["classification"] == (
@@ -66,7 +67,9 @@ def test_divergence_table_names_real_cases_and_classifications():
     assert len(ids) == len(CASES), "duplicate case identity"
     for key, divergence in DIVERGENCES.items():
         assert key in ids, key
-        assert divergence.classification in {"semantic difference", "test error", "shared deviation"}
+        assert divergence.classification in {
+            "semantic difference", "test error", "shared deviation"
+        }
         assert set(divergence.observed) <= set(probe.COLUMNS), key
         assert divergence.note
 
