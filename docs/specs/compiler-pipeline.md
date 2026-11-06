@@ -1,14 +1,14 @@
 ---
 author: codex/Codex
 created: "2026-10-01T19:21:55-04:00"
-agent: codex/Codex
-date: "2026-10-14"
+agent: claude-code/Claude Fable 5.1
+date: "2026-11-06"
 type: technical-specification
 task: Define the shared Workbook Forge compiler pipeline
-status: proposed
+status: in-force
 summary: Defines how Excel, calculation definitions, Python, Rust, agents, applications, and OOXML pass through one versioned workbook model, with stage results and compatibility evidence kept distinct.
 next_steps:
-  - Record the canonical scalar Excel open, edit, recalculate, save, and reimport cycle, then close the broader Spec 2 gate.
+  - Commit the 2026-10-14 scalar Excel observation (Excel 16.113.4; the receipt is uncommitted because the saved package held a machine-local path) with a value-level regression link, then close the broader red-flag Spec 2 (export parity) gate.
   - Integrate the proven calculation and export path behind the headless interface only after that gate.
 remaining:
   - The shared model does not yet back every older toolkit and agent operation.
@@ -52,6 +52,8 @@ portfolio_profile:
 This is the engineering companion to [Workbook Forge product specifications](../product-specifications.md)
 and the [North Star](../vision.md). It describes the intended compiler shape;
 it does not claim every stage is integrated or Excel-compatible today.
+
+Status: in force, because `AGENTS.md` treats every spec under `docs/specs/` as binding on new work; in force means the contract governs new slices, not that every stage is built. Proposals not yet accepted live under [`proposed/`](proposed/README.md).
 
 ## Decision
 
