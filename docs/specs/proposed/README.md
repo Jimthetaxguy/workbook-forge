@@ -15,6 +15,7 @@ Recommended order:
 | 05 | [canonical-calculation-session](05-canonical-calculation-session.md) | Revisioned preview/set-inputs/calculate over the canonical Workbook | No | Session at all; report v2 |
 | 06 | [typed-bindings-model-v2](06-typed-bindings-model-v2.md) | Binding type, required flag and constraints with a v1→v2 migrator | No | **Model v2 approval required before any code** |
 | 07 | [joined-headless-command](07-joined-headless-command.md) | One thin command: intake → views → calculate → export → receipt | No (gated on 01) | Gate scope; duplicate-key policy |
+| 08 | [meaning-ownership-map](08-meaning-ownership-map.md) | Field- and operation-level map of which representation owns which spreadsheet meaning, the companions each route needs, the edges that exist or are missing, and a proposed owner per concept | No | None; it is the input to the convergence decision behind 05 and 06 |
 
 03 and 04 do not depend on Excel and can run while 01 waits for a Mac
 session. 02 also needs no Excel, but product-specifications.md holds Rust views
