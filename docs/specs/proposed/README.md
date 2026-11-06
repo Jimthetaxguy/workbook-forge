@@ -19,6 +19,10 @@ Recommended order:
 | 06 | [typed-bindings-model-v2](06-typed-bindings-model-v2.md) | Binding type, required flag and constraints with a v1→v2 migrator | No | **Model v2 approval required before any code** |
 | 07 | [joined-headless-command](07-joined-headless-command.md) | One thin command: intake → views → calculate → export → receipt | No (gated on 01) | Gate scope; duplicate-key policy |
 | 08 | [meaning-ownership-map](08-meaning-ownership-map.md) | Field- and operation-level map of which representation owns which spreadsheet meaning, the companions each route needs, the edges that exist or are missing, and a proposed owner per concept | No | None; it is the input to the convergence decision behind 05 and 06 |
+| 09 | [contract-convergence](09-contract-convergence.md) | One versioned contract for workbook meaning with the session and the preservation envelope as companions; both candidate bases costed, one recommended, six migration steps with adapters and evidence | No | **G-A: which base, and both version fields to 2** |
+| 10 | [preservation-envelope](10-preservation-envelope.md) | The named companion that preserves what the model does not represent: source identity, baseline, guards, text layout, carry inventory, invalidation rules (proposal in progress) | No | None expected |
+| 11 | [source-route](11-source-route.md) | Source generation as one capability: three source modes, the runtime mechanism decided on the equivalence data, reverse lowering, editable-source levels (proposal in progress) | No | None expected |
+| 12 | [composition-transformations](12-composition-transformations.md) | Extraction of a dependency closure into a named-input composition and placement back into cells, with provenance and reference rules (proposal in progress) | No | None expected |
 
 03 and 04 do not depend on Excel and can run while 01 waits for a Mac
 session. 02 also needs no Excel, but product-specifications.md holds Rust views
