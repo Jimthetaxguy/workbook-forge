@@ -21,6 +21,7 @@ import sanitize_receipt  # noqa: E402
 COMMITTED = ROOT / "receipts" / "canonical-operating-scenario"
 COMMITTED_WORKBOOK = COMMITTED / "operating-scenario.exported.xlsx"
 FAKE_HOME = "/Users/example-user"
+FAKE_LINUX_HOME = "/home/example-user"
 FAKE_RUN = f"{FAKE_HOME}/Desktop/excel-run"
 
 _MAIN_NS = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
@@ -282,7 +283,7 @@ def test_windows_paths_are_never_resolved_against_the_working_directory(tmp_path
 
 @pytest.mark.parametrize(
     "token",
-    [f"{FAKE_HOME}", f"{FAKE_HOME}/", "/home/example-user", "/home/example-user/", "C:\\Users\\example-user", "~/"],
+    [FAKE_HOME, f"{FAKE_HOME}/", FAKE_LINUX_HOME, f"{FAKE_LINUX_HOME}/", "C:\\Users\\example-user", "~/"],
 )
 def test_a_home_directory_itself_becomes_the_marker_not_the_account_name(tmp_path, token):
     workbook = tiny_xlsx(tmp_path / "saved.xlsx")
