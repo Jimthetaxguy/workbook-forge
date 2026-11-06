@@ -1,14 +1,14 @@
 ---
 author: codex/Codex
 created: 2026-09-28
-agent: codex/Codex
-date: '2026-10-14'
+agent: claude-code/Claude Fable 5.1
+date: '2026-11-06'
 type: product-specification
 task: Specify Workbook Forge user outcomes and executable engineering path
 status: active-specification
 summary: Defines the user outcomes and compiler contract for explainable workbook intake, shared calculations across Python and Rust, Excel output, headless use, formula hypotheses, and evidence-led coverage.
 next_steps:
-  - Record the canonical scalar Excel open, edit, recalculate, save, and reimport cycle.
+  - Commit the 2026-10-14 scalar Excel observation with a value-level regression link. Excel 16.113.4 opened, edited, fully recalculated, saved and reimported the canonical operating scenario; the receipt is uncommitted because the saved package held a machine-local path.
   - Close the full Excel export gate, including declared result ranges and required volatile, iterative, array/spill, and quirk cases, before joining the proven path behind the headless interface.
   - Keep the paired overview and structural map on the Python intake command until that gate is closed. Rust views and the joined headless path come after it.
 remaining:
@@ -430,8 +430,8 @@ limits near the feature summary and link to exact status and evidence.
 | Order | Work item | Can start now? | Depends on | Completion evidence |
 | --- | --- | --- | --- | --- |
 | 1 | Complete the shared calculation result and provenance contract for the operating scenario | Done for the library report | Existing canonical model and explicit bindings | Same canonical bytes produce expected Python and Rust results; `schemas/calculation-report.v1.schema.json` identifies the engine, model versions, source cells and diagnostics. Excel observation is still separate |
-| 2 | Record the canonical scalar Excel open/edit/full-recalc/save/reimport cycle | Yes; the harness exists | 1 and the current export path | Receipt records Excel build, edits, observed values, formula differences and unavailable settings honestly; explicitly marked as the first observation |
-| 3 | Close the full Excel export gate, including declared spill placement | After the scalar observation | 2 and a defined result-range contract | Excel receipts cover the declared spill range, volatile, iterative and known-quirk cases with explicit tolerances; unsupported required cases keep the gate open |
+| 2 | Commit the canonical scalar Excel open/edit/full-recalc/save/reimport observation | Observed on 2026-10-14 with Excel 16.113.4; the receipt is uncommitted because the saved package held a machine-local path | 1 and the current export path | A sanitised receipt records Excel build, edits, observed values, formula differences and unavailable settings honestly, is explicitly marked as the first observation, and is linked to a value-level regression test |
+| 3 | Close the full Excel export gate, including declared spill placement | After the scalar receipt is committed | 2 and a defined result-range contract | Excel receipts cover the declared spill range, volatile, iterative and known-quirk cases with explicit tolerances; unsupported required cases keep the gate open |
 | 4 | Prototype the paired overview, structural map and privacy-safe source handling | Python intake does this; Rust views do not | Existing canonical intake | Synthetic cases show coordinate links and cross-view checks; serialized model, summary and scan omit a distinctive private input path while retaining fingerprint and cell evidence |
 | 5 | Put intake → model → supported calculation → export behind one headless workflow | After 1–4 | Shared result contract, full Excel gate, paired report and privacy acceptance | A caller-selected workbook produces versioned model output, bounded context, diagnostics, calculation evidence and a new `.xlsx` without a GUI |
 | 6 | Rank formula and workbook gaps by workflow value | Research can start now | Concrete workbook tasks and observed failures | A task-to-gap matrix ties each candidate to semantic rules, Python/Rust fixtures and Excel evidence needed |
@@ -439,7 +439,7 @@ limits near the feature summary and link to exact status and evidence.
 | 8 | Research hard-coded formula hypotheses | Research only for now | Paired intake signals and labeled ground-truth corpus | Candidate evidence, ambiguous cases, counterexamples and false-positive results; source workbook remains unchanged |
 
 The first trust path is **shared calculation report → scalar Excel observation
-→ full Spec 2 evidence → headless workflow**. Paired intake and formula-gap
+→ full red-flag Spec 2 (export parity) evidence → headless workflow**. Paired intake and formula-gap
 research can advance alongside the Excel work, but the default agent path waits
 until the workbook behavior is evidenced and its outputs use privacy-safe,
 source-linked reports. Application reuse follows the same operation contract.

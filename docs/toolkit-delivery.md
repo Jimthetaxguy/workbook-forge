@@ -1,14 +1,14 @@
 ---
 author: Codex
 created: 2026-09-28
-agent: codex/Codex
-date: '2026-09-28T16:11:18-04:00'
+agent: claude-code/Claude Fable 5.1
+date: '2026-11-06'
 type: implementation-record
 task: Deliver the programmable workbook toolkit
-status: review-candidate-live-excel-pending
-summary: Independent Python and Rust native primitives, workbook workflows and review fixes pass local tests and installed-package checks; full Excel Desktop acceptance remains outstanding.
-next_steps: [Review the verified SDK candidate and current-state findings, complete live Excel acceptance, define explicit composition-to-workbook bindings for the next milestone]
-remaining: [Full live Excel acceptance, wider optional native-wheel platform coverage, hosted CI evidence]
+status: merged-2026-09-28-excel-acceptance-pending
+summary: The toolkit merged to main on 2026-09-28. Independent Python and Rust native primitives, workbook workflows and review fixes pass local tests and installed-package checks; full Excel Desktop acceptance remains outstanding, and the one scalar observation (Excel 16.113.4, 2026-10-14) is uncommitted.
+next_steps: [Commit the 2026-10-14 scalar Excel observation with a value-level regression link and then close the full export gate, define explicit composition-to-workbook bindings for the next milestone]
+remaining: [Full live Excel acceptance, wider optional native-wheel platform coverage. Hosted CI is not a goal while GitHub Actions is blocked by billing; the local gate tools/gate.sh is the acceptance evidence (AGENTS.md)]
 open_questions: []
 ---
 
@@ -62,7 +62,8 @@ executable behavior and metadata that an agent can inspect. The main remaining
 integration gap is an explicit path from a named native composition into a
 workbook model. That path is a proposed next milestone, not a delivered feature.
 
-The coverage counts describe different things: 521 inventoried functions,
+The coverage counts describe different things (counts as of `main` 580aacd on
+2026-11-06; the rest of this assessment keeps its 2026-09-28 date): 521 inventoried functions,
 123 implemented formula functions, nine directly callable primitive functions,
 ten primitive binary operators, ten XML extraction patterns and nine workbook
 agent operations. None of these counts implies complete Excel support.
@@ -111,7 +112,9 @@ prove recovery of the original native composition.
 agreement between implementations. Independently derived arithmetic checks the
 scenario's business result. Installed consumers establish package usability.
 Current Excel evidence is recorded in [Excel observations](excel-observations.md).
-The full Excel Desktop gate and hosted CI evidence remain outstanding.
+The full Excel Desktop gate remains outstanding. Hosted CI is not a goal while
+GitHub Actions is blocked by billing; the local gate `tools/gate.sh` is the
+evidence (see `AGENTS.md`).
 
 **Conservative extraction is useful even when calculation is unavailable.**
 Original formula text, imported caches and calculated values have distinct roles.
@@ -163,7 +166,7 @@ reimport as a workbook model. Recovering native compositions from imported
 formulas is a subsequent transformation with its own acceptance cases.
 
 Dependency order: binding contract → independent transformations → supported
-software/workbook comparison. Excel observations and hosted CI setup can proceed
+software/workbook comparison. Excel observations can proceed
 alongside implementation, but successful Excel acceptance is required before
 claiming that the complete delivery survives an Excel Desktop round trip.
 
@@ -363,7 +366,7 @@ acceptance criterion has not passed. Current Excel evidence is in
 | Independent Python Excel extraction and production | `workbook_forge.xlsx.import_xlsx` / `export_xlsx` |
 | Agent adapters | `workbook_forge.agent.AgentWorkbook`, `workbook_forge::agent::AgentWorkbook` |
 | Agent transports | `workbook-forge agent`, Rust `agent_workbook` example |
-| CLI | `workbook-forge scenario`, `inspect`, `run`, `capabilities` |
+| CLI | `workbook-forge scenario`, `inspect`, `run`, `capabilities`, `intake`, `calculate`, `extract`, `agent`; `workbook-forge-compile` for the source compiler |
 | Capability report | `workbook_forge.catalog.workbook_capabilities()` |
 
 The WASM facade is a library boundary, not an MCP endpoint. It accepts
