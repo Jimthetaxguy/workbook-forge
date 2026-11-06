@@ -91,6 +91,7 @@ Formulas a full calculation does not cover in these categories:
 - **in-cell-array-functions**: `hb_flatten_has_functions.xlsx` reports `unsupported_formula` for HAS, HASANY, HASALL, and FLATTEN.
 - **name-cycle**: `hb_defined_names.xlsx` reports its name cycle as `name_cycle` (`cycle` in the canonical model) by design.
 - **new-functions**: `hb_flatten_has_functions.xlsx` reports `unsupported_formula` for HAS, HASANY, HASALL, and FLATTEN.
+- **r1c1-looking-names**: `hb_r1c1_looking_names.xlsx`: three formulas calculate through their names. `XFE1` is shaped like a cell past column XFD, so `XFE1*2` stays `invalid_reference` even though a name of that spelling exists.
 - **sheet-name-spaces**: `hb_3d_references.xlsx` reports `unsupported_formula` for its 3D spans and for the name `FirstQuarter`, whose target is a 3D span. The other files in this category have no calculation diagnostics.
 
 ## Preserved only (52)

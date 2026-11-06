@@ -109,6 +109,11 @@ SUPPORTED_NOTES = {
         "`invalid_reference` for the cell-shaped `XFE1`. "
         "`hb_google_sheets_like.xlsx` reports `unsupported_formula` for CONCATENATE."
     ),
+    "r1c1-looking-names": (
+        "`hb_r1c1_looking_names.xlsx`: three formulas calculate through their "
+        "names. `XFE1` is shaped like a cell past column XFD, so `XFE1*2` stays "
+        "`invalid_reference` even though a name of that spelling exists."
+    ),
     "name-cycle": (
         "`hb_defined_names.xlsx` reports its name cycle as `name_cycle` "
         "(`cycle` in the canonical model) by design."
