@@ -38,7 +38,10 @@ are not byte-stable across regenerations; the others are.
 `python tools/corpus_check.py --report docs/corpus-report.md` runs every file
 through every engine and writes the matrix. `expectations.json` lists the
 expected non-pass outcomes; `python/tests/test_corpus.py` holds the matrix to it
-and never accepts a crash, a corrupt package or a lost value.
+and never accepts a crash, a corrupt package or a lost value. The report's
+`Run:` line names the day and the commit the engines ran from;
+`test_committed_corpus_report_is_fresh` regenerates the report and compares
+everything but that line, so a stale committed report fails the suite.
 
 `python tools/corpus/capabilities.py` turns the committed report into
 [docs/capabilities-xlsx.md](../../docs/capabilities-xlsx.md): each category as
