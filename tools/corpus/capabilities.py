@@ -73,7 +73,6 @@ PRESERVED_ONLY = {
     "structured-refs": "Structured references are kept; none of these formulas are calculated.",
     "3d-references": "3D references (Jan:Mar!B2) are kept with their cached values; calculation reports `unsupported_formula`.",
     "3d-refs": "The 3D formula in `op_sheet_name_quoting.xlsx` is `SUM('Q1 Budget:Σ Totals'!A1)` and its cached value is empty. Calculation reports `unsupported_formula`.",
-    "r1c1-looking-names": "The names are kept and calculated. `XFE1` is shaped like a cell past column XFD, so `XFE1*2` stays `invalid_reference`; the other three formulas calculate through their names.",
     "long-formula": "Kept; the toolkit engine does not calculate a long flat chain (expression depth limit), the canonical model does.",
     "formula-length-limit": "Kept; see long-formula.",
     "print-titles": "Print titles are kept.",
@@ -109,6 +108,11 @@ SUPPORTED_NOTES = {
         "`unsupported_formula`. `hb_r1c1_looking_names.xlsx` reports "
         "`invalid_reference` for the cell-shaped `XFE1`. "
         "`hb_google_sheets_like.xlsx` reports `unsupported_formula` for CONCATENATE."
+    ),
+    "r1c1-looking-names": (
+        "`hb_r1c1_looking_names.xlsx`: three formulas calculate through their "
+        "names. `XFE1` is shaped like a cell past column XFD, so `XFE1*2` stays "
+        "`invalid_reference` even though a name of that spelling exists."
     ),
     "name-cycle": (
         "`hb_defined_names.xlsx` reports its name cycle as `name_cycle` "

@@ -157,7 +157,7 @@ def test_shared_fixture_in_the_canonical_model():
 def test_a_table_without_a_name_keeps_the_unsupported_name_refusal():
     # No table (a document that never came from a workbook): unchanged.
     assert evaluate("=Rate").message == "unsupported name 'Rate'"
-    # A table: unknown is Excel's #NAME?.
+    # A table: an unknown name is #NAME?.
     assert evaluate("=Rate", names=DefinedNames()).code == "#NAME?"
 
 
