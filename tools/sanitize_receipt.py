@@ -13,12 +13,22 @@ it (a value, a key, or a token inside a longer string) becomes
 - the repository-relative path, when it resolves inside ``--root``;
 - a content fingerprint ``sha256:<hex>`` (``workbook_forge.model.content_fingerprint``),
   when it names a readable file outside the root;
-- its basename, when it names nothing on this machine or sits inside prose.
+- its basename, when it names nothing on this machine or sits inside prose;
+- the marker ``<home>``, when it is a home directory itself (``/Users/<name>``,
+  ``/home/<name>``, ``C:\\Users\\<name>``, ``~``), since the basename would be
+  the account name.
 
 A machine-local path is a POSIX path under one of the home, temporary or
 volume roots in ``MACHINE_LOCAL_ROOTS``, a ``~`` path, a Windows drive path or
 a ``file://`` URL. System paths such as ``/usr/bin/osascript`` are left alone.
-Relative paths are never touched.
+Relative paths are never touched. A Windows path is never resolved on this
+host; it always falls back to its basename or the marker.
+
+A string that starts with a path is taken as one path to its end, so a path
+with spaces survives as a whole. A path with spaces in the middle of prose is
+cut at the first space; the rest stays. After rewriting, every string is
+scanned for a surviving ``Users/`` or ``home/`` fragment and each hit is a
+warning naming the location, so such a case is not missed silently.
 
 The output directory must be new; an existing path is refused before anything
 is written. Beside the two files the tool writes ``sanitized.json``: the
@@ -64,6 +74,12 @@ PATH_TOKEN = re.compile(
     rf"""(?<![\w./\\-])(?:file://)?(?:~(?=/)|/(?:{_POSIX})(?=/)|[A-Za-z]:\\)[^\s"'<>|]*"""
 )
 _TRAILING_PUNCTUATION = ".,;:)]}"
+#: Directory names whose child is an account's home directory.
+HOME_ROOTS = ("Users", "home")
+HOME_MARKER = "<home>"
+#: A home-directory fragment that the token regex did not cover, such as a
+#: path cut at a space or written without its leading slash.
+SURVIVOR = re.compile(r"(?<![\w.])(?:Users|home)[/\\][^\s/\\\"']+")
 MANIFEST_NAME = "sanitized.json"
 
 
@@ -136,14 +152,33 @@ def _split_token(token: str) -> tuple[str, str]:
     return token, tail
 
 
-def _as_path(token: str) -> tuple[Path, str]:
-    """A filesystem path for the token, and the basename to fall back on."""
+def _is_home_directory(parts: tuple[str, ...]) -> bool:
+    """``Users/<name>`` or ``home/<name>`` with nothing after the name."""
+    return len(parts) == 2 and parts[0] in HOME_ROOTS
+
+
+def _classify(token: str) -> tuple[Path | None, str]:
+    """(a path on this host to resolve, or None; the replacement to fall back on).
+
+    A Windows path is never resolved: on a POSIX host it would be a relative
+    path and resolve against the working directory. A home directory itself
+    becomes ``HOME_MARKER`` rather than its basename, the account name.
+    """
     text = token[len("file://"):] if token.startswith("file://") else token
     if re.match(r"[A-Za-z]:\\", text):
-        return Path(text), PureWindowsPath(text).name
+        pure = PureWindowsPath(text)
+        parts = tuple(part for part in pure.parts[1:] if part)
+        return None, HOME_MARKER if _is_home_directory(parts) else (pure.name or HOME_MARKER)
     if text.startswith("~"):
-        return Path(text).expanduser(), PurePosixPath(text).name
-    return Path(text), PurePosixPath(text).name
+        pure = PurePosixPath(text)
+        fallback = HOME_MARKER if len(pure.parts) <= 1 else pure.name
+        try:
+            return Path(text).expanduser(), fallback
+        except (RuntimeError, OSError):
+            return None, fallback
+    pure = PurePosixPath(text)
+    parts = tuple(part for part in pure.parts[1:] if part)
+    return Path(text), HOME_MARKER if _is_home_directory(parts) else (pure.name or "path")
 
 
 def rewrite_path(token: str, root: Path, *, whole: bool) -> tuple[str, str]:
@@ -152,11 +187,13 @@ def rewrite_path(token: str, root: Path, *, whole: bool) -> tuple[str, str]:
     ``whole`` is true when the token is the entire string, which is the only
     place a content fingerprint reads well.
     """
-    path, basename = _as_path(token)
-    try:
-        resolved = path.resolve()
-    except (OSError, RuntimeError):
-        resolved = None
+    path, fallback = _classify(token)
+    resolved = None
+    if path is not None:
+        try:
+            resolved = path.resolve()
+        except (OSError, RuntimeError):
+            resolved = None
     if resolved is not None:
         try:
             relative = resolved.relative_to(root)
@@ -169,18 +206,19 @@ def rewrite_path(token: str, root: Path, *, whole: bool) -> tuple[str, str]:
                 return content_fingerprint(resolved.read_bytes()), "fingerprint"
             except OSError:
                 pass
-    return basename or "path", "basename"
+    return fallback, "basename"
 
 
 def sanitize_text(text: str, root: Path, location: str, changes: list[Change]) -> str:
     """Rewrite every machine-local path token in one string."""
     stripped = text.strip()
-    match = PATH_TOKEN.fullmatch(stripped)
-    if match is not None and stripped == text:
-        replacement, kind = rewrite_path(text, root, whole=True)
-        if replacement != text:
-            changes.append(Change(location, kind, text, replacement))
-        return replacement
+    if PATH_TOKEN.match(stripped) is not None:
+        # The string is a path, spaces included, to its end.
+        replacement, kind = rewrite_path(stripped, root, whole=True)
+        if replacement != stripped:
+            changes.append(Change(location, kind, stripped, replacement))
+            return replacement
+        return text
 
     def substitute(found: re.Match[str]) -> str:
         token, tail = _split_token(found.group(0))
@@ -209,9 +247,29 @@ def sanitize_document(document: Any, root: Path, location: str = "", changes: li
             # original path never reaches the change record through its label.
             new_key = sanitize_text(key, root, f"{location}[key]" if location else "[key]", changes) if isinstance(key, str) else key
             here = f"{location}.{new_key}" if location else str(new_key)
+            if new_key in out:
+                raise SanitizeError(f"two keys sanitise to {new_key!r} at {here}; the receipt needs a hand edit")
             out[new_key] = sanitize_document(value, root, here, changes)
         return out
     return document
+
+
+def surviving_fragments(document: Any, location: str = "") -> list[str]:
+    """Locations of strings that still hold a ``Users/`` or ``home/`` fragment."""
+    found: list[str] = []
+    if isinstance(document, str):
+        if SURVIVOR.search(document):
+            found.append(location or "<root>")
+    elif isinstance(document, list):
+        for index, item in enumerate(document):
+            found.extend(surviving_fragments(item, f"{location}[{index}]"))
+    elif isinstance(document, dict):
+        for key, value in document.items():
+            here = f"{location}.{key}" if location else str(key)
+            if isinstance(key, str) and SURVIVOR.search(key):
+                found.append(f"{here} (key)")
+            found.extend(surviving_fragments(value, here))
+    return found
 
 
 def scan_workbook(path: Path) -> list[tuple[str, str]]:
@@ -303,7 +361,10 @@ def sanitize(
         workbook_sha256=workbook_sha256,
         changes=changes,
         workbook_paths=scan_workbook(workbook_path),
-        receipt_warnings=_hash_warnings(document, workbook_sha256),
+        receipt_warnings=_hash_warnings(document, workbook_sha256) + [
+            f"a path-like fragment survives at {where}; review it by hand"
+            for where in surviving_fragments(sanitized)
+        ],
     )
     if dry_run or out_dir is None:
         return result

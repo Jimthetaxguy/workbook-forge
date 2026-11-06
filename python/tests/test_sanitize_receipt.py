@@ -260,3 +260,72 @@ def test_command_line_exit_codes(synthetic, tmp_path, capsys):
     assert "must be new" in capsys.readouterr().err
     assert sanitize_receipt.main(argv[:4] + ["--dry-run"]) == 0
     assert "dry run: nothing was written" in capsys.readouterr().out
+
+
+def test_windows_paths_are_never_resolved_against_the_working_directory(tmp_path, monkeypatch):
+    """On a POSIX host a drive path is relative; resolving it from inside the
+    repository would make it look repository-relative and leave it in place."""
+    monkeypatch.chdir(ROOT)
+    workbook = tiny_xlsx(tmp_path / "saved.xlsx")
+    receipt_path = tmp_path / "receipt.json"
+    windows = "C:\\Users\\example-user\\excel-run\\roundtrip.xlsx"
+    receipt_path.write_text(json.dumps({"working_copy": windows, "note": f"saved {windows} then closed"}) + "\n")
+    out = tmp_path / "out"
+    result = sanitize_receipt.sanitize(receipt_path, workbook, out)
+    written = (out / "receipt.json").read_bytes()
+    assert b"C:\\" not in written and b"example-user" not in written
+    document = json.loads(written)
+    assert document == {"working_copy": "roundtrip.xlsx", "note": "saved roundtrip.xlsx then closed"}
+    assert {change.kind for change in result.changes} == {"basename"}
+    assert result.receipt_warnings == []
+
+
+@pytest.mark.parametrize(
+    "token",
+    [f"{FAKE_HOME}", f"{FAKE_HOME}/", "/home/example-user", "/home/example-user/", "C:\\Users\\example-user", "~/"],
+)
+def test_a_home_directory_itself_becomes_the_marker_not_the_account_name(tmp_path, token):
+    workbook = tiny_xlsx(tmp_path / "saved.xlsx")
+    receipt_path = tmp_path / "receipt.json"
+    receipt_path.write_text(json.dumps({"folder": token, "note": f"Excel opened {token} first"}) + "\n")
+    result = sanitize_receipt.sanitize(receipt_path, workbook, tmp_path / "out", root=tmp_path / "repo")
+    document = json.loads((tmp_path / "out" / "receipt.json").read_text(encoding="utf-8"))
+    assert document["folder"] == sanitize_receipt.HOME_MARKER
+    assert document["note"] == f"Excel opened {sanitize_receipt.HOME_MARKER} first"
+    assert b"example-user" not in (tmp_path / "out" / "receipt.json").read_bytes()
+    assert result.receipt_warnings == []
+
+
+def test_a_string_that_starts_with_a_path_is_taken_whole_spaces_included(tmp_path):
+    workbook = tiny_xlsx(tmp_path / "saved.xlsx")
+    receipt_path = tmp_path / "receipt.json"
+    spaced = f"{FAKE_RUN}/My Files/roundtrip final.xlsx"
+    receipt_path.write_text(json.dumps({"working_copy": spaced, "padded": f"  {spaced}  "}) + "\n")
+    sanitize_receipt.sanitize(receipt_path, workbook, tmp_path / "out", root=tmp_path / "repo")
+    document = json.loads((tmp_path / "out" / "receipt.json").read_text(encoding="utf-8"))
+    assert document == {"working_copy": "roundtrip final.xlsx", "padded": "roundtrip final.xlsx"}
+
+
+def test_a_surviving_home_fragment_is_a_warning_naming_its_location(tmp_path):
+    workbook = tiny_xlsx(tmp_path / "saved.xlsx")
+    receipt_path = tmp_path / "receipt.json"
+    receipt_path.write_text(json.dumps({
+        "unslashed": "see Users/example-user/excel-run for the log",
+        "spaced": "saved C:\\Users\\Example User\\roundtrip.xlsx fine",
+        "clean": "receipts/run/receipt.json",
+    }) + "\n")
+    result = sanitize_receipt.sanitize(receipt_path, workbook, tmp_path / "out", root=tmp_path / "repo", dry_run=True)
+    assert result.receipt_warnings == ["a path-like fragment survives at unslashed; review it by hand"]
+    changed = {change.location: change.replacement for change in result.changes}
+    assert changed == {"spaced": sanitize_receipt.HOME_MARKER}
+
+
+def test_two_keys_that_sanitise_to_one_name_are_refused(tmp_path):
+    workbook = tiny_xlsx(tmp_path / "saved.xlsx")
+    receipt_path = tmp_path / "receipt.json"
+    receipt_path.write_text(json.dumps({
+        "by_path": {f"{FAKE_RUN}/roundtrip.xlsx": 1, f"{FAKE_HOME}/other-run/roundtrip.xlsx": 2},
+    }) + "\n")
+    with pytest.raises(sanitize_receipt.SanitizeError, match="two keys sanitise to 'roundtrip.xlsx'"):
+        sanitize_receipt.sanitize(receipt_path, workbook, tmp_path / "out", root=tmp_path / "repo")
+    assert not (tmp_path / "out").exists()
