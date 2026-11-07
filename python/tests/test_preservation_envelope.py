@@ -7,8 +7,10 @@ from __future__ import annotations
 
 import dataclasses
 import json
+import os
 from pathlib import Path
 import shutil
+import subprocess
 
 import pytest
 
@@ -126,3 +128,77 @@ def test_envelope_describe_is_json_and_sorted(path):
     assert set(described["source"]["sheet_parts"]) <= set(described["source"]["sheet_entries"])
     assert described["date_system"] in {"1900", "1904"}
     assert isinstance(described["compatibility_version"], int)
+
+
+# --- cross-language agreement -----------------------------------------------
+
+# What both importers must hold identically for the same package bytes. The
+# baseline document, tables, guards and text layouts are spec 10's own lane
+# (its refutation record lists where the two decoders differ today) and are
+# compared there, not here.
+_AGREED_KEYS = ("source", "merged", "date_system", "compatibility_version", "insertion_bound")
+
+
+def _python_envelopes() -> dict[str, dict]:
+    described = {}
+    for path in _importable_corpus():
+        try:
+            model = import_xlsx(path)
+        except WorkbookError:
+            continue
+        described[path.name] = model.envelope.describe()
+    return described
+
+
+def _rust_envelopes(paths: list[Path]) -> dict[str, dict]:
+    cargo = shutil.which("cargo")
+    if cargo is None:
+        pytest.skip("Rust toolchain is unavailable; the Rust envelope was not built")
+    target = ROOT / "rust" / "target"
+    env = dict(os.environ, CARGO_TARGET_DIR=str(target))
+    built = subprocess.run(
+        [cargo, "build", "--quiet", "--manifest-path", str(ROOT / "rust" / "Cargo.toml"),
+         "--locked", "--offline", "--example", "envelope_describe"],
+        env=env, text=True, capture_output=True, timeout=600,
+    )
+    assert built.returncode == 0, built.stderr
+    binary = target / "debug" / "examples" / (
+        "envelope_describe.exe" if os.name == "nt" else "envelope_describe"
+    )
+    completed = subprocess.run(
+        [str(binary), *(str(path) for path in paths)],
+        cwd=ROOT, text=True, capture_output=True, timeout=600,
+    )
+    assert completed.returncode == 0, completed.stderr
+    described = {}
+    for line in completed.stdout.splitlines():
+        item = json.loads(line)
+        described[paths[item["index"]].name] = item
+    return described
+
+
+def test_python_and_rust_envelopes_agree_on_identity_and_baseline_bytes():
+    python_side = _python_envelopes()
+    paths = [CORPUS / name for name in python_side]
+    rust_side = _rust_envelopes(paths)
+    differences = []
+    refused_by_rust = []
+    agreed = 0
+    for name, left in python_side.items():
+        item = rust_side[name]
+        if "error" in item:
+            refused_by_rust.append(f"{name}: {item['error']}")
+            continue
+        right = item["describe"]
+        for key in _AGREED_KEYS:
+            if left[key] != right[key]:
+                differences.append(f"{name}: {key}: python {left[key]!r} rust {right[key]!r}")
+        if left["text"]["cells"] != right["text"]["cells"]:
+            differences.append(f"{name}: text.cells")
+        if left["baseline"]["parts"] != right["baseline"]["parts"]:
+            differences.append(f"{name}: baseline.parts")
+        agreed += 1
+    assert not differences, "\n".join(differences)
+    # A workbook one importer refuses is a known difference between the two
+    # decoders, named here rather than skipped silently.
+    assert agreed >= 40, f"only {agreed} workbooks agreed; refused by Rust: {refused_by_rust}"
