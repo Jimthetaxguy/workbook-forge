@@ -301,6 +301,15 @@ def import_xlsx(
     """
     import json
 
+    from .envelope import (
+        Baseline,
+        ContainerMetadata,
+        PreservationEnvelope,
+        SourceIdentity,
+        TextPreservation,
+    )
+    from .model import content_fingerprint
+
     with Workbook.open(path) as workbook:
         styles, style_metadata = _styles(workbook)
         document: dict[str, Any] = {
@@ -557,17 +566,44 @@ def import_xlsx(
                 if item["name"].casefold() in text_layouts
                 for address in item["cells"]
             )
+        snapshot = model.to_dict()
+        infos = tuple(copy.copy(info) for info in workbook._archive.infolist())
         model._source_baseline = _Baseline(
             workbook.source,
             tuple(workbook._parts.items()),
-            tuple(copy.copy(info) for info in workbook._archive.infolist()),
+            infos,
             workbook._archive.comment,
-            json.dumps(model.to_dict(), allow_nan=False),
+            json.dumps(snapshot, allow_nan=False),
             workbook._uses_1904_date_system,
             tuple(merged),
             workbook._compatibility_version,
         )
         model._import_metadata = metadata
+        # The same state, named (spec 10 Design 1). The handle stays in memory
+        # for the overwrite refusal and is never described.
+        model._envelope = PreservationEnvelope(
+            SourceIdentity(
+                content_fingerprint(Path(path).read_bytes()),
+                tuple(sorted(workbook._parts)),
+                workbook._workbook_part,
+                dict(sheet_parts),
+                tuple(workbook.sheet_entry_names),
+                workbook.chartsheets,
+                workbook.source,
+            ),
+            Baseline(
+                dict(workbook._parts),
+                ContainerMetadata(infos, workbook._archive.comment),
+                snapshot,
+            ),
+            tuple(copy.deepcopy(metadata["tables"])),
+            dict(merged),
+            metadata["date_system"],
+            workbook._compatibility_version,
+            model._feature_guard,
+            TextPreservation(model._text_cells, dict(text_layouts)),
+            (_EXCEL_MAX_ROWS, _EXCEL_MAX_COLUMNS),
+        )
         return model
 
 

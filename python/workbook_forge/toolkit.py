@@ -102,6 +102,8 @@ class WorkbookModel:
         # (xlsx.TextLayout), and the cells the import held there.
         self._text_layouts: dict[str, Any] = {}
         self._imported_addresses: frozenset[tuple[str, str]] = frozenset()
+        # The imported package's envelope.PreservationEnvelope; None when authored.
+        self._envelope = None
 
     def _new_session(self, model_json: str):
         if self._names is None:
@@ -115,6 +117,11 @@ class WorkbookModel:
     @property
     def revision(self) -> int:
         return self.to_dict()["revision"]
+
+    @property
+    def envelope(self) -> Any:
+        """The imported package's PreservationEnvelope; None for an authored model."""
+        return self._envelope
 
     def to_dict(self) -> dict[str, Any]:
         """Return a detached snapshot; modifying it does not edit this session."""
