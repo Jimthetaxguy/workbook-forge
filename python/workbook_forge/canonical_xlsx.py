@@ -10,7 +10,6 @@ passing spill test.
 
 from __future__ import annotations
 
-import os
 import re
 import tempfile
 import zipfile
@@ -34,8 +33,10 @@ from workbook_forge.model import (
 )
 from workbook_forge.workbook import (
     Workbook as Package,
+    OUTPUT_EXISTS_MESSAGE,
     _cell_position,
     _q,
+    link_new,
 )
 from workbook_forge.xlsx import _fresh_parts, _styles, _xml
 
@@ -110,7 +111,7 @@ def export_canonical(
     if target.suffix.lower() != ".xlsx":
         raise CanonicalPackageError("invalid_output", "output must use the .xlsx extension")
     if target.exists():
-        raise FileExistsError(target)
+        raise FileExistsError(OUTPUT_EXISTS_MESSAGE)
     target.parent.mkdir(parents=True, exist_ok=True)
     parts = _fresh_parts(_ooxml_buffer(workbook))
     _write_defined_names(parts, workbook)
@@ -128,7 +129,7 @@ def export_canonical(
             if calc is not None:
                 calc.set("fullPrecision", "1")
             package.save_as(staged)
-        os.link(staged, target)
+        link_new(staged, target)
     return target
 
 

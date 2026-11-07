@@ -1,15 +1,15 @@
 ---
 author: Codex
 created: 2026-09-24
-agent: codex/Codex
-date: '2026-10-24'
+agent: claude-code/Claude Fable 5.1
+date: '2026-11-06'
 type: project-context
 task: Build an SDK for Excel in agent-ready formats using independent Python and Rust implementations
 status: active
-summary: "Workbook Forge is an agent-ready Excel compiler: supported inputs and calculations pass through one versioned model to independent Python/Rust runtimes and editable OOXML. Main contains the compiler, toolkit, target-gated Rust/WASM byte boundary, blank-workbook constructor, Univer canvas (Formula Lab), local XLSX export, and source compiler profile 6 XLOOKUP generation. Formula Lab remains a prototype with bounded formula support, no MCP host bridge, and no worksheet spill projection. Imported workbooks accept value/formula edits to absent cells within Excel's grid (or a declared session bound), refuse insertion into merged non-anchor cells, and export them as valid OOXML. Excel 16.113.4 has observed the scalar operating scenario; Spec 2 and the joined headless path remain outstanding."
+summary: "Workbook Forge is an agent-ready Excel compiler: supported inputs and calculations pass through one versioned model to independent Python/Rust runtimes and editable OOXML. Main contains the compiler, toolkit, target-gated Rust/WASM byte boundary, blank-workbook constructor, Univer canvas (Formula Lab), local XLSX export, and source compiler profile 6 XLOOKUP generation. Formula Lab remains a prototype with bounded formula support, no MCP host bridge, and no worksheet spill projection. Imported workbooks accept value/formula edits to absent cells within Excel's grid (or a declared session bound), refuse insertion into merged non-anchor cells, and export them as valid OOXML. Excel 16.113.4 observed the scalar operating scenario on 2026-10-14 (receipt uncommitted); red-flag Spec 2 and the joined headless path remain outstanding."
 next_steps:
   - Harden the browser Formula Lab, including imported-workbook editing and array-result projection, before describing it as a general spreadsheet application. Keep a local MCP companion or in-page host bridge a separate, independently verified integration.
-  - Keep the Excel 16.113.4 operating-scenario observation uncommitted. The saved package contains a machine-local path. Spec 2 stays false until export writes every declared spill cell and a fresh Excel reimport matches them.
+  - Sanitise and commit the 2026-10-14 Excel 16.113.4 operating-scenario observation with a value-level regression link; it is uncommitted because the saved package contains a machine-local path. Red-flag Spec 2 (export parity) stays false until export writes every declared spill cell and a fresh Excel reimport matches them.
   - Fix remaining confirmed defects from Microsoft's examples or decimal arithmetic, never from either engine. The SUM accumulation rule, the serial-0 date, the typed reason on unsupported-function results, the defined-name diagnostic, and the calculation report are already in place.
   - Settle the profiles that were written from Microsoft's prose rather than an example in one Excel session: criteria over numbers stored as text, error cells under criteria, text functions over errors, EDATE before serial 1.
   - Decide whether bindings get a value type, required status and constraints. That changes the schema and needs a new version.
@@ -27,7 +27,11 @@ remaining:
   - Run `bash tools/gate.sh` locally before a commit or pull request; GitHub Actions is blocked by billing, and mergeability alone is not acceptance evidence.
   - Of the 33 confirmed review findings that were open on 2026-09-29, ten were fixed on 2026-09-30 (counting and criteria functions, text functions over errors, arithmetic overflow, EDATE before serial 1, expression depth, `_xHHHH_` escapes, missing and unchecked versions, blank references). On 2026-10-05 four more of the six named findings were resolved: the SUM accumulation rule and typed reason on unsupported-function results were already fixed in prior commits; serial 0 as a date was fixed (MONTH(0)=1, DAY(0)=0, YEAR(0)=1900; serial 0 is an engine profile, see `docs/behavior-profiles.md`); and a formula using a defined name is now reported as `unsupported_formula` instead of `parse_error`. The calculation report now exists. An output origin of `calculated` means `Formula.result` was produced by the engine; cell provenance is left unchanged so an imported cache is not promoted. The per-cell memory bound remains deferred. The remaining 17 unnamed findings from the `.verification/` ledger could not be individually assessed (gitignored, not on disk). The 2026-09-30 fixes carry Workbook Forge profiles that have not been checked in Excel.
   - "GitHub reports Jimthetaxguy/workbook-forge as public, verified 2026-09-28; historical private-release preparation notes in docs/run-history.md describe their original checkpoints."
-open_questions: []
+open_questions:
+  - "G-A, schema or model version change: typed bindings (proposed spec 06), a calculation-report v2 or a spill-placement field each need James's approval before any code; `schema_version` and `model_version` do not move without it."
+  - "G-B, vision wording: whether `docs/vision.md` moves to the toolkit framing now or after the contracts settle. Factual corrections do not wait on this."
+  - "G-C, writeback semantics for the original file: the conflict rule, staging, recovery, and what the same baseline means."
+  - "G-D, public contract commitments: anything tagged, published or promised to a host."
 ---
 # Workbook Forge Context
 ## Purpose
@@ -93,7 +97,11 @@ Build an **SDK for Excel in agent-ready formats**: expose supported workbook dat
 ## Current State
 The [current-state findings](docs/toolkit-delivery.md#current-state-findings) separate delivered capabilities from evidence limits. Native named-input compositions and cell-based workbook expressions remain separate authoring interfaces; the canonical binding path is on `main` and is not yet the general export API.
 The native primitive interface adds nine functions and ten binary operators, typed native values, named-input composition and inspectable operation identities without requiring a workbook. Both packages provide the canonical catalog and expression schema. All three PR boundary findings are fixed; final independent review also closed a direct-call size-limit mismatch. Contributor evidence and the outstanding Excel acceptance gate are recorded in `docs/toolkit-delivery.md`.
-At the accepted toolkit checkpoint, coverage was 115 implemented functions, 85 detailed semantic specs, 110 source records, and 1,371 shared fixtures; its complete suite recorded 923 Python and 88 Rust tests. Those checkpoint counts describe the toolkit baseline, not Excel-wide compatibility. The 521-entry source inventory is broader than current implemented coverage, with 398 catalog-only functions. FILTER, SORT, and UNIQUE return bounded, shape-preserving arrays; worksheet spill projection remains unsupported.
+At the 2026-09-28 toolkit checkpoint (`32f49e2`), coverage was 115 implemented functions, 85 detailed semantic specs, 110 source records and 1,371 shared fixtures, and the suite ran 923 Python and 88 Rust tests. Those are checkpoint figures, not the tree today and not Excel-wide compatibility. Current numbers on `main` `580aacd`, 2026-11-06 (derivation in `docs/history/coverage-and-test-counts-2026-11-06.md`):
+- `catalog/formulas.json`: 123 implemented functions of the 521-entry inventory (398 catalog-only), 86 detailed semantic specs, 116 source records.
+- `fixtures/formula-cases.jsonl`: 1,691 cases.
+- Clean-tree gate of 2026-11-06: 4,037 Python tests, 233 Rust tests plus 1 ignored release benchmark, 15 forge-engine Node tests.
+FILTER, SORT, and UNIQUE return bounded, shape-preserving arrays; worksheet spill projection remains unsupported.
 
 The standalone source compiler converts supported `.xlsx` workbooks into an exact versioned Python or Rust source scaffold and compiles edited artifacts back to `.xlsx`. Source profiles 2–6 cover SUM, lazy IF/IFERROR, AVERAGE, and (in profile 6) XLOOKUP, plus bounded scalar arithmetic, references/ranges, comparisons, and multi-sheet dependencies. Profile 6 preserves XLOOKUP's six argument positions, supports omitted `lookup_value`/`if_not_found`/`match_mode`/`search_mode`, exact matching over equal-length one-dimensional referenced arrays, scalar fallback, and forward/reverse linear search. Approximate/wildcard/binary modes, computed array arguments, two-dimensional returns and spill projection remain unsupported. The compiler driver, parser, validator, and lowering remain Python; generated Rust is executed by a real Rust backend. The four same-language/cross-language routes consume the preceding edited artifact. This is a constrained source dialect, not a general-purpose compiler or a replacement for the canonical workbook-model interchange path. The optional TypeScript client speaks the existing agent-workbook JSON-lines protocol to either engine; it does not add a third evaluator, UI, server, or durable transport.
 
@@ -126,8 +134,9 @@ The Excel round-trip harness is `tools/excel_oracle.py`, with `tools/canonical_e
 - `docs/review-protocol.md`: how to review this project so that the reviewer does not inherit the builder's view; `tools/review/` enforces it.
 - `tools/gate.sh`: the gate.
 - `docs/vision.md`: the North Star and the v1 spine order.
-- `docs/specs/`: compiler pipeline, red-flag contracts, model versioning rules and the model changelog. `schemas/workbook-model.v1.schema.json` is the canonical schema.
-- `receipts/`: committed Excel round-trip receipts. `tools/review/findings.schema.json`: the shape of a review finding.
+- `docs/specs/`: the specs in force: compiler pipeline, red-flag contracts, model versioning rules and the model changelog. `schemas/workbook-model.v1.schema.json` is the canonical schema.
+- `docs/specs/proposed/`: proposed specs 01–07, not accepted contracts. Its README gives the working order and the decisions waiting on James; the four gates in `open_questions` above group them.
+- `receipts/`: preflight packages for the Excel round-trip harness. They record that Excel was not invoked and that red-flag Spec 2 is not passed; no Excel observation receipt is committed. `tools/review/findings.schema.json`: the shape of a review finding.
 - `docs/history/`: superseded branch briefs, dated notes and Jev advisory receipts, kept for the record and not current guidance.
 - `.autoresearch/state.json`: the authoritative accepted-run ledger. `.autoresearch/config.json` holds the loop criteria; its `eval_command` is `tools/gate.sh`.
 ## Working conventions

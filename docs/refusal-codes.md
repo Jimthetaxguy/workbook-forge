@@ -69,5 +69,7 @@ its own codes through `CanonicalPackageError` and `ModelError`, for example
 `unsupported_formula_group` (shared, array or data-table formula groups),
 `array_spill_refused`, `unsupported_package` (such as a 1904 date system),
 `invalid_output` and `evidence_insufficient`. The table's `inherited` list names them and the engine
-(`ToolkitError`) codes such as `invalid_value` and `parse_error`. They are defined at their raise
-sites in `python/workbook_forge/canonical_xlsx.py` and `model.py`.
+(`ToolkitError`) codes such as `invalid_value`, `parse_error` and `unsupported_array_reference`
+(a bound output or dependency resolves to an array result; spill projection is not modeled,
+`python_engine.py`, `toolkit.rs`). They are defined at their raise sites in
+`python/workbook_forge/canonical_xlsx.py`, `model.py`, `python_engine.py` and `rust/src/toolkit.rs`.

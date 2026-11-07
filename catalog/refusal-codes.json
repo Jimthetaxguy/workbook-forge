@@ -251,6 +251,7 @@
       "parse_error",
       "resource_limit",
       "revision_conflict",
+      "unsupported_array_reference",
       "unsupported_edit",
       "unsupported_formula",
       "unsupported_formula_group",

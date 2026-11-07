@@ -6,7 +6,7 @@ slices must satisfy them or name an explicit waiver in the PR.
 
 Related: [North Star vision](../vision.md).
 
-## What is built (2026-09-29)
+## What is built (2026-11-06)
 
 These specs state requirements. This table states which of them the code on
 `main` meets, so that a requirement is not read as a fact. The shared compiler
@@ -21,6 +21,7 @@ stages and source-path privacy rule are specified in
 | Versions enforced on write (Spec 4) | Built. `Workbook.to_dict`, `to_json` and `export_canonical` in Python and `Workbook::to_json` in Rust refuse any version other than 1 with the same `unsupported_*_version` errors as the reader, before any bytes or file are produced. The toolkit form's Rust exporter validates its model the same way |
 | A missing version refused everywhere (Spec 4) | Built. The canonical reader refuses it as `missing_required_field`; the toolkit workbook form, read by `run`, `inspect` and `agent`, refuses it as the typed `schema_version` diagnostic in both engines |
 | One serialized form for every tool (Spec 1) | Not built. Two forms exist. Intake, canonical export and the canonical receipt use the canonical model. The agent tools, the general export and `run`, `inspect`, `scenario` and `agent` use the older toolkit workbook form. The #32 browser command envelope and delta patches (`rust/src/browser_contract.rs`) are a session protocol over the toolkit session, not a third workbook schema. The session event log (schema v1, `rust/src/event_log.rs`) is the same kind of session record: memory only, for edit, undo, and redo intents and for replay. It is not durable, not the sealed cell-store log, and not an Excel observation. Replay of an imported workbook checks the baseline sha256 and byte length and the engine's own calc deltas. It is not a third workbook schema |
+| The source compiler enters through the toolkit form, not the canonical model (Spec 1) | Not unified. `workbook-forge-compile` and `python/workbook_forge/source_graph.py` read an `.xlsx` with `xlsx.import_xlsx` and build a toolkit `WorkbookModel` (`source_graph.py:27-28`, `source_cli.py:26`); the canonical model in `model.py` is not on that path. Its generated Python and Rust source is a constrained dialect over the toolkit form |
 | Model changelog (Spec 4) | Built: `model-changelog.md` |
 | Typed bindings with value type, required status and constraints | Not in the canonical model: version 1 bindings are name-to-cell maps. The toolkit workbook form has typed input bindings |
 | A calculation report with backend and model provenance, and origin `calculated` (Spec 1, item 7) | Built as a separate document, `schemas/calculation-report.v1.schema.json`. Both engines emit it. An output origin of `calculated` means `Formula.result` was produced by that engine. Cell provenance stays the origin of the stored value, so an imported cache is not promoted. Export still keeps no Excel receipt |
@@ -28,7 +29,7 @@ stages and source-path privacy rule are specified in
 | Shared fixtures only, with no language-local expected values (Spec 1, item 6) | Partly. Both suites read `fixtures/`. Both also assert literal expected values, and Rust reads `operating-scenario-cases.json` only when the Python test runs it |
 | Migrator from an older version (Spec 1) | Not built. Only version 1 exists |
 | Excel round-trip harness (Spec 2) | Built: `tools/excel_oracle.py` |
-| An observed Excel round trip of the canonical fixture (Spec 2) | Not recorded. The committed receipts are preflight only |
+| An observed Excel round trip of the canonical fixture (Spec 2) | Observed on 2026-10-14 with Excel 16.113.4, not committed: the saved package held a machine-local path. The committed receipts are preflight only |
 | Array spill, volatile, iteration and quirk classes observed (Spec 2) | Not observed. Spill placement is unsupported on export |
 | `oracle_optional` and `oracle_required` test runs (Spec 2) | Not built |
 | Detectors behind an off-switch (Spec 3) | Not built |
@@ -36,7 +37,7 @@ stages and source-path privacy rule are specified in
 | Intake of array, shared and data-table formulas (Spec 4) | Refused with a reason. Every workbook with a filled-down formula is refused |
 | Intake of dates written as text, 1904 dates and macros (Spec 4) | Refused with a reason |
 | Intake decoding `_xHHHH_` escapes in text | Built, in both readers and both writers, for shared strings, inline strings and string formula caches. The rule is in `docs/behavior-profiles.md` |
-| A job that runs both suites on every change | Not built. `tools/gate.sh` runs them locally |
+| A job that runs both suites on every change | Not built. GitHub Actions is blocked by billing (`AGENTS.md`); `tools/gate.sh` runs them locally and is the acceptance evidence |
 
 ---
 

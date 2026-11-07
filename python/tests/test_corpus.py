@@ -68,9 +68,18 @@ def test_every_expectation_names_a_corpus_file_and_a_registered_code():
                 assert codes is None or code in codes, code
 
 
-def test_corpus_matrix_matches_expectations(rust_bin):
-    files = corpus_check.corpus_files([])
-    results = corpus_check.run_isolated(files, ["py_toolkit", "py_canonical", "rust"], rust_bin)
+ENGINES = ["py_toolkit", "py_canonical", "rust"]
+
+
+@pytest.fixture(scope="module")
+def corpus_results(rust_bin) -> dict:
+    """One run of the whole corpus through every engine, shared by the matrix
+    test and the report-freshness test so the corpus is not run twice."""
+    return corpus_check.run_isolated(corpus_check.corpus_files([]), ENGINES, rust_bin)
+
+
+def test_corpus_matrix_matches_expectations(corpus_results):
+    results = corpus_results
     defects = [
         f"{name} {engine}: {record['outcome']} at {record.get('stage')}: {record.get('error')}"
         for name, row in results.items()
@@ -81,6 +90,23 @@ def test_corpus_matrix_matches_expectations(rust_bin):
     expectations = json.loads(corpus_check.EXPECTATIONS.read_text(encoding="utf-8"))
     mismatches = corpus_check.expectation_mismatches(results, expectations)
     assert not mismatches, "\n".join(mismatches)
+
+
+def test_committed_corpus_report_is_fresh(corpus_results, tmp_path):
+    """docs/corpus-report.md is the report today's engines write, apart from the
+    `Run:` line that names the day and commit of the run. Regenerate it with
+    `python tools/corpus_check.py --report docs/corpus-report.md`."""
+    expectations = json.loads(corpus_check.EXPECTATIONS.read_text(encoding="utf-8"))
+    regenerated = tmp_path / "corpus-report.md"
+    regenerated.write_text(corpus_check.markdown(corpus_results, ENGINES, expectations), encoding="utf-8")
+    committed = (ROOT / "docs" / "corpus-report.md").read_text(encoding="utf-8")
+    assert corpus_check.RUN_STAMP.search(committed), "docs/corpus-report.md carries no `Run:` line naming its day and commit"
+    assert corpus_check.without_run_stamp(committed) == corpus_check.without_run_stamp(
+        regenerated.read_text(encoding="utf-8")
+    ), (
+        f"docs/corpus-report.md is stale; today's report is at {regenerated}. "
+        "Regenerate with: python tools/corpus_check.py --report docs/corpus-report.md"
+    )
 
 
 def test_refusal_code_table_is_shared_and_complete():

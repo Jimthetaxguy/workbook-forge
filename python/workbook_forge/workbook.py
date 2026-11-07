@@ -54,6 +54,22 @@ MACRO_WORKBOOK_CONTENT_TYPE = "application/vnd.ms-excel.sheet.macroEnabled.main+
 XML_NS = "http://www.w3.org/XML/1998/namespace"
 NS = {"m": MAIN, "r": REL_DOC}
 # Shared with Rust (xlsx::POSITIONAL_CELLS_MESSAGE): the same words, the same code.
+OUTPUT_EXISTS_MESSAGE = "output path already exists"
+
+
+def link_new(staged: str | Path, target: str | Path) -> None:
+    """Hard-link ``staged`` to ``target``, which must not exist yet.
+
+    ``os.link`` is the atomic half of every writer's exists check. When another
+    writer won the race the OS error names both paths; the refusal we raise
+    instead names neither, because no report may carry a machine path.
+    """
+    try:
+        os.link(staged, target)
+    except FileExistsError:
+        raise FileExistsError(OUTPUT_EXISTS_MESSAGE) from None
+
+
 POSITIONAL_CELLS_MESSAGE = (
     "a worksheet row or cell has no r reference; rows and cells placed by position are not read"
 )
@@ -859,7 +875,7 @@ class Workbook:
         if destination == self.source:
             raise WorkbookError("refusing to overwrite the source workbook")
         if destination.exists():
-            raise FileExistsError(destination)
+            raise FileExistsError(OUTPUT_EXISTS_MESSAGE)
         if self._uses_1904_date_system:
             raise UnsupportedWorkbook(
                 "formula calculation does not support the workbook's 1904 date system"
@@ -1980,7 +1996,7 @@ class Workbook:
         if target == self.source:
             raise WorkbookError("refusing to overwrite the source workbook")
         if target.exists():
-            raise FileExistsError(target)
+            raise FileExistsError(OUTPUT_EXISTS_MESSAGE)
         target.parent.mkdir(parents=True, exist_ok=True)
         changed: dict[str, bytes] = dict(self._changed_misc)
         changed.update(
@@ -2009,7 +2025,7 @@ class Workbook:
                     destination.writestr(
                         info, changed.get(info.filename, self._parts[info.filename])
                     )
-            os.link(temp, target)
+            link_new(temp, target)
         finally:
             temp.unlink(missing_ok=True)
         return target
