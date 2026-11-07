@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "note": "Hand-authored from docs/specs/proposed/09-contract-convergence.md section 5 row 0 (spec 09 step 0). Each case gives the document that goes in, the normalised document that must come out, and the Conversion record: every dropped and added field path, sorted by code point. Expected documents were written by hand from the specs, not produced by either engine. Rules the cases pin: numbers are floats in the toolkit shape and integers in the canonical shape when integer-valued within 2^53; an error with no message is {error} in the toolkit shape and {error, message: null} in the canonical shape; #N/A! is spelled #N/A in the canonical shape; the canonical bindings object is present only when at least one binding exists; drop lists are relative to the normalised toolkit form, so bindings.inputs.<name>.required is dropped even when the caller never wrote it.",
+  "note": "Hand-authored from docs/specs/proposed/09-contract-convergence.md section 5 row 0 (spec 09 step 0). Each case gives the document that goes in, the normalised document that must come out, and the Conversion record: every dropped and added field path, sorted by code point. Expected documents were written by hand from the specs, not produced by either engine. Rules the cases pin: numbers are floats in the toolkit shape and integers in the canonical shape when integer-valued within 2^53; an error with no message is {error} in the toolkit shape and {error, message: null} in the canonical shape; #N/A! is spelled #N/A in the canonical shape; the canonical bindings object is present only when at least one binding exists; drop lists are relative to the normalised toolkit form, so bindings.inputs.<name>.required is dropped even when the caller never wrote it; model_version is added on the way to the canonical shape and dropped on the way back, as revision is in the other direction; without an envelope no workbook provenance is written, because a toolkit document does not say whether it was authored or imported, and the only cell provenance written is {origin: imported} on a formula cell whose value came from cached_value, which is by definition the imported cache; a style number_format of exactly General is Excel's default with no canonical representation and is dropped and listed, as canonical import drops it (case-sensitive, that one string only); the integer rule is inclusive at 2^53 and excludes negative zero, which stays a float.",
   "canonical_cases": [
     {
       "name": "authored-two-sheets",
@@ -193,7 +193,6 @@
         "schema_version": 1,
         "model_version": 1,
         "metadata": {},
-        "provenance": {"origin": "authored"},
         "bindings": {
           "inputs": {"rate": {"sheet": "Data", "address": "A2"}},
           "outputs": {"sum": {"sheet": "Data", "address": "B2"}}
@@ -233,7 +232,7 @@
           "sheets[0].id"
         ],
         "added": [
-          "provenance",
+          "model_version",
           "sheets[0].cells.A1.data_type",
           "sheets[0].cells.A2.data_type",
           "sheets[0].cells.A3.data_type",
@@ -275,7 +274,6 @@
         "schema_version": 1,
         "model_version": 1,
         "metadata": {},
-        "provenance": {"origin": "authored"},
         "bindings": {
           "inputs": {"x": {"sheet": "S", "address": "A1"}},
           "outputs": {}
@@ -299,7 +297,7 @@
           "sheets[0].id"
         ],
         "added": [
-          "provenance",
+          "model_version",
           "sheets[0].cells.A1.data_type",
           "sheets[0].cells.B1.data_type",
           "sheets[0].dimensions"
