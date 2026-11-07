@@ -1,0 +1,357 @@
+{
+  "schema_version": 1,
+  "note": "Hand-authored from docs/specs/proposed/09-contract-convergence.md section 5 row 0 (spec 09 step 0). Each case gives the document that goes in, the normalised document that must come out, and the Conversion record: every dropped and added field path, sorted by code point. Expected documents were written by hand from the specs, not produced by either engine. Rules the cases pin: numbers are floats in the toolkit shape and integers in the canonical shape when integer-valued within 2^53; an error with no message is {error} in the toolkit shape and {error, message: null} in the canonical shape; #N/A! is spelled #N/A in the canonical shape; the canonical bindings object is present only when at least one binding exists; drop lists are relative to the normalised toolkit form, so bindings.inputs.<name>.required is dropped even when the caller never wrote it.",
+  "canonical_cases": [
+    {
+      "name": "authored-two-sheets",
+      "input_kinds": {"rate": "number"},
+      "canonical": {
+        "schema_version": 1,
+        "model_version": 1,
+        "metadata": {"name": "two-sheets", "description": "hand-authored"},
+        "provenance": {"origin": "authored", "source": "fixture"},
+        "bindings": {
+          "inputs": {
+            "rate": {"sheet": "Inputs", "address": "B1"},
+            "label": {"sheet": "Inputs", "address": "A1"}
+          },
+          "outputs": {"total": {"sheet": "Totals", "address": "A1"}}
+        },
+        "sheets": [
+          {
+            "name": "Inputs",
+            "dimensions": [1, 3, 1, 3],
+            "cells": {
+              "A1": {"address": "A1", "value": "Rate", "data_type": "text"},
+              "B1": {"address": "B1", "value": 20, "data_type": "number", "number_format": "0.00", "provenance": {"origin": "authored", "source": "named-assumption"}},
+              "C1": {"address": "C1", "value": true, "data_type": "boolean"},
+              "A2": {"address": "A2", "value": {"error": "#REF!", "message": null}, "data_type": "error"},
+              "B3": {"address": "B3", "value": null, "data_type": "blank"},
+              "C3": {"address": "C3", "value": 2.5, "data_type": "number"}
+            }
+          },
+          {
+            "name": "Totals",
+            "dimensions": [1, 2, 1, 1],
+            "cells": {
+              "A1": {"address": "A1", "value": null, "data_type": "blank", "formula": {"expression": "=Inputs!B1*2", "dependencies": [], "result": null}},
+              "A2": {"address": "A2", "value": 999, "data_type": "number", "formula": {"expression": "=A1+1", "dependencies": [], "result": null}, "provenance": {"origin": "imported", "source": "xl/worksheets/sheet2.xml"}}
+            }
+          }
+        ],
+        "diagnostics": [
+          {"code": "unsupported_formula", "classification": "unsupported", "message": "unsupported function FOO", "sheet": "Totals", "address": "A1", "function": "FOO"},
+          {"code": "parse_error", "classification": "parse_error", "message": "formula could not be parsed"}
+        ]
+      },
+      "toolkit": {
+        "schema_version": 1,
+        "revision": 0,
+        "sheets": [
+          {
+            "id": "sheet-1",
+            "name": "Inputs",
+            "cells": {
+              "A1": {"value": "Rate"},
+              "A2": {"value": {"error": "#REF!"}},
+              "B1": {"value": 20.0, "style": {"number_format": "0.00"}},
+              "B3": {"value": null},
+              "C1": {"value": true},
+              "C3": {"value": 2.5}
+            },
+            "column_widths": {}
+          },
+          {
+            "id": "sheet-2",
+            "name": "Totals",
+            "cells": {
+              "A1": {"value": null, "formula": "=Inputs!B1*2"},
+              "A2": {"value": null, "formula": "=A1+1", "cached_value": 999.0}
+            },
+            "column_widths": {}
+          }
+        ],
+        "inputs": {"rate": {"sheet": "Inputs", "address": "B1", "kind": "number", "required": true}},
+        "outputs": {"total": {"sheet": "Totals", "address": "A1"}}
+      },
+      "conversion": {
+        "dropped": [
+          "bindings.inputs.label",
+          "diagnostics[0]",
+          "diagnostics[1]",
+          "metadata.description",
+          "metadata.name",
+          "model_version",
+          "provenance",
+          "sheets[0].cells.A1.data_type",
+          "sheets[0].cells.A2.data_type",
+          "sheets[0].cells.B1.data_type",
+          "sheets[0].cells.B1.provenance",
+          "sheets[0].cells.B3.data_type",
+          "sheets[0].cells.C1.data_type",
+          "sheets[0].cells.C3.data_type",
+          "sheets[0].dimensions",
+          "sheets[1].cells.A1.data_type",
+          "sheets[1].cells.A1.formula.dependencies",
+          "sheets[1].cells.A1.formula.result",
+          "sheets[1].cells.A2.data_type",
+          "sheets[1].cells.A2.formula.dependencies",
+          "sheets[1].cells.A2.formula.result",
+          "sheets[1].cells.A2.provenance",
+          "sheets[1].dimensions"
+        ],
+        "added": [
+          "bindings.inputs.rate.kind",
+          "bindings.inputs.rate.required",
+          "revision",
+          "sheets[0].id",
+          "sheets[1].cells.A2.cached_value",
+          "sheets[1].id"
+        ]
+      }
+    },
+    {
+      "name": "calculated-with-dependencies",
+      "input_kinds": null,
+      "canonical": {
+        "schema_version": 1,
+        "model_version": 1,
+        "metadata": {},
+        "sheets": [
+          {
+            "name": "Calc",
+            "cells": {
+              "A1": {"address": "A1", "value": 3, "data_type": "number"},
+              "A2": {"address": "A2", "value": null, "data_type": "blank", "formula": {"expression": "=A1*2", "dependencies": ["Calc!A1"], "result": 6}, "provenance": {"origin": "calculated"}}
+            }
+          }
+        ]
+      },
+      "toolkit": {
+        "schema_version": 1,
+        "revision": 0,
+        "sheets": [
+          {
+            "id": "sheet-1",
+            "name": "Calc",
+            "cells": {
+              "A1": {"value": 3.0},
+              "A2": {"value": null, "formula": "=A1*2"}
+            },
+            "column_widths": {}
+          }
+        ],
+        "inputs": {},
+        "outputs": {}
+      },
+      "conversion": {
+        "dropped": [
+          "model_version",
+          "sheets[0].cells.A1.data_type",
+          "sheets[0].cells.A2.data_type",
+          "sheets[0].cells.A2.formula.dependencies",
+          "sheets[0].cells.A2.formula.result",
+          "sheets[0].cells.A2.provenance"
+        ],
+        "added": [
+          "revision",
+          "sheets[0].id"
+        ]
+      }
+    }
+  ],
+  "toolkit_cases": [
+    {
+      "name": "typed-values",
+      "toolkit": {
+        "schema_version": 1,
+        "revision": 4,
+        "sheets": [
+          {
+            "id": "data",
+            "name": "Data",
+            "cells": {
+              "A1": {"value": null},
+              "A2": {"value": 7.0},
+              "A3": {"value": 2.5},
+              "A4": {"value": "text"},
+              "A5": {"value": true},
+              "A6": {"value": {"error": "#N/A!"}},
+              "B1": {"value": null, "formula": "=A2+A3", "cached_value": 999.0},
+              "B2": {"value": null, "formula": "=SUM(A2:A3)"},
+              "C1": {"value": 1.0, "style": {"bold": true, "number_format": "0.0"}},
+              "C2": {"value": 2.0, "style": {"number_format": "General"}},
+              "D1": {"value": 5.0, "blocked_reason": "grouped formula region Data!D1:D2"}
+            },
+            "column_widths": {"A": 12.5, "C": 8.0}
+          }
+        ],
+        "inputs": {"rate": {"sheet": "Data", "address": "A2", "kind": "number", "required": false, "min": 0.0, "max": 100.0}},
+        "outputs": {"sum": {"sheet": "Data", "address": "B2"}}
+      },
+      "canonical": {
+        "schema_version": 1,
+        "model_version": 1,
+        "metadata": {},
+        "provenance": {"origin": "authored"},
+        "bindings": {
+          "inputs": {"rate": {"sheet": "Data", "address": "A2"}},
+          "outputs": {"sum": {"sheet": "Data", "address": "B2"}}
+        },
+        "sheets": [
+          {
+            "name": "Data",
+            "dimensions": [1, 6, 1, 4],
+            "cells": {
+              "A1": {"address": "A1", "value": null, "data_type": "blank"},
+              "A2": {"address": "A2", "value": 7, "data_type": "number"},
+              "A3": {"address": "A3", "value": 2.5, "data_type": "number"},
+              "A4": {"address": "A4", "value": "text", "data_type": "text"},
+              "A5": {"address": "A5", "value": true, "data_type": "boolean"},
+              "A6": {"address": "A6", "value": {"error": "#N/A", "message": null}, "data_type": "error"},
+              "B1": {"address": "B1", "value": 999, "data_type": "number", "formula": {"expression": "=A2+A3", "dependencies": ["Data!A2", "Data!A3"], "result": null}, "provenance": {"origin": "imported"}},
+              "B2": {"address": "B2", "value": null, "data_type": "blank", "formula": {"expression": "=SUM(A2:A3)", "dependencies": ["Data!A2", "Data!A3"], "result": null}},
+              "C1": {"address": "C1", "value": 1, "data_type": "number", "number_format": "0.0"},
+              "C2": {"address": "C2", "value": 2, "data_type": "number"},
+              "D1": {"address": "D1", "value": 5, "data_type": "number"}
+            }
+          }
+        ]
+      },
+      "conversion": {
+        "dropped": [
+          "bindings.inputs.rate.kind",
+          "bindings.inputs.rate.max",
+          "bindings.inputs.rate.min",
+          "bindings.inputs.rate.required",
+          "revision",
+          "sheets[0].cells.C1.style.bold",
+          "sheets[0].cells.C2.style.number_format",
+          "sheets[0].cells.D1.blocked_reason",
+          "sheets[0].column_widths.A",
+          "sheets[0].column_widths.C",
+          "sheets[0].id"
+        ],
+        "added": [
+          "provenance",
+          "sheets[0].cells.A1.data_type",
+          "sheets[0].cells.A2.data_type",
+          "sheets[0].cells.A3.data_type",
+          "sheets[0].cells.A4.data_type",
+          "sheets[0].cells.A5.data_type",
+          "sheets[0].cells.A6.data_type",
+          "sheets[0].cells.B1.data_type",
+          "sheets[0].cells.B1.formula.dependencies",
+          "sheets[0].cells.B1.formula.result",
+          "sheets[0].cells.B1.provenance",
+          "sheets[0].cells.B2.data_type",
+          "sheets[0].cells.B2.formula.dependencies",
+          "sheets[0].cells.B2.formula.result",
+          "sheets[0].cells.C1.data_type",
+          "sheets[0].cells.C2.data_type",
+          "sheets[0].cells.D1.data_type",
+          "sheets[0].dimensions"
+        ]
+      }
+    },
+    {
+      "name": "unnormalised-input",
+      "toolkit": {
+        "schema_version": 1,
+        "sheets": [
+          {
+            "id": "s",
+            "name": "S",
+            "cells": {
+              "B1": {"value": 2},
+              "A1": {"value": 1}
+            }
+          }
+        ],
+        "inputs": {"x": {"sheet": "S", "address": "A1", "kind": "number"}},
+        "outputs": {}
+      },
+      "canonical": {
+        "schema_version": 1,
+        "model_version": 1,
+        "metadata": {},
+        "provenance": {"origin": "authored"},
+        "bindings": {
+          "inputs": {"x": {"sheet": "S", "address": "A1"}},
+          "outputs": {}
+        },
+        "sheets": [
+          {
+            "name": "S",
+            "dimensions": [1, 1, 1, 2],
+            "cells": {
+              "A1": {"address": "A1", "value": 1, "data_type": "number"},
+              "B1": {"address": "B1", "value": 2, "data_type": "number"}
+            }
+          }
+        ]
+      },
+      "conversion": {
+        "dropped": [
+          "bindings.inputs.x.kind",
+          "bindings.inputs.x.required",
+          "revision",
+          "sheets[0].id"
+        ],
+        "added": [
+          "provenance",
+          "sheets[0].cells.A1.data_type",
+          "sheets[0].cells.B1.data_type",
+          "sheets[0].dimensions"
+        ]
+      }
+    }
+  ],
+  "refusals": [
+    {
+      "name": "toolkit-refuses-a-32-unit-sheet-name",
+      "direction": "to_toolkit",
+      "input_kinds": null,
+      "document": {
+        "schema_version": 1,
+        "model_version": 1,
+        "metadata": {},
+        "sheets": [{"name": "ABCDEFGHIJKLMNOPQRSTUVWXYZABCDEF", "cells": {}}]
+      },
+      "code": "invalid_sheet"
+    },
+    {
+      "name": "input-kinds-must-name-a-bound-input",
+      "direction": "to_toolkit",
+      "input_kinds": {"b": "number"},
+      "document": {
+        "schema_version": 1,
+        "model_version": 1,
+        "metadata": {},
+        "bindings": {"inputs": {"a": {"sheet": "S", "address": "A1"}}, "outputs": {}},
+        "sheets": [{"name": "S", "cells": {"A1": {"address": "A1", "value": 1, "data_type": "number"}}}]
+      },
+      "code": "unknown_input"
+    },
+    {
+      "name": "canonical-refuses-a-sheet-name-with-a-bang",
+      "direction": "to_canonical",
+      "input_kinds": null,
+      "document": {
+        "schema_version": 1,
+        "revision": 0,
+        "sheets": [{"id": "s", "name": "A!B", "cells": {"A1": {"value": 1.0}}, "column_widths": {}}],
+        "inputs": {},
+        "outputs": {}
+      },
+      "code": "invalid_model"
+    },
+    {
+      "name": "toolkit-document-without-a-schema-version-is-refused-by-the-toolkit-reader",
+      "direction": "to_canonical",
+      "input_kinds": null,
+      "document": {"sheets": []},
+      "code": "schema_version"
+    }
+  ]
+}
