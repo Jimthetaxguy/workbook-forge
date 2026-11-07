@@ -52,23 +52,23 @@ def _is_repository_root_or_parent(path: Path) -> bool:
 
 def _existing_output_detail(path: Path) -> str:
     if path.is_symlink():
-        return f"refusing an existing symbolic link ({path})"
+        return "refusing an existing symbolic link"
     resolved = path.resolve()
     if _is_repository_root_or_parent(resolved):
-        return f"refusing the repository root or a parent of it ({resolved})"
+        return "refusing the repository root or a parent of it"
     if not path.is_dir():
-        return f"existing path is not a canonical receipt directory ({path})"
+        return "existing path is not a canonical receipt directory"
     entries = list(path.iterdir())
     if not entries:
-        return f"refusing an existing empty directory ({path})"
+        return "refusing an existing empty directory"
     unexpected = sorted(
         entry.name
         for entry in entries
         if entry.name not in _RECEIPT_ENTRIES or entry.is_symlink()
     )
     if unexpected:
-        return f"refusing an existing directory containing {', '.join(unexpected)} ({path})"
-    return f"refusing an existing canonical receipt directory ({path})"
+        return f"refusing an existing directory containing {', '.join(unexpected)}"
+    return "refusing an existing canonical receipt directory"
 
 def build_canonical_receipt(
     fixture: str | Path,

@@ -26,6 +26,11 @@ fn export_xlsx_refuses_an_existing_target_without_a_path() {
     std::fs::write(&target, b"keep").unwrap();
     let refused = export_xlsx(&operating_scenario(), &target).unwrap_err();
     assert_eq!(refused.code(), "output_exists", "{refused}");
+    assert_eq!(
+        refused.to_string(),
+        "output path already exists",
+        "{refused}"
+    );
     assert!(!refused.to_string().contains(TOKEN), "{refused}");
     assert_eq!(std::fs::read(&target).unwrap(), b"keep");
 }
@@ -43,6 +48,7 @@ fn agent_export_error_for_an_existing_target_carries_no_path() {
     assert_eq!(response["ok"], false, "{response}");
     assert_eq!(response["error"]["code"], "export_error", "{response}");
     let message = response["error"]["message"].as_str().unwrap();
+    assert_eq!(message, "output path already exists", "{message}");
     assert!(!message.contains(TOKEN), "{message}");
 }
 
@@ -55,6 +61,11 @@ fn losing_the_link_race_is_the_shared_output_exists_refusal() {
     std::fs::write(&target, b"other writer").unwrap();
     let refused = workbook_forge::xlsx::link_new(&staged, &target).unwrap_err();
     assert_eq!(refused.code(), "output_exists", "{refused}");
+    assert_eq!(
+        refused.to_string(),
+        "output path already exists",
+        "{refused}"
+    );
     assert!(!refused.to_string().contains(TOKEN), "{refused}");
     assert_eq!(std::fs::read(&target).unwrap(), b"other writer");
 }

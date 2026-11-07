@@ -205,6 +205,27 @@ def read_source(path: Path) -> str:
     return content.decode("utf-8")
 
 
+def _reported_failure(error: BaseException) -> tuple[str, str]:
+    """Code and message safe to print: no argv and no machine path.
+
+    The sentences match ``source_process``: a compiler that could not be
+    launched, a compile that failed or timed out, and an output that already
+    exists.
+    """
+    if isinstance(error, FileExistsError):
+        return "artifact_exists", "binary artifact path must be new"
+    if isinstance(error, subprocess.CalledProcessError):
+        return "compilation_failed", "generated Rust did not compile"
+    if isinstance(error, subprocess.TimeoutExpired):
+        return "resource_limit", "Rust compilation exceeded its timeout"
+    if isinstance(error, OSError):
+        return "missing_toolchain", "Rust compiler could not be launched"
+    code = getattr(error, "code", "invalid_input")
+    if not isinstance(code, str) or not code:
+        code = "invalid_input"
+    return code, str(error)
+
+
 def main(argv=None, *, default_profile="graph-v6"):
     parser = argparse.ArgumentParser(description=__doc__,epilog="Graph-v5/v6 AVERAGE direct coercion is provisional: Microsoft sources conflict. Graph-v6 XLOOKUP is limited to exact matching and forward/reverse linear search over one-dimensional referenced arrays; Excel observation is unavailable. Rust emission needs an explicit writer adapter.")
     commands = parser.add_subparsers(dest="command", required=True)
@@ -283,7 +304,8 @@ def main(argv=None, *, default_profile="graph-v6"):
                 with args.output.open("xb") as target:
                     target.write(payload)
     except (ValueError, WorkbookError, OSError, subprocess.SubprocessError, RecursionError) as error:
-        print(json.dumps({"ok": False, "code": getattr(error, "code", "invalid_input"), "message": str(error)}))
+        code, message = _reported_failure(error)
+        print(json.dumps({"ok": False, "code": code, "message": message}))
         return 1
     return 0
 

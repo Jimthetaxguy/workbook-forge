@@ -8,7 +8,7 @@ from pathlib import Path
 import sys
 
 from .catalog import workbook_capabilities
-from .workbook import WorkbookError
+from .workbook import WorkbookError, os_error_message
 
 
 def _json_object(pairs: list[tuple[object, object]]) -> dict:
@@ -251,7 +251,8 @@ def main(argv: list[str] | None = None) -> int:
         WorkbookError,
         CanonicalPackageError,
     ) as error:
-        payload: dict[str, object] = {"error": str(error)}
+        message = os_error_message(error) if isinstance(error, OSError) else str(error)
+        payload: dict[str, object] = {"error": message}
         code = getattr(error, "code", None)
         if isinstance(code, str) and code:
             payload["code"] = code
