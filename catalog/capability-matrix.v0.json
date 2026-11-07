@@ -16,7 +16,7 @@
     },
     {
       "path": "docs/corpus-report.md",
-      "sha256": "bfceb6a64332b5073db4105a923e27f4a11b2299705f944f0e11c2c767ef874b"
+      "sha256": "1ddee595dc0e1b0d3e2ad0a81ed5307f99e1cf011f8a763b394c1cab65518bf7"
     },
     {
       "path": "python/workbook_forge/source_graph.py",
