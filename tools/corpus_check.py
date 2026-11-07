@@ -67,14 +67,19 @@ OUTCOMES = ("pass", "refuse", "untyped", "crash", "corrupt", "lossy")
 #: committed report with a fresh run after removing it.
 RUN_STAMP_PREFIX = "Run: "
 RUN_STAMP = re.compile(r"^Run: .*$", re.MULTILINE)
-# Parts an edit may rewrite. Everything else in the source package must come
-# back byte-identical from the preserving writer.
+# Parts every export may rewrite, edits or none: both writers set full
+# recalculation on open and drop the calc chain unconditionally. Everything
+# else in the source package must come back byte-identical from the preserving
+# writer, except the sheet part that holds the edited cell. The writers also
+# re-serialise every sheet part that holds a formula cell in the calculation
+# closure to refresh its cache; this lane binds the edited cell as the sole
+# output, so that closure is one cell and no other sheet part is touched.
 MAY_CHANGE = {
-    "[Content_Types].xml",  # calcChain removal
+    "[Content_Types].xml",  # calcChain override removed, when the baseline had one
     "xl/workbook.xml",  # calcPr full-calc-on-load
-    "xl/_rels/workbook.xml.rels",  # calcChain removal
-    "xl/calcChain.xml",  # invalidated after an edit
-    "xl/sharedStrings.xml",
+    "xl/_rels/workbook.xml.rels",  # calcChain relationship removed, when the baseline had one
+    "xl/calcChain.xml",  # removed on every export
+    "xl/sharedStrings.xml",  # listed for a shared-string writer; no writer touches it today
 }
 GENERIC_CODES = {"", None, "workbook_error", "xlsx_error", "unsupported_workbook", "invalid_workbook"}
 
