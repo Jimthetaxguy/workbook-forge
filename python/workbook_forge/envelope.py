@@ -7,13 +7,20 @@ compatibility version, feature guards, text layout) that a later write must
 honour. Every field but ``source.handle`` and ``insertion_bound`` is a function
 of the imported bytes and the import bindings.
 
+The envelope is read-only below the field: its mappings are views the
+assembler builds, its document is kept as JSON text and handed out as a fresh
+copy, and its guard is the envelope's own copy.
+
 ``describe()`` is the path-free JSON projection the Rust side produces too.
-The ``handle`` is session memory and never appears in it.
+The ``handle`` is session memory and appears in neither ``describe()`` nor
+``repr()``.
 """
 from __future__ import annotations
 
+from collections.abc import Mapping
 import copy
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+import json
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 import zipfile
@@ -33,11 +40,12 @@ class SourceIdentity:
     fingerprint: str
     parts: tuple[str, ...]
     workbook_part: str
-    sheet_parts: dict[str, str]
+    sheet_parts: Mapping[str, str]
     sheet_entries: tuple[str, ...]
-    chartsheets: dict[str, str]
-    # Where the bytes came from, for the overwrite refusal only. Never serialised.
-    handle: Path | None
+    chartsheets: Mapping[str, str]
+    # Where the bytes came from, for the overwrite refusal only. Never
+    # serialised and never printed.
+    handle: Path | None = field(repr=False)
 
 
 @dataclass(frozen=True)
@@ -52,9 +60,14 @@ class ContainerMetadata:
 class Baseline:
     """The imported bytes and the document as imported: the "before" of every patch."""
 
-    parts: dict[str, bytes]
+    parts: Mapping[str, bytes]
     container: ContainerMetadata | None
-    document: dict[str, Any]
+    document_json: str
+
+    @property
+    def document(self) -> dict[str, Any]:
+        """The imported toolkit document, a fresh copy on every read."""
+        return json.loads(self.document_json)
 
 
 @dataclass(frozen=True)
@@ -64,7 +77,7 @@ class TextPreservation:
     # (casefolded sheet, address).
     cells: frozenset[tuple[str, str]]
     # Casefolded sheet name -> layout.
-    layouts: dict[str, TextLayout]
+    layouts: Mapping[str, TextLayout]
 
 
 @dataclass(frozen=True)
@@ -73,7 +86,7 @@ class PreservationEnvelope:
     baseline: Baseline
     tables: tuple[dict[str, Any], ...]
     # Sheet name as written -> merged ranges (column, row, column, row).
-    merged: dict[str, tuple[tuple[int, int, int, int], ...]]
+    merged: Mapping[str, tuple[tuple[int, int, int, int], ...]]
     date_system: str
     compatibility_version: int
     guards: FeatureGuard
@@ -84,7 +97,8 @@ class PreservationEnvelope:
     def describe(self) -> dict[str, Any]:
         """The path-free JSON projection; identical in shape to the Rust side's."""
         container = self.baseline.container
-        written_names = [sheet["name"] for sheet in self.baseline.document["sheets"]]
+        document = self.baseline.document
+        written_names = [sheet["name"] for sheet in document["sheets"]]
         return {
             "source": {
                 "fingerprint": self.source.fingerprint,
@@ -101,7 +115,7 @@ class PreservationEnvelope:
                 "container": None
                 if container is None
                 else {"entries": len(container.infos), "comment_bytes": len(container.comment)},
-                "document": copy.deepcopy(self.baseline.document),
+                "document": document,
             },
             "tables": copy.deepcopy(list(self.tables)),
             "merged": {

@@ -13,6 +13,7 @@ import json
 import math
 from pathlib import Path
 import re
+import shutil
 
 import jsonschema
 import pytest
@@ -224,12 +225,63 @@ def test_to_canonical_derives_dependencies_with_the_canonical_analyzer():
         }
     )
     document["sheets"].append({"id": "o", "name": "Other", "cells": {}})
-    workbook, _conversion = to_canonical(document)
+    workbook, conversion = to_canonical(document)
     cells = workbook.sheets[0].cells
     assert cells["A1"].formula.dependencies == ("Other!A1", "S!B1", "S!B2")
-    # A formula the analyzer refuses gets no dependencies and is not refused here.
+    # A formula the analyzer refuses gets no dependencies and is not refused
+    # here; the refusal travels as a canonical diagnostic on that cell, so it
+    # is never mistaken for a formula with no references.
     assert cells["A2"].formula.dependencies == ()
+    assert [item.to_dict() for item in workbook.diagnostics] == [
+        {
+            "code": "parse_error",
+            "classification": "parse_error",
+            "message": "formula could not be parsed",
+            "sheet": "S",
+            "address": "A2",
+        }
+    ]
+    assert "diagnostics[0]" in conversion.added
     assert workbook.sheets[1].dimensions is None
+
+
+def test_to_canonical_with_an_envelope_marks_only_baseline_cells_imported(tmp_path):
+    # The baseline says which cells the import held and with what; a cell
+    # added or changed since is authored, whatever the envelope's sheet parts.
+    copy = tmp_path / "op_merged_cells.xlsx"
+    shutil.copyfile(CORPUS / "op_merged_cells.xlsx", copy)
+    model = import_xlsx(copy)
+    imported = model.to_dict()["sheets"][0]
+    merged_addresses = {"A1", "B1", "C1", "D1", "A4", "A5", "A6"}
+    edited = next(
+        address
+        for address, cell in imported["cells"].items()
+        if "formula" not in cell and address not in merged_addresses
+    )
+    model.set_value("Report", edited, "changed after import")
+    model.set_value("Report", "Z99", 42.0)
+    model.set_formula("Report", "Z100", "=Z99*2")
+    document = model.to_dict()
+    document["sheets"].append(
+        {"id": "later", "name": "Later", "cells": {"A1": {"value": 1.0}}, "column_widths": {}}
+    )
+    workbook, conversion = to_canonical(document, model.envelope)
+    assert workbook.provenance.to_dict() == {
+        "origin": "imported",
+        "source": model.envelope.source.workbook_part,
+    }
+    report = workbook.sheet("Report").cells
+    authored = {edited, "Z99", "Z100"}
+    for address, cell in report.items():
+        expected = (
+            {"origin": "authored"}
+            if address in authored
+            else {"origin": "imported", "source": "xl/worksheets/sheet1.xml"}
+        )
+        assert cell.provenance.to_dict() == expected, address
+        assert f"sheets[0].cells.{address}.provenance" in conversion.added
+    assert workbook.sheet("Later").cells["A1"].provenance.to_dict() == {"origin": "authored"}
+    assert "sheets[1].cells.A1.provenance" in conversion.added
 
 
 def test_to_canonical_integer_rule_is_inclusive_and_keeps_negative_zero_a_float():

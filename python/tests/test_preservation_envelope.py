@@ -14,6 +14,8 @@ import subprocess
 
 import pytest
 
+from workbook_forge import xlsx
+from workbook_forge import xlsx_features as features
 from workbook_forge.envelope import PreservationEnvelope
 from workbook_forge.model import content_fingerprint
 from workbook_forge.toolkit import WorkbookModel
@@ -74,8 +76,14 @@ def test_envelope_is_assembled_from_import_and_holds_no_path(tmp_path):
     assert envelope.date_system == "1900"
     assert envelope.compatibility_version == 1
     assert envelope.tables == ()
-    assert envelope.guards is model._feature_guard
+    # The guard is the envelope's own copy; only its public projection is shared.
+    assert envelope.guards is not model._feature_guard
+    for name in ("validations", "pivots", "charts"):
+        assert features.public(getattr(envelope.guards, name)) == features.public(
+            getattr(model._feature_guard, name)
+        )
     assert set(described["guards"]) == {"data_validations", "pivots", "charts"}
+    assert "private-dir-xyz" not in repr(envelope)
     assert envelope.text.cells == model._text_cells
     assert described["text"] == {"cells": [], "layouts": {}}
     assert envelope.insertion_bound == (1_048_576, 16_384)
@@ -97,6 +105,24 @@ def test_envelope_is_immutable(tmp_path):
         envelope.baseline.document = {}
     with pytest.raises(dataclasses.FrozenInstanceError):
         envelope.text.cells = frozenset()
+    # Immutability goes below the field: the mappings are read-only views.
+    with pytest.raises(TypeError):
+        envelope.source.sheet_parts["Ghost"] = "x"
+    with pytest.raises(TypeError):
+        envelope.source.chartsheets["Ghost"] = "x"
+    with pytest.raises(TypeError):
+        envelope.baseline.parts["ghost.xml"] = b""
+    with pytest.raises(TypeError):
+        envelope.merged["Ghost"] = ()
+    with pytest.raises(TypeError):
+        envelope.text.layouts["ghost"] = None
+    # The document comes out as a fresh copy each time, so a caller's edits
+    # never reach the baseline.
+    document = envelope.baseline.document
+    document["sheets"].clear()
+    document["revision"] = 99
+    assert envelope.baseline.document == model.to_dict()
+    assert envelope.describe()["baseline"]["document"] == model.to_dict()
 
 
 def _importable_corpus() -> list[Path]:
@@ -147,6 +173,29 @@ def test_envelope_describe_is_json_and_sorted_for_every_importable_corpus_workbo
 # (its refutation record lists where the two decoders differ today) and are
 # compared there, not here.
 _AGREED_KEYS = ("source", "merged", "date_system", "compatibility_version", "insertion_bound")
+
+
+def test_fingerprint_names_the_bytes_that_were_decoded(tmp_path, monkeypatch):
+    # The fingerprint is taken from the bytes the package reader decoded, not
+    # from a second read of the file, which could see different bytes.
+    folder = tmp_path / "private-dir-xyz"
+    folder.mkdir()
+    copy = folder / MERGED.name
+    shutil.copyfile(MERGED, copy)
+    original = copy.read_bytes()
+    real_open = xlsx.Workbook.open
+
+    def open_then_change_the_file(path):
+        workbook = real_open(path)
+        with Path(path).open("ab") as handle:
+            handle.write(b"written after the package was read")
+        return workbook
+
+    monkeypatch.setattr(xlsx.Workbook, "open", staticmethod(open_then_change_the_file))
+    envelope = import_xlsx(copy).envelope
+    assert copy.read_bytes() != original
+    assert envelope.source.fingerprint == content_fingerprint(original)
+    assert envelope.source.fingerprint != content_fingerprint(copy.read_bytes())
 
 
 def _python_envelopes() -> dict[str, dict]:
