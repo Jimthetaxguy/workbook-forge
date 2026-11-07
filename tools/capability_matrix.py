@@ -19,11 +19,14 @@ and sha256), the ``routes`` table (the operations each route offers), and
 needs no default. A row is ``kind``, ``feature``, ``route``, ``operation``,
 ``status``, ``evidence_grade`` and ``source`` (the input that established the
 status; ``tools/capability_matrix.py`` when a rule in this file did).
+``evidence_grade`` is the function catalog's grade only on an evaluate row
+the catalog established, and ``none`` on every other row.
 
 Features are of three kinds:
 
-- ``function``: every entry of ``catalog/formulas.json``, with its
-  ``evidence_grade``.
+- ``function``: every entry of ``catalog/formulas.json``. Its catalog
+  ``evidence_grade`` is recorded on the evaluate rows for python-toolkit,
+  python-canonical and rust when that route's status is ``supported``.
 - ``category``: every category in the committed corpus report's Matrix table.
 - ``primitive``: the eleven primitives of ``catalog/workbook-capabilities.json``.
 
@@ -40,13 +43,19 @@ Rules, in the order the code applies them:
    stages (inspect, preserve, evaluate, edit, reimport, export); the canonical
    model writes a fresh package by design and so has no preserve operation;
    the source routes offer emit-source, evaluate, reimport and export; the
-   agent and browser routes offer inspect, edit and export, which the tool
-   derives from the operation catalog's ``effect`` fields and from the protocol
-   command names and checks against the table.
+   agent route offers inspect, edit and export, derived from the operation
+   catalog's ``effect`` fields; the browser route offers inspect, evaluate,
+   edit and export, derived from the protocol command names. Both derived
+   sets are checked against the table. The browser ``calculate`` command is
+   evaluate. No catalog grades that command, so every browser-protocol
+   evaluate cell is ``untested``.
 2. Functions answer evaluate and emit-source. ``evaluate`` is ``supported`` on
    python-toolkit, python-canonical and rust when the catalog status for that
    language is ``conformance-tested`` (the two Python routes share one engine),
-   and ``untested`` on wasm-browser, which the catalog does not grade.
+   and ``untested`` on wasm-browser and browser-protocol, which the catalog
+   does not grade. The catalog ``evidence_grade`` is recorded on those
+   ``supported`` evaluate rows and is ``none`` on ``untested``,
+   ``not-applicable`` and emit-source rows.
    ``emit-source`` on the source routes is ``supported`` for
    ``FUNCTIONS_BY_VERSION[6]`` and otherwise the refusal source_graph.py raises
    for any other call; ``evaluate`` there is ``untested`` for those five and
@@ -114,6 +123,8 @@ STATUSES = ("supported", "preserved", "untested", "not-applicable")  # plus refu
 CORPUS_STAGES = ("inspect", "preserve", "evaluate", "edit", "reimport", "export")
 SOURCE_OPERATIONS = ("emit-source", "evaluate", "reimport", "export")
 PROTOCOL_OPERATIONS = ("inspect", "edit", "export")
+# `calculate` is evaluate. No catalog grades that command, so those cells are untested.
+BROWSER_OPERATIONS = ("inspect", "evaluate", "edit", "export")
 ROUTE_OPERATIONS = {
     "python-toolkit": CORPUS_STAGES,
     "python-canonical": tuple(op for op in CORPUS_STAGES if op != "preserve"),
@@ -122,7 +133,7 @@ ROUTE_OPERATIONS = {
     "source-python": SOURCE_OPERATIONS,
     "source-rust": SOURCE_OPERATIONS,
     "agent-protocol": PROTOCOL_OPERATIONS,
-    "browser-protocol": PROTOCOL_OPERATIONS,
+    "browser-protocol": BROWSER_OPERATIONS,
 }
 
 # Corpus engine column -> routes it establishes. The Rust lane runs the same
@@ -139,10 +150,10 @@ SOURCE_PROFILE = 6
 AGENT_EFFECTS = {"read": "inspect", "preview": "edit", "edit": "edit", "write_file": "export"}
 # Browser command -> matrix operation. None marks session lifecycle commands
 # (open a workbook, create one, subscribe to events, replay a log) that are
-# not one of the seven operations.
+# not one of the seven operations. `calculate` is evaluate; no catalog grades it.
 BROWSER_COMMANDS = {
     "open": None, "newWorkbook": None, "snapshot": "inspect", "applyEdits": "edit",
-    "calculate": "inspect", "export": "export", "applyAndCalculate": "edit", "log": "inspect",
+    "calculate": "evaluate", "export": "export", "applyAndCalculate": "edit", "log": "inspect",
     "subscribe": None, "replay": None,
 }
 # Primitive boolean -> matrix operation; `construct` has no counterpart.
@@ -231,6 +242,18 @@ def row_key(row: dict) -> tuple:
     return (KINDS.index(row["kind"]), row["feature"], ROUTES.index(row["route"]), OPERATIONS.index(row["operation"]))
 
 
+def evidence_grade(kind: str, route: str, operation: str, status: str, grade: str) -> str:
+    """The catalog grade only on an evaluate row the catalog established."""
+    if (
+        kind == "function"
+        and operation == "evaluate"
+        and route in FUNCTION_STATUS_LANGUAGE
+        and status == "supported"
+    ):
+        return grade
+    return "none"
+
+
 class Rows:
     """Collects one row per feature, route and operation; unset cells become not-applicable."""
 
@@ -254,7 +277,9 @@ class Rows:
                     status, source = self.cells.get((kind, name, route, operation), ("not-applicable", SELF))
                     out.append({
                         "kind": kind, "feature": name, "route": route, "operation": operation,
-                        "status": status, "evidence_grade": grade, "source": source,
+                        "status": status,
+                        "evidence_grade": evidence_grade(kind, route, operation, status, grade),
+                        "source": source,
                     })
         return sorted(out, key=row_key)
 
@@ -320,6 +345,13 @@ def add_primitives(rows: Rows) -> None:
                 rows.set("primitive", entry["id"], route, operation, status, INPUTS["primitives"])
 
 
+def fill_browser_evaluate(rows: Rows) -> None:
+    """protocol.ts ``calculate`` is evaluate. No input grades that command."""
+    for kind, name in rows.grades:
+        if (kind, name, "browser-protocol", "evaluate") not in rows.cells:
+            rows.set(kind, name, "browser-protocol", "evaluate", "untested", SELF)
+
+
 def build() -> dict:
     read_agent_operations()
     read_browser_commands()
@@ -327,6 +359,7 @@ def build() -> dict:
     add_categories(rows)
     add_functions(rows)
     add_primitives(rows)
+    fill_browser_evaluate(rows)
     table = rows.rows()
     features = {kind: 0 for kind in KINDS}
     for kind, _name in rows.grades:
