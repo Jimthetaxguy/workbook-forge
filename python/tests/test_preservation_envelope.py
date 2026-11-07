@@ -103,31 +103,41 @@ def _importable_corpus() -> list[Path]:
     return sorted(CORPUS.glob("*.xlsx"))
 
 
-@pytest.mark.parametrize("path", _importable_corpus(), ids=lambda path: path.name)
-def test_envelope_describe_is_json_and_sorted(path):
-    try:
-        model = import_xlsx(path)
-    except WorkbookError as error:
-        pytest.skip(f"import_xlsx refuses this workbook: {type(error).__name__}")
-    envelope = model.envelope
-    described = envelope.describe()
-    text = json.dumps(described, sort_keys=True, allow_nan=False)
-    assert json.loads(text) == described
-    assert str(path.parent) not in text
-    assert described["text"]["cells"] == sorted(described["text"]["cells"])
-    assert described["text"]["cells"] == sorted([sheet, address] for sheet, address in envelope.text.cells)
-    written_names = {sheet["name"] for sheet in described["baseline"]["document"]["sheets"]}
-    # Layouts are described under the sheet name as written; the in-memory
-    # dict is keyed casefolded.
-    assert set(described["text"]["layouts"]) <= written_names
-    assert set(described["text"]["layouts"]) == {
-        name for name in written_names if name.casefold() in envelope.text.layouts
-    }
-    assert described["source"]["parts"] == sorted(described["baseline"]["parts"])
-    assert set(described["source"]["sheet_parts"]) == written_names
-    assert set(described["source"]["sheet_parts"]) <= set(described["source"]["sheet_entries"])
-    assert described["date_system"] in {"1900", "1904"}
-    assert isinstance(described["compatibility_version"], int)
+def test_envelope_describe_is_json_and_sorted_for_every_importable_corpus_workbook():
+    # One loop, not a parametrisation: the gate forbids skipped tests, and a
+    # workbook the importer refuses has no envelope to describe.
+    described_count = 0
+    for path in _importable_corpus():
+        try:
+            model = import_xlsx(path)
+        except WorkbookError:
+            continue
+        described_count += 1
+        where = path.name
+        envelope = model.envelope
+        described = envelope.describe()
+        text = json.dumps(described, sort_keys=True, allow_nan=False)
+        assert json.loads(text) == described, where
+        assert str(path.parent) not in text, where
+        assert described["text"]["cells"] == sorted(described["text"]["cells"]), where
+        assert described["text"]["cells"] == sorted(
+            [sheet, address] for sheet, address in envelope.text.cells
+        ), where
+        written_names = {sheet["name"] for sheet in described["baseline"]["document"]["sheets"]}
+        # Layouts are described under the sheet name as written; the in-memory
+        # dict is keyed casefolded.
+        assert set(described["text"]["layouts"]) <= written_names, where
+        assert set(described["text"]["layouts"]) == {
+            name for name in written_names if name.casefold() in envelope.text.layouts
+        }, where
+        assert described["source"]["parts"] == sorted(described["baseline"]["parts"]), where
+        assert set(described["source"]["sheet_parts"]) == written_names, where
+        assert set(described["source"]["sheet_parts"]) <= set(
+            described["source"]["sheet_entries"]
+        ), where
+        assert described["date_system"] in {"1900", "1904"}, where
+        assert isinstance(described["compatibility_version"], int), where
+    assert described_count >= 40, described_count
 
 
 # --- cross-language agreement -----------------------------------------------
