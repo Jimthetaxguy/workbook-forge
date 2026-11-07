@@ -210,11 +210,15 @@ pub fn to_toolkit(
 /// Toolkit to canonical. Starts with `WorkbookModel::validate`, ends with
 /// `model::hydrate` on the assembled document and returns what it read.
 ///
-/// With an envelope the workbook and every cell carry imported provenance
-/// naming their package part and `metadata.source` names the bytes. Without
-/// one no workbook provenance is written, because a toolkit document does
-/// not say whether it was authored or imported; only a formula cell whose
-/// value came from `cached_value` is marked imported.
+/// With an envelope the workbook carries imported provenance naming its
+/// workbook part, `metadata.source` names the bytes, and a cell the baseline
+/// document still holds unchanged carries imported provenance naming its
+/// sheet part; a cell added or changed since import is authored. Without an
+/// envelope no workbook provenance is written, because a toolkit document
+/// does not say whether it was authored or imported; only a formula cell
+/// whose value came from `cached_value` is marked imported. A formula the
+/// canonical analyzer refuses keeps empty dependencies and its refusal
+/// travels as a canonical diagnostic.
 pub fn to_canonical(
     model: &WorkbookModel,
     envelope: Option<&PreservationEnvelope>,
@@ -300,12 +304,21 @@ pub fn to_canonical(
                     None => {}
                 }
             }
-            let provenance = if envelope.is_some() {
+            let provenance = if let Some(envelope) = envelope {
                 record.add(format!("{path}.provenance"));
-                Some(model::Provenance {
-                    origin: "imported".to_string(),
-                    source: sheet_part.clone(),
-                })
+                if baseline_holds(envelope, &sheet.name, address, cell) {
+                    Some(model::Provenance {
+                        origin: "imported".to_string(),
+                        source: sheet_part.clone(),
+                    })
+                } else {
+                    // The baseline says this cell was added or changed after
+                    // import, so the package is not its source.
+                    Some(model::Provenance {
+                        origin: "authored".to_string(),
+                        source: None,
+                    })
+                }
             } else if from_cache {
                 record.add(format!("{path}.provenance"));
                 Some(model::Provenance {
@@ -402,17 +415,34 @@ pub fn to_canonical(
     };
     // Dependencies come from the canonical engine's own analyzer, which needs
     // the assembled workbook to resolve sheet names; a formula it refuses
-    // keeps an empty list.
+    // keeps an empty list and its refusal becomes a diagnostic, so it is
+    // never mistaken for a formula with no references.
     let mut analysed = Vec::new();
+    let mut diagnostics = Vec::new();
     for (index, sheet) in workbook.sheets.iter().enumerate() {
         for (address, cell) in &sheet.cells {
             if let Some(formula) = &cell.formula {
-                let (dependencies, _) =
+                let (dependencies, diagnostic) =
                     model::analyze(&workbook, &sheet.name, address, &formula.expression, None);
                 analysed.push((index, address.clone(), dependencies));
+                diagnostics.extend(diagnostic);
             }
         }
     }
+    // The model's own order: sheet, address, code, function, message.
+    diagnostics.sort_by_cached_key(|d| {
+        (
+            d.sheet.clone().unwrap_or_default(),
+            d.address.clone().unwrap_or_default(),
+            d.code.clone(),
+            d.function.clone().unwrap_or_default(),
+            d.message.clone(),
+        )
+    });
+    for index in 0..diagnostics.len() {
+        record.add(format!("diagnostics[{index}]"));
+    }
+    workbook.diagnostics = diagnostics;
     for (index, address, dependencies) in analysed {
         if let Some(formula) = workbook.sheets[index]
             .cells
@@ -445,6 +475,37 @@ fn canonical_value(value: &CellValue) -> Result<Scalar, ConversionError> {
             message: message.clone(),
         },
     })
+}
+
+/// Whether the envelope's baseline document still holds this cell as
+/// imported: a sheet of the same name, the same address, and the same value,
+/// formula and cache (a blank cache is no cache). Anything else was added or
+/// changed after import.
+fn baseline_holds(
+    envelope: &PreservationEnvelope,
+    sheet: &str,
+    address: &str,
+    cell: &toolkit::Cell,
+) -> bool {
+    let Some(original) = envelope
+        .baseline
+        .document
+        .sheets
+        .iter()
+        .find(|baseline| baseline.name == sheet)
+        .and_then(|baseline| baseline.cells.get(address))
+    else {
+        return false;
+    };
+    let cache = |cell: &toolkit::Cell| {
+        cell.cached_value
+            .as_ref()
+            .filter(|cached| !matches!(cached, CellValue::Blank))
+            .cloned()
+    };
+    original.value == cell.value
+        && original.formula == cell.formula
+        && cache(original) == cache(cell)
 }
 
 /// The canonical spelling of a formula: a leading `=`, which the importers'

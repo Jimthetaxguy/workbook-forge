@@ -234,3 +234,25 @@ fn describe_is_sorted_and_serialisable() {
     );
     assert_eq!(describe["text"]["layouts"], envelope.layouts());
 }
+
+#[test]
+fn debug_output_holds_no_path() {
+    // F6: `{:?}` is a projection too; the handle is session memory.
+    let bytes = corpus("op_merged_cells.xlsx");
+    let folder = PrivateFolder::new("debug");
+    let path = folder.place("merged.xlsx", &bytes);
+    let envelope = import_xlsx(&path, BTreeMap::new(), BTreeMap::new())
+        .expect("import")
+        .envelope();
+    assert!(envelope.source.handle.is_some());
+    let text = format!("{:?}", envelope.source);
+    assert!(!text.contains("private-dir-xyz"), "{text}");
+    assert!(text.contains("handle: Some(\"<in memory>\")"), "{text}");
+    assert!(text.contains("fingerprint: \"sha256:"), "{text}");
+    assert!(
+        text.contains("workbook_part: \"xl/workbook.xml\""),
+        "{text}"
+    );
+    let from_bytes = import_from_bytes(&bytes);
+    assert!(format!("{:?}", from_bytes.source).contains("handle: None"));
+}

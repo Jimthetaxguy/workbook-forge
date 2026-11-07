@@ -12,10 +12,11 @@ use crate::toolkit::WorkbookModel;
 use crate::xlsx::{FeatureGuard, TextLayout};
 use serde_json::{Map, Value as Json, json};
 use std::collections::{BTreeMap, BTreeSet};
+use std::fmt;
 use std::path::PathBuf;
 
 /// Which bytes the envelope belongs to and how the package names its sheets.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct SourceIdentity {
     /// `sha256:` + 64 hex over the imported bytes; the envelope's identity.
     pub fingerprint: String,
@@ -30,6 +31,21 @@ pub struct SourceIdentity {
     pub chartsheets: BTreeMap<String, String>,
     /// Where the bytes came from; session memory, never serialised.
     pub handle: Option<PathBuf>,
+}
+
+/// Every field, with the handle shown as present or absent, never as a path.
+impl fmt::Debug for SourceIdentity {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("SourceIdentity")
+            .field("fingerprint", &self.fingerprint)
+            .field("parts", &self.parts)
+            .field("workbook_part", &self.workbook_part)
+            .field("sheet_parts", &self.sheet_parts)
+            .field("sheet_entries", &self.sheet_entries)
+            .field("chartsheets", &self.chartsheets)
+            .field("handle", &self.handle.as_ref().map(|_| "<in memory>"))
+            .finish()
+    }
 }
 
 /// Zip entry metadata and archive comment. The Rust package keeps neither

@@ -6,8 +6,17 @@ use serde_json::{Value as Json, json};
 use std::collections::{BTreeMap, BTreeSet};
 use workbook_forge::convert::{Conversion, ConversionError, to_canonical, to_toolkit};
 use workbook_forge::model;
-use workbook_forge::toolkit::{CellReference, Session, WorkbookModel};
+use workbook_forge::toolkit::{
+    Cell, CellReference, CellValue, Edit, Session, Sheet, WorkbookModel,
+};
 use workbook_forge::xlsx::import_xlsx_bytes;
+
+fn corpus(name: &str) -> Vec<u8> {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../fixtures/corpus")
+        .join(name);
+    std::fs::read(path).expect("corpus file")
+}
 
 fn fixture() -> Json {
     let path = concat!(
@@ -577,6 +586,7 @@ fn every_importable_corpus_workbook_converts_and_round_trips() {
     let mut converted = 0;
     let mut import_refused = 0;
     let mut canonical_refused = BTreeMap::new();
+    let mut with_diagnostics: BTreeMap<String, Vec<String>> = BTreeMap::new();
     let mut entries: Vec<_> = std::fs::read_dir(&folder)
         .expect("corpus folder")
         .map(|entry| entry.expect("entry").path())
@@ -600,6 +610,25 @@ fn every_importable_corpus_workbook_converts_and_round_trips() {
             }
         };
         converted += 1;
+        // Every analyzer refusal is a diagnostic listed as added, in index
+        // order, and nothing past the last one is listed.
+        for index in 0..workbook.diagnostics.len() {
+            let path = format!("diagnostics[{index}]");
+            assert!(forward.added.contains(&path), "{name}: {path} not listed");
+        }
+        let past_end = format!("diagnostics[{}]", workbook.diagnostics.len());
+        assert!(
+            !forward.added.contains(&past_end),
+            "{name}: {past_end} listed"
+        );
+        if !workbook.diagnostics.is_empty() {
+            let codes = workbook
+                .diagnostics
+                .iter()
+                .map(|d| d.code.clone())
+                .collect();
+            with_diagnostics.insert(name.clone(), codes);
+        }
         let text = workbook.to_json().unwrap();
         model::hydrate(text.as_bytes()).unwrap_or_else(|error| panic!("{name}: {error}"));
         let document = canonical_json(&workbook);
@@ -630,6 +659,10 @@ fn every_importable_corpus_workbook_converts_and_round_trips() {
             "{name}"
         );
     }
+    assert!(
+        !with_diagnostics.is_empty(),
+        "no corpus workbook exercised the diagnostic path"
+    );
     assert_eq!(
         canonical_refused,
         known_canonical_refusals
@@ -642,6 +675,101 @@ fn every_importable_corpus_workbook_converts_and_round_trips() {
         converted >= 40,
         "corpus: {converted} workbooks converted, {import_refused} refused by the importer"
     );
+}
+
+#[test]
+fn envelope_marks_only_baseline_cells_imported() {
+    // F1: the baseline document says which cells the package held; a cell
+    // added or changed since import, or on a sheet the import never saw, is
+    // authored with no source. The workbook itself stays imported.
+    let imported = import_xlsx_bytes(
+        &corpus("op_merged_cells.xlsx"),
+        BTreeMap::new(),
+        BTreeMap::new(),
+    )
+    .unwrap();
+    let edit = |address: &str, value: Option<CellValue>, formula: Option<&str>| Edit {
+        sheet: "Report".into(),
+        address: address.into(),
+        value,
+        formula: formula.map(String::from),
+        style: None,
+        restore_absent: false,
+    };
+    imported
+        .apply(
+            vec![
+                edit("Z99", Some(CellValue::Number(1.0)), None),
+                edit("Z100", None, Some("Z99*2")),
+                edit("B3", Some(CellValue::Number(99.0)), None),
+            ],
+            None,
+        )
+        .unwrap();
+    let mut model = imported.snapshot();
+    let mut later = Sheet::new("Later");
+    later
+        .cells
+        .insert("A1".into(), Cell::value(CellValue::Text("late".into())));
+    model.sheets.push(later);
+
+    let envelope = imported.envelope();
+    let (workbook, conversion) = to_canonical(&model, Some(&envelope)).unwrap();
+    let document = canonical_json(&workbook);
+    assert_eq!(
+        document["provenance"],
+        json!({"origin": "imported", "source": "xl/workbook.xml"})
+    );
+    let imported_cell = json!({"origin": "imported", "source": "xl/worksheets/sheet1.xml"});
+    let authored = json!({"origin": "authored"});
+    let report = &document["sheets"][0]["cells"];
+    for address in ["A1", "A2", "B2", "C3"] {
+        assert_eq!(report[address]["provenance"], imported_cell, "{address}");
+    }
+    for address in ["Z99", "Z100", "B3"] {
+        assert_eq!(report[address]["provenance"], authored, "{address}");
+    }
+    assert_eq!(document["sheets"][1]["name"], "Later");
+    assert_eq!(document["sheets"][1]["cells"]["A1"]["provenance"], authored);
+    for path in [
+        "sheets[0].cells.A1.provenance",
+        "sheets[0].cells.B3.provenance",
+        "sheets[0].cells.Z99.provenance",
+        "sheets[0].cells.Z100.provenance",
+        "sheets[1].cells.A1.provenance",
+    ] {
+        assert!(conversion.added.contains(&path.to_string()), "{path}");
+    }
+}
+
+#[test]
+fn analyzer_refusals_travel_as_diagnostics() {
+    // F2: a formula the canonical analyzer refuses keeps empty dependencies
+    // and its refusal becomes a canonical diagnostic, listed as added.
+    let model = toolkit_model(&json!({
+        "schema_version": 1,
+        "sheets": [{"id": "s", "name": "S", "cells": {
+            "A1": {"value": null, "formula": "=SUM(B1:B2)"},
+            "A2": {"value": null, "formula": "=NOSUCHFUNCTION(("},
+            "B1": {"value": 1.0},
+            "B2": {"value": 2.0}
+        }}]
+    }));
+    let (workbook, conversion) = to_canonical(&model, None).unwrap();
+    let formula = |address: &str| workbook.sheets[0].cells[address].formula.clone().unwrap();
+    assert_eq!(formula("A1").dependencies, ["S!B1", "S!B2"]);
+    assert!(formula("A2").dependencies.is_empty());
+    assert_eq!(workbook.diagnostics.len(), 1, "{:?}", workbook.diagnostics);
+    let diagnostic = &workbook.diagnostics[0];
+    assert_eq!(diagnostic.code, "parse_error");
+    assert_eq!(diagnostic.sheet.as_deref(), Some("S"));
+    assert_eq!(diagnostic.address.as_deref(), Some("A2"));
+    assert!(conversion.added.contains(&"diagnostics[0]".to_string()));
+    assert!(matches_grammar("diagnostics[0]"));
+    let document = canonical_json(&workbook);
+    assert_eq!(document["diagnostics"].as_array().unwrap().len(), 1);
+    let stripped = without(&document, &BTreeSet::from(["diagnostics[0]".to_string()]));
+    assert!(stripped.get("diagnostics").is_none());
 }
 
 #[test]
