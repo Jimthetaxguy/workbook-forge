@@ -1728,6 +1728,16 @@ struct SessionState {
     utc_offset_minutes: i32,
     /// The imported workbook's defined names: read-only, never edited.
     names: Option<Arc<DefinedNames>>,
+    /// The revision the session opened at: the version of every cell no
+    /// edit has written since.
+    opened_revision: u64,
+    /// Per-cell version index: canonical `Sheet!A1` key -> the revision of
+    /// the last applied edit batch that wrote the cell (value, formula,
+    /// style or removal). Maintained by `apply` under this lock, so a lookup
+    /// is O(1) and always agrees with `model.revision`. Calculation never
+    /// touches it: a recalculated value (TODAY, RAND, a changed precedent)
+    /// does not bump its cell's version.
+    cell_revisions: HashMap<String, u64>,
 }
 /// Clones share one synchronized transient session. Calculation holds no write
 /// lock while evaluating; publication checks the source revision again.
@@ -1758,6 +1768,7 @@ impl Session {
         names: Option<DefinedNames>,
     ) -> Result<Self, ToolkitError> {
         model.validate()?;
+        let opened_revision = model.revision;
         Ok(Self {
             state: Arc::new(Mutex::new(SessionState {
                 model,
@@ -1765,6 +1776,8 @@ impl Session {
                 dirty: BTreeSet::new(),
                 utc_offset_minutes: 0,
                 names: names.map(Arc::new),
+                opened_revision,
+                cell_revisions: HashMap::new(),
             })),
         })
     }
@@ -1789,6 +1802,39 @@ impl Session {
         let state = self.state();
         keys.iter()
             .map(|key| state.model.get_cell(key).cloned())
+            .collect()
+    }
+    /// The revision the session opened at. A cell no edit has written since
+    /// has this version.
+    pub fn opened_revision(&self) -> u64 {
+        self.state().opened_revision
+    }
+    /// The current revision and each named cell's version (canonical
+    /// `Sheet!A1` keys), read under one lock so a later
+    /// `apply(.., Some(revision))` either sees exactly these versions or is
+    /// refused with `revision_conflict`. A cell's version is the revision of
+    /// the last applied edit that wrote it, or the opening revision.
+    pub fn cell_revisions(&self, keys: &[String]) -> (u64, Vec<u64>) {
+        let state = self.state();
+        let versions = keys
+            .iter()
+            .map(|key| {
+                state
+                    .cell_revisions
+                    .get(key)
+                    .copied()
+                    .unwrap_or(state.opened_revision)
+            })
+            .collect();
+        (state.model.revision, versions)
+    }
+    /// Every cell an edit has written in this session, with its version.
+    /// Cells absent from the map have the opening revision.
+    pub fn written_cell_revisions(&self) -> BTreeMap<String, u64> {
+        self.state()
+            .cell_revisions
+            .iter()
+            .map(|(key, revision)| (key.clone(), *revision))
             .collect()
     }
     pub fn published(&self) -> Option<CalculationReport> {
@@ -1890,9 +1936,13 @@ impl Session {
             .revision
             .checked_add(1)
             .ok_or_else(|| ToolkitError::new("resource_limit", "revision counter exhausted"))?;
+        let revision = candidate.revision;
         state.model = candidate;
+        for key in &changed {
+            state.cell_revisions.insert(key.clone(), revision);
+        }
         state.dirty.extend(changed);
-        Ok(state.model.revision)
+        Ok(revision)
     }
     /// The session's offset from UTC in minutes (east positive).
     pub fn utc_offset_minutes(&self) -> i32 {

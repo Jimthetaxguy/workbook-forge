@@ -51,6 +51,12 @@ export interface EngineError {
   cells?: { sheet: string; address: string; expected: LogInput; current: LogInput; overwritten_by: string | null }[];
   /** undo_conflict / redo_conflict: the events that overwrote those cells. */
   overwritten_by?: string[];
+  /**
+   * revision_conflict from a cell precondition: each precondition cell written
+   * after its base_version, with its current version and the intent that
+   * wrote it (null when that write was not logged).
+   */
+  stale_cells?: StaleCell[];
   [detail: string]: unknown;
 }
 
@@ -65,6 +71,14 @@ export interface SnapshotCell {
    * there: `00123` keeps its leading zeros and is never read as a number.
    */
   text?: true;
+  /**
+   * The cell's version: the revision of the last applied edit (set_cells,
+   * undo, redo, applyEdits) that wrote its input. Absent when no edit has
+   * written the cell since the workbook opened; its version is then the
+   * opening revision, and any later snapshot revision is a valid
+   * base_version for it. Recalculated values never bump it.
+   */
+  cellRevision?: Revision;
 }
 
 /**
@@ -125,9 +139,15 @@ export interface ExportResult {
 
 // ---- Command envelope (multi-user contract section 6.1) -------------------
 // One envelope per intent; the worker applies it, calculates, and answers with
-// a delta. Only mode "strict" (compare-and-swap on base_revision) is
-// implemented; "rebase" fails closed with unsupported_mode and non-empty
-// preconditions with unsupported_precondition.
+// a delta. Modes (docs/cell-versions.md):
+// - "strict" (the default): compare-and-swap on base_revision; any write
+//   anywhere since refuses with revision_conflict. Preconditions, if sent,
+//   are checked too.
+// - "cells": base_revision may be behind; the command applies unless a
+//   precondition cell was written after its base_version (revision_conflict
+//   with stale_cells). No preconditions = a blind (last-write-wins) write.
+// - "rebase" fails closed with unsupported_mode.
+// Undo and redo refuse preconditions with unsupported_precondition.
 
 export interface Actor {
   kind: 'human' | 'agent';
@@ -159,6 +179,28 @@ export interface CommandMeta {
   univer?: string;
 }
 
+/**
+ * Refuse the command unless this cell is unchanged since base_version: its
+ * cellRevision / cell_revision as last read, or any snapshot revision taken
+ * after its last write. Any cell may be named, not only an edited one.
+ */
+export interface CellPrecondition {
+  sheet: string;
+  address: string;
+  base_version: Revision;
+}
+
+/** A precondition cell written after its base_version. */
+export interface StaleCell {
+  sheet: string;
+  address: string;
+  base_version: Revision;
+  /** The cell's current version. */
+  cell_revision: Revision;
+  /** The intent event that wrote it, or null when that write was not logged. */
+  overwritten_by: string | null;
+}
+
 export interface CommandEnvelope {
   v: 1;
   /** Globally unique, client-generated (crypto.randomUUID()). The dedupe key. */
@@ -171,8 +213,9 @@ export interface CommandEnvelope {
   idempotency_key: string | null;
   actor: Actor;
   base_revision: Revision;
-  mode: 'strict' | 'rebase';
-  preconditions: unknown[];
+  mode: 'strict' | 'cells' | 'rebase';
+  /** At most 10,000, one per cell. Empty in strict mode keeps today's behavior. */
+  preconditions: CellPrecondition[];
   op: SetCellsOp | HistoryOp;
 }
 
@@ -183,6 +226,11 @@ export interface ChangedCell {
   value: CalculatedValue;
   /** Formula without the leading "=", or null for a literal. */
   formula: string | null;
+  /**
+   * The cell's version after the command. A cell whose value only
+   * recalculated keeps its earlier version. Absent on older builds.
+   */
+  cell_revision?: Revision;
 }
 
 export interface CommandResponse {
@@ -258,7 +306,10 @@ export interface IntentEvent extends LogEventBase {
     undo_event?: string;
     command_id?: string;
   };
-  base: { mode: 'strict'; expectedRevision: Revision } | { mode: 'cells' | 'rebase'; baseRevision: Revision } | null;
+  base:
+    | { mode: 'strict'; expectedRevision: Revision; preconditions?: CellPrecondition[] }
+    | { mode: 'cells' | 'rebase'; baseRevision: Revision; preconditions?: CellPrecondition[] }
+    | null;
   status: 'applied' | 'rejected';
   /** Applied: the new revision. Rejected: the revision it was refused at. */
   revision: Revision;

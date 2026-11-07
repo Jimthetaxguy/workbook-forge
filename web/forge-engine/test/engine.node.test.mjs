@@ -422,3 +422,35 @@ test('replay of NOW()+RAND() returns the logged pass under a non-UTC zone', () =
   assert.equal(typeof painted.calc.now_ms, 'number');
   assert.match(painted.calc.seed, /^\d+$/);
 });
+
+// Per-cell versions and preconditions (docs/cell-versions.md) on
+// fixtures/univer-spike-chain.xlsx: A1 = 10 (literal), B1 = A1*2, ...
+test('cell versions: snapshot cellRevision, cells-mode preconditions, stale_cells', () => {
+  const engine = new ForgeEngine({ openXlsx });
+  call(engine, 'open', { bytes: new Uint8Array(fixture) });
+  assert.equal(call(engine, 'snapshot').value.sheets[0].cells.A1.cellRevision, undefined);
+  const edit = (id, base, address, value, extra = {}) =>
+    call(engine, 'applyAndCalculate', { envelope: envelope(id, base, [{ sheet: 'Sheet1', address, value }], extra) });
+  const first = edit('v-1', '0', 'A1', 20);
+  assert.equal(first.value.changed.find((c) => c.address === 'A1').cell_revision, '1');
+  // B1 recalculated (A1*2) but was not written: its version stays at open.
+  assert.equal(first.value.changed.find((c) => c.address === 'B1').cell_revision, '0');
+  const snap = call(engine, 'snapshot').value.sheets[0].cells;
+  assert.equal(snap.A1.cellRevision, '1');
+  assert.equal(snap.B1.cellRevision, undefined);
+  // Disjoint: a client at r0 edits H1 with a precondition on H1.
+  const pre = (address, base_version) => ({ sheet: 'Sheet1', address, base_version });
+  const disjoint = edit('v-2', '0', 'H1', 5, { mode: 'cells', preconditions: [pre('H1', '0')] });
+  assert.equal(disjoint.ok, true, JSON.stringify(disjoint));
+  assert.equal(disjoint.value.revision, '2');
+  // Overlapping: the same stale client edits A1.
+  const overlap = edit('v-3', '0', 'A1', 1, { mode: 'cells', preconditions: [pre('A1', '0')] });
+  assert.equal(overlap.ok, false);
+  assert.equal(overlap.error.code, 'revision_conflict');
+  assert.deepEqual(overlap.error.stale_cells, [
+    { sheet: 'Sheet1', address: 'A1', base_version: '0', cell_revision: '1', overwritten_by: first.value.event_id },
+  ]);
+  // Strict stays whole-workbook compare-and-swap.
+  assert.equal(edit('v-4', '0', 'H2', 1).error.code, 'revision_conflict');
+  assert.equal(call(engine, 'snapshot').value.sheets[0].cells.A1.value, 20);
+});
