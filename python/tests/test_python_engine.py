@@ -87,13 +87,37 @@ def test_array_results_are_explicit_and_array_dependencies_refused():
 
 
 def test_spill_range_operator_is_refused_as_unsupported_formula():
-    # Parity with Rust: `A1#` is syntax Workbook Forge reads but does not calculate, not a parse error.
+    # `A1#` is syntax Workbook Forge reads but does not calculate, not a parse error.
     result = json.loads(engine.calculate(model({"A1": {"formula": "=SEQUENCE(3)"}, "B1": {"formula": "=A1#"}}, {"out": "B1"})))
     codes = {(item["code"], item["message"]) for item in result["diagnostics"]}
-    assert any(code == "unsupported_formula" and "spill range operator" in message for code, message in codes), codes
+    assert ("unsupported_formula", "spill range operator # is not supported") in codes, codes
 
 
-def test_na_bang_is_not_a_formula_literal_in_either_engine():
+def test_unknown_error_literal_is_refused_as_unsupported_formula():
+    result = json.loads(engine.calculate(model({"A1": {"formula": "=#ZZ"}}, {"out": "A1"})))
+    codes = {(item["code"], item["message"]) for item in result["diagnostics"]}
+    assert ("unsupported_formula", "unknown or unsupported error literal") in codes, codes
+
+
+def test_defined_name_keeps_spill_and_unknown_literal_messages():
+    names = json.dumps([
+        {"name": "Spill", "sheet": None, "formula": "=A1#", "hidden": False},
+        {"name": "Bad", "sheet": None, "formula": "=#ZZ", "hidden": False},
+    ])
+    result = json.loads(engine.calculate(model({"B1": {"formula": "=Spill"}, "C1": {"formula": "=Bad"}}, {"spill": "B1", "bad": "C1"}), names_json=names))
+    codes = {(item["address"], item["code"], item["message"]) for item in result["diagnostics"]}
+    assert ("B1", "unsupported_formula", "spill range operator # is not supported") in codes, codes
+    assert ("C1", "unsupported_formula", "unknown or unsupported error literal") in codes, codes
+
+
+def test_array_plus_unsupported_xlookup_mode_is_refused():
+    result = json.loads(engine.calculate(model({"A1": {"formula": "=SEQUENCE(2)+XLOOKUP(1,B1:B1,C1:C1,,1)"}, "B1": {"value": 1}, "C1": {"value": 2}}, {"out": "A1"})))
+    assert result["outputs"] == {}
+    codes = {(item["code"], item["message"]) for item in result["diagnostics"]}
+    assert ("unsupported_formula", "XLOOKUP supports exact match_mode=0 only") in codes, codes
+
+
+def test_na_bang_is_not_a_formula_literal():
     # `#N/A!` is accepted as an authored cell value alias and normalised; in formula text only `#N/A` is a literal.
     result = json.loads(engine.calculate(model({"A1": {"formula": "=#N/A!"}}, {"out": "A1"})))
     assert [item["code"] for item in result["diagnostics"]] == ["parse_error"]
@@ -101,7 +125,7 @@ def test_na_bang_is_not_a_formula_literal_in_either_engine():
     assert result["outputs"]["out"] == {"error": "#N/A"}
 
 
-def test_oversize_array_result_is_a_num_error_as_in_rust():
+def test_oversize_array_result_is_a_num_error():
     from workbook_forge import _formula_array_result
 
     result = _formula_array_result(tuple((1.0,) for _ in range(100_001)))

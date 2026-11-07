@@ -618,11 +618,11 @@ def _stray_hash_message(source: str, position: int) -> str:
     """A ``#`` that starts no error literal: the spill-range operator after a
     reference or call (``A1#``), otherwise an unknown literal. Both are syntax
     Workbook Forge reads but does not calculate, so both classify as
-    ``unsupported_formula`` in both engines."""
+    ``unsupported_formula``. The sentences match the Rust lexer."""
     before = source[:position].rstrip()
     if before and (before[-1].isalnum() or before[-1] in ")$_."):
-        return f"spill range operator # at offset {position} is not supported"
-    return f"unknown or unsupported error literal at offset {position}"
+        return "spill range operator # is not supported"
+    return "unknown or unsupported error literal"
 
 
 class _Parser:
@@ -970,6 +970,26 @@ def _binary_array_parts(value: object) -> tuple[tuple[int, int], tuple[object, .
     return None
 
 
+def _is_worksheet_refusal(value: object) -> ErrorValue | None:
+    """An evaluation error the worksheet path reports as ``unsupported_formula``.
+
+    The scalar path in ``python_engine`` promotes these messages. Elementwise
+    lifting must return the same error for the whole formula. An ordinary Excel
+    error, such as ``#DIV/0!``, still lifts as an array element.
+    """
+    value = _dereference(value)
+    if not isinstance(value, ErrorValue):
+        return None
+    message = value.message
+    if (
+        message.startswith("unsupported function ")
+        or "supports exact match_mode=0 only" in message
+        or "search_mode must be 1 or -1" in message
+    ):
+        return value
+    return None
+
+
 def _apply_binary_values(
     op: str, left: object, right: object, *, worksheet: bool = False
 ) -> object:
@@ -980,6 +1000,11 @@ def _apply_binary_values(
 
     if left_array is not None and right_array is not None and left_array[0] != right_array[0]:
         return ErrorValue("#VALUE!", "array operator operands must have identical shapes")
+    for operand, parts in ((left, left_array), (right, right_array)):
+        if parts is None:
+            refusal = _is_worksheet_refusal(operand)
+            if refusal is not None:
+                return refusal
     shape = left_array[0] if left_array is not None else right_array[0]
     assert shape is not None
     rows, columns = shape
