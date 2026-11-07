@@ -12,17 +12,21 @@ it (a value, a key, or a token inside a longer string) becomes
 
 - the repository-relative path, when it resolves inside ``--root``;
 - a content fingerprint ``sha256:<hex>`` (``workbook_forge.model.content_fingerprint``),
-  when it names a readable file outside the root;
-- its basename, when it names nothing on this machine or sits inside prose;
+  when it names a readable file outside the root and outside any home directory;
+- its basename, when it names nothing on this machine, sits inside prose, or
+  names a file under a home directory;
 - the marker ``<home>``, when it is a home directory itself (``/Users/<name>``,
-  ``/home/<name>``, ``C:\\Users\\<name>``, ``~``), since the basename would be
-  the account name.
+  ``/home/<name>``, ``C:\\Users\\<name>``, ``~`` or ``~/``), since the basename
+  would be the account name.
 
 A machine-local path is a POSIX path under one of the home, temporary or
 volume roots in ``MACHINE_LOCAL_ROOTS``, a ``~`` path, a Windows drive path or
 a ``file://`` URL. System paths such as ``/usr/bin/osascript`` are left alone.
-Relative paths are never touched. A Windows path is never resolved on this
-host; it always falls back to its basename or the marker.
+Relative paths are never touched. A ``~`` path is never expanded, and a path
+under ``/home`` or ``/Users`` is never resolved or read; both keep the basename
+or the marker. A path that resolves into one of those directories is not
+fingerprinted either. A Windows path is never resolved on this host; it always
+falls back to its basename or the marker.
 
 A string that starts with a path is taken as one path to its end, so a path
 with spaces survives as a whole. A path with spaces in the middle of prose is
@@ -157,12 +161,25 @@ def _is_home_directory(parts: tuple[str, ...]) -> bool:
     return len(parts) == 2 and parts[0] in HOME_ROOTS
 
 
+def _under_home_directory(path: Path) -> bool:
+    """True for a POSIX path under ``/home`` or ``/Users``.
+
+    The check uses the path's own parts. It does not expand ``~`` and it does
+    not consult the process home directory.
+    """
+    parts = path.parts
+    return len(parts) >= 2 and parts[0] == "/" and parts[1] in HOME_ROOTS
+
+
 def _classify(token: str) -> tuple[Path | None, str]:
     """(a path on this host to resolve, or None; the replacement to fall back on).
 
     A Windows path is never resolved: on a POSIX host it would be a relative
-    path and resolve against the working directory. A home directory itself
-    becomes ``HOME_MARKER`` rather than its basename, the account name.
+    path and resolve against the working directory. A ``~`` path is never
+    expanded, and a path under ``/home`` or ``/Users`` is never resolved, so
+    neither can be read. A home directory itself becomes ``HOME_MARKER``
+    rather than its basename, the account name. A file under a home directory
+    keeps its basename.
     """
     text = token[len("file://"):] if token.startswith("file://") else token
     if re.match(r"[A-Za-z]:\\", text):
@@ -172,13 +189,13 @@ def _classify(token: str) -> tuple[Path | None, str]:
     if text.startswith("~"):
         pure = PurePosixPath(text)
         fallback = HOME_MARKER if len(pure.parts) <= 1 else pure.name
-        try:
-            return Path(text).expanduser(), fallback
-        except (RuntimeError, OSError):
-            return None, fallback
+        return None, fallback
     pure = PurePosixPath(text)
     parts = tuple(part for part in pure.parts[1:] if part)
-    return Path(text), HOME_MARKER if _is_home_directory(parts) else (pure.name or "path")
+    fallback = HOME_MARKER if _is_home_directory(parts) else (pure.name or "path")
+    if parts and parts[0] in HOME_ROOTS:
+        return None, fallback
+    return Path(text), fallback
 
 
 def rewrite_path(token: str, root: Path, *, whole: bool) -> tuple[str, str]:
@@ -201,7 +218,8 @@ def rewrite_path(token: str, root: Path, *, whole: bool) -> tuple[str, str]:
             relative = None
         if relative is not None and str(relative) != ".":
             return relative.as_posix(), "relative"
-        if whole and resolved.is_file():
+        # A symlink or ``..`` can land in a home directory. Do not read it.
+        if whole and not _under_home_directory(resolved) and resolved.is_file():
             try:
                 return content_fingerprint(resolved.read_bytes()), "fingerprint"
             except OSError:
