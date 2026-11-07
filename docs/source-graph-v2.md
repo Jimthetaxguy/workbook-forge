@@ -122,10 +122,13 @@ macro/provider execution is introduced.
 
 ## Coverage and verification
 
-Profile2 compiles **SUM as one source function in each language**. The current
-521-row pinned map additionally identifies the newer [profile3](source-graph-v3.md). It keeps **115 declared SDK runtime profiles** and Excel
-observation as separate counts. A registry row is not a full argument-domain
-proof. The pinned inventory still requires refresh against a target Excel build.
+Profile2 compiles **SUM as one source function in each language**. The
+521-row pinned map additionally identifies the newer [profile3](source-graph-v3.md).
+At the 2026-09-28 checkpoint (`32f49e2`) it kept **115 declared SDK runtime
+profiles**, separate from Excel observation. The catalog now records 123
+implemented functions (`CONTEXT.md` at the repository root). A registry row is
+not a full argument-domain proof. The pinned inventory still requires refresh
+against a target Excel build.
 
 ```sh
 python -m pytest -q python/tests/test_source_graph.py python/tests/test_source_compiler.py python/tests/test_compiler_benchmark.py

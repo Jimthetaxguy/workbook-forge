@@ -45,7 +45,7 @@ it is not implemented by silently changing the current spreadsheet profile.
 | codex/agent_consumer | Python primitives, example/tests, prefix handling and Python packaging | 37 focused primitive/prefix tests and 14 expression tests pass; fresh pure/native wheels pass outside the checkout on Python 3.12/3.14 | No assigned work remains |
 | codex/xlsx_adapter | Rust primitives, standalone runners, prefix handling and Rust packaging | All 88 Rust tests pass on stable and Rust 1.88; packaged external consumer verifies calculations, schema discovery and workbook workflows | No assigned work remains |
 | codex/architecture_review | Independent contract and PR regression review | 233 initial primitive cases and 12 PR regressions pass; final direct-call size and schema-export findings independently closed | No review findings remain |
-| codex/Codex | Shared catalog/schema, integration, reference analysis and shared records | Full gates at that checkpoint passed 923 Python and 88 Rust tests, including the additional schema test and direct-call regressions; package receipts inspected | Full Excel Desktop acceptance and hosted CI remain outstanding |
+| codex/Codex | Shared catalog/schema, integration, reference analysis and shared records | Full gates at that checkpoint passed 923 Python and 88 Rust tests, including the additional schema test and direct-call regressions; package receipts inspected | At the 2026-09-28 checkpoint, full Excel Desktop acceptance and hosted CI were outstanding. Hosted CI is not a current goal (see the frontmatter) |
 
 This record has one coordinating writer, codex/Codex. Contributors report what
 changed, actual checks and unresolved work at meaningful milestones. Their
@@ -62,7 +62,7 @@ executable behavior and metadata that an agent can inspect. The main remaining
 integration gap is an explicit path from a named native composition into a
 workbook model. That path is a proposed next milestone, not a delivered feature.
 
-The coverage counts describe different things (counts as of `main` 580aacd on
+The coverage counts describe different things (catalog counts unchanged at `main` `c506165` since `580aacd` on
 2026-11-06; the rest of this assessment keeps its 2026-09-28 date): 521 inventoried functions,
 123 implemented formula functions, nine directly callable primitive functions,
 ten primitive binary operators, ten XML extraction patterns and nine workbook
@@ -434,7 +434,7 @@ unavailable Rust bridge raises `NativeUnavailableError`.
 
 ## Verification record
 
-The native primitive checkpoint passes **923 Python tests and 88 Rust tests**.
+The 2026-09-28 native primitive checkpoint (`32f49e2`) passed **923 Python tests and 88 Rust tests**. Those totals are that checkpoint, not a later gate.
 The primitive contract file contains 234 cases, including real standalone Rust
 execution; 12 focused PR regressions cover compatibility prefixes, null-only
 edits and conflicting XML payloads. The final independent review also caught a
@@ -472,8 +472,8 @@ The final gate ran with a fresh checkout-local Rust target directory after a
 stale cached library caused an unresolved module error. The previous target
 was preserved; package verification now uses a separate target directory.
 
-All 1,371 fixtures are exercised through each workbook engine: 1,368 retain
-their expected results, while three oversized cases receive the documented
+At the 2026-09-28 checkpoint, all 1,371 fixtures were exercised through each workbook engine: 1,368 retained
+their expected results, while three oversized cases received the documented
 workbook resource-limit rejection in both engines. Existing direct evaluator
 fixtures retain their outcomes. Native-import-blocked subprocess checks prove
 Python authoring, calculation, expression copying and XLSX roundtrips work alone.
