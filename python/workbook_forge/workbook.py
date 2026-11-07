@@ -57,17 +57,38 @@ NS = {"m": MAIN, "r": REL_DOC}
 OUTPUT_EXISTS_MESSAGE = "output path already exists"
 
 
+def os_error_message(error: OSError) -> str:
+    """Return an OS error's text with the filename removed.
+
+    ``FileExistsError`` is the shared sentence. Every other OS error contributes
+    ``strerror`` when the operating system set one. An ``OSError`` constructed
+    with a single message and no filename keeps that message. ``str(error)`` is
+    not used: ``OSError(errno, "", path)`` repeats the filename.
+    """
+    if isinstance(error, FileExistsError):
+        return OUTPUT_EXISTS_MESSAGE
+    if error.strerror:
+        return error.strerror
+    if error.filename is None and len(error.args) == 1 and isinstance(error.args[0], str):
+        return error.args[0]
+    return ""
+
+
 def link_new(staged: str | Path, target: str | Path) -> None:
     """Hard-link ``staged`` to ``target``, which must not exist yet.
 
-    ``os.link`` is the atomic half of every writer's exists check. When another
-    writer won the race the OS error names both paths; the refusal we raise
-    instead names neither, because no report may carry a machine path.
+    ``os.link`` is the atomic half of every writer's exists check. The OS error
+    names the paths; the refusal raised here does not, because no report may
+    carry a machine path. An existing target uses the shared sentence. Any
+    other OS error contributes only its ``strerror``.
     """
     try:
         os.link(staged, target)
-    except FileExistsError:
-        raise FileExistsError(OUTPUT_EXISTS_MESSAGE) from None
+    except OSError as error:
+        message = os_error_message(error)
+        if isinstance(error, FileExistsError):
+            raise FileExistsError(message) from None
+        raise type(error)(error.errno, message) from None
 
 
 POSITIONAL_CELLS_MESSAGE = (
@@ -372,7 +393,8 @@ def _preflight_archive_directory(source_stream: BinaryIO, source_size: int) -> i
         directory_offset = end_record[zipfile._ECD_OFFSET]
         record_location = end_record[zipfile._ECD_LOCATION]
     except (OSError, zipfile.BadZipFile, struct.error, IndexError, TypeError) as exc:
-        raise WorkbookError(f"cannot inspect workbook ZIP directory: {exc}") from exc
+        detail = os_error_message(exc) if isinstance(exc, OSError) else str(exc)
+        raise WorkbookError(f"cannot inspect workbook ZIP directory: {detail}") from exc
     finally:
         source_stream.seek(0)
 
@@ -720,7 +742,7 @@ class Workbook:
                 source_stream = source.open("rb")
                 source_size = os.fstat(source_stream.fileno()).st_size
             except OSError as exc:
-                raise WorkbookError(f"cannot open workbook: {exc}") from exc
+                raise WorkbookError(f"cannot open workbook: {os_error_message(exc)}") from exc
             if source_size > MAX_COMPRESSED_PACKAGE_BYTES:
                 raise UnsupportedWorkbook("compressed workbook exceeds size limit")
             entry_count = _preflight_archive_directory(source_stream, source_size)
@@ -728,7 +750,8 @@ class Workbook:
             try:
                 archive = zipfile.ZipFile(source_stream, "r")
             except (OSError, zipfile.BadZipFile) as exc:
-                raise WorkbookError(f"cannot open workbook: {exc}") from exc
+                detail = os_error_message(exc) if isinstance(exc, OSError) else str(exc)
+                raise WorkbookError(f"cannot open workbook: {detail}") from exc
             infos = archive.infolist()
             if len(infos) != entry_count:
                 raise WorkbookError("workbook ZIP directory changed after preflight")

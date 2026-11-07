@@ -17,7 +17,14 @@ from typing import Any
 
 from .catalog import _catalog_file
 from .toolkit import WorkbookModel
-from .workbook import OUTPUT_EXISTS_MESSAGE, UnsupportedWorkbook, WorkbookError, _cell_position, _normal_address
+from .workbook import (
+    OUTPUT_EXISTS_MESSAGE,
+    UnsupportedWorkbook,
+    WorkbookError,
+    _cell_position,
+    _normal_address,
+    os_error_message,
+)
 from .xlsx import _check_insertion, export_xlsx
 
 MAX_REQUEST_BYTES = 1024 * 1024
@@ -42,15 +49,6 @@ class _OperationError(ValueError):
 
 def _fail(code: str, message: str):
     raise _OperationError(code, message)
-
-
-def _os_error_message(error: OSError) -> str:
-    """An OSError's text without its filename: the agent never reports a machine path."""
-    if isinstance(error, FileExistsError):
-        return OUTPUT_EXISTS_MESSAGE
-    if error.strerror:
-        return error.strerror
-    return str(error)
 
 
 def _bytes(value: Any) -> bytes:
@@ -236,7 +234,7 @@ class AgentWorkbook:
         elif isinstance(error, WorkbookError):
             code, message = "export_error", str(error)
         elif isinstance(error, OSError):
-            code, message = "export_error", _os_error_message(error)
+            code, message = "export_error", os_error_message(error)
         elif hasattr(error, "code"):
             code, message = str(error.code), getattr(error, "message", str(error))
         elif isinstance(error, (ValueError, TypeError, OverflowError)):
@@ -356,7 +354,7 @@ class AgentWorkbook:
             if self._output_dir.resolve() != self._output_dir or target.parent.resolve() != self._output_dir:
                 _fail("export_error", "configured output directory changed")
             if os.path.lexists(target):
-                _fail("export_error", "output path already exists")
+                _fail("export_error", OUTPUT_EXISTS_MESSAGE)
             receipt = {"filename": filename, "revision": revision, "bytes": 999_999_999}
             self._check_response(self._envelope(request_id, operation, revision, receipt))
             # Calculate and publish exactly the revision checked above, keeping
@@ -364,7 +362,7 @@ class AgentWorkbook:
             try:
                 result = export_xlsx(self._detached(snapshot), target)
             except OSError as error:
-                raise _OperationError("export_error", _os_error_message(error)) from error
+                raise _OperationError("export_error", os_error_message(error)) from error
             except (WorkbookError, ValueError) as error:
                 raise _OperationError("export_error", str(error)) from error
             return {"filename": filename, "revision": revision, "bytes": result.stat().st_size}, revision
