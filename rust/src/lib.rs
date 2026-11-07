@@ -6,7 +6,9 @@
 
 pub mod agent;
 pub mod browser_contract;
+pub mod convert;
 pub mod delimited;
+pub mod envelope;
 pub mod event_log;
 pub mod evidence;
 pub mod extraction;

@@ -487,7 +487,7 @@ fn defined_names(workbook: &Workbook) -> Result<Option<DefinedNames>, ModelError
     Ok(Some(DefinedNames::new(entries)))
 }
 
-fn analyze(
+pub(crate) fn analyze(
     workbook: &Workbook,
     sheet_name: &str,
     address: &str,
@@ -1049,7 +1049,7 @@ fn parse_value(data: &JsonValue, path: &str) -> Result<Scalar, ModelError> {
     }
 }
 
-fn value_type(value: &Scalar) -> &'static str {
+pub(crate) fn value_type(value: &Scalar) -> &'static str {
     match value {
         Scalar::Blank => "blank",
         Scalar::Number(_) => "number",

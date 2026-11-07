@@ -3,6 +3,8 @@
 //! ZIP/XML crates supply container primitives only. Workbook semantics, model
 //! translation, styles, validation, and surgical cell patches are implemented
 //! here. Imported packages retain an immutable byte baseline; no Python runs.
+use crate::envelope::{Baseline, PreservationEnvelope, SourceIdentity, TextPreservation};
+use crate::model::content_fingerprint;
 use crate::toolkit::{
     self, CalculationReport, Cell, CellAddress, CellValue, Edit, InputBinding, Session, Sheet,
     Style, WorkbookModel,
@@ -10,7 +12,7 @@ use crate::toolkit::{
 use crate::xml_patterns::{Node, Xml};
 #[path = "xlsx_features.rs"]
 mod features;
-use features::FeatureGuard;
+pub(crate) use features::FeatureGuard;
 use serde_json::{Value as Json, json};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs::{self, OpenOptions};
@@ -312,6 +314,11 @@ struct Package {
 }
 impl Package {
     fn read(path: &Path) -> Result<Self> {
+        Self::from_bytes(&Self::read_bytes(path)?)
+    }
+    /// The package bytes behind `path`, after the extension and size checks,
+    /// so a caller can fingerprint exactly what it decodes.
+    fn read_bytes(path: &Path) -> Result<Vec<u8>> {
         if path
             .extension()
             .and_then(|s| s.to_str())
@@ -322,7 +329,7 @@ impl Package {
         if fs::metadata(path)?.len() > MAX_COMPRESSED as u64 {
             return Err(err("compressed package exceeds 130 MiB"));
         }
-        Self::from_bytes(&fs::read(path)?)
+        Ok(fs::read(path)?)
     }
     fn from_bytes(bytes: &[u8]) -> Result<Self> {
         if bytes.len() > MAX_COMPRESSED {
@@ -825,8 +832,9 @@ struct Decoded {
     /// Sheet name -> merged ranges `(c1, r1, c2, r2)` from `<mergeCells>`.
     merged: BTreeMap<String, Vec<(u32, u32, u32, u32)>>,
     date1904: bool,
-    /// Compatibility Version 3 or later: formulas are preserved, not calculated.
-    compat3: bool,
+    /// The workbook's Compatibility Version (1 when unset). Version 3 or
+    /// later: formulas are preserved, not calculated.
+    compatibility_version: u32,
     capabilities: Json,
     /// Every `<sheet>` entry in workbook order (worksheets and chartsheets),
     /// the order `localSheetId` counts.
@@ -845,7 +853,7 @@ struct Decoded {
 /// `inherited_style` writes the same choice at export.
 #[derive(Clone, Debug, Default)]
 pub(crate) struct TextLayout {
-    name: String,
+    pub(crate) name: String,
     rows: BTreeMap<u32, bool>,
     columns: Vec<(u32, u32, bool)>,
 }
@@ -859,7 +867,7 @@ impl TextLayout {
             .find(|(first, last, _)| (*first..=*last).contains(&col))
             .is_some_and(|(_, _, text)| *text)
     }
-    fn public(&self) -> Json {
+    pub(crate) fn public(&self) -> Json {
         json!({
             "text_columns": self.columns.iter().filter(|c| c.2).map(|c| [c.0, c.1]).collect::<Vec<_>>(),
             "text_rows": self.rows.iter().filter(|r| *r.1).map(|r| *r.0).collect::<Vec<_>>(),
@@ -990,7 +998,7 @@ fn decode_mode(
         .map(|s| boolean(s))
         .transpose()?
         .unwrap_or(false);
-    let compat3 = compatibility_version(&wb, wbroot) >= 3;
+    let compat_version = compatibility_version(&wb, wbroot);
     let rich_arrays = holds_rich_arrays(package, &types);
     let rels = relationships(package.get(&rel_part(&workbook_part))?)?;
     let mut strings = Vec::new();
@@ -1125,7 +1133,7 @@ fn decode_mode(
                         cell.blocked_reason =
                             Some("1904 date-system formula calculation is unsupported".into());
                     }
-                    if compat3 {
+                    if compat_version >= 3 {
                         cell.blocked_reason = Some(COMPAT_V3_CALCULATION.into());
                     }
                     if matches!(kind, "array" | "dataTable" | "shared")
@@ -1363,7 +1371,7 @@ fn decode_mode(
         sheet_parts,
         merged,
         date1904,
-        compat3,
+        compatibility_version: compat_version,
         capabilities,
         sheet_entries,
         guard,
@@ -1430,11 +1438,15 @@ pub(crate) fn extraction_source(path: &Path) -> Result<ExtractionSource> {
 /// An immutable source package plus a native transient workbook session.
 pub struct ImportedWorkbook {
     source: Option<PathBuf>,
+    /// `sha256:` fingerprint of the imported bytes.
+    fingerprint: String,
     baseline: Package,
     original: WorkbookModel,
     session: Session,
     workbook_part: String,
     sheet_parts: BTreeMap<String, String>,
+    /// Every `<sheet>` entry in workbook order, chartsheets included.
+    sheet_entries: Vec<String>,
     /// Sheet name -> merged ranges `(c1, r1, c2, r2)`; their non-anchor cells
     /// never receive inserted cells.
     merged: BTreeMap<String, Vec<(u32, u32, u32, u32)>>,
@@ -1442,7 +1454,7 @@ pub struct ImportedWorkbook {
     /// inserted at. Excel's grid unless the session declared a smaller one.
     insertion_bound: (u32, u32),
     date1904: bool,
-    compat3: bool,
+    compatibility_version: u32,
     capabilities: Json,
     guard: FeatureGuard,
     /// (lowercased sheet, address) of Text-formatted (`@`) cells.
@@ -1483,8 +1495,15 @@ pub fn import_xlsx(
     outputs: BTreeMap<String, CellAddress>,
 ) -> Result<ImportedWorkbook> {
     let path = path.as_ref();
-    let package = Package::read(path)?;
-    import_package(package, Some(fs::canonicalize(path)?), inputs, outputs)
+    let bytes = Package::read_bytes(path)?;
+    let package = Package::from_bytes(&bytes)?;
+    import_package(
+        package,
+        Some(fs::canonicalize(path)?),
+        inputs,
+        outputs,
+        content_fingerprint(&bytes),
+    )
 }
 
 /// Import an `.xlsx` package directly from caller-owned bytes.
@@ -1498,7 +1517,13 @@ pub fn import_xlsx_bytes(
     inputs: BTreeMap<String, InputBinding>,
     outputs: BTreeMap<String, CellAddress>,
 ) -> Result<ImportedWorkbook> {
-    import_package(Package::from_bytes(bytes)?, None, inputs, outputs)
+    import_package(
+        Package::from_bytes(bytes)?,
+        None,
+        inputs,
+        outputs,
+        content_fingerprint(bytes),
+    )
 }
 
 fn import_package(
@@ -1506,6 +1531,7 @@ fn import_package(
     source: Option<PathBuf>,
     inputs: BTreeMap<String, InputBinding>,
     outputs: BTreeMap<String, CellAddress>,
+    fingerprint: String,
 ) -> Result<ImportedWorkbook> {
     let decoded = decode(&package, inputs, outputs)?;
     let text_cells = decoded
@@ -1524,15 +1550,17 @@ fn import_package(
         .collect();
     Ok(ImportedWorkbook {
         source,
+        fingerprint,
         baseline: package,
         original: decoded.model.clone(),
         session: Session::with_names(decoded.model, Some(decoded.names))?,
         workbook_part: decoded.workbook_part,
         sheet_parts: decoded.sheet_parts,
+        sheet_entries: decoded.sheet_entries,
         merged: decoded.merged,
         insertion_bound: (EXCEL_MAX_ROWS, EXCEL_MAX_COLUMNS),
         date1904: decoded.date1904,
-        compat3: decoded.compat3,
+        compatibility_version: decoded.compatibility_version,
         capabilities: decoded.capabilities,
         guard: decoded.guard,
         text_cells,
@@ -1571,7 +1599,7 @@ impl ImportedWorkbook {
                 "transferred snapshot must retain all source cell addresses",
             ));
         }
-        if self.compat3 {
+        if self.compatibility_version >= 3 {
             // A snapshot is an edit batch by another route: the live-edit
             // refusal of new or changed formulas holds here too.
             let changed = self
@@ -1672,15 +1700,17 @@ impl ImportedWorkbook {
         }
         Self {
             source: self.source.clone(),
+            fingerprint: self.fingerprint.clone(),
             baseline: self.baseline.clone(),
             original: self.original.clone(),
             session: Session::with_names(model, self.session.names())?,
             workbook_part: self.workbook_part.clone(),
             sheet_parts: self.sheet_parts.clone(),
+            sheet_entries: self.sheet_entries.clone(),
             merged: self.merged.clone(),
             insertion_bound: self.insertion_bound,
             date1904: self.date1904,
-            compat3: self.compat3,
+            compatibility_version: self.compatibility_version,
             capabilities: self.capabilities.clone(),
             guard: self.guard.clone(),
             text_cells: self.text_cells.clone(),
@@ -1752,6 +1782,53 @@ impl ImportedWorkbook {
     pub fn insertion_bound(&self) -> (u32, u32) {
         self.insertion_bound
     }
+    /// The preservation envelope (spec 10 Design 1): everything this import
+    /// holds beyond its document, cloned. `tables`, pivot and chart records
+    /// and `chartsheets` are the ones `capabilities()` already lists.
+    pub fn envelope(&self) -> PreservationEnvelope {
+        let records = |key: &str| -> Vec<Json> {
+            self.capabilities[key]
+                .as_array()
+                .cloned()
+                .unwrap_or_default()
+        };
+        let chartsheets = self.capabilities["chartsheets"]
+            .as_object()
+            .map(|map| {
+                map.iter()
+                    .filter_map(|(name, part)| Some((name.clone(), part.as_str()?.to_string())))
+                    .collect()
+            })
+            .unwrap_or_default();
+        PreservationEnvelope {
+            source: SourceIdentity {
+                fingerprint: self.fingerprint.clone(),
+                parts: self.baseline.parts.keys().cloned().collect(),
+                workbook_part: self.workbook_part.clone(),
+                sheet_parts: self.sheet_parts.clone(),
+                sheet_entries: self.sheet_entries.clone(),
+                chartsheets,
+                handle: self.source.clone(),
+            },
+            baseline: Baseline {
+                parts: self.baseline.parts.clone(),
+                container: None,
+                document: self.original.clone(),
+            },
+            tables: records("tables"),
+            merged: self.merged.clone(),
+            date_system: if self.date1904 { "1904" } else { "1900" }.to_string(),
+            compatibility_version: self.compatibility_version,
+            guards: self.guard.clone(),
+            pivot_records: records("pivots"),
+            chart_records: records("charts"),
+            text: TextPreservation {
+                cells: self.text_cells.clone(),
+                layouts: self.text_layouts.clone(),
+            },
+            insertion_bound: self.insertion_bound,
+        }
+    }
     /// May a cell absent from `sheet` be inserted at `(col, row)`?
     fn check_insertion(&self, sheet: &str, col: u32, row: u32) -> Result<()> {
         let (rows, columns) = self.insertion_bound;
@@ -1782,7 +1859,7 @@ impl ImportedWorkbook {
             if self.date1904 && edit.formula.is_some() {
                 return Err(err("1904 formula edits are unsupported"));
             }
-            if self.compat3 && edit.formula.is_some() {
+            if self.compatibility_version >= 3 && edit.formula.is_some() {
                 return Err(err(format!("compat_version_3: {COMPAT_V3_EDIT}")));
             }
             if edit.style.is_some() {
