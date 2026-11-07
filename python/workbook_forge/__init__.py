@@ -173,7 +173,7 @@ _LEX_RE = re.compile(
     r"(?P<SPACE>\s+)"
     r'|(?P<STRING>"(?:[^"]|"")*")'
     r"|(?P<SHEET>'(?:[^']|'')*')"
-    r"|(?P<ERROR>\#(?:NULL!|DIV/0!|VALUE!|REF!|NAME\?|NUM!|N/A|N/A!|SPILL!|CALC!))"
+    r"|(?P<ERROR>\#(?:NULL!|DIV/0!|VALUE!|REF!|NAME\?|NUM!|N/A|SPILL!|CALC!))"
     r"|(?P<NUMBER>(?:\d+(?:\.\d*)?|\.\d+)(?:[Ee][+-]?\d+)?)"
     # A cell reference ends at its row digits. Text that carries on (R1C1Total,
     # C3PO, DEC2BIN) or opens a call (LOG10) is a name or function, not a cell.
@@ -210,7 +210,14 @@ def _is_unsupported_formula_message(message: str) -> bool:
     not calculate (a name, a 3D reference, Excel's in-cell array syntax), as
     opposed to a parse error."""
     return message.startswith(
-        ("unsupported name ", "3D reference ", "in-cell array ", "defined name")
+        (
+            "unsupported name ",
+            "3D reference ",
+            "in-cell array ",
+            "defined name",
+            "spill range operator ",
+            "unknown or unsupported error literal",
+        )
     )
 
 
@@ -595,6 +602,8 @@ def _tokenize(source: str) -> list[_Token]:
     while position < len(source):
         match = _LEX_RE.match(source, position)
         if match is None:
+            if source[position] == "#":
+                raise _FormulaSyntaxError(_stray_hash_message(source, position))
             raise _FormulaSyntaxError(f"unsupported character at offset {position}")
         kind = match.lastgroup
         value = match.group()
@@ -603,6 +612,17 @@ def _tokenize(source: str) -> list[_Token]:
         position = match.end()
     tokens.append(_Token("EOF", "", len(source)))
     return tokens
+
+
+def _stray_hash_message(source: str, position: int) -> str:
+    """A ``#`` that starts no error literal: the spill-range operator after a
+    reference or call (``A1#``), otherwise an unknown literal. Both are syntax
+    Workbook Forge reads but does not calculate, so both classify as
+    ``unsupported_formula`` in both engines."""
+    before = source[:position].rstrip()
+    if before and (before[-1].isalnum() or before[-1] in ")$_."):
+        return f"spill range operator # at offset {position} is not supported"
+    return f"unknown or unsupported error literal at offset {position}"
 
 
 class _Parser:
@@ -1291,7 +1311,10 @@ def _formula_array_result(rows: tuple[tuple[Scalar, ...], ...]) -> ArrayValue | 
                 return ErrorValue("#NUM!", "array numeric values must be finite binary64 values")
             output.append(number)
         normalized.append(tuple(output))
-    return ArrayValue(tuple(normalized))
+    try:
+        return ArrayValue(tuple(normalized))
+    except ValueError as error:
+        return ErrorValue("#NUM!", str(error))
 
 
 def _sort_call(

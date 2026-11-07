@@ -391,6 +391,18 @@ impl<'a> Lexer<'a> {
                     return Ok(Token::Error(error));
                 }
             }
+            // The spill-range operator after a reference or call (`A1#`) is
+            // syntax Workbook Forge reads but does not calculate; so is any
+            // other stray `#`. Python's `_stray_hash_message` says the same.
+            let before = self.chars[..self.pos]
+                .iter()
+                .rev()
+                .find(|c| !c.is_whitespace());
+            if before.is_some_and(|c| c.is_alphanumeric() || matches!(c, ')' | '$' | '_' | '.')) {
+                return Err(FormulaError::Unsupported(
+                    "spill range operator # is not supported".into(),
+                ));
+            }
             return Err(FormulaError::Unsupported(
                 "unknown or unsupported error literal".into(),
             ));
@@ -1457,9 +1469,15 @@ fn apply_binary_values(
                 .as_ref()
                 .cloned()
                 .unwrap_or_else(|| right_matrix[row][column].clone());
-            output_row.push(
-                eval_binary(op, left_value, right_value, worksheet).unwrap_or_else(Value::Error),
-            );
+            // A worksheet error is an element; a refusal of the formula itself
+            // (unsupported operator, parse) is raised, as it is for a scalar.
+            output_row.push(match eval_binary(op, left_value, right_value, worksheet) {
+                Ok(value) => value,
+                Err(refusal @ (FormulaError::Unsupported(_) | FormulaError::Parse(_))) => {
+                    return Err(refusal);
+                }
+                Err(error) => Value::Error(error),
+            });
         }
         result.push(output_row);
     }
@@ -7445,6 +7463,23 @@ fn civil_from_days(z: i64) -> (i32, u32, u32) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn parity_lifting_propagates_unsupported_errors_instead_of_storing_them() {
+        // An unsupported operator is a formula-level refusal for a scalar formula;
+        // elementwise lifting must not turn it into array elements.
+        let array = CalcValue::Array(ArrayValue::new(vec![vec![Value::Number(1.0)]]).unwrap());
+        let result = apply_binary_values("??", array, CalcValue::Scalar(Value::Number(1.0)), false);
+        assert!(
+            matches!(result, Err(FormulaError::Unsupported(_))),
+            "{result:?}"
+        );
+    }
+    #[test]
+    fn parity_oversize_array_is_a_num_error() {
+        let rows = vec![vec![Value::Number(1.0)]; MAX_ARRAY_CELLS + 1];
+        assert!(matches!(ArrayValue::new(rows), Err(FormulaError::Num)));
+    }
 
     #[derive(Debug, PartialEq)]
     enum JsonValue {

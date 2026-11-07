@@ -2448,6 +2448,56 @@ mod tests {
         assert!(report.values.is_empty());
     }
     #[test]
+    fn parity_spill_range_operator_is_refused_as_unsupported_formula() {
+        let workbook = model(
+            &[
+                ("A1", Cell::formula("=SEQUENCE(3)")),
+                ("B1", Cell::formula("=A1#")),
+            ],
+            &[("out", "B1")],
+        );
+        let report = calculate(&workbook, 1);
+        assert!(
+            report.diagnostics.iter().any(|d| {
+                d.code == "unsupported_formula" && d.message.contains("spill range operator")
+            }),
+            "{:?}",
+            report.diagnostics
+        );
+    }
+    #[test]
+    fn parity_na_bang_is_not_a_formula_literal() {
+        let report = calculate(
+            &model(&[("A1", Cell::formula("=#N/A!"))], &[("out", "A1")]),
+            1,
+        );
+        let codes: Vec<&str> = report.diagnostics.iter().map(|d| d.code.as_str()).collect();
+        assert_eq!(codes, vec!["parse_error"], "{:?}", report.diagnostics);
+        let report = calculate(
+            &model(
+                &[
+                    (
+                        "A1",
+                        Cell::value(CellValue::Error {
+                            error: "#N/A!".into(),
+                            message: None,
+                        }),
+                    ),
+                    ("B1", Cell::formula("=A1")),
+                ],
+                &[("out", "B1")],
+            ),
+            1,
+        );
+        assert_eq!(
+            report.outputs["out"],
+            CalculatedValue::Scalar(CellValue::Error {
+                error: "#N/A".into(),
+                message: None
+            })
+        );
+    }
+    #[test]
     fn array_results_have_shape_without_implicit_spill_projection() {
         let mut workbook = model(
             &[

@@ -86,6 +86,28 @@ def test_array_results_are_explicit_and_array_dependencies_refused():
     assert any(item["code"] == "unsupported_array_reference" for item in result["diagnostics"])
 
 
+def test_spill_range_operator_is_refused_as_unsupported_formula():
+    # Parity with Rust: `A1#` is syntax Workbook Forge reads but does not calculate, not a parse error.
+    result = json.loads(engine.calculate(model({"A1": {"formula": "=SEQUENCE(3)"}, "B1": {"formula": "=A1#"}}, {"out": "B1"})))
+    codes = {(item["code"], item["message"]) for item in result["diagnostics"]}
+    assert any(code == "unsupported_formula" and "spill range operator" in message for code, message in codes), codes
+
+
+def test_na_bang_is_not_a_formula_literal_in_either_engine():
+    # `#N/A!` is accepted as an authored cell value alias and normalised; in formula text only `#N/A` is a literal.
+    result = json.loads(engine.calculate(model({"A1": {"formula": "=#N/A!"}}, {"out": "A1"})))
+    assert [item["code"] for item in result["diagnostics"]] == ["parse_error"]
+    result = json.loads(engine.calculate(model({"A1": {"value": {"error": "#N/A!"}}, "B1": {"formula": "=A1"}}, {"out": "B1"})))
+    assert result["outputs"]["out"] == {"error": "#N/A"}
+
+
+def test_oversize_array_result_is_a_num_error_as_in_rust():
+    from workbook_forge import _formula_array_result
+
+    result = _formula_array_result(tuple((1.0,) for _ in range(100_001)))
+    assert isinstance(result, ErrorValue) and result.code == "#NUM!"
+
+
 def test_incremental_dependency_replacement_and_unrelated_work():
     session = engine.Session(model({"A1": {"value": 1}, "A2": {"value": 10}, "B1": {"formula": "=A1+1"}, "C1": {"formula": "=B1*2"}, "D1": {"formula": "=A2+1"}}, {"main": "C1", "other": "D1"}))
     assert len(report(session)["evaluated_cells"]) == 3
