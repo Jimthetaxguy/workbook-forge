@@ -129,6 +129,7 @@ The Excel round-trip harness is `tools/excel_oracle.py`, with `tools/canonical_e
 - `docs/behavior-profiles.md`: current behavior and profile notes by function family, plus workbook adapter details.
 - `docs/date-text-functions.md`: DATEDIF, DATEVALUE and TIMEVALUE, including unambiguous date text and the MD date-roll profile.
 - `docs/volatile-functions.md`: NOW, TODAY, RAND, RANDBETWEEN and RANDARRAY, and the one calculation context per pass.
+- `python/workbook_forge/convert.py` and `rust/src/convert.rs`: the explicit conversion edges between the canonical and toolkit workbook shapes (spec 09 step 0), each returning a `Conversion` of every dropped and added field path; `python/workbook_forge/envelope.py` and `rust/src/envelope.rs`: the in-memory `PreservationEnvelope` that `import_xlsx` assembles (spec 10 Design 1); `fixtures/shape-conversion-cases.v1.json` pins both engines' lists.
 - `docs/defined-names.md`: Excel defined names, read-only and calculated in all four engines (Python/Rust toolkit and canonical model); scopes, the shared fixture `fixtures/defined-names.v1.json`, and the typed refusals (cycles, hidden and built-in, external, relative, dynamic).
 - `python/workbook_forge/intake.py`: reads an `.xlsx` file into the canonical model; `workbook-forge intake` is its command.
 - `docs/review-protocol.md`: how to review this project so that the reviewer does not inherit the builder's view; `tools/review/` enforces it.

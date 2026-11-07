@@ -2,7 +2,7 @@
 author: unknown
 created: null
 agent: codex/Codex
-date: '2026-10-25'
+date: '2026-11-07'
 type: project-history
 task: Preserve historical Workbook Forge checkpoints
 status: active
@@ -21,6 +21,14 @@ The 2026-09-28 documentation review removed personal conversation references and
 Earlier notes counted "evaluator slices". Slices 2–10 predate the autoresearch loop (the 65-function baseline). Slice *N* for *N* from 11 to 23 is Run *N*−10. From Run 14 onward the notes use run numbers only.
 
 ## Project activity
+
+### 2026-11-07 — claude-code/Claude Fable 5.1 — spec 09 step 0: shape conversion edges and the in-memory preservation envelope
+- Changed: `to_toolkit` and `to_canonical` in both languages (`python/workbook_forge/convert.py`, `rust/src/convert.rs`) convert between the canonical and toolkit workbook shapes and return a `Conversion` naming every field path dropped and added, in the canonical hydrator's path grammar; a refusal by the target shape's reader passes through as `ConversionError` with that reader's code. `import_xlsx` in both languages assembles a `PreservationEnvelope` (`envelope.py`, `envelope.rs`) from what it already held, with a path-free `describe()` projection. The Rust importer keeps the compatibility version as an integer, the sheet-entry order and the fingerprint of the bytes it decoded; the Python package reader reads the file once and fingerprints those bytes. One hand-authored fixture, `fixtures/shape-conversion-cases.v1.json`, pins the drop and add lists for both engines and states every rule the cases rely on.
+- Why: spec 09 section 5 row 0 names these edges as the first, decision-free step of the convergence; they become the step 6 migrator. Spec 10 Design 1 names the envelope the importers held implicitly. Nothing here waits on decision G-A: binding typing is carried only when the caller supplies a kind, and the envelope's `inventory` is omitted because its definition follows G-A.
+- Evidence: both importers accept 82 of the 90 corpus `.xlsx`; both conversions refuse the same two (`hb_data_table_formula.xlsx`, `hb_shared_formulas.xlsx`, an empty shared-formula follower the canonical reader refuses, as canonical intake refuses those files); the other 80 convert, hydrate, validate against the v1 schema and round-trip with exactly the listed drops and additions in both languages; converted imports agree with canonical intake cell for cell on the 73 workbooks both importers accept; the Python and Rust envelopes agree on identity, part fingerprints, merged ranges, date system, compatibility version, text cells and insertion bound for all 82. Adversarial review in two stages per `docs/review-protocol.md`: 25 expectations written from the specs before any code, two of which corrected the fixture (`model_version` is listed as added; no provenance is invented without an envelope); stage 2 reproduced 11 findings, five fixed on the branch (post-import edits no longer stamped `imported`; a refused formula leaves a diagnostic, not a silent empty list; the Python fingerprint covers the decoded bytes; deep immutability; no handle in `repr` or `Debug`), two recorded as pre-existing engine divergences (duplicate sheet-name folding, canonical float text), four notes.
+- Boundaries: binding `kind` and `required` wait on G-A; `inventory` omitted; `baseline.document`, `tables`, `guards` and `text.layouts` are not asserted equal across languages (spec 10's lane); a formula gains the canonical leading `=` and `#N/A!` is spelled `#N/A`, both unlisted representation changes; no `schema_version` or `model_version` change; `metadata.source` is an optional key of the open `metadata` object; no Excel behaviour claimed. The conversion also exposed two analyzer divergences on the corpus (`hb_long_formula.xlsx`, `hb_many_sheets.xlsx`), recorded for the parity lane with the two above.
+- Repository gate: `bash tools/gate.sh` passed on `8277a99` with 4220 Python tests (no skips), 260 Rust tests and one ignored benchmark, ruff clean, wasm build and Node tests, whitespace clean.
+- Next/remaining: the G-A memo from the per-fixture conversion records; spec 10's own pull request for the guard entry point and invalidation rules; step 1 (session over the owner model) after G-A.
 
 ### 2026-10-25 — codex/Codex — Formula Lab test-server ownership
 - Changed: both the shell launcher and direct Playwright runs now use Playwright's server lifecycle and refuse an occupied port. The shell no longer starts a second server, probes an unrelated listener, or writes a shared temporary log. `SPIKE_PORT` and `SPIKE_SKIP_BUILD` remain supported; the internal `SPIKE_EXTERNAL_SERVER` bypass is removed. Listing tests no longer builds or starts a server.
