@@ -9,7 +9,7 @@ none of them is an Excel-compatibility claim.
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `32f49e2` (toolkit checkpoint) | 2026-09-28 | 115 | 85 | 110 | 1,371 | 923 | 88 | not built |
 | `c84ec07` (proposed-spec base) | 2026-10-14 | 115 | 85 | 110 | 1,491 | not recorded here | not recorded here | not built |
-| `580aacd` (`main`) | 2026-11-06 | 123 | 86 | 116 | 1,691 | 4,037 passed | 233 passed, 1 ignored | 15 passed |
+| `580aacd` (gate; catalog counts still match `c506165`) | 2026-11-06 | 123 | 86 | 116 | 1,691 | 4,037 passed | 233 passed, 1 ignored | 15 passed |
 
 How each column is derived, from a checkout at the named commit:
 
@@ -31,4 +31,5 @@ Why the older documents disagreed: the 115 / 85 / 110 / 1,371 figures were the
 2026-09-28 checkpoint and stayed in `CONTEXT.md` unlabelled while `README.md`
 and `docs/toolkit-delivery.md` were moved to the later 123 / 86 / 116 / 1,691
 figures. The 2026-11-06 correction labelled the checkpoint and added the
-current block.
+current block. The catalog columns still match `main` `c506165`. The Python,
+Rust and Node columns are the `580aacd` gate and have not been re-run.
