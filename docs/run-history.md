@@ -2,7 +2,7 @@
 author: unknown
 created: null
 agent: codex/Codex
-date: '2026-10-14'
+date: '2026-10-25'
 type: project-history
 task: Preserve historical Workbook Forge checkpoints
 status: active
@@ -21,6 +21,14 @@ The 2026-09-28 documentation review removed personal conversation references and
 Earlier notes counted "evaluator slices". Slices 2–10 predate the autoresearch loop (the 65-function baseline). Slice *N* for *N* from 11 to 23 is Run *N*−10. From Run 14 onward the notes use run numbers only.
 
 ## Project activity
+
+### 2026-10-25 — codex/Codex — Formula Lab test-server ownership
+- Changed: both the shell launcher and direct Playwright runs now use Playwright's server lifecycle and refuse an occupied port. The shell no longer starts a second server, probes an unrelated listener, or writes a shared temporary log. `SPIKE_PORT` and `SPIKE_SKIP_BUILD` remain supported; the internal `SPIKE_EXTERNAL_SERVER` bypass is removed. Listing tests no longer builds or starts a server.
+- Why: reproduced a passing browser test against an existing server even though the launcher's own server failed to bind. A reachable URL alone did not establish that the intended build was under test.
+- Evidence: three new regressions failed before the correction; all six launcher checks pass afterward via `node --test web/univer-spike/scripts/e2e-launcher.test.mjs`. They use real HTTP listeners and Playwright to cover occupied ports in both launch paths, invalid ports, discovery, and server cleanup after successful and failed tests. The existing browser suite passes all 12 tests on a nondefault port, the stock-calculator control passes separately on default port 4179, and TypeScript checking passes. Independent scoped review found no actionable issue.
+- Boundaries: Vite rebuilt the browser bundle using the existing WASM package. The browser tests verify Forge worker calculation, imported-cell edits, native macOS undo, adapter redo, and export/reimport in tested scenarios; they do not establish Microsoft Excel Desktop compatibility. No product calculation behavior or schema changed.
+- Repository gate: `bash tools/gate.sh` passed with 3,491 Python tests and 148 Rust tests (one pre-existing release benchmark ignored), native bridge rebuild, compilation, lint, formatting, catalog and whitespace checks.
+- Next/remaining: retain the separate Excel observation gate and existing imported absent-cell/spill limitations; run the launcher regressions alongside browser acceptance when changing test infrastructure.
 
 ### 2026-10-24 — codex — blank-workbook Formula Lab and XLOOKUP argument handling
 - Changed: added a blank-workbook constructor and authored-cell editing to the Rust/WASM browser session, then exposed `newWorkbook` through the typed worker client. The Univer demo can create a sheet, enter formulas through the formula bar and grid, calculate in the Forge worker, export an `.xlsx`, and reopen the bytes. The browser page states its privacy boundary and supported formula slice. Rust and Python preserve XLOOKUP's six positional arguments, treat an omitted lookup value as blank, honor an optional `if_not_found`, and apply defaults when optional middle arguments are omitted. Python and Rust normalize `_xlfn.XLOOKUP`/`_xlfn.XMATCH` at the OOXML boundary and write the markers back for Excel. The adapter now splits `Sheet!A1` keys at the final delimiter, restores projected values with their original scalar type, and validates a replacement import before disposing the current Univer workbook. A reproducible edge fixture covers `Sales!2026` and a Boolean cell.
