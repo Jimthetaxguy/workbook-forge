@@ -23,6 +23,8 @@ Recommended order:
 | 10 | [preservation-envelope](10-preservation-envelope.md) | The named companion that preserves what the model does not represent: source identity, baseline, guards, text layout, carry inventory, invalidation rules (proposal in progress) | No | None expected |
 | 11 | [source-route](11-source-route.md) | Source generation as one capability: three source modes, the runtime mechanism decided on the equivalence data, reverse lowering, editable-source levels (proposal in progress) | No | None expected |
 | 12 | [composition-transformations](12-composition-transformations.md) | Extraction of a dependency closure into a named-input composition and placement back into cells, with provenance and reference rules (proposal in progress) | No | None expected |
+| 13 | [export-and-writeback](13-export-and-writeback.md) | Five destination intentions, export planning, and the original-file update contract with compatibility check, staging, conflict protection and recovery (proposal in progress) | No | **G-C: writeback semantics** |
+| 14 | [result-range-contract](14-result-range-contract.md) | The spill placement capability chain: array semantics, anchor and ownership, collisions and growth, dependency effects, atomic publication, projection and OOXML emission, Excel evidence (proposal in progress) | Yes, for its evidence | G-A if a model field is added; whether the first release includes spill |
 
 03 and 04 do not depend on Excel and can run while 01 waits for a Mac
 session. 02 also needs no Excel, but product-specifications.md holds Rust views
