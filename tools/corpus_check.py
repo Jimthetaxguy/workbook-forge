@@ -79,7 +79,6 @@ MAY_CHANGE = {
     "xl/workbook.xml",  # calcPr full-calc-on-load
     "xl/_rels/workbook.xml.rels",  # calcChain relationship removed, when the baseline had one
     "xl/calcChain.xml",  # removed on every export
-    "xl/sharedStrings.xml",  # listed for a shared-string writer; no writer touches it today
 }
 GENERIC_CODES = {"", None, "workbook_error", "xlsx_error", "unsupported_workbook", "invalid_workbook"}
 

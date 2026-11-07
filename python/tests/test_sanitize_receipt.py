@@ -2,7 +2,9 @@
 
 The paths in these tests are synthetic. ``/Users/example-user`` names no
 account on any machine; it stands for the kind of path an Excel run leaves in
-a receipt.
+a receipt. ``HOME`` and ``USERPROFILE`` point at a directory under ``tmp_path``
+that contains ``Documents/excel-run/notes.txt``, so a ``~`` expansion would
+read that file instead of anything in the runner's account.
 """
 from __future__ import annotations
 
@@ -79,6 +81,23 @@ def tiny_xlsx(path: Path, *, abs_path: str | None = None, cell_value: int = 1) -
     return path
 
 
+@pytest.fixture(autouse=True)
+def pinned_home(tmp_path, monkeypatch):
+    """Point ``~`` at the test tmp directory and plant the notes file there.
+
+    The receipt fixtures name ``~/Documents/excel-run/notes.txt``. The file
+    exists, so expanding ``~`` and fingerprinting that path would replace the
+    note with a ``sha256:`` value. The sanitiser must keep the basename.
+    """
+    home = tmp_path / "pinned-home"
+    planted = home / "Documents" / "excel-run" / "notes.txt"
+    planted.parent.mkdir(parents=True)
+    planted.write_bytes(b"pinned-home-secret")
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
+    return home
+
+
 @pytest.fixture
 def synthetic(tmp_path):
     """A repository root with a receipt that holds every path shape the tool rewrites."""
@@ -121,7 +140,10 @@ def test_paths_leave_the_receipt_and_the_workbook_bytes_do_not_change(synthetic,
     assert _sha(out / "roundtrip.xlsx") == _sha(workbook) == result.workbook_sha256
     written = (out / "receipt.json").read_bytes()
     manifest_bytes = (out / "sanitized.json").read_bytes()
-    for leak in (b"example-user", b"/Users/", b"~/", b"C:\\\\", b"file://", str(outside).encode()):
+    for leak in (
+        b"example-user", b"/Users/", b"~/", b"C:\\\\", b"file://", str(outside).encode(),
+        b"pinned-home-secret", b"pinned-home",
+    ):
         assert leak not in written, leak
         assert leak not in manifest_bytes, leak
 
@@ -261,6 +283,52 @@ def test_command_line_exit_codes(synthetic, tmp_path, capsys):
     assert "must be new" in capsys.readouterr().err
     assert sanitize_receipt.main(argv[:4] + ["--dry-run"]) == 0
     assert "dry run: nothing was written" in capsys.readouterr().out
+
+
+def test_home_directory_files_are_not_expanded_or_read(tmp_path, monkeypatch, pinned_home):
+    """``~`` and ``/home`` / ``/Users`` paths stay a basename or the marker.
+
+    The planted notes file exists under the pinned ``HOME``. Expanding ``~``
+    would read it. Resolving a ``/home`` or ``/Users`` path is refused too,
+    including when that path names an existing file.
+    """
+    secret = pinned_home / "Documents" / "excel-run" / "notes.txt"
+    assert secret.read_bytes() == b"pinned-home-secret"
+    root = tmp_path / "repo"
+    root.mkdir()
+    calls = []
+    real_expand = Path.expanduser
+    real_resolve = Path.resolve
+
+    def expanduser(self):
+        if str(self).startswith("~"):
+            calls.append(("expanduser", str(self)))
+        return real_expand(self)
+
+    def resolve(self, *args, **kwargs):
+        text = self.as_posix()
+        if text.startswith("/home/") or text.startswith("/Users/"):
+            calls.append(("resolve", text))
+        return real_resolve(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "expanduser", expanduser)
+    monkeypatch.setattr(Path, "resolve", resolve)
+
+    def rewritten(token):
+        return sanitize_receipt.rewrite_path(token, root, whole=True)
+
+    assert rewritten("~/Documents/excel-run/notes.txt") == ("notes.txt", "basename")
+    assert rewritten(f"{FAKE_LINUX_HOME}/Desktop/secret.txt") == ("secret.txt", "basename")
+    assert rewritten(f"{FAKE_HOME}/Desktop/secret.txt") == ("secret.txt", "basename")
+    assert rewritten(FAKE_LINUX_HOME) == (sanitize_receipt.HOME_MARKER, "basename")
+    assert rewritten(f"{FAKE_HOME}/") == (sanitize_receipt.HOME_MARKER, "basename")
+    assert rewritten("~/") == (sanitize_receipt.HOME_MARKER, "basename")
+    outside = tmp_path / "elsewhere" / "contract.json"
+    outside.parent.mkdir()
+    outside.write_text('{"id": "synthetic"}\n', encoding="utf-8")
+    fingerprint, kind = rewritten(str(outside))
+    assert kind == "fingerprint" and fingerprint == "sha256:" + _sha(outside)
+    assert calls == []
 
 
 def test_windows_paths_are_never_resolved_against_the_working_directory(tmp_path, monkeypatch):

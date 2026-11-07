@@ -148,7 +148,25 @@ AVERAGE_DIRECT = (
 AVERAGE_TEXT_ERROR = (
     "Microsoft AVERAGE remarks: text that cannot be translated into a number causes an error"
 )
+# Unary plus is the only row that still cites this phrase. The engines do not
+# match that report, so the row is a shared deviation. A row the engines match
+# names a Workbook Forge profile instead and keeps the unverified note.
 REPORTED = "reported Excel behavior, not stated on the Microsoft page; unverified here"
+WOULD_SETTLE = "an Excel observation would settle the expectation"
+IF_OMITTED_FALSE = (
+    "Workbook Forge IF omitted-argument profile (catalog/formulas.json, IF semantics "
+    "default): an omitted value_if_false returns FALSE; Microsoft's IF page only marks "
+    "the argument optional; " + WOULD_SETTLE
+)
+IF_TEXT_NOT_LOGICAL = (
+    "Workbook Forge logical-test profile: nonempty text is not a logical value, so "
+    "logical_test is #VALUE!; " + WOULD_SETTLE
+)
+XLOOKUP_TEXT_MATCH = (
+    "Workbook Forge XLOOKUP exact-match profile (docs/source-graph-v6.md): lookup text "
+    "compares without regard to case; that page records these expected values as a local "
+    "implementation profile, not an Excel observation; " + WOULD_SETTLE
+)
 SORT_ORDER = (
     "Excel default sort order places numbers before text before logical values, so the "
     "comparison operators rank them in that order and never coerce across types"
@@ -185,17 +203,16 @@ CASES = [
     Case("IF", "taken_error_branch", "=IF(A1>0,1/0,5)", {"A1": 3}, error("#DIV/0!"),
          "the taken branch divides by zero"),
     Case("IF", "two_arguments_false_default", "=IF(A1>5,1)", {"A1": 3}, False,
-         "with value_if_false omitted a false test returns FALSE (" + REPORTED + "; the IF page "
-         "only marks the argument optional)"),
+         "with value_if_false omitted a false test returns FALSE (" + IF_OMITTED_FALSE + ")"),
     Case("IF", "blank_condition_is_false", "=IF(A3,1,2)", {"A3": None}, 2.0,
          "a blank test is FALSE, so the third argument is returned"),
     Case("IF", "numeric_condition_nonzero_is_true", "=IF(A1,1,2)", {"A1": 3}, 1.0,
          "a nonzero number is TRUE"),
     Case("IF", "text_condition_is_value_error", '=IF("abc",1,2)', {}, error("#VALUE!"),
-         "text has no truth value, so logical_test is #VALUE! (" + REPORTED + ")"),
+         "text has no truth value, so logical_test is #VALUE! (" + IF_TEXT_NOT_LOGICAL + ")"),
     Case("IF", "numeric_text_cell_condition_is_value_error", "=IF(A2,1,2)", MIXED,
-         error("#VALUE!"), "a cell holding the text 7 is text, not a logical value (" + REPORTED
-         + ")"),
+         error("#VALUE!"), "a cell holding the text 7 is text, not a logical value ("
+         + IF_TEXT_NOT_LOGICAL + ")"),
     Case("IF", "error_condition_propagates", "=IF(1/0,1,2)", {}, error("#DIV/0!"),
          "an error in logical_test is the result"),
     Case("IF", "blank_cell_branch_result", "=IF(A1>0,A3,1)", {"A1": 3, "A3": None}, 0.0,
@@ -242,8 +259,7 @@ CASES = [
          "Microsoft general rule: an error value in an argument is the result"),
     # XLOOKUP
     Case("XLOOKUP", "exact_forward", '=XLOOKUP("PEAR",A1:A4,B1:B4)', FRUIT, 10.0,
-         "the first match of PEAR without regard to case is row 1 (case-insensitive lookup "
-         "text matching is " + REPORTED + ")"),
+         "the first match of PEAR without regard to case is row 1 (" + XLOOKUP_TEXT_MATCH + ")"),
     Case("XLOOKUP", "exact_reverse", '=XLOOKUP("pear",A1:A4,B1:B4,,,-1)', FRUIT, 20.0,
          "search_mode -1 searches from the last item, so the row 2 duplicate wins"),
     Case("XLOOKUP", "if_not_found_taken", '=XLOOKUP("missing",A1:A4,B1:B4,"not found")', FRUIT,
@@ -328,8 +344,9 @@ CASES = [
          "Microsoft documents 9.99999999999999E+307 as the largest number; the #NUM! code is "
          "a Workbook Forge profile (docs/behavior-profiles.md, General)"),
     Case("OPERATORS", "text_equality_ascii_case_insensitive", '="Pear"="PEAR"', {}, True,
-         "the = operator compares text without regard to case (" + REPORTED + "; Microsoft's "
-         "EXACT page offers EXACT as the case-sensitive comparison)"),
+         "the = operator compares ASCII text without regard to case (" + PROFILE_COMPARISON
+         + "; Microsoft's EXACT page offers EXACT as the case-sensitive comparison; "
+         + WOULD_SETTLE + ")"),
     Case("OPERATORS", "text_relational_order", '="apple"<"Banana"', {}, True,
          "case-insensitive text order: a precedes b"),
     Case("OPERATORS", "number_text_equality_is_false", '=1="1"', {}, False, SORT_ORDER),
