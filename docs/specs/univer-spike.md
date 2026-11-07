@@ -53,6 +53,14 @@ Undo/redo are intents too: Ctrl+Z undoes this actor's own latest applied,
 not-undone intent and is refused with `undo_conflict` (naming the cells and
 the overwriting event) if those cells changed since.
 
+**Cell versions.** Each cell carries a version: the revision of the last
+applied edit that wrote it (`cellRevision` on snapshot cells,
+`cell_revision` on `changed` cells). An envelope in `mode: "cells"` with
+`preconditions: [{sheet, address, base_version}]` applies even when the
+workbook moved, unless a named cell was written after its `base_version`
+(`revision_conflict` with `stale_cells`). `mode: "strict"` stays the
+default. See [cell versions](../cell-versions.md).
+
 The demo keeps no workbook session on Railway. The blank-workbook author/edit/
 calculate/export/reopen path uses only static GET requests with no request
 bodies in Playwright. The user may open a local `.xlsx`, and **Download .xlsx**

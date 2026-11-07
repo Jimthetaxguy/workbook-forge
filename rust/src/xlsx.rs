@@ -1708,6 +1708,20 @@ impl ImportedWorkbook {
     pub fn read_cells(&self, keys: &[String]) -> Vec<Option<Cell>> {
         self.session.read_cells(keys)
     }
+    /// The current revision and each named cell's version (see
+    /// [`Session::cell_revisions`]).
+    pub fn cell_revisions(&self, keys: &[String]) -> (u64, Vec<u64>) {
+        self.session.cell_revisions(keys)
+    }
+    /// Cells written in this session with their versions; any other cell
+    /// has the opening revision.
+    pub fn written_cell_revisions(&self) -> BTreeMap<String, u64> {
+        self.session.written_cell_revisions()
+    }
+    /// The revision the session opened at.
+    pub fn opened_revision(&self) -> u64 {
+        self.session.opened_revision()
+    }
     pub fn capabilities(&self) -> &Json {
         &self.capabilities
     }
