@@ -454,6 +454,21 @@ impl Package {
         Ok(bytes)
     }
 }
+/// Hard-link `staged` to `target`, which must not exist yet.
+///
+/// `fs::hard_link` is the atomic half of every writer's exists check. When
+/// another writer won the race the refusal is the shared `output_exists`
+/// message, never the OS text, and never a path.
+pub fn link_new(staged: &Path, target: &Path) -> Result<()> {
+    fs::hard_link(staged, target).map_err(|e| {
+        if e.kind() == std::io::ErrorKind::AlreadyExists {
+            err("output path already exists")
+        } else {
+            XlsxError::from(e)
+        }
+    })
+}
+
 fn publish(package: &Package, path: &Path) -> Result<PathBuf> {
     if path
         .extension()
@@ -480,7 +495,7 @@ fn publish(package: &Package, path: &Path) -> Result<PathBuf> {
     let result = (|| {
         file.write_all(&bytes)?;
         file.sync_all()?;
-        fs::hard_link(&temporary, path)?;
+        link_new(&temporary, path)?;
         Ok(path.to_path_buf())
     })();
     drop(file);

@@ -17,7 +17,7 @@ from typing import Any
 
 from .catalog import _catalog_file
 from .toolkit import WorkbookModel
-from .workbook import UnsupportedWorkbook, WorkbookError, _cell_position, _normal_address
+from .workbook import OUTPUT_EXISTS_MESSAGE, UnsupportedWorkbook, WorkbookError, _cell_position, _normal_address
 from .xlsx import _check_insertion, export_xlsx
 
 MAX_REQUEST_BYTES = 1024 * 1024
@@ -42,6 +42,15 @@ class _OperationError(ValueError):
 
 def _fail(code: str, message: str):
     raise _OperationError(code, message)
+
+
+def _os_error_message(error: OSError) -> str:
+    """An OSError's text without its filename: the agent never reports a machine path."""
+    if isinstance(error, FileExistsError):
+        return OUTPUT_EXISTS_MESSAGE
+    if error.strerror:
+        return error.strerror
+    return str(error)
 
 
 def _bytes(value: Any) -> bytes:
@@ -224,8 +233,10 @@ class AgentWorkbook:
             code, message = error.code, error.message
         elif isinstance(error, UnsupportedWorkbook):
             code, message = "unsupported_operation", str(error)
-        elif isinstance(error, (FileExistsError, OSError, WorkbookError)):
+        elif isinstance(error, WorkbookError):
             code, message = "export_error", str(error)
+        elif isinstance(error, OSError):
+            code, message = "export_error", _os_error_message(error)
         elif hasattr(error, "code"):
             code, message = str(error.code), getattr(error, "message", str(error))
         elif isinstance(error, (ValueError, TypeError, OverflowError)):
@@ -352,7 +363,9 @@ class AgentWorkbook:
             # imported package bytes even if an independent host edit races us.
             try:
                 result = export_xlsx(self._detached(snapshot), target)
-            except (WorkbookError, OSError, ValueError) as error:
+            except OSError as error:
+                raise _OperationError("export_error", _os_error_message(error)) from error
+            except (WorkbookError, ValueError) as error:
                 raise _OperationError("export_error", str(error)) from error
             return {"filename": filename, "revision": revision, "bytes": result.stat().st_size}, revision
         _fail("unknown_operation", "unknown operation")
