@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import copy
 import math
-import os
 import tempfile
 import zipfile
 from dataclasses import dataclass
@@ -22,6 +21,7 @@ from . import xlsx_features as features
 from .toolkit import WorkbookModel, _digest
 from .workbook import (
     COMPAT_V3_CALCULATION,
+    OUTPUT_EXISTS_MESSAGE,
     CONTENT_TYPES,
     EXCEL_ERROR_CODES,
     NS,
@@ -46,10 +46,11 @@ from .workbook import (
     _normal_address,
     _q,
     _reference_bounds,
-    _safe_xml,
     _rewrite_ooxml_function_markers,
+    _safe_xml,
     _string_part_text,
     _validate_xml_text,
+    link_new,
 )
 
 STYLES_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"
@@ -1101,7 +1102,7 @@ def export_xlsx(
     if baseline is not None and target == baseline.source:
         raise WorkbookError("refusing to overwrite the source workbook")
     if target.exists():
-        raise FileExistsError(target)
+        raise FileExistsError(OUTPUT_EXISTS_MESSAGE)
     document = model.to_dict()
     calculation = model.calculate() if report is None else copy.deepcopy(report)
     if (
@@ -1182,5 +1183,5 @@ def export_xlsx(
             pass
         if model.revision != document["revision"]:
             raise WorkbookError("model changed during export; retry from its current snapshot")
-        os.link(staged, target)
+        link_new(staged, target)
     return target
