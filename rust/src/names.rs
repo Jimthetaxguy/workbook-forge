@@ -340,6 +340,8 @@ impl NameScope<'_> {
                     "3D reference ",
                     "in-cell array ",
                     "defined name",
+                    "spill range operator ",
+                    "unknown or unsupported error literal",
                 ]
                 .iter()
                 .any(|prefix| message.starts_with(prefix)) =>

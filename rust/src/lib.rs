@@ -7465,14 +7465,15 @@ mod tests {
     use super::*;
 
     #[test]
-    fn parity_lifting_propagates_unsupported_errors_instead_of_storing_them() {
-        // An unsupported operator is a formula-level refusal for a scalar formula;
-        // elementwise lifting must not turn it into array elements.
-        let array = CalcValue::Array(ArrayValue::new(vec![vec![Value::Number(1.0)]]).unwrap());
-        let result = apply_binary_values("??", array, CalcValue::Scalar(Value::Number(1.0)), false);
-        assert!(
-            matches!(result, Err(FormulaError::Unsupported(_))),
-            "{result:?}"
+    fn parity_lifting_refuses_an_unsupported_xlookup_mode_across_an_array() {
+        // An unsupported XLOOKUP mode is a formula-level refusal. Adding it to
+        // an array must not store that refusal as array elements.
+        let cells = cells(&[("B1", Value::Number(1.0)), ("C1", Value::Number(2.0))]);
+        assert_eq!(
+            evaluate_result("=SEQUENCE(2)+XLOOKUP(1,B1:B1,C1:C1,,1)", &cells, "Sheet1"),
+            Err(FormulaError::Unsupported(
+                "XLOOKUP/XMATCH currently support exact match_mode=0 only".into(),
+            ))
         );
     }
     #[test]

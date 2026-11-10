@@ -2084,6 +2084,7 @@ pub fn operating_scenario() -> WorkbookModel {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::DefinedName;
     fn model(cells: &[(&str, Cell)], outputs: &[(&str, &str)]) -> WorkbookModel {
         let mut sheet = Sheet::new("Data");
         sheet.cells = cells
@@ -2459,7 +2460,70 @@ mod tests {
         let report = calculate(&workbook, 1);
         assert!(
             report.diagnostics.iter().any(|d| {
-                d.code == "unsupported_formula" && d.message.contains("spill range operator")
+                d.code == "unsupported_formula"
+                    && d.message == "spill range operator # is not supported"
+            }),
+            "{:?}",
+            report.diagnostics
+        );
+    }
+    #[test]
+    fn parity_unknown_error_literal_is_refused_as_unsupported_formula() {
+        let report = calculate(
+            &model(&[("A1", Cell::formula("=#ZZ"))], &[("out", "A1")]),
+            1,
+        );
+        assert!(
+            report.diagnostics.iter().any(|d| {
+                d.code == "unsupported_formula"
+                    && d.message == "unknown or unsupported error literal"
+            }),
+            "{:?}",
+            report.diagnostics
+        );
+    }
+    #[test]
+    fn parity_defined_name_keeps_spill_and_unknown_literal_messages() {
+        let workbook = model(
+            &[
+                ("B1", Cell::formula("=Spill")),
+                ("C1", Cell::formula("=Bad")),
+            ],
+            &[("spill", "B1"), ("bad", "C1")],
+        );
+        let names = DefinedNames::new(vec![
+            DefinedName {
+                name: "Spill".into(),
+                sheet: None,
+                formula: "=A1#".into(),
+                hidden: false,
+            },
+            DefinedName {
+                name: "Bad".into(),
+                sheet: None,
+                formula: "=#ZZ".into(),
+                hidden: false,
+            },
+        ]);
+        let report = Session::with_names(workbook, Some(names))
+            .unwrap()
+            .calculate(1);
+        assert!(
+            report.diagnostics.iter().any(|d| {
+                d.sheet.as_deref() == Some("Data")
+                    && d.address.as_deref() == Some("B1")
+                    && d.code == "unsupported_formula"
+                    && d.message == "spill range operator # is not supported"
+            }),
+            "{:?}",
+            report.diagnostics
+        );
+        assert!(
+            report.diagnostics.iter().any(|d| {
+                d.sheet.as_deref() == Some("Data")
+                    && d.address.as_deref() == Some("C1")
+                    && d.code == "unsupported_formula"
+                    && d.message == "unknown or unsupported error literal"
             }),
             "{:?}",
             report.diagnostics
