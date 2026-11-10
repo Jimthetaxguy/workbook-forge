@@ -276,7 +276,7 @@ impl AgentWorkbook {
                 }
                 let target = self.output_dir.join(filename);
                 if target.symlink_metadata().is_ok() {
-                    return Err(error("export_error", "output already exists"));
+                    return Err(error("export_error", "output path already exists"));
                 }
                 // No file is created if any required result is unavailable.
                 let selected = select_outputs(model, None)?;
