@@ -94,6 +94,10 @@ def test_every_catalog_function_evaluates_on_both_engines(matrix):
     for name in names:
         assert functions[name][("python-canonical", "evaluate")] == "supported"
         assert functions[name][("wasm-browser", "evaluate")] == "untested"
+        assert functions[name][("browser-protocol", "evaluate")] == "untested"
+    # The agent catalog has no calculate effect, so that route still has no evaluate operation.
+    assert functions["SUM"][("agent-protocol", "evaluate")] == "not-applicable"
+    assert functions["SUM"][("browser-protocol", "inspect")] == "not-applicable"
 
 
 def test_exactly_five_functions_emit_source(matrix):
@@ -151,6 +155,7 @@ def test_category_rows_follow_the_report(matrix):
     # No catalog records category behaviour through the protocols or the source compiler.
     assert categories["defined-names"][("agent-protocol", "edit")] == "untested"
     assert categories["defined-names"][("browser-protocol", "inspect")] == "untested"
+    assert categories["defined-names"][("browser-protocol", "evaluate")] == "untested"
     assert categories["defined-names"][("source-python", "emit-source")] == "untested"
 
 
@@ -166,10 +171,16 @@ def test_primitive_rows_follow_the_capability_table(matrix):
                 assert primitives[entry["id"]][(route, operation)] == expected, (entry["id"], route, flag)
     assert primitives["arrays"][("rust", "edit")] == "not-applicable"
     assert primitives["scalar-cells"][("python-canonical", "evaluate")] == "not-applicable"
+    # The browser calculate command is evaluate, and the primitive table does not grade it.
+    assert primitives["scalar-cells"][("browser-protocol", "evaluate")] == "untested"
+    assert primitives["scalar-cells"][("browser-protocol", "inspect")] == "not-applicable"
 
 
 def test_rows_use_the_vocabulary(matrix):
     sources = set(capability_matrix.INPUTS.values()) | {"tools/capability_matrix.py"}
+    catalog = json.loads((ROOT / "catalog" / "formulas.json").read_text(encoding="utf-8"))
+    function_grades = {entry["name"]: entry["evidence_grade"] for entry in catalog["functions"]}
+    engine_evaluate = set(capability_matrix.FUNCTION_STATUS_LANGUAGE)
     for row in matrix["rows"]:
         assert list(row) == ["kind", "feature", "route", "operation", "status", "evidence_grade", "source"]
         assert row["kind"] in capability_matrix.KINDS, row
@@ -179,8 +190,16 @@ def test_rows_use_the_vocabulary(matrix):
         assert status in capability_matrix.STATUSES or REFUSED.match(status), row
         assert row["evidence_grade"] in EVIDENCE_GRADES, row
         assert row["source"] in sources, row
-        if row["kind"] == "function":
-            assert row["evidence_grade"] != "none", row
+        # The catalog grade belongs only on the evaluate rows it established.
+        established = (
+            row["kind"] == "function"
+            and row["operation"] == "evaluate"
+            and row["route"] in engine_evaluate
+            and status == "supported"
+        )
+        if established:
+            assert row["evidence_grade"] == function_grades[row["feature"]], row
+            assert row["source"] == capability_matrix.INPUTS["formulas"], row
         else:
             assert row["evidence_grade"] == "none", row
     assert matrix["routes"] == {route: list(ops) for route, ops in capability_matrix.ROUTE_OPERATIONS.items()}
