@@ -331,6 +331,25 @@ export interface PatchEvent {
   evaluated_cells: number;
 }
 
+/**
+ * Posted once by the worker when its engine has started. Optional for
+ * clients: any response also shows the engine is up.
+ */
+export interface WorkerReadyMessage {
+  type: 'ready';
+}
+
+/**
+ * Posted once by the worker when every engine initialisation attempt failed.
+ * Every request, before or after, is also answered with this error
+ * (code `engine_init_failed`), so a client that ignores this message still
+ * hears back.
+ */
+export interface WorkerInitFailedMessage {
+  type: 'init_failed';
+  error: EngineError;
+}
+
 /** Requests, keyed by command name. */
 export interface Commands {
   /** `name` is recorded as the log baseline's name. */
