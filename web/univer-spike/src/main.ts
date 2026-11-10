@@ -82,11 +82,22 @@ async function boot() {
   const devRevision = $('dev-revision');
   const devSource = $('dev-source');
   const showStatus = () => {
-    const state = adapter.pending > 0 ? 'Calculating…' : 'All changes calculated';
+    // A failed or closed engine is terminal: say so rather than "Calculating…"
+    // or a calculated state that no longer holds.
+    const engine = client.state;
+    const state =
+      engine.kind === 'failed'
+        ? `Engine stopped: ${engine.error.message}`
+        : engine.kind === 'closed'
+          ? 'Engine closed'
+          : adapter.pending > 0
+            ? 'Calculating…'
+            : 'All changes calculated';
     status.textContent = `${source.name} · ${state} · Version ${adapter.revision}`;
     devRevision.textContent = `Forge r${adapter.revision} · mode ${mode}`;
     devSource.textContent = `${source.kind}: ${source.name}`;
-    void refreshIssues();
+    // Lifecycle failures already show in the status line.
+    refreshIssues().catch(() => {});
   };
   showStatus();
   setInterval(showStatus, 250);

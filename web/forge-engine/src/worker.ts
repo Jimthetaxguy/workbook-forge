@@ -7,12 +7,16 @@
 
 import init, { createBlankWorkbook, openXlsx, replayJson, sha256Hex } from '../pkg/workbook_forge.js';
 import { ForgeEngine } from './engine';
+import { createWorkerHost } from './worker-host';
 import type { RequestMessage } from './protocol';
 
 const wasm = { openXlsx, createBlankWorkbook, sha256Hex, replayJson };
 // NOW and TODAY follow the user's zone; the engine resolves its offset per command.
 const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-const ready = (async () => {
+// Two attempts: fetch the bytes ourselves (to hash them), else let the glue
+// load the file. If both fail the host enters its failed state and answers
+// every request with engine_init_failed instead of leaving clients waiting.
+const engine = (async () => {
   try {
     const bytes = new Uint8Array(await (await fetch(new URL('../pkg/workbook_forge_bg.wasm', import.meta.url))).arrayBuffer());
     await init({ module_or_path: bytes });
@@ -22,23 +26,17 @@ const ready = (async () => {
     return new ForgeEngine(wasm, { wasmSha256: null, timeZone });
   }
 })();
-let queue: Promise<unknown> = Promise.resolve();
+const worker = self as unknown as Worker;
 /** Every client that receives patches. One today (the page that started us). */
-const subscribers: { postMessage(message: unknown): void }[] = [self as unknown as Worker];
+const subscribers: { postMessage(message: unknown): void }[] = [worker];
+const host = createWorkerHost({
+  engine,
+  post: (message, transfer = []) => worker.postMessage(message, transfer),
+  broadcast: (message) => {
+    for (const port of subscribers) port.postMessage(message);
+  },
+});
 
 self.addEventListener('message', (event: MessageEvent<RequestMessage>) => {
-  const request = event.data;
-  queue = queue.then(async () => {
-    const engine = await ready;
-    const response = engine.handle(request);
-    const transfer: Transferable[] = [];
-    if (response.result.ok && request.command === 'export') {
-      transfer.push((response.result.value as { bytes: Uint8Array }).bytes.buffer as ArrayBuffer);
-    }
-    (self as unknown as Worker).postMessage(response, transfer);
-    // Ack before patch: the submitter's response goes first, then each patch
-    // to every subscriber, then log events for event subscribers.
-    for (const patch of engine.drainPatches()) for (const port of subscribers) port.postMessage(patch);
-    for (const message of engine.drainEvents()) for (const port of subscribers) port.postMessage(message);
-  });
+  void host.receive(event.data);
 });

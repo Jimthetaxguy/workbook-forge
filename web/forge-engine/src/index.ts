@@ -1,3 +1,3 @@
 export * from './protocol';
-export { ForgeClient, startForgeWorker } from './client';
-export type { Port, CommandLogEntry } from './client';
+export { ForgeClient, ForgeClientError, startForgeWorker } from './client';
+export type { Port, CommandLogEntry, ClientState, ForgeClientErrorCode, ForgeClientOptions } from './client';
