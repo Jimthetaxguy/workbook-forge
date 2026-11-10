@@ -223,8 +223,10 @@ None assumed. `metadata` is an open object (`schemas/workbook-model.v1.schema.js
 exists today, so projecting the inventory changes no wire shape. Moving it to
 `metadata.not_carried` or adding `metadata.source.fingerprint` as a *required* field
 is a `schema_version` matter by `docs/specs/model-versioning.md:7-10` and belongs to
-decision G-A in spec 09. Every field of the envelope except `inventory` is the same
-under either base; `inventory` is defined relative to the owner's carry set and its
+decision G-A in spec 09, decided 2026-11-09 for Base B: the inventory is defined against
+the toolkit shape's carry set, so `Style` and `column_widths` leave it, and this spec's
+own pull request writes that definition. Every field of the envelope except `inventory`
+is the same under either base; `inventory` is defined relative to the owner's carry set and its
 corpus agreement test is written per owner. The toolkit document cannot carry any
 envelope field without a shape change (`python/workbook_forge/python_engine.py:72-76`
 refuses unknown fields; `rust/src/toolkit.rs:255-312,403` `deny_unknown_fields`), one
@@ -305,7 +307,7 @@ as section 2 states: `test_absent_cell_export.py:321-326` and
   owner recommendation this spec fulfils).
 - Spec 09: section 4 (what is "not in the document"), step 0 (the in-memory
   `PreservationEnvelope` this spec defines; the envelope needs no decision, its
-  `inventory` definition follows G-A), section 10 item 5 (rule scopes).
+  `inventory` definition follows G-A, decided 2026-11-09), section 10 item 5 (rule scopes).
 - G-C consumes section 2's writeback row and section 5's fingerprint join.
 
 ## Open questions for James

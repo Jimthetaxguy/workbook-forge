@@ -59,7 +59,7 @@ no profile 7.
 
 - Translating arbitrary Python or Rust into a workbook (`docs/specs/compiler-pipeline.md:75-80`).
 - Composition-to-cells placement (spec 12), the preservation envelope (10), the
-  owner-model decision (09 G-A); any Excel observation (the two shared deviations
+  owner-model decision (09 G-A, decided 2026-11-09); any Excel observation (the two shared deviations
   wait on the 01 lane).
 - Changing a shipped template `source_runtime_v2..v6`: a template edit invalidates
   every saved artifact of that profile (`docs/source-compiler-review-stage6.md:49-54`).

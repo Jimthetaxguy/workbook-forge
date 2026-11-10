@@ -12,4 +12,5 @@ current guidance; `CONTEXT.md` holds the current state and
 | `repo-cleanup-2026-09-25.md` | Notes from the first cleanup and the pre-git backup archive. |
 | `run24-evaluator-safety-checkpoint-2026-09-24.md` | Checkpoint note for evaluator run 24. |
 | `coverage-and-test-counts-2026-11-06.md` | Function, spec, fixture and test counts at the 2026-09-28, 2026-10-14 and 2026-11-06 checkpoints, with the command that derives each. Written when `CONTEXT.md` was corrected to label the checkpoint figures. |
+| `g-a-decision-2026-11-08/` | The decision memo for G-A (spec 09 section 3), written from spec 09 step 0's measured conversion records over the corpus; its independent refutation in two passes; and the three measurement scripts with their recorded output, which run against a checkout of PR #119. James adopted the memo's statement on 2026-11-09. Lane names in the memo (N3, N8) refer to the program plan kept outside the repository. |
 | `jev-receipts/` | Advisory receipts from the Jev critic during the autoresearch loop, under the earlier product name. Nothing reads them. |

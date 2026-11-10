@@ -1,8 +1,8 @@
 ---
 type: technical-specification
-status: proposed — needs James's decision on the base, the binding shape and the version fields before any schema code
+status: proposed — decision G-A taken 2026-11-09 (section 3): Base B, the toolkit binding shape with kind optional, both version fields to 2; steps 1 to 6 may proceed in order
 base: main 41f28d3
-summary: Converge the canonical and toolkit workbook shapes into one versioned contract for workbook meaning, with the session and the preservation envelope as named companions, by moving one responsibility at a time. Costs both candidate bases from the import map, leans toward extending the toolkit shape, states what that lean rests on and what would reverse it, and names the adapters, retirement conditions and evidence for each step. The base, the binding shape and the version fields are one decision, the repository's approval gate.
+summary: Converge the canonical and toolkit workbook shapes into one versioned contract for workbook meaning, with the session and the preservation envelope as named companions, by moving one responsibility at a time. Costs both candidate bases from the import map, leaned toward extending the toolkit shape and stated what would reverse the lean; the decision, taken 2026-11-09 on step 0's measurements, is Base B (section 3). Names the adapters, retirement conditions and evidence for each step. The base, the binding shape and the version fields are one decision, the repository's approval gate.
 ---
 
 # 09 — Contract convergence and migration map
@@ -151,6 +151,9 @@ the document into the session.
 
 ### Where the lean comes from, and what would reverse it
 
+*Written before the decision and kept as the record of what the decision had to
+answer; the decision follows at the end of this section.*
+
 By importing files the toolkit shape has roughly three times the consumers in both
 languages, carries the only Rust `.xlsx` importer and the native bridge, and canonical
 intake is Python-only. On that evidence this proposal **leans to Base B**. The lean is
@@ -190,6 +193,61 @@ unbumped before. Two further facts belong to the decision:
 Nothing in section 5 may start before it except the parts of step 0 that section 5
 marks as mechanical.
 
+### Decision, 2026-11-09
+
+James adopted the following statement on 2026-11-09, from the decision memo written on
+step 0's measured `Conversion` records and refuted independently in two passes
+(`docs/history/g-a-decision-2026-11-08/`):
+
+> **G-A.** The owner contract is `workbook-model.v2` grown from the **toolkit shape (Base B)**. Bindings keep the toolkit's shape `{sheet, address, kind, required, min, max, choices}`, amended so that `kind` may be absent (an untyped binding accepts any scalar; the formula-cell and blocked-cell refusals still apply). `required` defaults to true for a binding written under v2; the v1 migrator writes `required: false` on every migrated binding, so no v1 document gains a refusal it did not have. `date`, `shape`, `enum` and `max_length` are not added. **Both `schema_version` and `model_version` go to 2**, and the changelog's v2 entry carries two lineage lines, one for each v1 shape it absorbs. The widened spill result field and range-shaped bindings wait for the Excel capture and take the version after v2; convergence does not wait on Excel. `formula.dependencies` stay textual `Sheet!A1`, written only by calculation; the collision owner is the calculation pass with a session-supplied blocked set; a 1×1 array result stays an array.
+
+What the measurement settled, against the three reasons and the two reversal conditions
+above:
+
+- Step 0's conversion edges ran over the 80 corpus workbooks that convert (82 of the 90
+  import; the canonical reader refuses two whose grouped formula regions carry an empty
+  formula with a `blocked_reason`). Every canonical-only field path on an imported
+  document is derived: 204,679 paths (`data_type`, cell provenance from the envelope's
+  baseline, `dependencies`, `result`, `dimensions`, `metadata.source`, `model_version`,
+  workbook provenance, diagnostics), all computed by the conversion in both languages.
+  The toolkit-only paths that are neither identity, session state nor the lossless
+  `General` number format are authored content or import guards: 298 paths in 14
+  workbooks (styles, column widths, `blocked_reason`, the cached values of spilled
+  cells), none of which the canonical schema holds or can re-derive. Reversal
+  condition 1 was not re-measured (the records count field paths, not code changes);
+  the inspection above stands, and the derived-field part of Base B's engine bill now
+  exists in both languages.
+- An authored canonical document does lose content through the toolkit shape: open
+  `metadata` keys, authored provenance and `metadata.defined_names`. All three are on
+  Base B's bill as section 4 lists them; the 17 `unsupported name` diagnostics in 5
+  corpus workbooks measure the name table's absence from the toolkit document, which
+  both importers hold beside the document and pass to the calculator as a side input.
+- The toolkit shape already holds what the canonical schema refuses and spec 14 link 2
+  needs on reimport: the empty follower formulas of grouped regions (2 workbooks) and
+  the cached values of spilled cells (10 cells in 2 workbooks).
+- Reason 1, the binding shape, is answered by the statement: the toolkit's shape
+  amended, which is the amended-spec-06 branch of section 6. Reversal condition 2,
+  bindings keeping spec 06's shape, is declined: a `kind` that may be absent is spec
+  06's `type: null` migrator rule in the toolkit's vocabulary, and `required: false`
+  on migrated bindings is spec 06's rule kept, because both engines validate every
+  binding against its bound cell on every input operation and a migrated blank cell
+  would otherwise refuse every input. Reason 2 stands as a bill: step 0 re-created
+  none of the four canonical assets, which remain Base B's work (write-side version
+  enforcement in the Python toolkit writers; the receipt fingerprints and the evidence
+  gate re-pinned at step 6).
+- Version fields: both to 2, with the two lineage lines. The spill result field (two
+  fields under Base B, `formula.result` and `cached_value`) and `shape` on bindings take
+  the version after v2, once the Excel capture exists, so convergence does not put the
+  Excel sitting on its critical path. The cost of that later version (a third schema, a
+  v2→v3 migrator in both engines, the hardcoded `schema_version` writers moving again,
+  a second bindings-schema change) is accepted and itemised in the memo.
+
+Consequences for this document: the typing rule step 0 left to G-A is fixed (a binding
+without a caller-supplied kind is carried untyped with `required: false` at step 2,
+instead of dropped; a caller-supplied kind keeps `required: true`); section 4's
+bindings row is filled in; section 6 records the alignment; `model-versioning.md` and
+`model-changelog.md` take the v2 entry when step 6 lands, not before.
+
 ## 4. The target contract
 
 One document, `workbook-model.v2`, whichever base it grows from, and one report shape.
@@ -204,7 +262,7 @@ The owner column names where authority lives after convergence.
 | `sheets[].id`, `name`, `dimensions`, `column_widths` | the contract |
 | `cells[].value`, `data_type`, `cached_value`, `formula.expression`, `formula.dependencies`, `formula.result` | the contract; `dependencies` and `result` written only by calculation; `cached_value` and `provenance.origin: imported` are reconciled into one representation here |
 | `cells[].style`, `blocked_reason` | the contract; `blocked_reason` set only by import |
-| `bindings.inputs[name]`, `bindings.outputs[name]` | the contract; the shape is part of decision G-A |
+| `bindings.inputs[name]`, `bindings.outputs[name]` | the contract; an input is `{sheet, address, kind?, required, min?, max?, choices?}` with `kind` optional and `required` true by default (G-A, section 3); an output is `{sheet, address}` |
 | `diagnostics[]` | whoever produced the document state; cleared and rewritten by calculation |
 | **report** `{report_version, stage, engine, behavior_profile, schema_version, model_version, source_fingerprint, revision, base_revision, calc{now_ms, utc_offset_minutes, seed}, inputs[], outputs[], values, evaluated_cells, stale, diagnostics[], calculated_formulas, unresolved_formulas}` | one `calculation-report.v2` merging the toolkit `CalculationReport` (`toolkit.rs:1203-1213`; `python_engine.py:516`) and the canonical v1 report; the session produces it |
 | not in the document: `revision`, preview state, the event log | the session |
@@ -220,29 +278,35 @@ tests of both pass.
 | --- | --- | --- | --- | --- |
 | 0. Explicit conversion edges | `to_toolkit(Workbook) -> (ToolkitModel, Conversion)` and `to_canonical(ToolkitModel, envelope) -> (Workbook, Conversion)` in Python and Rust, where `Conversion` lists what was dropped **and what was added**. Mechanical additions: `Sheet.id` as `sheet-N`; a formula cell's canonical `value` moved to `cached_value`; `data_type` derived from the value; `formula.dependencies` derived by the engine's parser; `formula.result` from `cached_value` or blank with its origin. **Not mechanical:** binding `kind` and `required`, which the toolkit requires and the canonical shape lacks. Step 0 carries a binding only when the caller supplies its kind; otherwise it drops the binding and lists it. The default typing rule is part of G-A | the two functions, an in-memory `PreservationEnvelope` assembled from what `import_xlsx` already holds, and a new `python/tests/test_shape_conversion.py` plus `rust/tests/shape_conversion.rs` (the existing `test_dual_engines.py` builds its own documents and has no hook for an external one) | never retired; they become the migrator in step 6 | the operating scenario, every `fixtures/corpus` workbook and the toolkit documents the cross-engine suite builds round-trip through both functions in both languages with exactly the listed drops and additions |
 | 1. Session over the owner model | spec 05 reframed: the toolkit `Session` machinery operates on the owner shape; `revision` leaves the document | a `Session` constructor accepting either shape through step 0. Change set for `revision`: three snapshot writers (`toolkit.py:28`; `python_engine.py:217, 650`; `wasm.rs:18, 94`) and seven test files that build or read a document `revision` (`test_dual_engines.py:45`, `test_defined_names.py:52`, `test_volatile.py:58`, `test_limit_boundaries.py:179, 198`, `test_compiler_seeded.py:64`, `test_toolkit_interfaces.py`, `test_agent_cli.py`); `test_limit_boundaries.py:198` asserts the document revision and changes | the old entry point once every caller passes the owner shape | `test_python_engine`, `test_agent_python`, `rust/tests/command_envelope.rs` pass unchanged; the seven files above are updated in the same change; a new shared input-change fixture produces the same report in both engines; the nine requirements of section 10 are stated in the session contract |
-| 2. Typed bindings in the owner contract | spec 06 under the chosen binding shape | migrator entry for untyped v1 bindings | the untyped binding reader when no v1 document remains in fixtures | spec 06's named tests, which do not exist yet and are written in this step |
+| 2. Typed bindings in the owner contract | spec 06 under the binding shape G-A chose (section 3) | migrator entry for untyped v1 bindings | the untyped binding reader when no v1 document remains in fixtures | spec 06's named tests, which do not exist yet and are written in this step |
 | 3. Agent operations on the owner | both adapters construct the owner shape; the wire format does not change | step 0 conversion at the boundary first, then native | the boundary conversion once both adapters are native | `test_agent_contract`, `test_agent_python`, `test_typescript_sdk` pass unchanged; `tools/generate_ts_contract.py`'s catalog hash is unchanged |
 | 4. Browser session on the owner | `WorkbookSession` and the command session take the owner; baseline and replay unchanged | step 0 conversion inside `open` first | the conversion once `wasm.rs` is native | `rust/tests/browser_contract.rs`, `event_log.rs`; `web/forge-engine` Node tests; the Playwright run recorded in the pull request |
 | 5. Source compiler input on the owner | `compile_workbook` starts from the owner shape; defined names become available to it | none beyond step 0 | the toolkit-only path once `python/tests/test_source_equivalence.py` (merged) is green on the owner shape | `test_source_graph*`, `test_source_equivalence` |
 | 6. Retire the second writer; keep a reader | the shape not chosen is no longer written; old documents of both shapes read through step 0 as a migrator that sniffs by field presence; `model-versioning.md` and `model-changelog.md` updated with two lineage lines | none | when every fixture and every receipt in the tree is in the owner shape | the whole gate; `tools/excel_oracle.py --check-receipt` on every committed receipt that carries an `excel_observation` block (today none does, so this check is vacuous until an observation is committed) |
 
-Step 0's mechanical parts may start before G-A. Its binding handling and everything
-from step 1 on wait for the decision.
+Step 0's mechanical parts were built before the decision (PR #119) with the binding
+handling deferred. G-A fixed that handling for step 2: a binding without a
+caller-supplied kind is carried untyped with `required: false`, not dropped; a
+caller-supplied kind keeps `required: true`. Steps 1 to 6 may proceed in order.
 
 ## 6. Alignment of specs 05 and 06
 
-- **Spec 05** stays as the session contract. Its "Scope" changes from "taking
-  `model.Workbook` directly" to "taking the owner model"; its acceptance tests keep their
-  names. Its report question is answered in section 4: one `calculation-report.v2`
-  merging both report shapes, carrying `revision`, `base_revision` and the calculation
-  context the v1 report lacks.
-- **Spec 06** stays as the typed-bindings contract, with one change forced by this
-  proposal: its binding shape is part of G-A. Under Base A it is as spec 06 wrote it.
-  Under Base B the toolkit's existing shape applies unless James amends it, which
-  settles spec 06's open questions by default: `required` true, kinds without `date`,
-  constraints `min`, `max`, `choices` only. Spec 06's non-goal against porting the
-  toolkit schema verbatim conflicts with Base B as written; James resolves that
-  conflict in G-A.
+Applied on 2026-11-09 with the decision.
+
+- **Spec 05** stays as the session contract, reframed to the owner model: its "Scope"
+  now reads "taking the owner model" in place of "taking `model.Workbook` directly",
+  and its acceptance tests keep their names. Its report question is answered in
+  section 4: one `calculation-report.v2` merging both report shapes, carrying
+  `revision`, `base_revision` and the calculation context the v1 report lacks. Step 1
+  builds it.
+- **Spec 06** stays as the typed-bindings contract, amended by G-A: the binding shape
+  is the toolkit's `{sheet, address, kind, required, min, max, choices}` with `kind`
+  optional; `required` defaults to true for v2-written bindings and the migrator writes
+  `required: false` on every migrated v1 binding; `date`, `shape`, `enum` and
+  `max_length` are not added (`choices` is spec 06's `enum`; `shape` is deferred to the
+  version that carries the result-range contract). Spec 06's non-goal against porting
+  the toolkit's binding schema is retired: red-flag Spec 1 asks for one binding schema,
+  and Base B satisfies it by adoption. Step 2 builds it.
 
 ## 7. Evidence that demonstrates the contract
 
@@ -271,9 +335,12 @@ consumes steps 1 and 2 and section 10.
 
 ## 9. Open questions for James
 
-- **Decision G-A:** Base A or Base B; the binding shape (spec 06's or the toolkit's,
-  or an amended spec 06); both version fields to 2.
-- Whether step 0's mechanical parts may start before the decision (recommended: yes).
+Both answered.
+
+- **Decision G-A**, taken 2026-11-09: Base B; the toolkit's binding shape with `kind`
+  optional and `required: false` on migrated bindings; both version fields to 2
+  (section 3).
+- Step 0's mechanical parts started before the decision, as recommended (PR #119).
 
 ## 10. Session requirements carried from the persistent-graph spike
 
