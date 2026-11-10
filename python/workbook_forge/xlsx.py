@@ -300,6 +300,15 @@ def import_xlsx(
     calculated or edited. Excessively large unsupported regions are rejected.
     """
     import json
+    from types import MappingProxyType
+
+    from .envelope import (
+        Baseline,
+        ContainerMetadata,
+        PreservationEnvelope,
+        SourceIdentity,
+        TextPreservation,
+    )
 
     with Workbook.open(path) as workbook:
         styles, style_metadata = _styles(workbook)
@@ -557,17 +566,45 @@ def import_xlsx(
                 if item["name"].casefold() in text_layouts
                 for address in item["cells"]
             )
+        snapshot_json = json.dumps(model.to_dict(), allow_nan=False)
+        infos = tuple(copy.copy(info) for info in workbook._archive.infolist())
         model._source_baseline = _Baseline(
             workbook.source,
             tuple(workbook._parts.items()),
-            tuple(copy.copy(info) for info in workbook._archive.infolist()),
+            infos,
             workbook._archive.comment,
-            json.dumps(model.to_dict(), allow_nan=False),
+            snapshot_json,
             workbook._uses_1904_date_system,
             tuple(merged),
             workbook._compatibility_version,
         )
         model._import_metadata = metadata
+        # The same state, named (spec 10 Design 1), read-only below the field.
+        # The handle stays in memory for the overwrite refusal and is never
+        # described.
+        model._envelope = PreservationEnvelope(
+            SourceIdentity(
+                workbook.source_fingerprint,
+                tuple(sorted(workbook._parts)),
+                workbook._workbook_part,
+                MappingProxyType(dict(sheet_parts)),
+                tuple(workbook.sheet_entry_names),
+                MappingProxyType(workbook.chartsheets),
+                workbook.source,
+            ),
+            Baseline(
+                MappingProxyType(dict(workbook._parts)),
+                ContainerMetadata(infos, workbook._archive.comment),
+                snapshot_json,
+            ),
+            tuple(copy.deepcopy(metadata["tables"])),
+            MappingProxyType(dict(merged)),
+            metadata["date_system"],
+            workbook._compatibility_version,
+            copy.deepcopy(model._feature_guard),
+            TextPreservation(model._text_cells, MappingProxyType(dict(text_layouts))),
+            (_EXCEL_MAX_ROWS, _EXCEL_MAX_COLUMNS),
+        )
         return model
 
 

@@ -9,6 +9,7 @@ Forge evaluator. It never executes macros or external data sources.
 from __future__ import annotations
 
 import functools
+import hashlib
 import io
 import json
 import math
@@ -747,6 +748,18 @@ class Workbook:
                 raise UnsupportedWorkbook("compressed workbook exceeds size limit")
             entry_count = _preflight_archive_directory(source_stream, source_size)
             source_stream.seek(0)
+            # Read the package once. The archive is decoded from these bytes
+            # and the fingerprint names them, so a file that changes under us
+            # is never fingerprinted as something other than what was read.
+            try:
+                data = source_stream.read(MAX_COMPRESSED_PACKAGE_BYTES + 1)
+            except OSError as exc:
+                raise WorkbookError(f"cannot open workbook: {exc}") from exc
+            if len(data) > MAX_COMPRESSED_PACKAGE_BYTES:
+                raise UnsupportedWorkbook("compressed workbook exceeds size limit")
+            source_stream.close()
+            source_stream = io.BytesIO(data)
+            source_fingerprint = "sha256:" + hashlib.sha256(data).hexdigest()
             try:
                 archive = zipfile.ZipFile(source_stream, "r")
             except (OSError, zipfile.BadZipFile) as exc:
@@ -836,6 +849,8 @@ class Workbook:
                 workbook_part,
                 content_types,
             )
+            # sha256 of the bytes decoded above; the package's identity.
+            workbook.source_fingerprint = source_fingerprint
             transferred = True
             return workbook
         finally:
