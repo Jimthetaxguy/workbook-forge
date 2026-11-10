@@ -25,11 +25,11 @@ The code is chosen in this order:
    The corpus report counts those fallbacks as `untyped`, a gap to close rather than
    an accepted outcome.
 
-`tools/corpus/expectations.json` records two splits that remain:
+`tools/corpus/expectations.json` records one split that remains.
+`hb_no_cell_references.xlsx` is `positional_cells` on every lane.
 
 | Corpus file | Python | Rust |
 | --- | --- | --- |
-| `hb_no_cell_references.xlsx` | `unsupported_package` | `package_damaged` |
 | `xw_macro.xlsm` | `not_xlsx` | `macro_content` |
 
 Callers should branch on the code, not on the message text, which may change.

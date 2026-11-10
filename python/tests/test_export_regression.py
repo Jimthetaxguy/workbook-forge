@@ -1,7 +1,10 @@
-"""The committed Excel evidence package against the current exporter.
+"""Regression of the current exporter against the committed preflight package.
 
 ``receipts/canonical-operating-scenario/operating-scenario.exported.xlsx`` is
-the package the committed preflight receipt pins by hash. ``evidence.check_observation``
+the package the committed preflight receipt pins by hash. That receipt records
+status ``prepared``, Excel Desktop ``pending``, and that Excel was not invoked.
+This module does not treat the package as an Excel observation.
+``evidence.check_observation``
 verifies hashes and consistency but never re-runs an engine, so once the writer
 changes a single byte a byte-pinned receipt can never re-match, and nothing says
 whether the change was a regression or a documented behaviour change.
@@ -210,7 +213,11 @@ def semantic_differences(
 
 @pytest.fixture(scope="module")
 def fresh_package(tmp_path_factory) -> Path:
-    """Today's export of the fixture, through the same path as the committed receipt."""
+    """Today's export of the fixture, through the same path as the committed preflight.
+
+    Excel is not invoked (``run_excel=False``). The comparison is an exporter
+    regression against the preflight package, not an Excel observation.
+    """
     output = tmp_path_factory.mktemp("export-regression") / "fresh"
     build_canonical_receipt(DEFAULT_FIXTURE, output, run_excel=False, rust=False)
     return output / "operating-scenario.exported.xlsx"

@@ -1,11 +1,13 @@
-# Proposed specs (handoff, based on main 580aacd)
+# Proposed specs (handoff)
 
 Proposals, not accepted contracts. The current truth is `CONTEXT.md`,
 `README.md`, `docs/specs/compiler-pipeline.md` and `docs/specs/red-flags.md`.
-Where these conflict with those files, those files win. This README was
-rechecked against `main` `580aacd` on 2026-11-06; specs 01–07 still declare
-`base: main c84ec07` in their frontmatter, so re-base each when it is next
-edited.
+Where these conflict with those files, those files win. Specs 01–07 declare
+`base: main c84ec07` in their frontmatter, and spec 08 declares
+`base: main 580aacd`. Specs 09–14 were written against `main` `41f28d3` and
+still declare that base. Re-base a spec when it is next edited. This index
+was corrected on 2026-11-07 against `main` `c506165`; the 2026-11-06 recheck
+was against `580aacd`.
 
 Recommended order:
 
@@ -44,14 +46,13 @@ refusal policy and gate scope (07), red-flag Spec 2 before the joined command
 but not serialized, Rust views (02), ruff 0.17 and the crate license field
 (04), and the per-cell memory bound values (03).
 
-## Notes from the four skipped docs
+## Notes
 
-- Missing spec: a declared result-range (spill placement) contract. The full
-  gate in 01 cannot close without it (product-specifications.md, plan item 3).
-  Not written here.
-- Suggested working order: 01 → 03 → 04 → 05 → 02 → 07, with 06 whenever James
-  approves. The vision doc also holds observers, diffusion, repeated-formula
-  collapse and formula recovery until the spine is green, so none are specced.
+Specs 09–14 were written against `main` `41f28d3`. The result-range contract
+is [spec 14](14-result-range-contract.md). The working order is the table above.
+
+The vision doc holds observers, diffusion, repeated-formula collapse and
+formula recovery until the spine is green, so none of those are specced here.
 
 ## Revisions (Oct 14)
 

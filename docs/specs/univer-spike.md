@@ -129,10 +129,13 @@ linear search (`search_mode` omitted, `1`, or `-1`), and an optional scalar
 reverse search can be written `=XLOOKUP("pear",C1:C3,D1:D3,,,-1)`.
 
 The evaluator currently rejects approximate and wildcard match modes (`-1`,
-`1`, `2`), binary search modes (`2`, `-2`), and multi-cell return arrays. It
-does not project dynamic array results into neighboring worksheet cells. A
-formula whose result is a multi-cell array is left blank in the grid, with a
-notice; a 1×1 array result is shown as its single value.
+`1`, `2`) and binary search modes (`2`, `-2`). Those refusals are listed under
+Formula issues. It does not project dynamic array results into neighboring
+worksheet cells. A two-dimensional XLOOKUP return is `#VALUE!` in the cell.
+Any other formula whose result is a multi-cell array is left blank in the
+grid, with a notice. A 1×1 array result is shown as its single value. This
+split matches the Developer panel after `68fe35e`.
+
 Microsoft documents those broader XLOOKUP behaviors, including a return array
 that can produce multiple columns; this prototype must not imply that full
 compatibility. The official syntax and behavior are described in [Microsoft's

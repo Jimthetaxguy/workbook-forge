@@ -334,7 +334,7 @@ The Microsoft function index currently contributes 521 named entries across its 
 - `docs/run-history.md` — dated project activity and what each autoresearch run added, preserving the facts at each checkpoint.
 - `.autoresearch/` — loop configuration (`config.json`) and the accepted-run ledger (`state.json`).
 - `docs/specs/` — the specs in force: the compiler pipeline, the red-flag specs, model versioning rules and the model changelog; `schemas/` holds the canonical workbook schema.
-- `docs/specs/proposed/` — proposed specs 01–07, not yet accepted contracts; its README gives the working order and the decisions waiting on James. Where a proposal conflicts with `CONTEXT.md`, `README.md` or a spec in force, those win.
+- `docs/specs/proposed/` — proposed specs 01–14, not yet accepted contracts; its README gives the working order and the decisions waiting on James. Where a proposal conflicts with `CONTEXT.md`, `README.md` or a spec in force, those win.
 - `docs/history/` — superseded briefs, notes and Jev advisory receipts, kept for the record.
 - `receipts/` — preflight packages for the Excel round-trip harness.
 
