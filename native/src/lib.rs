@@ -1,6 +1,6 @@
 //! A batch boundary between Python and the toolkit workbook form.
 //!
-//! The bridge uses toolkit::WorkbookModel and toolkit::calculate. It is not
+//! The bridge uses toolkit::WorkbookModel and toolkit::Session. It is not
 //! the canonical model::Workbook. JSON is an interchange representation, not a
 //! persistence or synchronization protocol. Calculation and session edits
 //! remain entirely inside Rust.
@@ -130,12 +130,12 @@ fn calculate(
 ) -> PyResult<String> {
     let model: toolkit::WorkbookModel = decode(model_json)?;
     model.validate().map_err(invalid)?;
-    if let Some(source) = names_json {
-        let table = names(source)?;
-        let session = toolkit::Session::with_names(model, Some(table)).map_err(invalid)?;
-        return encode(&py.detach(|| session.calculate(workers)));
-    }
-    encode(&py.detach(|| toolkit::calculate(&model, workers)))
+    // names_json absent selects Session::with_names(model, None), which is
+    // Session::new. A new session calculates with no names, which is what
+    // toolkit::calculate does.
+    let table = names_json.map(names).transpose()?;
+    let session = toolkit::Session::with_names(model, table).map_err(invalid)?;
+    encode(&py.detach(|| session.calculate(workers)))
 }
 
 #[pymodule]

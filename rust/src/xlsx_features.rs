@@ -1082,15 +1082,11 @@ impl FeatureGuard {
             .collect();
         // The detached copy has no session of its own. Pass the workbook's
         // name table so a formula under the rule is checked with the same
-        // names calculation uses.
-        let report = match names {
-            Some(table) => {
-                let session = crate::toolkit::Session::with_names(detached, Some(table.clone()))
-                    .map_err(|error| error.to_string())?;
-                session.calculate(1)
-            }
-            None => crate::toolkit::calculate(&detached, 1),
-        };
+        // names calculation uses. Both callers pass the imported table, which
+        // is present even when it is empty.
+        let session = crate::toolkit::Session::with_names(detached, names.cloned())
+            .map_err(|error| error.to_string())?;
+        let report = session.calculate(1);
         let whole = report.diagnostics.iter().find(|d| d.address.is_none());
         for (index, (sheet, address, formula)) in targets.into_iter().enumerate() {
             let rule = self.formula_rule(sheet, address).expect("filtered above");
