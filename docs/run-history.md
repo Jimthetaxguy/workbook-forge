@@ -2,7 +2,7 @@
 author: unknown
 created: null
 agent: codex/Codex
-date: '2026-11-07'
+date: '2026-11-09'
 type: project-history
 task: Preserve historical Workbook Forge checkpoints
 status: active
@@ -21,6 +21,13 @@ The 2026-09-28 documentation review removed personal conversation references and
 Earlier notes counted "evaluator slices". Slices 2–10 predate the autoresearch loop (the 65-function baseline). Slice *N* for *N* from 11 to 23 is Run *N*−10. From Run 14 onward the notes use run numbers only.
 
 ## Project activity
+
+### 2026-11-09 — claude-code/Claude Fable 5.1 — decision G-A recorded: Base B, the amended toolkit binding shape, both version fields to 2
+- Changed: spec 09 section 3 carries the statement James adopted on 2026-11-09 and the measured basis for it; section 6's alignment is applied (spec 05 reframed to the owner model with `calculation-report.v2`; spec 06 amended to the toolkit binding shape with `kind` optional and `required: false` on migrated bindings, its non-goal against the toolkit schema retired); spec 14's four G-A questions are marked answered; the proposed README and `CONTEXT.md` drop G-A from the open gates, leaving G-B, G-C and G-D. The decision memo, its two-pass refutation and the three measurement scripts with their recorded output are kept under `docs/history/g-a-decision-2026-11-08/`.
+- Why: spec 09 could only estimate each base's cost from the import map. Step 0's `Conversion` records measured what each shape holds that the other refuses, on every converting corpus workbook: 204,679 canonical-only field paths, all derived, against 298 toolkit-only paths of authored content or import guards in 14 of 80 workbooks; 17 of the 48 conversion diagnostics come from the defined-name table living beside the toolkit document rather than in it. Neither of spec 09's two reversal conditions fired, so the lean became a recommendation and James adopted it.
+- Evidence: the memo's first draft was refuted independently (4 refuted, 15 weakened, 5 citation errors; the measurement scripts reran byte-identical) and corrected; a second pass confirmed the 24 corrections and added four points, all applied; the recommendation held through both passes. The measurement reproduces against a checkout of PR #119 with the commands at the end of the memo. Checks on this branch: ruff clean over python, tools, examples and the history bundle's scripts; `pytest -q` 4065 passed with 150 skipped in a fresh worktree without the native bridge binary, then the eleven bridge-dependent test files rerun with the bridge present: 725 passed, 0 skipped; whitespace clean; the committed measurement script reran byte-identical to its recorded output. No Rust file changed, so `cargo test` was not rerun; the gate passed on #119's head 8277a99, which this branch extends with documentation only.
+- Boundaries: documentation only; no code, schema or version changed, and `model-versioning.md` and `model-changelog.md` take the v2 entry at spec 09 step 6. Specs 05 and 06 keep their `base` lines because only the G-A alignment was edited, not their other claims. No Excel behaviour claimed.
+- Next/remaining: spec 09 step 1 (the session over the owner model, with section 10's nine requirements) and step 2 (typed bindings under the amended shape, where the untyped-binding rule moves into `to_toolkit`); spec 10's inventory definition; spec 12's binding record reads `kind` as optional when it is next edited.
 
 ### 2026-11-07 — claude-code/Claude Fable 5.1 — spec 09 step 0: shape conversion edges and the in-memory preservation envelope
 - Changed: `to_toolkit` and `to_canonical` in both languages (`python/workbook_forge/convert.py`, `rust/src/convert.rs`) convert between the canonical and toolkit workbook shapes and return a `Conversion` naming every field path dropped and added, in the canonical hydrator's path grammar; a refusal by the target shape's reader passes through as `ConversionError` with that reader's code. `import_xlsx` in both languages assembles a `PreservationEnvelope` (`envelope.py`, `envelope.rs`) from what it already held, with a path-free `describe()` projection. The Rust importer keeps the compatibility version as an integer, the sheet-entry order and the fingerprint of the bytes it decoded; the Python package reader reads the file once and fingerprints those bytes. One hand-authored fixture, `fixtures/shape-conversion-cases.v1.json`, pins the drop and add lists for both engines and states every rule the cases rely on.

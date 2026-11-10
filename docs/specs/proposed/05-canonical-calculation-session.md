@@ -1,11 +1,18 @@
 ---
 type: technical-specification
-status: proposed
+status: proposed — reframed 2026-11-09 to the owner model under decision G-A (spec 09 section 3)
 base: main c84ec07
-summary: Add a revisioned calculation session over the canonical Workbook in both engines, so set-input/preview/calculate carry model revisions like the agent session already does.
+summary: Add a revisioned calculation session over the owner workbook model in both engines, so set-input/preview/calculate carry model revisions like the agent session already does. Reframed under decision G-A (2026-11-09) from the canonical Workbook to the owner model, which grows from the toolkit shape.
 ---
 
-# 05 — Revisioned calculation session on the canonical model
+# 05 — Revisioned calculation session on the owner model
+
+Reframed on 2026-11-09: decision G-A chose the toolkit shape as the base of the owner
+contract (spec 09 section 3), so this session operates on the owner model through spec
+09 step 1, starting from the toolkit `Session` machinery rather than a second session
+on the canonical path. The problem and the operations below are unchanged; where the
+text says "canonical" it names the v1 documents the session must still accept through
+spec 09 step 0.
 
 ## Problem
 
@@ -27,9 +34,10 @@ headless command (07) and future agent operations run on.
 
 ## Scope
 
-- Python: `CanonicalSession` in a new `python/workbook_forge/session.py`,
-  taking `model.Workbook` directly (Spec 1: no DTO in between).
-- Rust: `CanonicalSession` in `rust/src/session.rs`, taking `model::Workbook`.
+- Python: a session in `python/workbook_forge/session.py` taking the owner model
+  directly (Spec 1: no DTO in between), built from the toolkit `Session` machinery
+  (spec 09 step 1); documents of either v1 shape enter through spec 09 step 0.
+- Rust: the same session in `rust/src/session.rs`, taking the owner model.
 - Operations: `revision`, `preview_inputs(values, expected_revision)`,
   `set_inputs(values, expected_revision)`, `calculate() -> report`.
 - Inputs are addressed by `bindings.inputs` names only.
@@ -54,11 +62,12 @@ headless command (07) and future agent operations run on.
 
 ## Schema / model-version impact
 
-- Workbook model: none. Revision is session state, not workbook meaning.
-- Calculation report: needs a `revision` (and for previews `base_revision`).
-  `schemas/calculation-report.v1.schema.json` must change. **James decides**
-  whether this is an optional v1 field or a `calculation-report.v2` schema;
-  the recommendation is v2, since the repo refuses unknown fields.
+- Workbook model: `revision` leaves the document and becomes session state (spec 09
+  section 4; the change set is in spec 09 step 1).
+- Calculation report: one `calculation-report.v2` merging the toolkit
+  `CalculationReport` and the canonical v1 report, carrying `revision`,
+  `base_revision` and the calculation context (spec 09 section 4). Decided with G-A
+  on 2026-11-09; the v1 report schema stays readable until spec 09 step 6.
 
 ## Acceptance tests
 
@@ -89,6 +98,6 @@ None to start. Spec 06 builds typed validation on top of it; spec 07 uses it.
 
 ## Open questions for James
 
-- **Decision (from PR #8):** should the canonical path grow a calculation
-  session at all?
-- **Decision:** report revision as optional v1 field, or a v2 report schema?
+Both answered by decision G-A (spec 09 section 3, 2026-11-09): the session is the
+toolkit session over the owner model, not a second session on the canonical path; the
+report is `calculation-report.v2`.

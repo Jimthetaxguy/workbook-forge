@@ -1,0 +1,468 @@
+{
+ "corpus": {
+  "files": 90,
+  "imported": 82,
+  "refused_by_importer": [
+   [
+    "hb_errors_newer_values.xlsx",
+    "UnsupportedWorkbook"
+   ],
+   [
+    "hb_in_cell_array_formula.xlsx",
+    "UnsupportedWorkbook"
+   ],
+   [
+    "hb_in_cell_list.xlsx",
+    "UnsupportedWorkbook"
+   ],
+   [
+    "hb_macro_content_in_xlsx.xlsx",
+    "UnsupportedWorkbook"
+   ],
+   [
+    "hb_nested_array.xlsx",
+    "UnsupportedWorkbook"
+   ],
+   [
+    "hb_no_cell_references.xlsx",
+    "UnsupportedWorkbook"
+   ],
+   [
+    "hb_rows_without_references.xlsx",
+    "UnsupportedWorkbook"
+   ],
+   [
+    "hb_strict_ooxml.xlsx",
+    "UnsupportedWorkbook"
+   ]
+  ],
+  "converted": 80,
+  "refused_by_canonical_reader": [
+   [
+    "hb_data_table_formula.xlsx",
+    "invalid_model"
+   ],
+   [
+    "hb_shared_formulas.xlsx",
+    "invalid_model"
+   ]
+  ],
+  "sheets": 315,
+  "cells": 91915,
+  "workbooks_with_style_beyond_number_format_or_General": 7,
+  "workbooks_with_column_widths": 4,
+  "workbooks_with_blocked_reason": 9,
+  "workbooks_with_analyzer_diagnostics": 15,
+  "diagnostic_codes": {
+   "unsupported_formula": 30,
+   "parse_error": 17,
+   "invalid_reference": 1
+  },
+  "to_canonical": {
+   "dropped": {
+    "sheet id": {
+     "paths": 315,
+     "workbooks": 80
+    },
+    "cell style (bold, colours, alignment)": {
+     "paths": 246,
+     "workbooks": 2
+    },
+    "revision": {
+     "paths": 80,
+     "workbooks": 80
+    },
+    "cell style.number_format (General)": {
+     "paths": 46,
+     "workbooks": 7
+    },
+    "cell blocked_reason": {
+     "paths": 30,
+     "workbooks": 9
+    },
+    "column width": {
+     "paths": 12,
+     "workbooks": 4
+    },
+    "cell cached_value": {
+     "paths": 10,
+     "workbooks": 2
+    }
+   },
+   "added": {
+    "cell data_type": {
+     "paths": 91915,
+     "workbooks": 79
+    },
+    "cell provenance": {
+     "paths": 91915,
+     "workbooks": 79
+    },
+    "formula.dependencies": {
+     "paths": 10124,
+     "workbooks": 47
+    },
+    "formula.result": {
+     "paths": 10124,
+     "workbooks": 47
+    },
+    "sheet dimensions": {
+     "paths": 313,
+     "workbooks": 79
+    },
+    "metadata.source": {
+     "paths": 80,
+     "workbooks": 80
+    },
+    "model_version": {
+     "paths": 80,
+     "workbooks": 80
+    },
+    "workbook provenance": {
+     "paths": 80,
+     "workbooks": 80
+    },
+    "diagnostic": {
+     "paths": 48,
+     "workbooks": 15
+    }
+   }
+  },
+  "to_toolkit": {
+   "dropped": {
+    "cell data_type": {
+     "paths": 91915,
+     "workbooks": 79
+    },
+    "cell provenance": {
+     "paths": 91915,
+     "workbooks": 79
+    },
+    "formula.dependencies": {
+     "paths": 10124,
+     "workbooks": 47
+    },
+    "formula.result": {
+     "paths": 10124,
+     "workbooks": 47
+    },
+    "sheet dimensions": {
+     "paths": 313,
+     "workbooks": 79
+    },
+    "metadata.source": {
+     "paths": 80,
+     "workbooks": 80
+    },
+    "model_version": {
+     "paths": 80,
+     "workbooks": 80
+    },
+    "workbook provenance": {
+     "paths": 80,
+     "workbooks": 80
+    },
+    "diagnostic": {
+     "paths": 48,
+     "workbooks": 15
+    }
+   },
+   "added": {
+    "sheet id": {
+     "paths": 315,
+     "workbooks": 80
+    },
+    "cell cached_value": {
+     "paths": 89,
+     "workbooks": 31
+    },
+    "revision": {
+     "paths": 80,
+     "workbooks": 80
+    }
+   }
+  }
+ },
+ "canonical_fixture": {
+  "input_kinds={}": {
+   "to_toolkit": {
+    "dropped": {
+     "cell data_type": {
+      "paths": 38,
+      "workbooks": 1
+     },
+     "formula.dependencies": {
+      "paths": 15,
+      "workbooks": 1
+     },
+     "formula.result": {
+      "paths": 15,
+      "workbooks": 1
+     },
+     "input binding (whole)": {
+      "paths": 3,
+      "workbooks": 1
+     },
+     "metadata (other keys)": {
+      "paths": 2,
+      "workbooks": 1
+     },
+     "sheet dimensions": {
+      "paths": 2,
+      "workbooks": 1
+     },
+     "cell provenance": {
+      "paths": 1,
+      "workbooks": 1
+     },
+     "model_version": {
+      "paths": 1,
+      "workbooks": 1
+     },
+     "workbook provenance": {
+      "paths": 1,
+      "workbooks": 1
+     }
+    },
+    "added": {
+     "sheet id": {
+      "paths": 2,
+      "workbooks": 1
+     },
+     "revision": {
+      "paths": 1,
+      "workbooks": 1
+     }
+    }
+   },
+   "back_to_canonical": {
+    "dropped": {
+     "sheet id": {
+      "paths": 2,
+      "workbooks": 1
+     },
+     "revision": {
+      "paths": 1,
+      "workbooks": 1
+     }
+    },
+    "added": {
+     "cell data_type": {
+      "paths": 38,
+      "workbooks": 1
+     },
+     "formula.dependencies": {
+      "paths": 15,
+      "workbooks": 1
+     },
+     "formula.result": {
+      "paths": 15,
+      "workbooks": 1
+     },
+     "sheet dimensions": {
+      "paths": 2,
+      "workbooks": 1
+     },
+     "diagnostic": {
+      "paths": 1,
+      "workbooks": 1
+     },
+     "model_version": {
+      "paths": 1,
+      "workbooks": 1
+     }
+    }
+   },
+   "cell_provenance_after_round_trip": {
+    "none": 38
+   },
+   "workbook_provenance_after_round_trip": null
+  },
+  "input_kinds=all number": {
+   "to_toolkit": {
+    "dropped": {
+     "cell data_type": {
+      "paths": 38,
+      "workbooks": 1
+     },
+     "formula.dependencies": {
+      "paths": 15,
+      "workbooks": 1
+     },
+     "formula.result": {
+      "paths": 15,
+      "workbooks": 1
+     },
+     "metadata (other keys)": {
+      "paths": 2,
+      "workbooks": 1
+     },
+     "sheet dimensions": {
+      "paths": 2,
+      "workbooks": 1
+     },
+     "cell provenance": {
+      "paths": 1,
+      "workbooks": 1
+     },
+     "model_version": {
+      "paths": 1,
+      "workbooks": 1
+     },
+     "workbook provenance": {
+      "paths": 1,
+      "workbooks": 1
+     }
+    },
+    "added": {
+     "input kind": {
+      "paths": 3,
+      "workbooks": 1
+     },
+     "input required": {
+      "paths": 3,
+      "workbooks": 1
+     },
+     "sheet id": {
+      "paths": 2,
+      "workbooks": 1
+     },
+     "revision": {
+      "paths": 1,
+      "workbooks": 1
+     }
+    }
+   },
+   "back_to_canonical": {
+    "dropped": {
+     "input kind": {
+      "paths": 3,
+      "workbooks": 1
+     },
+     "input required": {
+      "paths": 3,
+      "workbooks": 1
+     },
+     "sheet id": {
+      "paths": 2,
+      "workbooks": 1
+     },
+     "revision": {
+      "paths": 1,
+      "workbooks": 1
+     }
+    },
+    "added": {
+     "cell data_type": {
+      "paths": 38,
+      "workbooks": 1
+     },
+     "formula.dependencies": {
+      "paths": 15,
+      "workbooks": 1
+     },
+     "formula.result": {
+      "paths": 15,
+      "workbooks": 1
+     },
+     "sheet dimensions": {
+      "paths": 2,
+      "workbooks": 1
+     },
+     "diagnostic": {
+      "paths": 1,
+      "workbooks": 1
+     },
+     "model_version": {
+      "paths": 1,
+      "workbooks": 1
+     }
+    }
+   },
+   "cell_provenance_after_round_trip": {
+    "none": 38
+   },
+   "workbook_provenance_after_round_trip": null
+  },
+  "cells": 38,
+  "formula_cells": 15,
+  "bindings": {
+   "inputs": {
+    "fixed_cost": "number",
+    "unit_cost": "number",
+    "unit_price": "number"
+   },
+   "outputs": 6
+  }
+ },
+ "fixture_cases": {
+  "canonical_cases/authored-two-sheets": {
+   "dropped": {
+    "input binding (whole)": 1,
+    "diagnostic": 2,
+    "metadata (other keys)": 2,
+    "model_version": 1,
+    "workbook provenance": 1,
+    "cell data_type": 8,
+    "cell provenance": 2,
+    "sheet dimensions": 2,
+    "formula.dependencies": 2,
+    "formula.result": 2
+   },
+   "added": {
+    "input kind": 1,
+    "input required": 1,
+    "revision": 1,
+    "sheet id": 2,
+    "cell cached_value": 1
+   }
+  },
+  "canonical_cases/calculated-with-dependencies": {
+   "dropped": {
+    "model_version": 1,
+    "cell data_type": 2,
+    "formula.dependencies": 1,
+    "formula.result": 1,
+    "cell provenance": 1
+   },
+   "added": {
+    "revision": 1,
+    "sheet id": 1
+   }
+  },
+  "toolkit_cases/typed-values": {
+   "dropped": {
+    "input kind": 1,
+    "input min/max/choices": 2,
+    "input required": 1,
+    "revision": 1,
+    "cell style (bold, colours, alignment)": 1,
+    "cell style.number_format (General)": 1,
+    "cell blocked_reason": 1,
+    "column width": 2,
+    "sheet id": 1
+   },
+   "added": {
+    "model_version": 1,
+    "cell data_type": 11,
+    "formula.dependencies": 2,
+    "formula.result": 2,
+    "cell provenance": 1,
+    "sheet dimensions": 1
+   }
+  },
+  "toolkit_cases/unnormalised-input": {
+   "dropped": {
+    "input kind": 1,
+    "input required": 1,
+    "revision": 1,
+    "sheet id": 1
+   },
+   "added": {
+    "model_version": 1,
+    "cell data_type": 2,
+    "sheet dimensions": 1
+   }
+  }
+ }
+}

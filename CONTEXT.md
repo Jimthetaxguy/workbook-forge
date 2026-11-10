@@ -2,7 +2,7 @@
 author: Codex
 created: 2026-09-24
 agent: claude-code/Claude Fable 5.1
-date: '2026-11-06'
+date: '2026-11-09'
 type: project-context
 task: Build an SDK for Excel in agent-ready formats using independent Python and Rust implementations
 status: active
@@ -12,7 +12,7 @@ next_steps:
   - Sanitise and commit the 2026-10-14 Excel 16.113.4 operating-scenario observation with a value-level regression link; it is uncommitted because the saved package contains a machine-local path. Red-flag Spec 2 (export parity) stays false until export writes every declared spill cell and a fresh Excel reimport matches them.
   - Fix remaining confirmed defects from Microsoft's examples or decimal arithmetic, never from either engine. The SUM accumulation rule, the serial-0 date, the typed reason on unsupported-function results, the defined-name diagnostic, and the calculation report are already in place.
   - Settle the profiles that were written from Microsoft's prose rather than an example in one Excel session: criteria over numbers stored as text, error cells under criteria, text functions over errors, EDATE before serial 1.
-  - Decide whether bindings get a value type, required status and constraints. That changes the schema and needs a new version.
+  - Build typed bindings as decision G-A fixed them on 2026-11-09 (`docs/specs/proposed/09-contract-convergence.md` section 3): the toolkit binding shape with `kind` optional and `required: false` on migrated v1 bindings, in model v2 with both version fields at 2, at spec 09 steps 2 and 6.
   - After the full Excel export gate, put the proven intake → model → calculation → export path behind the Python headless CLI, then expose Rust operations with matching behavior.
   - Use docs/product-specifications.md as the durable product and acceptance contract for intake, compilation, headless use, formula hypotheses and evidence-led coverage.
   - Use docs/specs/compiler-pipeline.md for the stage boundaries, code-to-code meaning, paired intake views, receipt contents and engineering order.
@@ -27,8 +27,8 @@ remaining:
   - Run `bash tools/gate.sh` locally before a commit or pull request; GitHub Actions is blocked by billing, and mergeability alone is not acceptance evidence.
   - Of the 33 confirmed review findings that were open on 2026-09-29, ten were fixed on 2026-09-30 (counting and criteria functions, text functions over errors, arithmetic overflow, EDATE before serial 1, expression depth, `_xHHHH_` escapes, missing and unchecked versions, blank references). On 2026-10-05 four more of the six named findings were resolved: the SUM accumulation rule and typed reason on unsupported-function results were already fixed in prior commits; serial 0 as a date was fixed (MONTH(0)=1, DAY(0)=0, YEAR(0)=1900; serial 0 is an engine profile, see `docs/behavior-profiles.md`); and a formula using a defined name is now reported as `unsupported_formula` instead of `parse_error`. The calculation report now exists. An output origin of `calculated` means `Formula.result` was produced by the engine; cell provenance is left unchanged so an imported cache is not promoted. The per-cell memory bound remains deferred. The remaining 17 unnamed findings from the `.verification/` ledger could not be individually assessed (gitignored, not on disk). The 2026-09-30 fixes carry Workbook Forge profiles that have not been checked in Excel.
   - "GitHub reports Jimthetaxguy/workbook-forge as public, verified 2026-09-28; historical private-release preparation notes in docs/run-history.md describe their original checkpoints."
+  - Decision G-A, taken 2026-11-09 and recorded in `docs/specs/proposed/09-contract-convergence.md` section 3: the owner contract is `workbook-model.v2` grown from the toolkit shape (Base B); bindings keep the toolkit shape with `kind` optional and `required: false` on migrated v1 bindings; both `schema_version` and `model_version` go to 2 when spec 09's migration lands, with two lineage lines; the spill result field and `shape` on bindings take the version after v2. No step of that migration beyond step 0 (PR #119) has started, and no version has moved.
 open_questions:
-  - "G-A, schema or model version change: typed bindings (proposed spec 06), a calculation-report v2 or a spill-placement field each need James's approval before any code; `schema_version` and `model_version` do not move without it."
   - "G-B, vision wording: whether `docs/vision.md` moves to the toolkit framing now or after the contracts settle. Factual corrections do not wait on this."
   - "G-C, writeback semantics for the original file: the conflict rule, staging, recovery, and what the same baseline means."
   - "G-D, public contract commitments: anything tagged, published or promised to a host."
@@ -136,7 +136,7 @@ The Excel round-trip harness is `tools/excel_oracle.py`, with `tools/canonical_e
 - `tools/gate.sh`: the gate.
 - `docs/vision.md`: the North Star and the v1 spine order.
 - `docs/specs/`: the specs in force: compiler pipeline, red-flag contracts, model versioning rules and the model changelog. `schemas/workbook-model.v1.schema.json` is the canonical schema.
-- `docs/specs/proposed/`: proposed specs 01–14, not accepted contracts. Its README gives the working order and the decisions waiting on James; the four gates in `open_questions` above group them.
+- `docs/specs/proposed/`: proposed specs 01–14, not accepted contracts. Its README gives the working order and the decisions waiting on James; the three gates in `open_questions` above group them, and decision G-A (2026-11-09) is recorded in spec 09 section 3 with its memo under `docs/history/`.
 - `receipts/`: preflight packages for the Excel round-trip harness. They record that Excel was not invoked and that red-flag Spec 2 is not passed; no Excel observation receipt is committed. `tools/review/findings.schema.json`: the shape of a review finding.
 - `docs/history/`: superseded branch briefs, dated notes and Jev advisory receipts, kept for the record and not current guidance.
 - `.autoresearch/state.json`: the authoritative accepted-run ledger. `.autoresearch/config.json` holds the loop criteria; its `eval_command` is `tools/gate.sh`.
