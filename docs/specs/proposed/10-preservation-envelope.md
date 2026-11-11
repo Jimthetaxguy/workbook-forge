@@ -10,17 +10,24 @@ summary: Name the companion that preserves what the workbook model does not repr
 ## Problem
 
 An imported workbook carries far more than cells. Today both importers keep that
-material and guard edits against it, but the thing they keep has no name and no
-contract. Python holds it as seven private attributes on the toolkit wrapper
+material and guard edits against it. Step 0 (PR #119) named that companion
+`PreservationEnvelope` (`python/workbook_forge/envelope.py`; `rust/src/envelope.rs`).
+The single guard entry point, the invalidation rules, the carry inventory and the
+portable form are not built, and Rust leaves container metadata empty. Python holds
+the fields as seven private attributes on the toolkit wrapper
 (`python/workbook_forge/toolkit.py:93-104`), one of which, `_source_baseline`, is a frozen
-`_Baseline` (`python/workbook_forge/xlsx.py:91-103`); Rust holds it as the fields of
-`ImportedWorkbook` beside the session (`rust/src/xlsx.rs:1416-1435`); canonical intake
+`_Baseline` (`python/workbook_forge/xlsx.py:91-103`), and assembles the envelope beside
+them (`xlsx.py:585-607`); Rust holds the fields on
+`ImportedWorkbook` (`rust/src/xlsx.rs:1439-1463`) and projects the envelope from them
+(`xlsx.rs:1788-1830`); canonical intake
 keeps none of it and instead lists what it dropped as `metadata.intake.not_carried`
-(`python/workbook_forge/intake.py:70,118-190`). The two importers already disagree on
-what they keep (section 1: zip container metadata, the compatibility version as an
-integer or a flag, a configurable or fixed insertion bound, part order).
+(`python/workbook_forge/intake.py:70,118-190`). Both importers store the sha256
+fingerprint of the bytes they decode, and both keep the compatibility version as an
+integer. The two importers still disagree on
+what they keep (section 1: zip container metadata, a configurable or fixed insertion
+bound, part order).
 
-Because the companion is implicit, its readers are inconsistent within one language and
+Readers of the named type remain inconsistent within one language and
 between the two. In Python, `WorkbookModel.apply` runs the 1904, compatibility, text
 and feature guards (`toolkit.py:123-148`), but `set_inputs` goes to the engine session
 directly (`toolkit.py:231-233`): it writes values only, so the formula guards have nothing
@@ -88,7 +95,7 @@ reason.
 
 | Field | Meaning | Python today | Rust today |
 | --- | --- | --- | --- |
-| `source.fingerprint` | `sha256:` of the imported bytes; the envelope's identity and its join key to the model (section 5) | not computed by `import_xlsx`; the canonical side has `content_fingerprint` and `require_fingerprint` (`python/workbook_forge/model.py:293-302`); the browser log records `Baseline{kind, name, sha256, bytes}` where `bytes` is a length (`rust/src/event_log.rs:46-58`) | `model::content_fingerprint` (`rust/src/model.rs:1636`); not stored on `ImportedWorkbook` |
+| `source.fingerprint` | `sha256:` of the imported bytes; the envelope's identity and its join key to the model (section 5) | sha256 of the package bytes `import_xlsx` decodes, stored on the envelope (`workbook.py:762,853`; `xlsx.py:585-587`); canonical `content_fingerprint` (`model.py:293-297`); the browser log records `Baseline{kind, name, sha256, bytes}` where `bytes` is a length (`event_log.rs:46-58`) | `content_fingerprint` of those decoded bytes (`model.rs:1636`), stored on `ImportedWorkbook.fingerprint` (`xlsx.rs:1441-1442,1505,1525`) and copied onto the envelope (`xlsx.rs:1804-1805`) |
 | `source.parts` | the package part names, **sorted**; the key set of `baseline.parts`, not a separate list. Zip order is container metadata | `_import_metadata["package_parts"]` (`xlsx.py:337`) | `capabilities["parts"]` from a `BTreeMap`, already sorted (`xlsx.rs:310-312,1344`) |
 | `source.workbook_part`, `source.sheet_parts`, `source.sheet_entries`, `source.chartsheets` | which part is the workbook; which part each worksheet is; the full sheet-entry order including chartsheets, which is the order `localSheetId` counts; the chartsheet name to part map | `_import_metadata["sheets"][i]["part"]` (`xlsx.py:484`), re-derived again by `Workbook.open` on the staged seed (`xlsx.py:1166`); `Workbook.sheet_entry_names` (`workbook.py:829`); `metadata["chartsheets"]` (`xlsx.py:518`) | `workbook_part`, `sheet_parts` (worksheets only, chartsheets skipped at `xlsx.rs:1038-1039`), `Decoded.sheet_entries` (`xlsx.rs:806,818`), `chartsheets` (`xlsx.rs:1344`) |
 | `source.handle` (*session*, never serialized) | where the bytes came from, for the overwrite refusal only | `_Baseline.source: Path` (`xlsx.py:93`); refusal at `xlsx.py:1101-1102` and `workbook.py:1978-1981` | `source: Option<PathBuf>`, canonicalized (`xlsx.rs:1417,1472`), `None` for a bytes import (`xlsx.rs:1481-1488`); refusal at `xlsx.rs:1954-1967` |
@@ -98,7 +105,7 @@ reason.
 | `tables` | table metadata the writers must not disturb | `metadata["tables"]` (`xlsx.py:316,347-362`) | `table_metadata` |
 | `merged` | sheet name to merged ranges `(c1, r1, c2, r2)` | `_Baseline.merged` (`xlsx.py:99-101`) | `merged` (`xlsx.rs:1423-1425`) |
 | `date_system` | `1900` or `1904` | `uses_1904_date_system` (`xlsx.py:98`; set at `workbook.py:1278`) | `date1904` (`xlsx.rs:1429,972-977`) |
-| `compatibility_version` | the integer; 3 or later blocks formula edits | `compatibility_version: int` (`xlsx.py:102-103`; `workbook.py:1284`) | `compat3: bool` (`xlsx.rs:1430,978`); the integer is lost |
+| `compatibility_version` | the integer; 3 or later blocks formula edits | `compatibility_version: int` on `_Baseline` and on `PreservationEnvelope` (`xlsx.py:102-104`; `envelope.py:91`) | `compatibility_version: u32` on `ImportedWorkbook` and on `PreservationEnvelope` (`xlsx.rs:1457`; `envelope.rs:89-90`); the integer is kept, and 3 or later blocks formula edits (`xlsx.rs:1602,1862`) |
 | `guards` | validation rules with `enforced` and their raw XML, pivot output bounds, charted sheets **and chart series references** | `FeatureGuard(validations, pivots, charts)` (`xlsx.py:540`; `python/workbook_forge/xlsx_features.py:647-653`); raw per-sheet validation XML in `metadata["sheets"][*]["validation"]` (`xlsx.py:489-492`) | `FeatureGuard{rules, pivots, charted}` holds lowercased charted sheet names only (`rust/src/xlsx_features.rs:949-951,992`); series `refs` live in `capabilities["charts"]` JSON (`xlsx.rs:1344`) and must move into the guard. Both languages derive charted sheets with `referenced_sheets(formula)` (`xlsx_features.py:766-772`; `xlsx_features.rs:955-975`), so a series that reads a defined name yields no sheet and is unprotected today |
 | `text.cells`, `text.layouts` | imported `@` cells; per-sheet row and column styles an inserted cell inherits | `_text_cells` (`xlsx.py:541-546`), `_text_layouts` and `_imported_addresses` (`xlsx.py:552-558`; `TextLayout`, `xlsx.py:228-256`) | `text_cells`, `text_layouts` (`xlsx.rs:1434-1435`); imported addresses read from `original` (`xlsx.rs:1888-1893`) |
 | `insertion_bound` (*session*) | the largest row and column an absent cell may be inserted at | constants `_EXCEL_MAX_ROWS`, `_EXCEL_MAX_COLUMNS` (`xlsx.py:106-107`) | `insertion_bound`, default Excel's grid, narrowed by `with_insertion_bound` (`xlsx.rs:1428,1518,1723-1731`) |
@@ -118,7 +125,7 @@ envelope, generated from it rather than kept beside it.
 | --- | --- | --- |
 | Edit guard: value, formula or style into an existing or absent cell | `date_system`, `compatibility_version`, `guards`, `text`, `merged`, `insertion_bound`, `baseline.document` | Python `apply` (`toolkit.py:123-148`) and agent preflight (`agent.py:364-389`); Rust `apply` → `validate_edits` (`xlsx.rs:1864-1879,1764-1862`). Python `set_inputs` skips text coercion and the feature check (`toolkit.py:231-233`); Python `apply` leaves insertion, `blocked_reason` and style checks to export and agent preflight (`xlsx.py:1002-1014`; `agent.py:375-389`) |
 | Formula result check under an enforced rule | `guards`, the names table | `check_formula_results` on a detached copy with the batch applied (`xlsx_features.py:723-764`; `xlsx.rs:1833-1851`) |
-| Patch export to a new file or to bytes | everything but `inventory` | Python: `export_xlsx` → `_patch_import` (`xlsx.py:1086-1186,970-1030`) re-checks changed cells against the **current** validation lists (`xlsx.py:944-961`, from `:996`), chart sheets, bindings, insertion, `blocked_reason` and styles. Rust: `export_package` → `patch` → `recalc` (`xlsx.rs:1927-1946,2855-2968,2490`); `patch` takes `(original, model, report, workbook_part, sheet_parts, date1904)`, no guard, merged, compatibility or text, and re-checks bindings (`verify_validation`, `:2877`) and 1904 only, because everything else ran at `apply` or in `export_snapshot` (`:1531-1664`). Only changed sheet parts, `calcPr`, and the calcChain removal touch bytes (`tools/corpus_check.py:72-78`) |
+| Patch export to a new file or to bytes | everything but `inventory` | Python: `export_xlsx` → `_patch_import` (`xlsx.py:1086-1186,970-1030`) re-checks changed cells against the **current** validation lists (`xlsx.py:944-961`, from `:996`), chart sheets, bindings, insertion, `blocked_reason` and styles. Rust: `export_package` → `patch` → `recalc` (`xlsx.rs:1927-1946,2855-2968,2490`); `patch` takes `(original, model, report, workbook_part, sheet_parts, date1904)`, no guard, merged, compatibility or text, and re-checks bindings (`verify_validation`, `:2877`) and 1904 only, because everything else ran at `apply` or in `export_snapshot` (`:1531-1664`). The four recalc parts in `MAY_CHANGE` (`tools/corpus_check.py:77-82`) and every sheet part the cache-refresh rule re-serialises (Design 3, "Export without edits") can change bytes |
 | Snapshot handoff: another model instance exported against this baseline | everything | `export_snapshot` in both languages (`xlsx.py:1030-1083`; `xlsx.rs:1531-1673`). Python re-attaches five attributes by hand (`xlsx.py:1078-1082`) and `_names` through the constructor (`:1043`) |
 | Detached preview | `date_system`, `guards`, `text` for the same answer a live edit would give | agent `_detached` copies three of seven attributes (`agent.py:204,209-210`) |
 | Inventory projection into `metadata.not_carried` and the inspect `xlsx` block | `inventory`, `source.parts` | intake only (`intake.py:70`) |
@@ -176,8 +183,12 @@ of the caller.
 | Semantic-only | the owner document (spec 09 section 4), including `metadata.not_carried` and `provenance` | calculate, author, write a fresh package (`canonical_xlsx.export_canonical`; Rust `export_xlsx`, `xlsx.rs:2402`) | patch an imported package, enforce its validations, keep its text layout, write back | the document bytes plus an optional `CalcContext`; already works through the native bridge and the toolkit-shape cross-engine fixtures |
 | Preservation-capable | the document plus the envelope | everything in section 2 | nothing fewer | **today only through a file**: export, then re-import rebuilds the envelope (`python/tests/test_rust_xlsx_interop.py:76`); the native bridge takes the toolkit document alone (spec 08 section 7, edge evidence) |
 
-In memory first. Spec 09 step 0 adds `PreservationEnvelope` in both languages,
-assembled by `import_xlsx` from section 1, where every field is already computed. A
+In memory first. Step 0 (PR #119) named `PreservationEnvelope` in both languages,
+and `import_xlsx` assembles it from the fields the importers already hold,
+including the sha256 fingerprint of the bytes they decode and the compatibility
+version as an integer. Inventory is not on the type, Rust leaves container
+metadata empty, and chart series references stay outside the guard. The single
+guard entry point, the invalidation rules and the portable form are not built. A
 cross-language handoff carries `(document, source.fingerprint, baseline.parts,
 baseline.container?, insertion_bound, import bindings)`; the receiver runs its own
 decoder over `baseline.parts` with those bindings to re-derive `baseline.document`,
@@ -340,9 +351,9 @@ lenses: 5 refuted, 12 weakened, 16 confirmed, 10 citation errors. All applied ab
 | Refuted (silent failure): 1904 formula edits are "blocked" (Python's snapshot export admits a new formula at an absent address; Rust refuses) | Section 3 row 2 names the hole; a test closes it |
 | Refuted: motivation cited to vision contracts and sections that do not exist | Replaced with spec 08, spec 09 and the gate definitions in the tree |
 | Weakened: three of seven attributes copied, not two; `apply` also skips the `blocked_reason` and style checks and two pinned tests change; `set_inputs` skips text coercion and the feature check only, Rust goes through `apply`; Rust `patch` takes no guard; the guard must say which document it judges; `inventory` depends on the owner's carry set; the event-log baseline holds a length, not bytes; Rust's guard lacks chart series refs and defined-name series are unprotected; Rust part order is sorted; sheet entries, chartsheets, tables and raw validation XML were omitted; a citation about rows and columns did not carry the rename claim; the attribute count double-counted the baseline | All corrected in the Problem, sections 1 to 5 and the tests |
-| Refuted after the fact (by spec 13's refuter): "Export without edits" preserves everything but the five `MAY_CHANGE` parts (both writers re-serialise every formula-bearing sheet in the calculation closure to refresh caches) | Design 3 last row corrected |
+| Refuted after the fact (by spec 13's refuter, before #116): "Export without edits" preserves everything but the five `MAY_CHANGE` parts (both writers re-serialise every formula-bearing sheet in the calculation closure to refresh caches). #116 removed `xl/sharedStrings.xml` from `MAY_CHANGE`, leaving four recalc parts | Design 3 last row corrected |
 | Citation errors: `toolkit.py:93-104`; `xlsx.py:337`; `xlsx_features.rs:999-1033`; `intake.py:118-190`; `xlsx.rs:1927-1946`; `_block_range` at `xlsx.py:211-225`; the event-log baseline; four off-by-one ranges | Corrected |
-| Confirmed: the `set_inputs` bypass; the agent export's `guard=None` chain; `_Baseline` frozen with the cited fields; `ImportedWorkbook` fields; lists re-read at write time; pivot refusal order; charted-sheet rename refusal; the Rust-only `restore_absent` refusal; the five `MAY_CHANGE` parts; every named fixture and test exists | Unchanged |
+| Confirmed: the `set_inputs` bypass; the agent export's `guard=None` chain; `_Baseline` frozen with the cited fields; `ImportedWorkbook` fields; lists re-read at write time; pivot refusal order; charted-sheet rename refusal; the Rust-only `restore_absent` refusal; the five `MAY_CHANGE` parts as they stood before #116, which removed `xl/sharedStrings.xml` and left four recalc parts; every named fixture and test exists | Unchanged |
 
 The refuter's verdict: the companion shape holds on either base; the first draft's text
 was not yet a contract a test could fail because of the baseline-document dependency, the
