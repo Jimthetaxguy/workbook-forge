@@ -26,7 +26,7 @@ from workbook_forge import source_graph
 from workbook_forge.toolkit import WorkbookModel
 from workbook_forge.expressions import Expression
 from workbook_forge.xlsx import export_xlsx, import_xlsx
-from workbook_forge.workbook import WorkbookError
+from workbook_forge.workbook import WorkbookError, os_error_message
 
 VERSION = 1
 MAIN = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
@@ -208,9 +208,11 @@ def read_source(path: Path) -> str:
 def _reported_failure(error: BaseException) -> tuple[str, str]:
     """Code and message safe to print: no argv and no machine path.
 
-    The sentences match ``source_process``: a compiler that could not be
-    launched, a compile that failed or timed out, and an output that already
-    exists.
+    Process failures keep the fixed sentences from ``source_process``: a
+    compile that failed or timed out, and an output that already exists. A
+    compiler that could not be launched is already a ``SourceDiagnostic``
+    from that module and keeps ``missing_toolchain``. Any other ``OSError``
+    reports ``io_error`` and the operating system's strerror, with no filename.
     """
     if isinstance(error, FileExistsError):
         return "artifact_exists", "binary artifact path must be new"
@@ -219,7 +221,7 @@ def _reported_failure(error: BaseException) -> tuple[str, str]:
     if isinstance(error, subprocess.TimeoutExpired):
         return "resource_limit", "Rust compilation exceeded its timeout"
     if isinstance(error, OSError):
-        return "missing_toolchain", "Rust compiler could not be launched"
+        return "io_error", os_error_message(error)
     code = getattr(error, "code", "invalid_input")
     if not isinstance(code, str) or not code:
         code = "invalid_input"
