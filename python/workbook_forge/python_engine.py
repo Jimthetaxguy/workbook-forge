@@ -23,6 +23,7 @@ from . import (
     DefinedNames,
     ErrorValue,
     _is_unsupported_formula_message,
+    _is_worksheet_refusal,
     defined_name_error_code,
     evaluate_result,
 )
@@ -481,7 +482,7 @@ def _evaluate_node(graph: _Graph, current: str, values: dict, context: CalcConte
         environment[dependency] = _engine_scalar(value)
     names = graph.names if graph.named and current in graph.named else None
     result = evaluate_result(graph.formulas[current], environment, current.rsplit("!", 1)[0], context=context, cell_key=current, names=names)
-    if isinstance(result, ErrorValue) and (result.message.startswith("unsupported function ") or "supports exact match_mode=0 only" in result.message or "search_mode must be 1 or -1" in result.message):
+    if isinstance(result, ErrorValue) and _is_worksheet_refusal(result) is not None:
         _fail("unsupported_formula", result.message)
     if isinstance(result, ArrayValue):
         return {"rows": [[_wire_scalar(value) for value in row] for row in result.rows]}
