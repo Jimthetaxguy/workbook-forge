@@ -23,6 +23,7 @@ from workbook_forge import (
     DefinedNames,
     ErrorValue,
     _is_unsupported_formula_message,
+    _is_worksheet_refusal,
     analyze_formula,
     defined_name_error_code,
     evaluate_result,
@@ -885,12 +886,17 @@ def _evaluate(
             address,
         )
     if isinstance(outcome, ErrorValue):
-        if outcome.message.startswith("unsupported function "):
-            function = outcome.message.removeprefix("unsupported function ")
+        refusal = _is_worksheet_refusal(outcome)
+        if refusal is not None:
+            function = (
+                refusal.message.removeprefix("unsupported function ")
+                if refusal.message.startswith("unsupported function ")
+                else None
+            )
             return _cell_diagnostic(
                 "unsupported_formula",
                 "unsupported",
-                f"unsupported function {function}",
+                refusal.message,
                 sheet_name,
                 address,
                 function,

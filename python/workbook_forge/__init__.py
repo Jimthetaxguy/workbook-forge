@@ -971,11 +971,11 @@ def _binary_array_parts(value: object) -> tuple[tuple[int, int], tuple[object, .
 
 
 def _is_worksheet_refusal(value: object) -> ErrorValue | None:
-    """An evaluation error the worksheet path reports as ``unsupported_formula``.
+    """An evaluation error reported as ``unsupported_formula``.
 
-    The scalar path in ``python_engine`` promotes these messages. Elementwise
-    lifting must return the same error for the whole formula. An ordinary Excel
-    error, such as ``#DIV/0!``, still lifts as an array element.
+    Worksheet calculation and canonical calculate both promote these messages.
+    Elementwise lifting must return the same error for the whole formula. An
+    ordinary Excel error, such as ``#DIV/0!``, still lifts as an array element.
     """
     value = _dereference(value)
     if not isinstance(value, ErrorValue):
