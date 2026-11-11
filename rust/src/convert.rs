@@ -101,7 +101,7 @@ pub fn to_toolkit(
         if !bound.is_some_and(|bindings| bindings.inputs.contains_key(name)) {
             return Err(ConversionError::new(
                 "unknown_input",
-                format!("input_kinds names '{name}', which the workbook does not bind"),
+                format!("unknown input {name}"),
             ));
         }
     }
@@ -497,15 +497,37 @@ fn baseline_holds(
     else {
         return false;
     };
-    let cache = |cell: &toolkit::Cell| {
-        cell.cached_value
-            .as_ref()
-            .filter(|cached| !matches!(cached, CellValue::Blank))
-            .cloned()
-    };
-    original.value == cell.value
-        && original.formula == cell.formula
-        && cache(original) == cache(cell)
+    original.formula == cell.formula
+        && values_match(&original.value, &cell.value)
+        && match (held_cache(original), held_cache(cell)) {
+            (Some(left), Some(right)) => values_match(left, right),
+            (None, None) => true,
+            _ => false,
+        }
+}
+
+/// A blank cache is no cache.
+fn held_cache(cell: &toolkit::Cell) -> Option<&CellValue> {
+    match cell.cached_value.as_ref() {
+        Some(value) if !matches!(value, CellValue::Blank) => Some(value),
+        _ => None,
+    }
+}
+
+/// `PartialEq` for `f64` treats `-0.0` and `0.0` as the same number. The
+/// baseline keeps the sign, the same distinction `canonical_number` keeps, and
+/// a cell whose value or cache changes only in that sign is authored.
+fn values_match(left: &CellValue, right: &CellValue) -> bool {
+    match (left, right) {
+        (CellValue::Number(left), CellValue::Number(right)) => {
+            if *left == 0.0 && *right == 0.0 {
+                left.is_sign_negative() == right.is_sign_negative()
+            } else {
+                left == right
+            }
+        }
+        _ => left == right,
+    }
 }
 
 /// The canonical spelling of a formula: a leading `=`, which the importers'
