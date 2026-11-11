@@ -21,8 +21,8 @@ import type {
 /**
  * The channel to the engine: a Worker, a MessagePort, or a WebView bridge with
  * the same shape. `error` and `messageerror` events, where the channel has
- * them, fail the client; `terminate` or `close`, where present, is called by
- * ForgeClient.close().
+ * them, fail the client. `terminate` or `close`, where present, is called when
+ * the client fails and by ForgeClient.close().
  */
 export interface Port {
   postMessage(message: unknown, transfer?: Transferable[]): void;
@@ -151,6 +151,8 @@ export class ForgeClient {
     if (this.current.kind === 'closed' || this.current.kind === 'failed') return;
     this.current = { kind: 'failed', error };
     this.rejectAll(error);
+    if (this.port.terminate) this.port.terminate();
+    else this.port.close?.();
   }
 
   private rejectAll(error: ForgeClientError) {

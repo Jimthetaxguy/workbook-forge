@@ -61,6 +61,9 @@ async function boot() {
   let issuesFor: string | null = null;
   let issuesBusy = false;
   const refreshIssues = async () => {
+    // calculate() rejects once the client has failed or closed, and each
+    // rejection is recorded. Stop asking; the status line still updates.
+    if (client.state.kind === 'failed' || client.state.kind === 'closed') return;
     const key = `${source.name}#${adapter.revision}`;
     if (issuesBusy || adapter.pending > 0 || key === issuesFor) return;
     issuesBusy = true;

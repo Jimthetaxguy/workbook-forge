@@ -57,6 +57,7 @@ test('init failing twice rejects pending and later sends instead of hanging', as
     return true;
   });
   assert.equal(client.state.kind, 'failed');
+  assert.equal(port.terminated, true);
   // A send after the failure is refused at once, not queued behind it.
   await assert.rejects(client.calculate(), { code: 'engine_init_failed' });
   assert.deepEqual(client.log.map((entry) => [entry.command, entry.ok, entry.code]), [
@@ -138,6 +139,7 @@ test('a worker error event rejects every pending request and fails the client', 
     });
   }
   assert.equal(client.state.kind, 'failed');
+  assert.equal(port.terminated, true);
   await assert.rejects(client.snapshot(), { code: 'worker_error' });
 });
 
@@ -148,6 +150,7 @@ test('a messageerror event rejects pending requests', async () => {
   port.dispatchEvent(new Event('messageerror'));
   await assert.rejects(pending, { code: 'worker_error' });
   assert.equal(client.state.kind, 'failed');
+  assert.equal(port.terminated, true);
 });
 
 test('close rejects pending requests, terminates the port and refuses new sends', async () => {
