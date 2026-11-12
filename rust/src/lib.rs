@@ -3766,6 +3766,14 @@ fn eval_call(name: &str, args: &[Expr], env: &Environment<'_>) -> Result<Value, 
             return worksheet_functions::scalar_math_call(name, args, env);
         }
         "XOR" => return worksheet_functions::xor_call(args, env),
+        "PRODUCT" | "SUMSQ" | "MEDIAN" | "MODE.SNGL" | "STDEV.S" | "STDEV.P" | "VAR.S"
+        | "VAR.P" => {
+            return worksheet_functions::aggregate_call(name, args, env);
+        }
+        "LARGE" | "SMALL" => return worksheet_functions::order_statistic_call(name, args, env),
+        "RANK.EQ" | "RANK" => return worksheet_functions::rank_call(name, args, env),
+        "AVERAGEA" => return worksheet_functions::averagea_call(args, env),
+        "SUMPRODUCT" => return worksheet_functions::sumproduct_call(args, env),
         "HOUR" | "MINUTE" | "SECOND" => {
             arity(name, args, 1, 1)?;
             let serial = to_number(&eval_scalar(&args[0], env)?)?;

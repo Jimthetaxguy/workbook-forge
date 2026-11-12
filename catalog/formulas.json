@@ -803,6 +803,90 @@
       "url": "https://support.microsoft.com/en-us/excel/functions/xor-function",
       "kind": "function-semantics",
       "retrieved": "2026-11-12"
+    },
+    {
+      "id": "ms-product",
+      "url": "https://support.microsoft.com/en-us/excel/functions/product-function",
+      "kind": "function-semantics",
+      "retrieved": "2026-11-12"
+    },
+    {
+      "id": "ms-sumsq",
+      "url": "https://support.microsoft.com/en-us/excel/functions/sumsq-function",
+      "kind": "function-semantics",
+      "retrieved": "2026-11-12"
+    },
+    {
+      "id": "ms-median",
+      "url": "https://support.microsoft.com/en-us/excel/functions/median-function",
+      "kind": "function-semantics",
+      "retrieved": "2026-11-12"
+    },
+    {
+      "id": "ms-mode-sngl",
+      "url": "https://support.microsoft.com/en-us/excel/functions/mode-sngl-function",
+      "kind": "function-semantics",
+      "retrieved": "2026-11-12"
+    },
+    {
+      "id": "ms-stdev-s",
+      "url": "https://support.microsoft.com/en-us/excel/functions/stdev-s-function",
+      "kind": "function-semantics",
+      "retrieved": "2026-11-12"
+    },
+    {
+      "id": "ms-stdev-p",
+      "url": "https://support.microsoft.com/en-us/excel/functions/stdev-p-function",
+      "kind": "function-semantics",
+      "retrieved": "2026-11-12"
+    },
+    {
+      "id": "ms-var-s",
+      "url": "https://support.microsoft.com/en-us/excel/functions/var-s-function",
+      "kind": "function-semantics",
+      "retrieved": "2026-11-12"
+    },
+    {
+      "id": "ms-var-p",
+      "url": "https://support.microsoft.com/en-us/excel/functions/var-p-function",
+      "kind": "function-semantics",
+      "retrieved": "2026-11-12"
+    },
+    {
+      "id": "ms-large",
+      "url": "https://support.microsoft.com/en-us/excel/functions/large-function",
+      "kind": "function-semantics",
+      "retrieved": "2026-11-12"
+    },
+    {
+      "id": "ms-small",
+      "url": "https://support.microsoft.com/en-us/excel/functions/small-function",
+      "kind": "function-semantics",
+      "retrieved": "2026-11-12"
+    },
+    {
+      "id": "ms-rank-eq",
+      "url": "https://support.microsoft.com/en-us/excel/functions/rank-eq-function",
+      "kind": "function-semantics",
+      "retrieved": "2026-11-12"
+    },
+    {
+      "id": "ms-rank",
+      "url": "https://support.microsoft.com/en-us/excel/functions/rank-function",
+      "kind": "function-semantics",
+      "retrieved": "2026-11-12"
+    },
+    {
+      "id": "ms-averagea",
+      "url": "https://support.microsoft.com/en-us/excel/functions/averagea-function",
+      "kind": "function-semantics",
+      "retrieved": "2026-11-12"
+    },
+    {
+      "id": "ms-sumproduct",
+      "url": "https://support.microsoft.com/en-us/excel/functions/sumproduct-function",
+      "kind": "function-semantics",
+      "retrieved": "2026-11-12"
     }
   ],
   "categories": [
@@ -1041,6 +1125,22 @@
     },
     {
       "name": "AVERAGE",
+      "category": "statistical",
+      "aliases": [],
+      "arity": {
+        "min": 1,
+        "max": 255
+      },
+      "availability": "legacy",
+      "status": {
+        "python": "conformance-tested",
+        "rust": "conformance-tested"
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
+    },
+    {
+      "name": "AVERAGEA",
       "category": "statistical",
       "aliases": [],
       "arity": {
@@ -2003,6 +2103,22 @@
       "profile_class": "unclassified"
     },
     {
+      "name": "LARGE",
+      "category": "statistical",
+      "aliases": [],
+      "arity": {
+        "min": 2,
+        "max": 2
+      },
+      "availability": "legacy",
+      "status": {
+        "python": "conformance-tested",
+        "rust": "conformance-tested"
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
+    },
+    {
       "name": "LCM",
       "category": "math-trigonometry",
       "aliases": [],
@@ -2163,6 +2279,22 @@
       "profile_class": "unclassified"
     },
     {
+      "name": "MEDIAN",
+      "category": "statistical",
+      "aliases": [],
+      "arity": {
+        "min": 1,
+        "max": 255
+      },
+      "availability": "legacy",
+      "status": {
+        "python": "conformance-tested",
+        "rust": "conformance-tested"
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
+    },
+    {
       "name": "MID",
       "category": "text",
       "aliases": [],
@@ -2235,6 +2367,22 @@
         "max": 2
       },
       "availability": "legacy",
+      "status": {
+        "python": "conformance-tested",
+        "rust": "conformance-tested"
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
+    },
+    {
+      "name": "MODE.SNGL",
+      "category": "statistical",
+      "aliases": [],
+      "arity": {
+        "min": 1,
+        "max": 254
+      },
+      "availability": "2010",
       "status": {
         "python": "conformance-tested",
         "rust": "conformance-tested"
@@ -2499,6 +2647,22 @@
       "profile_class": "unclassified"
     },
     {
+      "name": "PRODUCT",
+      "category": "math-trigonometry",
+      "aliases": [],
+      "arity": {
+        "min": 1,
+        "max": 255
+      },
+      "availability": "legacy",
+      "status": {
+        "python": "conformance-tested",
+        "rust": "conformance-tested"
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
+    },
+    {
       "name": "PV",
       "category": "financial",
       "aliases": [],
@@ -2571,6 +2735,38 @@
         "max": 2
       },
       "availability": "legacy",
+      "status": {
+        "python": "conformance-tested",
+        "rust": "conformance-tested"
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
+    },
+    {
+      "name": "RANK",
+      "category": "compatibility",
+      "aliases": [],
+      "arity": {
+        "min": 2,
+        "max": 3
+      },
+      "availability": "legacy",
+      "status": {
+        "python": "conformance-tested",
+        "rust": "conformance-tested"
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
+    },
+    {
+      "name": "RANK.EQ",
+      "category": "statistical",
+      "aliases": [],
+      "arity": {
+        "min": 2,
+        "max": 3
+      },
+      "availability": "2010",
       "status": {
         "python": "conformance-tested",
         "rust": "conformance-tested"
@@ -2723,6 +2919,22 @@
       "profile_class": "unclassified"
     },
     {
+      "name": "SMALL",
+      "category": "statistical",
+      "aliases": [],
+      "arity": {
+        "min": 2,
+        "max": 2
+      },
+      "availability": "legacy",
+      "status": {
+        "python": "conformance-tested",
+        "rust": "conformance-tested"
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
+    },
+    {
       "name": "SORT",
       "category": "lookup-reference",
       "aliases": [],
@@ -2747,6 +2959,38 @@
         "max": 1
       },
       "availability": "legacy",
+      "status": {
+        "python": "conformance-tested",
+        "rust": "conformance-tested"
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
+    },
+    {
+      "name": "STDEV.P",
+      "category": "statistical",
+      "aliases": [],
+      "arity": {
+        "min": 1,
+        "max": 254
+      },
+      "availability": "2010",
+      "status": {
+        "python": "conformance-tested",
+        "rust": "conformance-tested"
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
+    },
+    {
+      "name": "STDEV.S",
+      "category": "statistical",
+      "aliases": [],
+      "arity": {
+        "min": 1,
+        "max": 254
+      },
+      "availability": "2010",
       "status": {
         "python": "conformance-tested",
         "rust": "conformance-tested"
@@ -2808,6 +3052,38 @@
       "aliases": [],
       "arity": {
         "min": 3,
+        "max": 255
+      },
+      "availability": "legacy",
+      "status": {
+        "python": "conformance-tested",
+        "rust": "conformance-tested"
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
+    },
+    {
+      "name": "SUMPRODUCT",
+      "category": "math-trigonometry",
+      "aliases": [],
+      "arity": {
+        "min": 1,
+        "max": 255
+      },
+      "availability": "legacy",
+      "status": {
+        "python": "conformance-tested",
+        "rust": "conformance-tested"
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
+    },
+    {
+      "name": "SUMSQ",
+      "category": "math-trigonometry",
+      "aliases": [],
+      "arity": {
+        "min": 1,
         "max": 255
       },
       "availability": "legacy",
@@ -3027,6 +3303,38 @@
       "profile_class": "unclassified"
     },
     {
+      "name": "VAR.P",
+      "category": "statistical",
+      "aliases": [],
+      "arity": {
+        "min": 1,
+        "max": 254
+      },
+      "availability": "2010",
+      "status": {
+        "python": "conformance-tested",
+        "rust": "conformance-tested"
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
+    },
+    {
+      "name": "VAR.S",
+      "category": "statistical",
+      "aliases": [],
+      "arity": {
+        "min": 1,
+        "max": 254
+      },
+      "availability": "2010",
+      "status": {
+        "python": "conformance-tested",
+        "rust": "conformance-tested"
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
+    },
+    {
       "name": "VDB",
       "category": "financial",
       "aliases": [],
@@ -3206,7 +3514,7 @@
   "coverage": {
     "catalog_completeness": "seeded-not-complete",
     "evaluator_completeness": "numeric-rounding-date-time-business-calendar-day-count-coupon-schedule-time-value-of-money-period-count-inversion-logical-selection-cumulative-payment-aggregation-and-basic-and-declining-balance-depreciation-slices-incrementally-conformance-tested-variable-declining-balance-date-aware-french-depreciation-and-odd-even-parity-functions-factorial-and-combinatorics-double-factorial-and-permutation-counts-greatest-common-divisor-and-least-common-multiple-bounded-rectangular-array-results-and-sequence-array-aware-lazy-selection-results-elementwise-array-operators-and-filter-selection-and-stable-sort-and-unique-array-functions",
-    "note": "The Microsoft function inventory contains 521 entries. One hundred thirty-nine functions are conformance-tested with shared Python/Rust fixtures; the remaining 382 of the 521 inventoried functions are catalog-only. Criteria functions implement scalar criteria, comparison operators, case-insensitive text, wildcard escapes, and bounded range shapes. SUMIF and AVERAGEIF reject differently sized sum/average ranges even though Excel aligns those ranges from their top-left cell; that compatibility gap is explicit in semantic_specs. MINIFS and MAXIFS require matching range shapes, allow one required plus up to 126 additional criteria pairs, and return 0 when no numeric result matches. XLOOKUP and XMATCH support exact match_mode=0 with forward/reverse search_mode=1/-1 only; approximate, wildcard, binary, and array-spill results are unsupported. TEXTBEFORE and TEXTAFTER support scalar delimiter extraction, optional arguments, negative instance numbers, match_end, and lazy if_not_found; their Excel locale collation and supplementary-plane character behavior remain unverified. ISNA, ISERR, ISERROR, and NA cover scalar inspection and creation of supported Excel error values; array error predicates and unsupported-syntax conversions remain out of scope. INT, TRUNC, ROUNDUP, ROUNDDOWN, MOD, and QUOTIENT add scalar directed rounding, floor/truncation, remainder, and integer-quotient behavior. Fractional num_digits values are truncated toward zero as an implementation rule; Microsoft pages do not specify this case, and direct Excel spot-checks remain outstanding. MONTH, DAYS, EDATE, and EOMONTH use the 1900 serial system and preserve its serial-60 compatibility date; DAYS subtracts numeric serials including their fractional parts. EDATE and EOMONTH truncate fractional month counts toward zero; both month-shift functions return whole-day serials, and EDATE discards a start serial's time fraction as an implementation profile rule. Locale-dependent text-date parsing and workbook-specific 1904 date systems are not modeled; time-fraction handling for EDATE/EOMONTH has not been spot-checked in Excel. HOUR, MINUTE, and SECOND extract whole-second components from numeric 1900-system serials; the serial ceiling and negative/non-finite input errors are evaluator profile rules not stated on the function pages. Locale-dependent time text such as '6:45 PM' is documented by Microsoft but not parsed here. The shared serial-to-seconds precision correction and TIME fractional-component truncation are evaluator profile rules that need Excel spot-checks. TIME accepts components from 0 through 32767, normalizes overflow, and returns a fraction of a day. IFS and SWITCH use ordered short-circuit evaluation and first-match selection; selected results may preserve a rectangular array through evaluate_result, but are not projected into worksheet cells. SWITCH treats ASCII text as case-insensitive and non-ASCII text as exact, with no cross-type coercion or locale collation. Microsoft documents selection/default behavior but not all evaluation and comparison details; these evaluator profile rules need a direct Excel spot-check. WEEKDAY, WEEKNUM, and ISOWEEKNUM add numeric 1900-system date serials, documented return selectors, System 1 and ISO week rules, and time-fraction flooring. Fractional return_type coercion and exact 1900 serial-60 week behavior are evaluator-profile rules that still need Excel spot-checks. WORKDAY and NETWORKDAYS use a Saturday/Sunday business calendar and scalar or cell-range holidays. NETWORKDAYS counts weekday endpoints inclusively; reversed-range sign, fractional date serials, holiday-cell coercion, serial 0, and serial 60 are explicit evaluator profiles that still need direct Excel spot-checks. WORKDAY truncates noninteger day offsets as Microsoft documents; holiday-cell coercion remains unverified. WORKDAY.INTL and NETWORKDAYS.INTL share numeric weekend codes, Monday-first seven-character masks, and range-based holiday handling. NETWORKDAYS.INTL documents inclusive and reversed-range counts plus zero for an all-one weekend mask. Its last example prose says 22 while the result column says 20 for mask 0010001 with holidays; fixtures follow the result column; WORKDAY.INTL documents zero-offset behavior and rejects the all-one mask, but its exact error is unspecified. Numeric selector coercion, date fractions, serial boundaries, and holiday-cell coercion remain profiles; holiday array constants and locale-sensitive date text are not implemented. DAYS360 and YEARFRAC add a bounded 30/360 and year-fraction slice. The published DAYS360 rules cover US NASD and European methods and negative direction; non-month-end US endpoint wording, numeric and blank-cell method handling, optional-slot parsing, fractional date serials, and serial 60 remain evaluator profiles. YEARFRAC covers bases 0-4, documented integer truncation and error codes, and Microsoft examples. Basis 1 uses a year-segmented Actual/Actual profile and reversed dates use a signed result; Microsoft does not specify those details on its function page, so neither is claimed as verified Excel behavior. The 1900 date system and serial 60 remain explicit evaluator profiles. The six COUP schedule formulas share a maturity-anchored, backward-stepped date schedule in the evaluator and expose separate function-specific outputs. Microsoft documents argument truncation, valid frequencies 1/2/4, basis values 0-4, output definitions, and date/frequency/basis/order errors. The maturity-anchored schedule, period/count equality behavior outside the documented strict COUPNCD/COUPPCD boundaries, basis-specific day counts, serial-60 behavior, and pre-zero internal coupon dates remain evaluator profiles. COUPDAYS basis 1 uses actual adjacent coupon-date serial difference but has not been checked against Excel; ExcelFinancialFunctions compatibility notes identify leap-year COUPDAYS differences, so shared expected values are not treated as Excel oracles. FV, PV, and PMT add a scalar periodic-cash-flow slice with shared sign, timing, zero-rate, omission, and numeric-profile cases. NPER inverts the periodic cash-flow equation, preserves negative and fractional results, and checks zero-rate and logarithm-domain boundaries under explicit evaluator profiles. Exact internal precision and undocumented input errors remain unverified. IPMT and PPMT split PMT into period interest and principal components; PPMT is defined as PMT minus IPMT, and both use explicit timing, range, numeric, and error profiles pending direct Excel checks. At accepted Run 19, the shared fixture corpus contained 1,238 cases covering 112 implemented functions, with 409 of the 521 inventory entries catalog-only. Its accepted checkpoint and detailed case summary follow below. SLN and SYD add straight-line and sum-of-years-digits depreciation. DB adds the documented three-decimal rate and month-sensitive first/final periods; DDB adds the documented factor-based decline and salvage cap. VDB adds fractional-interval depreciation, optional straight-line switching, and a logarithmic-time geometric kernel; its split fractional-period behavior remains an evaluator profile because an Apache compatibility note reports a difference from Excel. Their bounds, truncation, coercion, error precedence, and high-range behavior remain evaluator profiles pending direct Excel checks. Apache ExcelFinancialFunctions and dual MIT/Apache Formualizer inform organization and numeric probes only; no code is copied. The Microsoft Office formula specification distinguishes normal-formula implicit intersection from array-entered full-range behavior and lists ISEVEN/ISODD as accepting range arguments. Run 19 adds bounded rectangular result arrays and SEQUENCE, and common aggregates/text/logical consumers flatten generated arrays. IF, IFERROR, IFNA, IFS, and SWITCH also preserve the selected result-array shape. IFERROR array error replacement remains element-wise unsupported, and explicit empty IF result slots return #VALUE! as an unverified Workbook Forge profile. Formula-cell implicit intersection, legacy array entry, dynamic spill placement and spill references remain unmodeled; local #VALUE! range fixtures still mark evaluator boundaries, not Excel expectations. Microsoft lists worksheet number precision as 15 digits. The EVEN/ODD fixtures using 16-digit values near 2^53 are Workbook Forge binary64 parser/evaluator boundary probes, not Excel numerical oracles. Run 16 adds FACT, COMBIN, and COMBINA. The Python and Rust kernels form exact integer factorial/binomial results and round once to binary64 with ties-to-even; Apache Commons Math informs the symmetric multiplicative pattern without copied code or a runtime dependency. Within FACT, COMBIN, and COMBINA arguments, plain integer literals, unary signs, +, -, *, and nonnegative integer-power expressions preserve exact source integers through the 2^53 argument boundary, subject to a 65,536-bit intermediate cap. Exact integer division forms a ratio and rounds once to binary64; mixed or decimal operands use binary64 division. Decimal/scientific literals can round before the check. Scalar coercion, truncation-before-domain order for negative fractions, mixed-error precedence, and local #NUM! overflow behavior remain Workbook Forge profiles where Microsoft sources are silent. Standalone expression arithmetic can preserve Python integers while Rust uses binary64 operators; exact-source cross-language assertions are scoped to the three named function arguments. Range errors are kept separate from Excel implicit-intersection and array-entry behavior because the function evaluator does not model general worksheet formula context. The Python workbook adapter separately handles explicitly targeted scalar formulas and static dependencies, without implicit intersection or array entry. Run 17 adds FACTDOUBLE, PERMUT, and PERMUTATIONA with Microsoft-linked semantics and independent bounded exact-integer kernels. FACTDOUBLE is range-capable in the Office formula specification but Workbook Forge retains a scalar-only local range boundary; PERMUTATIONA 0^0, negative-input handling, coercion, output rounding, and overflow remain evaluator profiles pending direct Excel checks. No source code is copied and runtime dependencies remain empty. Run 18 adds GCD and LCM with Microsoft-linked argument, truncation, error, and 2^53 boundary rules. Both are range-capable in MS-OE376, but range calls remain a local unsupported boundary until formula-cell context is modeled. GCD(0,0), LCM zero behavior, mixed-input order, coercion, and negative-fraction order are explicitly local profiles pending Excel checks. Run 19 adds SEQUENCE with an immutable rectangular ArrayValue and shape-preserving evaluate_result API in Python and Rust. Thirty-eight shared cases cover Microsoft’s 4×5 shape example, row-major progression, optional slots, ranges, nested SUM, dimension/coercion/error profiles and the 100000-cell local cap. Formualizer v0.7.0 informs the separation between pre-allocation shape bounds and workbook spill projection; its MIT/Apache-2.0 release is an architecture reference only and no code was copied. No direct Excel spot-checks were run.. Run 20 adds elementwise binary operators and FILTER to the bounded array result layer. The accepted slice has 113 functions with shared Python/Rust fixture parity, 1,301 shared fixtures, 84 detailed specs, 107 source records, 16 OSS patterns, and 408 catalog-only inventory functions. Sixty-three new shared cases cover all advertised binary operators, exact-shape pairing, scalar broadcasting, cell errors, Microsoft's AND/OR include-mask examples, vertical and horizontal FILTER masks, fallback behavior, comparison-coercion and error-precedence profiles, and shape/error boundaries. Numeric, blank, and empty-text mask coercion; explicit missing fallback; row-major mask error order; lazy fallback; array-valued fallback shape; and binary comparison collation/coercion and left-to-right binary-operator error precedence are Workbook Forge profiles. Python and Rust return shaped formula results without worksheet spill projection. Jev's scope result remains advisory; independent semantic/catalog reviews and the full Python/Rust and schema gates passed before acceptance. No Excel spot-checks were run; no source code was copied and no runtime dependency was added. Run 21 adds bounded targeted scalar formula calculation to the Python workbook adapter and aligns CONCAT numeric text, argument, and UTF-16 text limits; its 21 new shared text cases supplement the workbook package cases. Run 22 adds SORT and UNIQUE with 44 shared cases, including four review regressions for oversized ranges, binary64 output, and reversed-range normalization, plus direct API checks for non-finite SORT key order. SORT and UNIQUE preserve array shape but do not project worksheet spill cells. Their comparison, coercion, output precision, selector, and empty-result details are explicitly Workbook Forge profiles where Microsoft documentation is incomplete. Shared fixtures establish implementation parity, not Excel compatibility; no direct Excel Desktop checks were run. No source code was copied and no runtime dependency was added."
+    "note": "The Microsoft function inventory contains 521 entries. One hundred fifty-three functions are conformance-tested with shared Python/Rust fixtures; the remaining 368 of the 521 inventoried functions are catalog-only. Criteria functions implement scalar criteria, comparison operators, case-insensitive text, wildcard escapes, and bounded range shapes. SUMIF and AVERAGEIF reject differently sized sum/average ranges even though Excel aligns those ranges from their top-left cell; that compatibility gap is explicit in semantic_specs. MINIFS and MAXIFS require matching range shapes, allow one required plus up to 126 additional criteria pairs, and return 0 when no numeric result matches. XLOOKUP and XMATCH support exact match_mode=0 with forward/reverse search_mode=1/-1 only; approximate, wildcard, binary, and array-spill results are unsupported. TEXTBEFORE and TEXTAFTER support scalar delimiter extraction, optional arguments, negative instance numbers, match_end, and lazy if_not_found; their Excel locale collation and supplementary-plane character behavior remain unverified. ISNA, ISERR, ISERROR, and NA cover scalar inspection and creation of supported Excel error values; array error predicates and unsupported-syntax conversions remain out of scope. INT, TRUNC, ROUNDUP, ROUNDDOWN, MOD, and QUOTIENT add scalar directed rounding, floor/truncation, remainder, and integer-quotient behavior. Fractional num_digits values are truncated toward zero as an implementation rule; Microsoft pages do not specify this case, and direct Excel spot-checks remain outstanding. MONTH, DAYS, EDATE, and EOMONTH use the 1900 serial system and preserve its serial-60 compatibility date; DAYS subtracts numeric serials including their fractional parts. EDATE and EOMONTH truncate fractional month counts toward zero; both month-shift functions return whole-day serials, and EDATE discards a start serial's time fraction as an implementation profile rule. Locale-dependent text-date parsing and workbook-specific 1904 date systems are not modeled; time-fraction handling for EDATE/EOMONTH has not been spot-checked in Excel. HOUR, MINUTE, and SECOND extract whole-second components from numeric 1900-system serials; the serial ceiling and negative/non-finite input errors are evaluator profile rules not stated on the function pages. Locale-dependent time text such as '6:45 PM' is documented by Microsoft but not parsed here. The shared serial-to-seconds precision correction and TIME fractional-component truncation are evaluator profile rules that need Excel spot-checks. TIME accepts components from 0 through 32767, normalizes overflow, and returns a fraction of a day. IFS and SWITCH use ordered short-circuit evaluation and first-match selection; selected results may preserve a rectangular array through evaluate_result, but are not projected into worksheet cells. SWITCH treats ASCII text as case-insensitive and non-ASCII text as exact, with no cross-type coercion or locale collation. Microsoft documents selection/default behavior but not all evaluation and comparison details; these evaluator profile rules need a direct Excel spot-check. WEEKDAY, WEEKNUM, and ISOWEEKNUM add numeric 1900-system date serials, documented return selectors, System 1 and ISO week rules, and time-fraction flooring. Fractional return_type coercion and exact 1900 serial-60 week behavior are evaluator-profile rules that still need Excel spot-checks. WORKDAY and NETWORKDAYS use a Saturday/Sunday business calendar and scalar or cell-range holidays. NETWORKDAYS counts weekday endpoints inclusively; reversed-range sign, fractional date serials, holiday-cell coercion, serial 0, and serial 60 are explicit evaluator profiles that still need direct Excel spot-checks. WORKDAY truncates noninteger day offsets as Microsoft documents; holiday-cell coercion remains unverified. WORKDAY.INTL and NETWORKDAYS.INTL share numeric weekend codes, Monday-first seven-character masks, and range-based holiday handling. NETWORKDAYS.INTL documents inclusive and reversed-range counts plus zero for an all-one weekend mask. Its last example prose says 22 while the result column says 20 for mask 0010001 with holidays; fixtures follow the result column; WORKDAY.INTL documents zero-offset behavior and rejects the all-one mask, but its exact error is unspecified. Numeric selector coercion, date fractions, serial boundaries, and holiday-cell coercion remain profiles; holiday array constants and locale-sensitive date text are not implemented. DAYS360 and YEARFRAC add a bounded 30/360 and year-fraction slice. The published DAYS360 rules cover US NASD and European methods and negative direction; non-month-end US endpoint wording, numeric and blank-cell method handling, optional-slot parsing, fractional date serials, and serial 60 remain evaluator profiles. YEARFRAC covers bases 0-4, documented integer truncation and error codes, and Microsoft examples. Basis 1 uses a year-segmented Actual/Actual profile and reversed dates use a signed result; Microsoft does not specify those details on its function page, so neither is claimed as verified Excel behavior. The 1900 date system and serial 60 remain explicit evaluator profiles. The six COUP schedule formulas share a maturity-anchored, backward-stepped date schedule in the evaluator and expose separate function-specific outputs. Microsoft documents argument truncation, valid frequencies 1/2/4, basis values 0-4, output definitions, and date/frequency/basis/order errors. The maturity-anchored schedule, period/count equality behavior outside the documented strict COUPNCD/COUPPCD boundaries, basis-specific day counts, serial-60 behavior, and pre-zero internal coupon dates remain evaluator profiles. COUPDAYS basis 1 uses actual adjacent coupon-date serial difference but has not been checked against Excel; ExcelFinancialFunctions compatibility notes identify leap-year COUPDAYS differences, so shared expected values are not treated as Excel oracles. FV, PV, and PMT add a scalar periodic-cash-flow slice with shared sign, timing, zero-rate, omission, and numeric-profile cases. NPER inverts the periodic cash-flow equation, preserves negative and fractional results, and checks zero-rate and logarithm-domain boundaries under explicit evaluator profiles. Exact internal precision and undocumented input errors remain unverified. IPMT and PPMT split PMT into period interest and principal components; PPMT is defined as PMT minus IPMT, and both use explicit timing, range, numeric, and error profiles pending direct Excel checks. At accepted Run 19, the shared fixture corpus contained 1,238 cases covering 112 implemented functions, with 409 of the 521 inventory entries catalog-only. Its accepted checkpoint and detailed case summary follow below. SLN and SYD add straight-line and sum-of-years-digits depreciation. DB adds the documented three-decimal rate and month-sensitive first/final periods; DDB adds the documented factor-based decline and salvage cap. VDB adds fractional-interval depreciation, optional straight-line switching, and a logarithmic-time geometric kernel; its split fractional-period behavior remains an evaluator profile because an Apache compatibility note reports a difference from Excel. Their bounds, truncation, coercion, error precedence, and high-range behavior remain evaluator profiles pending direct Excel checks. Apache ExcelFinancialFunctions and dual MIT/Apache Formualizer inform organization and numeric probes only; no code is copied. The Microsoft Office formula specification distinguishes normal-formula implicit intersection from array-entered full-range behavior and lists ISEVEN/ISODD as accepting range arguments. Run 19 adds bounded rectangular result arrays and SEQUENCE, and common aggregates/text/logical consumers flatten generated arrays. IF, IFERROR, IFNA, IFS, and SWITCH also preserve the selected result-array shape. IFERROR array error replacement remains element-wise unsupported, and explicit empty IF result slots return #VALUE! as an unverified Workbook Forge profile. Formula-cell implicit intersection, legacy array entry, dynamic spill placement and spill references remain unmodeled; local #VALUE! range fixtures still mark evaluator boundaries, not Excel expectations. Microsoft lists worksheet number precision as 15 digits. The EVEN/ODD fixtures using 16-digit values near 2^53 are Workbook Forge binary64 parser/evaluator boundary probes, not Excel numerical oracles. Run 16 adds FACT, COMBIN, and COMBINA. The Python and Rust kernels form exact integer factorial/binomial results and round once to binary64 with ties-to-even; Apache Commons Math informs the symmetric multiplicative pattern without copied code or a runtime dependency. Within FACT, COMBIN, and COMBINA arguments, plain integer literals, unary signs, +, -, *, and nonnegative integer-power expressions preserve exact source integers through the 2^53 argument boundary, subject to a 65,536-bit intermediate cap. Exact integer division forms a ratio and rounds once to binary64; mixed or decimal operands use binary64 division. Decimal/scientific literals can round before the check. Scalar coercion, truncation-before-domain order for negative fractions, mixed-error precedence, and local #NUM! overflow behavior remain Workbook Forge profiles where Microsoft sources are silent. Standalone expression arithmetic can preserve Python integers while Rust uses binary64 operators; exact-source cross-language assertions are scoped to the three named function arguments. Range errors are kept separate from Excel implicit-intersection and array-entry behavior because the function evaluator does not model general worksheet formula context. The Python workbook adapter separately handles explicitly targeted scalar formulas and static dependencies, without implicit intersection or array entry. Run 17 adds FACTDOUBLE, PERMUT, and PERMUTATIONA with Microsoft-linked semantics and independent bounded exact-integer kernels. FACTDOUBLE is range-capable in the Office formula specification but Workbook Forge retains a scalar-only local range boundary; PERMUTATIONA 0^0, negative-input handling, coercion, output rounding, and overflow remain evaluator profiles pending direct Excel checks. No source code is copied and runtime dependencies remain empty. Run 18 adds GCD and LCM with Microsoft-linked argument, truncation, error, and 2^53 boundary rules. Both are range-capable in MS-OE376, but range calls remain a local unsupported boundary until formula-cell context is modeled. GCD(0,0), LCM zero behavior, mixed-input order, coercion, and negative-fraction order are explicitly local profiles pending Excel checks. Run 19 adds SEQUENCE with an immutable rectangular ArrayValue and shape-preserving evaluate_result API in Python and Rust. Thirty-eight shared cases cover Microsoft’s 4×5 shape example, row-major progression, optional slots, ranges, nested SUM, dimension/coercion/error profiles and the 100000-cell local cap. Formualizer v0.7.0 informs the separation between pre-allocation shape bounds and workbook spill projection; its MIT/Apache-2.0 release is an architecture reference only and no code was copied. No direct Excel spot-checks were run.. Run 20 adds elementwise binary operators and FILTER to the bounded array result layer. The accepted slice has 113 functions with shared Python/Rust fixture parity, 1,301 shared fixtures, 84 detailed specs, 107 source records, 16 OSS patterns, and 408 catalog-only inventory functions. Sixty-three new shared cases cover all advertised binary operators, exact-shape pairing, scalar broadcasting, cell errors, Microsoft's AND/OR include-mask examples, vertical and horizontal FILTER masks, fallback behavior, comparison-coercion and error-precedence profiles, and shape/error boundaries. Numeric, blank, and empty-text mask coercion; explicit missing fallback; row-major mask error order; lazy fallback; array-valued fallback shape; and binary comparison collation/coercion and left-to-right binary-operator error precedence are Workbook Forge profiles. Python and Rust return shaped formula results without worksheet spill projection. Jev's scope result remains advisory; independent semantic/catalog reviews and the full Python/Rust and schema gates passed before acceptance. No Excel spot-checks were run; no source code was copied and no runtime dependency was added. Run 21 adds bounded targeted scalar formula calculation to the Python workbook adapter and aligns CONCAT numeric text, argument, and UTF-16 text limits; its 21 new shared text cases supplement the workbook package cases. Run 22 adds SORT and UNIQUE with 44 shared cases, including four review regressions for oversized ranges, binary64 output, and reversed-range normalization, plus direct API checks for non-finite SORT key order. SORT and UNIQUE preserve array shape but do not project worksheet spill cells. Their comparison, coercion, output precision, selector, and empty-result details are explicitly Workbook Forge profiles where Microsoft documentation is incomplete. Shared fixtures establish implementation parity, not Excel compatibility; no direct Excel Desktop checks were run. No source code was copied and no runtime dependency was added."
   },
   "semantic_specs": {
     "AMORDEGRC": {
@@ -7501,6 +7809,481 @@
       "source_refs": [
         "ms-xor",
         "ms-ooxml-formula-evaluation"
+      ]
+    },
+    "PRODUCT": {
+      "arguments": [
+        {
+          "name": "number1",
+          "kind": "number-reference-range-or-array",
+          "required": true
+        },
+        {
+          "name": "number_n",
+          "kind": "number-reference-range-or-array",
+          "required": false,
+          "max_additional": 254
+        }
+      ],
+      "returns": {
+        "kind": "number",
+        "shape": "scalar"
+      },
+      "semantics": {
+        "definition": "Multiplies all the numbers given as arguments.",
+        "documented_behavior": "Microsoft documents 1 to 255 numbers or ranges, that only numbers in an array or reference are multiplied while empty cells, logical values, and text there are ignored, PRODUCT(A2:A4)=2250 and PRODUCT(A2:A4,2)=4500 for 5, 15, 30, and that A2*A3*A4 gives the same result.",
+        "value_profile": "Values typed directly as arguments count when they are numbers, logical values (TRUE is 1, FALSE is 0), or text holding a plain decimal number (optional sign, digits with an optional decimal point, optional exponent; surrounding spaces ignored); other directly typed text returns #VALUE!. Inside a cell reference, range, or computed array only numbers count; text, logical values, and empty cells are ignored. A single-cell reference is a reference. An explicitly empty argument returns #VALUE!. Which directly typed text counts as a number is a Workbook Forge profile.",
+        "error_profile": "An error value anywhere in the arguments, including inside a reference or array, is returned; the first one in argument order, row by row, wins. Microsoft's function pages disagree on this point (several say error values in a reference are ignored); Workbook Forge propagates them so that a broken input never yields a number. This is an unverified Workbook Forge profile.",
+        "order_profile": "Arguments are read one at a time from left to right, each one completely, and the first problem met is returned: a wrong argument count first, then for each argument in turn its error value or its text that is not a number. Microsoft does not specify precedence among several problems; this is an unverified Workbook Forge profile.",
+        "empty_profile": "When no number is counted the result is 0. Microsoft does not document this case.",
+        "numeric_profile": "Inputs and results are finite binary64 numbers, sums and products are explicit left folds in reading order, and a result that is not finite returns #NUM! even where a different order of operations would avoid the overflow. Microsoft does not specify the internal arithmetic or an overflow code; this profile has not been spot-checked in Excel.",
+        "compatibility_limit": "No behaviour of this function has been spot-checked in Excel."
+      },
+      "source_refs": [
+        "ms-product",
+        "ms-ooxml-formula-evaluation",
+        "ms-excel-precision-limits"
+      ]
+    },
+    "SUMSQ": {
+      "arguments": [
+        {
+          "name": "number1",
+          "kind": "number-reference-range-or-array",
+          "required": true
+        },
+        {
+          "name": "number_n",
+          "kind": "number-reference-range-or-array",
+          "required": false,
+          "max_additional": 254
+        }
+      ],
+      "returns": {
+        "kind": "number",
+        "shape": "scalar"
+      },
+      "semantics": {
+        "definition": "Returns the sum of the squares of the arguments.",
+        "documented_behavior": "Microsoft documents 1 to 255 arguments; numbers, logical values, and text representations of numbers typed directly into the list are counted; in an array or reference only numbers are counted and empty cells, logical values, text, and error values are ignored; arguments that are error values or text that cannot be translated into numbers cause errors; SUMSQ(3,4)=25.",
+        "value_profile": "Values typed directly as arguments count when they are numbers, logical values (TRUE is 1, FALSE is 0), or text holding a plain decimal number (optional sign, digits with an optional decimal point, optional exponent; surrounding spaces ignored); other directly typed text returns #VALUE!. Inside a cell reference, range, or computed array only numbers count; text, logical values, and empty cells are ignored. A single-cell reference is a reference. An explicitly empty argument returns #VALUE!. Which directly typed text counts as a number is a Workbook Forge profile.",
+        "error_profile": "An error value anywhere in the arguments, including inside a reference or array, is returned; the first one in argument order, row by row, wins. Microsoft's function pages disagree on this point (several say error values in a reference are ignored); Workbook Forge propagates them so that a broken input never yields a number. This is an unverified Workbook Forge profile.",
+        "order_profile": "Arguments are read one at a time from left to right, each one completely, and the first problem met is returned: a wrong argument count first, then for each argument in turn its error value or its text that is not a number. Microsoft does not specify precedence among several problems; this is an unverified Workbook Forge profile.",
+        "empty_profile": "When no number is counted the result is 0.",
+        "numeric_profile": "Inputs and results are finite binary64 numbers, sums and products are explicit left folds in reading order, and a result that is not finite returns #NUM! even where a different order of operations would avoid the overflow. Microsoft does not specify the internal arithmetic or an overflow code; this profile has not been spot-checked in Excel.",
+        "compatibility_limit": "No behaviour of this function has been spot-checked in Excel."
+      },
+      "source_refs": [
+        "ms-sumsq",
+        "ms-ooxml-formula-evaluation",
+        "ms-excel-precision-limits"
+      ]
+    },
+    "MEDIAN": {
+      "arguments": [
+        {
+          "name": "number1",
+          "kind": "number-reference-range-or-array",
+          "required": true
+        },
+        {
+          "name": "number_n",
+          "kind": "number-reference-range-or-array",
+          "required": false,
+          "max_additional": 254
+        }
+      ],
+      "returns": {
+        "kind": "number",
+        "shape": "scalar"
+      },
+      "semantics": {
+        "definition": "Returns the number in the middle of a set of numbers; with an even count, the average of the two middle numbers.",
+        "documented_behavior": "Microsoft documents 1 to 255 numbers; an even count averages the two middle numbers; logical values and text representations of numbers typed directly are counted; text, logical values, and empty cells in an array or reference are ignored while zero is included; arguments that are error values or untranslatable text cause errors; MEDIAN(A2:A6)=3 and MEDIAN(A2:A7)=3.5 for 1 through 6.",
+        "value_profile": "Values typed directly as arguments count when they are numbers, logical values (TRUE is 1, FALSE is 0), or text holding a plain decimal number (optional sign, digits with an optional decimal point, optional exponent; surrounding spaces ignored); other directly typed text returns #VALUE!. Inside a cell reference, range, or computed array only numbers count; text, logical values, and empty cells are ignored. A single-cell reference is a reference. An explicitly empty argument returns #VALUE!. Which directly typed text counts as a number is a Workbook Forge profile.",
+        "error_profile": "An error value anywhere in the arguments, including inside a reference or array, is returned; the first one in argument order, row by row, wins. Microsoft's function pages disagree on this point (several say error values in a reference are ignored); Workbook Forge propagates them so that a broken input never yields a number. This is an unverified Workbook Forge profile.",
+        "order_profile": "Arguments are read one at a time from left to right, each one completely, and the first problem met is returned: a wrong argument count first, then for each argument in turn its error value or its text that is not a number. Microsoft does not specify precedence among several problems; this is an unverified Workbook Forge profile.",
+        "empty_profile": "When no number is counted the result is #NUM!. Microsoft does not document this case.",
+        "implementation": "The numbers are sorted ascending. The average of two middle numbers is their sum divided by two; when that sum is not finite, each is halved before adding.",
+        "numeric_profile": "Inputs and results are finite binary64 numbers, sums and products are explicit left folds in reading order, and a result that is not finite returns #NUM! even where a different order of operations would avoid the overflow. Microsoft does not specify the internal arithmetic or an overflow code; this profile has not been spot-checked in Excel.",
+        "compatibility_limit": "No behaviour of this function has been spot-checked in Excel."
+      },
+      "source_refs": [
+        "ms-median",
+        "ms-ooxml-formula-evaluation",
+        "ms-excel-precision-limits"
+      ]
+    },
+    "MODE.SNGL": {
+      "arguments": [
+        {
+          "name": "number1",
+          "kind": "number-reference-range-or-array",
+          "required": true
+        },
+        {
+          "name": "number_n",
+          "kind": "number-reference-range-or-array",
+          "required": false,
+          "max_additional": 253
+        }
+      ],
+      "returns": {
+        "kind": "number",
+        "shape": "scalar"
+      },
+      "semantics": {
+        "definition": "Returns the most frequently occurring number in a data set.",
+        "documented_behavior": "Microsoft documents 1 to 254 arguments; text, logical values, and empty cells in an array or reference are ignored while zero is included; arguments that are error values or untranslatable text cause errors; a data set with no duplicate data points returns #N/A; MODE.SNGL(A2:A7)=4 for 5.6, 4, 4, 3, 2, 4.",
+        "value_profile": "Values typed directly as arguments count when they are numbers, logical values (TRUE is 1, FALSE is 0), or text holding a plain decimal number (optional sign, digits with an optional decimal point, optional exponent; surrounding spaces ignored); other directly typed text returns #VALUE!. Inside a cell reference, range, or computed array only numbers count; text, logical values, and empty cells are ignored. A single-cell reference is a reference. An explicitly empty argument returns #VALUE!. Which directly typed text counts as a number is a Workbook Forge profile.",
+        "error_profile": "An error value anywhere in the arguments, including inside a reference or array, is returned; the first one in argument order, row by row, wins. Microsoft's function pages disagree on this point (several say error values in a reference are ignored); Workbook Forge propagates them so that a broken input never yields a number. This is an unverified Workbook Forge profile.",
+        "order_profile": "Arguments are read one at a time from left to right, each one completely, and the first problem met is returned: a wrong argument count first, then for each argument in turn its error value or its text that is not a number. Microsoft does not specify precedence among several problems; this is an unverified Workbook Forge profile.",
+        "tie_profile": "When several numbers share the highest count, the one that appears first in reading order is returned. Microsoft does not state a tie rule on this page; this is an unverified Workbook Forge profile. Numbers are compared by exact binary64 equality.",
+        "numeric_profile": "Inputs and results are finite binary64 numbers, sums and products are explicit left folds in reading order, and a result that is not finite returns #NUM! even where a different order of operations would avoid the overflow. Microsoft does not specify the internal arithmetic or an overflow code; this profile has not been spot-checked in Excel.",
+        "compatibility_limit": "No behaviour of this function has been spot-checked in Excel."
+      },
+      "source_refs": [
+        "ms-mode-sngl",
+        "ms-ooxml-formula-evaluation",
+        "ms-excel-precision-limits"
+      ]
+    },
+    "STDEV.S": {
+      "arguments": [
+        {
+          "name": "number1",
+          "kind": "number-reference-range-or-array",
+          "required": true
+        },
+        {
+          "name": "number_n",
+          "kind": "number-reference-range-or-array",
+          "required": false,
+          "max_additional": 253
+        }
+      ],
+      "returns": {
+        "kind": "number",
+        "shape": "scalar"
+      },
+      "semantics": {
+        "definition": "Estimates standard deviation from a sample using the n-1 method.",
+        "documented_behavior": "Microsoft documents 1 to 254 arguments; the formula sqrt(sum((x - mean)^2)/(n-1)); logical values and text representations of numbers typed directly are counted; in an array or reference only numbers are counted and empty cells, logical values, text, and error values are ignored; arguments that are error values or untranslatable text cause errors; STDEV.S(A2:A11)=27.46391572 for its ten strength values.",
+        "value_profile": "Values typed directly as arguments count when they are numbers, logical values (TRUE is 1, FALSE is 0), or text holding a plain decimal number (optional sign, digits with an optional decimal point, optional exponent; surrounding spaces ignored); other directly typed text returns #VALUE!. Inside a cell reference, range, or computed array only numbers count; text, logical values, and empty cells are ignored. A single-cell reference is a reference. An explicitly empty argument returns #VALUE!. Which directly typed text counts as a number is a Workbook Forge profile.",
+        "error_profile": "An error value anywhere in the arguments, including inside a reference or array, is returned; the first one in argument order, row by row, wins. Microsoft's function pages disagree on this point (several say error values in a reference are ignored); Workbook Forge propagates them so that a broken input never yields a number. This is an unverified Workbook Forge profile.",
+        "order_profile": "Arguments are read one at a time from left to right, each one completely, and the first problem met is returned: a wrong argument count first, then for each argument in turn its error value or its text that is not a number. Microsoft does not specify precedence among several problems; this is an unverified Workbook Forge profile.",
+        "count_profile": "Fewer than 2 counted numbers returns #DIV/0!. Microsoft does not name this error value on the function page.",
+        "implementation": "The mean is the left-fold sum divided by the count; the squared deviations from that mean are summed in reading order and divided by the count minus one, and the result is the binary64 square root of that quotient. Python and Rust perform the same binary64 operations in the same order. Excel's internal algorithm is not documented and may differ in the last digits.",
+        "numeric_profile": "Inputs and results are finite binary64 numbers, sums and products are explicit left folds in reading order, and a result that is not finite returns #NUM! even where a different order of operations would avoid the overflow. Microsoft does not specify the internal arithmetic or an overflow code; this profile has not been spot-checked in Excel.",
+        "compatibility_limit": "No behaviour of this function has been spot-checked in Excel."
+      },
+      "source_refs": [
+        "ms-stdev-s",
+        "ms-ooxml-formula-evaluation",
+        "ms-excel-precision-limits"
+      ]
+    },
+    "STDEV.P": {
+      "arguments": [
+        {
+          "name": "number1",
+          "kind": "number-reference-range-or-array",
+          "required": true
+        },
+        {
+          "name": "number_n",
+          "kind": "number-reference-range-or-array",
+          "required": false,
+          "max_additional": 253
+        }
+      ],
+      "returns": {
+        "kind": "number",
+        "shape": "scalar"
+      },
+      "semantics": {
+        "definition": "Calculates standard deviation from an entire population using the n method.",
+        "documented_behavior": "Microsoft documents 1 to 254 arguments; the formula sqrt(sum((x - mean)^2)/n); logical values and text representations of numbers typed directly are counted; in an array or reference only numbers are counted and empty cells, logical values, text, and error values are ignored; arguments that are error values or untranslatable text cause errors; STDEV.P(A3:A12)=26.05455814 for its ten strength values.",
+        "value_profile": "Values typed directly as arguments count when they are numbers, logical values (TRUE is 1, FALSE is 0), or text holding a plain decimal number (optional sign, digits with an optional decimal point, optional exponent; surrounding spaces ignored); other directly typed text returns #VALUE!. Inside a cell reference, range, or computed array only numbers count; text, logical values, and empty cells are ignored. A single-cell reference is a reference. An explicitly empty argument returns #VALUE!. Which directly typed text counts as a number is a Workbook Forge profile.",
+        "error_profile": "An error value anywhere in the arguments, including inside a reference or array, is returned; the first one in argument order, row by row, wins. Microsoft's function pages disagree on this point (several say error values in a reference are ignored); Workbook Forge propagates them so that a broken input never yields a number. This is an unverified Workbook Forge profile.",
+        "order_profile": "Arguments are read one at a time from left to right, each one completely, and the first problem met is returned: a wrong argument count first, then for each argument in turn its error value or its text that is not a number. Microsoft does not specify precedence among several problems; this is an unverified Workbook Forge profile.",
+        "count_profile": "Fewer than 1 counted number returns #DIV/0!. Microsoft does not name this error value on the function page.",
+        "implementation": "The mean is the left-fold sum divided by the count; the squared deviations from that mean are summed in reading order and divided by the count, and the result is the binary64 square root of that quotient. Python and Rust perform the same binary64 operations in the same order. Excel's internal algorithm is not documented and may differ in the last digits.",
+        "numeric_profile": "Inputs and results are finite binary64 numbers, sums and products are explicit left folds in reading order, and a result that is not finite returns #NUM! even where a different order of operations would avoid the overflow. Microsoft does not specify the internal arithmetic or an overflow code; this profile has not been spot-checked in Excel.",
+        "compatibility_limit": "No behaviour of this function has been spot-checked in Excel."
+      },
+      "source_refs": [
+        "ms-stdev-p",
+        "ms-ooxml-formula-evaluation",
+        "ms-excel-precision-limits"
+      ]
+    },
+    "VAR.S": {
+      "arguments": [
+        {
+          "name": "number1",
+          "kind": "number-reference-range-or-array",
+          "required": true
+        },
+        {
+          "name": "number_n",
+          "kind": "number-reference-range-or-array",
+          "required": false,
+          "max_additional": 253
+        }
+      ],
+      "returns": {
+        "kind": "number",
+        "shape": "scalar"
+      },
+      "semantics": {
+        "definition": "Estimates variance from a sample.",
+        "documented_behavior": "Microsoft documents 1 to 254 arguments; the formula sum((x - mean)^2)/(n-1); logical values and text representations of numbers typed directly are counted; in an array or reference only numbers are counted and empty cells, logical values, text, and error values are ignored; arguments that are error values or untranslatable text cause errors; VAR.S(A2:A11)=754.27 for its ten strength values.",
+        "value_profile": "Values typed directly as arguments count when they are numbers, logical values (TRUE is 1, FALSE is 0), or text holding a plain decimal number (optional sign, digits with an optional decimal point, optional exponent; surrounding spaces ignored); other directly typed text returns #VALUE!. Inside a cell reference, range, or computed array only numbers count; text, logical values, and empty cells are ignored. A single-cell reference is a reference. An explicitly empty argument returns #VALUE!. Which directly typed text counts as a number is a Workbook Forge profile.",
+        "error_profile": "An error value anywhere in the arguments, including inside a reference or array, is returned; the first one in argument order, row by row, wins. Microsoft's function pages disagree on this point (several say error values in a reference are ignored); Workbook Forge propagates them so that a broken input never yields a number. This is an unverified Workbook Forge profile.",
+        "order_profile": "Arguments are read one at a time from left to right, each one completely, and the first problem met is returned: a wrong argument count first, then for each argument in turn its error value or its text that is not a number. Microsoft does not specify precedence among several problems; this is an unverified Workbook Forge profile.",
+        "count_profile": "Fewer than 2 counted numbers returns #DIV/0!. Microsoft does not name this error value on the function page.",
+        "implementation": "The mean is the left-fold sum divided by the count; the squared deviations from that mean are summed in reading order and divided by the count minus one. Python and Rust perform the same binary64 operations in the same order. Excel's internal algorithm is not documented and may differ in the last digits.",
+        "numeric_profile": "Inputs and results are finite binary64 numbers, sums and products are explicit left folds in reading order, and a result that is not finite returns #NUM! even where a different order of operations would avoid the overflow. Microsoft does not specify the internal arithmetic or an overflow code; this profile has not been spot-checked in Excel.",
+        "compatibility_limit": "No behaviour of this function has been spot-checked in Excel."
+      },
+      "source_refs": [
+        "ms-var-s",
+        "ms-ooxml-formula-evaluation",
+        "ms-excel-precision-limits"
+      ]
+    },
+    "VAR.P": {
+      "arguments": [
+        {
+          "name": "number1",
+          "kind": "number-reference-range-or-array",
+          "required": true
+        },
+        {
+          "name": "number_n",
+          "kind": "number-reference-range-or-array",
+          "required": false,
+          "max_additional": 253
+        }
+      ],
+      "returns": {
+        "kind": "number",
+        "shape": "scalar"
+      },
+      "semantics": {
+        "definition": "Calculates variance from an entire population.",
+        "documented_behavior": "Microsoft documents 1 to 254 arguments; the formula sum((x - mean)^2)/n; logical values and text representations of numbers typed directly are counted; in an array or reference only numbers are counted and empty cells, logical values, text, and error values are ignored; arguments that are error values or untranslatable text cause errors; VAR.P(A2:A11)=678.84 for its ten strength values.",
+        "value_profile": "Values typed directly as arguments count when they are numbers, logical values (TRUE is 1, FALSE is 0), or text holding a plain decimal number (optional sign, digits with an optional decimal point, optional exponent; surrounding spaces ignored); other directly typed text returns #VALUE!. Inside a cell reference, range, or computed array only numbers count; text, logical values, and empty cells are ignored. A single-cell reference is a reference. An explicitly empty argument returns #VALUE!. Which directly typed text counts as a number is a Workbook Forge profile.",
+        "error_profile": "An error value anywhere in the arguments, including inside a reference or array, is returned; the first one in argument order, row by row, wins. Microsoft's function pages disagree on this point (several say error values in a reference are ignored); Workbook Forge propagates them so that a broken input never yields a number. This is an unverified Workbook Forge profile.",
+        "order_profile": "Arguments are read one at a time from left to right, each one completely, and the first problem met is returned: a wrong argument count first, then for each argument in turn its error value or its text that is not a number. Microsoft does not specify precedence among several problems; this is an unverified Workbook Forge profile.",
+        "count_profile": "Fewer than 1 counted number returns #DIV/0!. Microsoft does not name this error value on the function page.",
+        "implementation": "The mean is the left-fold sum divided by the count; the squared deviations from that mean are summed in reading order and divided by the count. Python and Rust perform the same binary64 operations in the same order. Excel's internal algorithm is not documented and may differ in the last digits.",
+        "numeric_profile": "Inputs and results are finite binary64 numbers, sums and products are explicit left folds in reading order, and a result that is not finite returns #NUM! even where a different order of operations would avoid the overflow. Microsoft does not specify the internal arithmetic or an overflow code; this profile has not been spot-checked in Excel.",
+        "compatibility_limit": "No behaviour of this function has been spot-checked in Excel."
+      },
+      "source_refs": [
+        "ms-var-p",
+        "ms-ooxml-formula-evaluation",
+        "ms-excel-precision-limits"
+      ]
+    },
+    "LARGE": {
+      "arguments": [
+        {
+          "name": "array",
+          "kind": "number-reference-range-or-array",
+          "required": true
+        },
+        {
+          "name": "k",
+          "kind": "number",
+          "required": true
+        }
+      ],
+      "returns": {
+        "kind": "number",
+        "shape": "scalar"
+      },
+      "semantics": {
+        "definition": "Returns the k-th largest number in a data set.",
+        "documented_behavior": "Microsoft documents a required array and k; an empty array returns #NUM!; k less than or equal to 0 or greater than the number of data points returns #NUM!; LARGE(array,1) is the largest value and LARGE(array,n) the smallest; LARGE(A2:B6,3)=5 and LARGE(A2:B6,7)=4 for its ten values.",
+        "value_profile": "Only numbers in the array argument are ranked; text, logical values, and empty cells in a reference or array are ignored. A value typed directly as the array argument follows the aggregate rule: a number, a logical value, or plain numeric text is a data set of one number and other text returns #VALUE!. Microsoft does not describe which values are ranked; this is an unverified Workbook Forge profile.",
+        "position_profile": "k is one value read with the shared scalar numeric coercer; a range or array for k returns #VALUE!. A k that is not a whole number returns #NUM!: Microsoft does not say how Excel treats a fractional k, and this evaluator refuses it instead of choosing a rounding direction.",
+        "error_profile": "An error value in the array is returned, then an error in k. The array is read before k, so an array error is reported before a k that is not a number. This is an unverified Workbook Forge profile.",
+        "compatibility_limit": "No behaviour of this function has been spot-checked in Excel."
+      },
+      "source_refs": [
+        "ms-large",
+        "ms-ooxml-formula-evaluation"
+      ]
+    },
+    "SMALL": {
+      "arguments": [
+        {
+          "name": "array",
+          "kind": "number-reference-range-or-array",
+          "required": true
+        },
+        {
+          "name": "k",
+          "kind": "number",
+          "required": true
+        }
+      ],
+      "returns": {
+        "kind": "number",
+        "shape": "scalar"
+      },
+      "semantics": {
+        "definition": "Returns the k-th smallest number in a data set.",
+        "documented_behavior": "Microsoft documents a required array and k; an empty array returns #NUM!; k less than or equal to 0 or exceeding the number of data points returns #NUM!; SMALL(array,1) is the smallest value and SMALL(array,n) the largest; SMALL(A2:A10,4)=4 and SMALL(B2:B10,2)=3 for its example columns.",
+        "value_profile": "Only numbers in the array argument are ranked; text, logical values, and empty cells in a reference or array are ignored. A value typed directly as the array argument follows the aggregate rule: a number, a logical value, or plain numeric text is a data set of one number and other text returns #VALUE!. Microsoft does not describe which values are ranked; this is an unverified Workbook Forge profile.",
+        "position_profile": "k is one value read with the shared scalar numeric coercer; a range or array for k returns #VALUE!. A k that is not a whole number returns #NUM!: Microsoft does not say how Excel treats a fractional k, and this evaluator refuses it instead of choosing a rounding direction.",
+        "error_profile": "An error value in the array is returned, then an error in k. The array is read before k, so an array error is reported before a k that is not a number. This is an unverified Workbook Forge profile.",
+        "compatibility_limit": "No behaviour of this function has been spot-checked in Excel."
+      },
+      "source_refs": [
+        "ms-small",
+        "ms-ooxml-formula-evaluation"
+      ]
+    },
+    "RANK.EQ": {
+      "arguments": [
+        {
+          "name": "number",
+          "kind": "number",
+          "required": true
+        },
+        {
+          "name": "ref",
+          "kind": "reference-range-or-array",
+          "required": true
+        },
+        {
+          "name": "order",
+          "kind": "number",
+          "required": false,
+          "default": 0
+        }
+      ],
+      "returns": {
+        "kind": "number",
+        "shape": "scalar"
+      },
+      "semantics": {
+        "definition": "Returns the rank of a number in a list of numbers: one more than the count of listed numbers ahead of it in the chosen order, so equal numbers share the top rank of their group.",
+        "documented_behavior": "Microsoft documents a required number and ref and an optional order; nonnumeric values in ref are ignored; order 0 or omitted ranks as if ref were sorted in descending order and any nonzero order as if sorted in ascending order; duplicate numbers receive the same rank and affect the ranks of later numbers, so with two tens at rank 5 the number 11 has rank 7; the tie correction factor [COUNT(ref)+1-RANK.EQ(number,ref,0)-RANK.EQ(number,ref,1)]/2; RANK.EQ(A2,A2:A6,1)=5, RANK.EQ(A6,A2:A6)=4, and RANK.EQ(A3,A2:A6,1)=3 for 7, 3.5, 3.5, 1, 2.",
+        "number_profile": "number is one value read with the shared scalar numeric coercer. A number that does not occur in the list returns #N/A; Microsoft does not document this case. Equality is exact binary64 equality.",
+        "ref_profile": "ref must be a cell reference, a range, or a computed array; a value typed directly returns #VALUE!. Only numbers in ref are ranked. An error value in ref is returned.",
+        "order_profile": "order is one value read with the shared scalar numeric coercer; zero or omitted ranks in descending order and any other number in ascending order. Arguments are read left to right and the first problem met is returned; the membership check comes last. Microsoft does not specify this precedence.",
+        "compatibility_limit": "No behaviour of this function has been spot-checked in Excel."
+      },
+      "source_refs": [
+        "ms-rank-eq",
+        "ms-ooxml-formula-evaluation"
+      ]
+    },
+    "RANK": {
+      "arguments": [
+        {
+          "name": "number",
+          "kind": "number",
+          "required": true
+        },
+        {
+          "name": "ref",
+          "kind": "reference-range-or-array",
+          "required": true
+        },
+        {
+          "name": "order",
+          "kind": "number",
+          "required": false,
+          "default": 0
+        }
+      ],
+      "returns": {
+        "kind": "number",
+        "shape": "scalar"
+      },
+      "semantics": {
+        "definition": "Returns the rank of a number in a list of numbers: one more than the count of listed numbers ahead of it in the chosen order, so equal numbers share the top rank of their group.",
+        "documented_behavior": "Microsoft documents RANK as a compatibility function replaced by RANK.EQ and RANK.AVG, with a required number and ref and an optional order; nonnumeric values in ref are ignored; order 0 or omitted ranks in descending order and any nonzero order in ascending order; duplicate numbers receive the same rank; RANK(A3,A2:A6,1)=3 and RANK(A2,A2:A6,1)=5 for 7, 3.5, 3.5, 1, 2.",
+        "number_profile": "number is one value read with the shared scalar numeric coercer. A number that does not occur in the list returns #N/A; Microsoft does not document this case. Equality is exact binary64 equality.",
+        "ref_profile": "ref must be a cell reference, a range, or a computed array; a value typed directly returns #VALUE!. Only numbers in ref are ranked. An error value in ref is returned.",
+        "order_profile": "order is one value read with the shared scalar numeric coercer; zero or omitted ranks in descending order and any other number in ascending order. Arguments are read left to right and the first problem met is returned; the membership check comes last. Microsoft does not specify this precedence.",
+        "compatibility_limit": "No behaviour of this function has been spot-checked in Excel."
+      },
+      "source_refs": [
+        "ms-rank",
+        "ms-ooxml-formula-evaluation"
+      ]
+    },
+    "AVERAGEA": {
+      "arguments": [
+        {
+          "name": "value1",
+          "kind": "value-reference-range-or-array",
+          "required": true
+        },
+        {
+          "name": "value_n",
+          "kind": "value-reference-range-or-array",
+          "required": false,
+          "max_additional": 254
+        }
+      ],
+      "returns": {
+        "kind": "number",
+        "shape": "scalar"
+      },
+      "semantics": {
+        "definition": "Returns the arithmetic mean of the values in the argument list, counting logical values and text.",
+        "documented_behavior": "Microsoft documents 1 to 255 values; logical values and text representations of numbers typed directly are counted; TRUE evaluates as 1 and FALSE as 0; array or reference arguments that contain text evaluate as 0, including empty text; empty cells in an array or reference are ignored; arguments that are error values or text that cannot be translated into numbers cause errors; AVERAGEA(A2:A6)=5.6 for 10, 7, 9, 2 and the text Not available.",
+        "documentation_conflict": "Microsoft's remarks say both that array or reference arguments that contain text evaluate as 0 and that text values in the array or reference are ignored. Its first example, in which the text cell is used in the calculation and the result is 5.6, settles this in favour of counting text as 0, and Workbook Forge follows the example. Microsoft's second example, AVERAGEA(A2:A5,A7)=5.6, is described as averaging four numbers and an empty cell, which would be 7 under the page's own rule that empty cells are ignored. Pasted as the page instructs, A7 holds the header text Formula, which evaluates as 0 and gives the published 5.6. The fixtures record both readings separately and do not treat the description as a rule.",
+        "value_profile": "Inside a cell reference, range, or computed array, numbers count as themselves, logical values as 1 or 0, every text value as 0, and empty cells are skipped. Typed directly, numbers, logical values, and text holding a plain decimal number count; other directly typed text, including empty text, returns #VALUE!. A single-cell reference is a reference. An explicitly empty argument returns #VALUE!. The directly typed text rule is a Workbook Forge profile.",
+        "error_profile": "An error value anywhere in the arguments is returned, the first one in argument order, row by row. With nothing to average the result is #DIV/0!. Microsoft does not name the empty-case error value; both are unverified Workbook Forge profiles.",
+        "numeric_profile": "Inputs and results are finite binary64 numbers, sums and products are explicit left folds in reading order, and a result that is not finite returns #NUM! even where a different order of operations would avoid the overflow. Microsoft does not specify the internal arithmetic or an overflow code; this profile has not been spot-checked in Excel.",
+        "compatibility_limit": "No behaviour of this function has been spot-checked in Excel."
+      },
+      "source_refs": [
+        "ms-averagea",
+        "ms-ooxml-formula-evaluation",
+        "ms-excel-precision-limits"
+      ]
+    },
+    "SUMPRODUCT": {
+      "arguments": [
+        {
+          "name": "array1",
+          "kind": "reference-range-or-array",
+          "required": true
+        },
+        {
+          "name": "array_n",
+          "kind": "reference-range-or-array",
+          "required": false,
+          "max_additional": 254
+        }
+      ],
+      "returns": {
+        "kind": "number",
+        "shape": "scalar"
+      },
+      "semantics": {
+        "definition": "Multiplies corresponding entries of the given arrays and returns the sum of those products.",
+        "documented_behavior": "Microsoft documents a required first array and 2 to 255 arrays in all; the array arguments must have the same dimensions or SUMPRODUCT returns #VALUE!, for example SUMPRODUCT(C2:C10,D2:D5); non-numeric array entries are treated as if they were zeros; SUMPRODUCT(C2:C5,D2:D5) equals C2*D2+C3*D3+C4*D4+C5*D5; arithmetic inside one argument, such as (A2:A5=A7)*(B2:B5=B7)*C2:C5, is evaluated before the sum. Microsoft's example data are published as images, so its example totals are not used as fixture values.",
+        "shape_profile": "A single value is a one-row, one-column array, so it pairs only with other single values. Dimensions are compared before any entry is read, so a size mismatch is reported in preference to an error value inside an array. Only the multiplication of corresponding entries is implemented; the other array operations Microsoft mentions are available only as arithmetic inside an argument.",
+        "value_profile": "Every entry that is not a number, including a logical value, text that looks like a number, an empty cell, and a logical value typed directly, counts as zero.",
+        "error_profile": "After the dimension check, an error value in any array is returned: the first array that contains one, and within it the first in row order. Microsoft does not specify this precedence; it is an unverified Workbook Forge profile.",
+        "numeric_profile": "Inputs and results are finite binary64 numbers, sums and products are explicit left folds in reading order, and a result that is not finite returns #NUM! even where a different order of operations would avoid the overflow. Microsoft does not specify the internal arithmetic or an overflow code; this profile has not been spot-checked in Excel.",
+        "compatibility_limit": "No behaviour of this function has been spot-checked in Excel."
+      },
+      "source_refs": [
+        "ms-sumproduct",
+        "ms-ooxml-formula-evaluation",
+        "ms-excel-precision-limits"
       ]
     }
   }

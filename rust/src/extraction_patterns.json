@@ -310,8 +310,8 @@
       "name": "AVERAGEA",
       "known": true,
       "category": "Statistical",
-      "python": "catalogued",
-      "rust": "catalogued"
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
     },
     "AVERAGEIF": {
       "name": "AVERAGEIF",
@@ -2067,8 +2067,8 @@
       "name": "LARGE",
       "known": true,
       "category": "Statistical",
-      "python": "catalogued",
-      "rust": "catalogued"
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
     },
     "LCM": {
       "name": "LCM",
@@ -2249,8 +2249,8 @@
       "name": "MEDIAN",
       "known": true,
       "category": "Statistical",
-      "python": "catalogued",
-      "rust": "catalogued"
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
     },
     "MID": {
       "name": "MID",
@@ -2340,8 +2340,8 @@
       "name": "MODE.SNGL",
       "known": true,
       "category": "Statistical",
-      "python": "catalogued",
-      "rust": "catalogued"
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
     },
     "MONTH": {
       "name": "MONTH",
@@ -2753,8 +2753,8 @@
       "name": "PRODUCT",
       "known": true,
       "category": "Math and trigonometry",
-      "python": "catalogued",
-      "rust": "catalogued"
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
     },
     "PROPER": {
       "name": "PROPER",
@@ -2830,8 +2830,8 @@
       "name": "RANK",
       "known": true,
       "category": "Compatibility",
-      "python": "catalogued",
-      "rust": "catalogued"
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
     },
     "RANK.AVG": {
       "name": "RANK.AVG",
@@ -2844,8 +2844,8 @@
       "name": "RANK.EQ",
       "known": true,
       "category": "Statistical",
-      "python": "catalogued",
-      "rust": "catalogued"
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
     },
     "RATE": {
       "name": "RATE",
@@ -3117,8 +3117,8 @@
       "name": "SMALL",
       "known": true,
       "category": "Statistical",
-      "python": "catalogued",
-      "rust": "catalogued"
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
     },
     "SORT": {
       "name": "SORT",
@@ -3166,15 +3166,15 @@
       "name": "STDEV.P",
       "known": true,
       "category": "Statistical",
-      "python": "catalogued",
-      "rust": "catalogued"
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
     },
     "STDEV.S": {
       "name": "STDEV.S",
       "known": true,
       "category": "Statistical",
-      "python": "catalogued",
-      "rust": "catalogued"
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
     },
     "STDEVA": {
       "name": "STDEVA",
@@ -3250,15 +3250,15 @@
       "name": "SUMPRODUCT",
       "known": true,
       "category": "Math and trigonometry",
-      "python": "catalogued",
-      "rust": "catalogued"
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
     },
     "SUMSQ": {
       "name": "SUMSQ",
       "known": true,
       "category": "Math and trigonometry",
-      "python": "catalogued",
-      "rust": "catalogued"
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
     },
     "SUMX2MY2": {
       "name": "SUMX2MY2",
@@ -3593,15 +3593,15 @@
       "name": "VAR.P",
       "known": true,
       "category": "Statistical",
-      "python": "catalogued",
-      "rust": "catalogued"
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
     },
     "VAR.S": {
       "name": "VAR.S",
       "known": true,
       "category": "Statistical",
-      "python": "catalogued",
-      "rust": "catalogued"
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
     },
     "VARA": {
       "name": "VARA",

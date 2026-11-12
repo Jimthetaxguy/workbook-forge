@@ -237,3 +237,311 @@ pub(super) fn xor_call(args: &[Expr], env: &Environment<'_>) -> Result<Value, Fo
     }
     Ok(Value::Bool(result))
 }
+
+/// One scalar argument. A range or array is `#VALUE!`; an error is returned.
+fn scalar_argument(expression: &Expr, env: &Environment<'_>) -> Result<Value, FormulaError> {
+    match eval(expression, env)? {
+        CalcValue::Scalar(value) | CalcValue::Referenced(value) => {
+            propagate_value_error(&value)?;
+            Ok(value)
+        }
+        CalcValue::Range(_) | CalcValue::Array(_) => Err(FormulaError::Value),
+    }
+}
+
+/// One scalar argument coerced to a number with the shared coercer.
+fn number_argument(expression: &Expr, env: &Environment<'_>) -> Result<f64, FormulaError> {
+    to_number(&scalar_argument(expression, env)?)
+}
+
+/// Text that an aggregate reads as a number when it is typed directly as an
+/// argument: an optional sign, digits with an optional decimal point, and an
+/// optional exponent. Surrounding spaces, tabs and line breaks are ignored.
+fn plain_number_text(text: &str) -> Option<f64> {
+    let text = text.trim_matches([' ', '\t', '\r', '\n']);
+    let bytes = text.as_bytes();
+    let digits_from = |start: usize| {
+        bytes[start..]
+            .iter()
+            .take_while(|byte| byte.is_ascii_digit())
+            .count()
+    };
+    let mut index = usize::from(matches!(bytes.first(), Some(b'+' | b'-')));
+    let whole = digits_from(index);
+    index += whole;
+    let mut fraction = 0;
+    if bytes.get(index) == Some(&b'.') {
+        index += 1;
+        fraction = digits_from(index);
+        index += fraction;
+    }
+    if whole == 0 && fraction == 0 {
+        return None;
+    }
+    if matches!(bytes.get(index), Some(b'e' | b'E')) {
+        index += 1;
+        if matches!(bytes.get(index), Some(b'+' | b'-')) {
+            index += 1;
+        }
+        let exponent = digits_from(index);
+        if exponent == 0 {
+            return None;
+        }
+        index += exponent;
+    }
+    if index != bytes.len() {
+        return None;
+    }
+    text.parse::<f64>().ok().filter(|number| number.is_finite())
+}
+
+/// Append the numbers an aggregate reads from one argument.
+///
+/// Typed directly, numbers, logical values and plain numeric text count and
+/// other text is `#VALUE!`. Inside a reference or array only numbers count.
+/// An error value anywhere is returned, the first one in reading order.
+fn collect_numbers(
+    expression: &Expr,
+    env: &Environment<'_>,
+    numbers: &mut Vec<f64>,
+) -> Result<(), FormulaError> {
+    let evaluated = eval(expression, env)?;
+    let referenced = keeps_reference(expression, &evaluated);
+    for value in flatten(evaluated) {
+        match value {
+            Value::Error(error) => return Err(error),
+            Value::Number(number) => numbers.push(number),
+            Value::Bool(flag) if !referenced => numbers.push(if flag { 1.0 } else { 0.0 }),
+            Value::Text(text) if !referenced => {
+                numbers.push(plain_number_text(&text).ok_or(FormulaError::Value)?);
+            }
+            _ => {}
+        }
+    }
+    Ok(())
+}
+
+/// The median of numbers already sorted in ascending order.
+fn sorted_median(sorted: &[f64]) -> f64 {
+    let middle = sorted.len() / 2;
+    if sorted.len() % 2 == 1 {
+        return sorted[middle];
+    }
+    let (low, high) = (sorted[middle - 1], sorted[middle]);
+    let sum = low + high;
+    if sum.is_finite() {
+        sum / 2.0
+    } else {
+        low / 2.0 + high / 2.0
+    }
+}
+
+/// The most frequent number; among equally frequent numbers, the one that
+/// appears first. `None` when no number repeats.
+fn first_mode(numbers: &[f64]) -> Option<f64> {
+    let mut seen: HashMap<u64, (usize, usize)> = HashMap::new();
+    for (index, number) in numbers.iter().enumerate() {
+        // Negative zero and zero are one value.
+        let key = if *number == 0.0 { 0.0_f64 } else { *number }.to_bits();
+        seen.entry(key).or_insert((0, index)).0 += 1;
+    }
+    seen.values()
+        .filter(|(count, _)| *count > 1)
+        .max_by(|left, right| left.0.cmp(&right.0).then(right.1.cmp(&left.1)))
+        .map(|(_, first)| numbers[*first])
+}
+
+/// PRODUCT, SUMSQ, MEDIAN, MODE.SNGL, STDEV.S, STDEV.P, VAR.S and VAR.P.
+#[inline(never)]
+pub(super) fn aggregate_call(
+    name: &str,
+    args: &[Expr],
+    env: &Environment<'_>,
+) -> Result<Value, FormulaError> {
+    let max = if matches!(name, "PRODUCT" | "SUMSQ" | "MEDIAN") {
+        255
+    } else {
+        254
+    };
+    arity(name, args, 1, max)?;
+    let mut numbers = Vec::new();
+    for expression in args {
+        collect_numbers(expression, env, &mut numbers)?;
+    }
+    match name {
+        "PRODUCT" => {
+            if numbers.is_empty() {
+                return Ok(Value::Number(0.0));
+            }
+            finite_number(numbers.iter().fold(1.0, |product, number| product * number))
+        }
+        "SUMSQ" => finite_number(
+            numbers
+                .iter()
+                .fold(0.0, |total, number| total + number * number),
+        ),
+        "MEDIAN" => {
+            if numbers.is_empty() {
+                return Err(FormulaError::Num);
+            }
+            numbers.sort_by(f64::total_cmp);
+            finite_number(sorted_median(&numbers))
+        }
+        "MODE.SNGL" => first_mode(&numbers)
+            .ok_or(FormulaError::NA)
+            .and_then(finite_number),
+        _ => {
+            let sample = matches!(name, "STDEV.S" | "VAR.S");
+            let count = numbers.len();
+            if count < if sample { 2 } else { 1 } {
+                return Err(FormulaError::Div0);
+            }
+            let total = numbers.iter().fold(0.0, |total, number| total + number);
+            let mean = total / count as f64;
+            let squares = numbers.iter().fold(0.0, |total, number| {
+                let deviation = number - mean;
+                total + deviation * deviation
+            });
+            let divisor = if sample { count - 1 } else { count };
+            let variance = squares / divisor as f64;
+            finite_number(if name.starts_with("STDEV") {
+                variance.sqrt()
+            } else {
+                variance
+            })
+        }
+    }
+}
+
+/// LARGE and SMALL: the k-th largest or smallest number.
+#[inline(never)]
+pub(super) fn order_statistic_call(
+    name: &str,
+    args: &[Expr],
+    env: &Environment<'_>,
+) -> Result<Value, FormulaError> {
+    arity(name, args, 2, 2)?;
+    let mut numbers = Vec::new();
+    collect_numbers(&args[0], env, &mut numbers)?;
+    let position = number_argument(&args[1], env)?;
+    if position.fract() != 0.0 || position < 1.0 || position > numbers.len() as f64 {
+        return Err(FormulaError::Num);
+    }
+    numbers.sort_by(f64::total_cmp);
+    let position = position as usize;
+    let index = if name == "LARGE" {
+        numbers.len() - position
+    } else {
+        position - 1
+    };
+    finite_number(numbers[index])
+}
+
+/// RANK.EQ and RANK: one more than the count of numbers ahead of `number`.
+#[inline(never)]
+pub(super) fn rank_call(
+    name: &str,
+    args: &[Expr],
+    env: &Environment<'_>,
+) -> Result<Value, FormulaError> {
+    arity(name, args, 2, 3)?;
+    let number = number_argument(&args[0], env)?;
+    let evaluated = eval(&args[1], env)?;
+    if !keeps_reference(&args[1], &evaluated) {
+        return Err(FormulaError::Value);
+    }
+    let mut numbers = Vec::new();
+    for value in flatten(evaluated) {
+        match value {
+            Value::Error(error) => return Err(error),
+            Value::Number(listed) => numbers.push(listed),
+            _ => {}
+        }
+    }
+    let ascending = match args.get(2) {
+        Some(expression) => number_argument(expression, env)? != 0.0,
+        None => false,
+    };
+    if !numbers.contains(&number) {
+        return Err(FormulaError::NA);
+    }
+    let ahead = numbers
+        .iter()
+        .filter(|listed| {
+            if ascending {
+                **listed < number
+            } else {
+                **listed > number
+            }
+        })
+        .count();
+    Ok(Value::Number((ahead + 1) as f64))
+}
+
+/// AVERAGEA: like AVERAGE, but logical values and text in a reference count.
+#[inline(never)]
+pub(super) fn averagea_call(args: &[Expr], env: &Environment<'_>) -> Result<Value, FormulaError> {
+    arity("AVERAGEA", args, 1, 255)?;
+    let mut total = 0.0;
+    let mut count = 0_usize;
+    for expression in args {
+        let evaluated = eval(expression, env)?;
+        let referenced = keeps_reference(expression, &evaluated);
+        for value in flatten(evaluated) {
+            total += match value {
+                Value::Error(error) => return Err(error),
+                Value::Blank => continue,
+                Value::Number(number) => number,
+                Value::Bool(flag) => {
+                    if flag {
+                        1.0
+                    } else {
+                        0.0
+                    }
+                }
+                Value::Text(_) if referenced => 0.0,
+                Value::Text(text) => plain_number_text(&text).ok_or(FormulaError::Value)?,
+            };
+            count += 1;
+        }
+    }
+    if count == 0 {
+        return Err(FormulaError::Div0);
+    }
+    finite_number(total / count as f64)
+}
+
+/// SUMPRODUCT: the sum of the products of corresponding entries.
+#[inline(never)]
+pub(super) fn sumproduct_call(args: &[Expr], env: &Environment<'_>) -> Result<Value, FormulaError> {
+    arity("SUMPRODUCT", args, 1, 255)?;
+    let mut arrays = Vec::with_capacity(args.len());
+    for expression in args {
+        arrays.push(calc_value_matrix(argument(expression, env)?));
+    }
+    let rows = arrays[0].len();
+    let columns = arrays[0].first().map_or(0, Vec::len);
+    if arrays
+        .iter()
+        .any(|array| array.len() != rows || array.iter().any(|row| row.len() != columns))
+    {
+        return Err(FormulaError::Value);
+    }
+    for value in arrays.iter().flatten().flatten() {
+        propagate_value_error(value)?;
+    }
+    let mut total = 0.0;
+    for row in 0..rows {
+        for column in 0..columns {
+            // An entry that is not a number counts as zero.
+            total += arrays.iter().fold(1.0, |product, array| {
+                product
+                    * match array[row][column] {
+                        Value::Number(number) => number,
+                        _ => 0.0,
+                    }
+            });
+        }
+    }
+    finite_number(total)
+}

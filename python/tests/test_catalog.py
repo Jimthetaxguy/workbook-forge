@@ -314,3 +314,41 @@ def test_scalar_math_glossary_separates_documented_rules_from_profiles():
     xor = lookup_function("XOR")["semantic_spec"]["semantics"]
     assert "odd number" in xor["definition"]
     assert "unverified Workbook Forge profiles" in xor["coercion_profile"]
+
+
+def test_range_statistics_glossary_separates_documented_rules_from_profiles():
+    expected_arity = {
+        "PRODUCT": (1, 255), "SUMSQ": (1, 255), "SUMPRODUCT": (1, 255), "MEDIAN": (1, 255),
+        "LARGE": (2, 2), "SMALL": (2, 2), "RANK.EQ": (2, 3), "RANK": (2, 3),
+        "STDEV.S": (1, 254), "STDEV.P": (1, 254), "VAR.S": (1, 254), "VAR.P": (1, 254),
+        "AVERAGEA": (1, 255), "MODE.SNGL": (1, 254),
+    }
+    for name, (minimum, maximum) in expected_arity.items():
+        entry = lookup_function(name)
+        assert function_status(name, "python") == "conformance-tested"
+        assert function_status(name, "rust") == "conformance-tested"
+        assert entry["implementation"]["arity"] == {"min": minimum, "max": maximum}
+        assert entry["implementation"]["evidence_grade"] == "dual_engine"
+        source_id = "ms-" + name.lower().replace(".", "-")
+        assert source_id in entry["semantic_spec"]["source_refs"]
+        semantics = entry["semantic_spec"]["semantics"]
+        assert "Microsoft documents" in semantics["documented_behavior"]
+        assert semantics["compatibility_limit"] == "No behaviour of this function has been spot-checked in Excel."
+
+    # Microsoft says error values in a reference are ignored; this evaluator
+    # returns them, and the spec must say so instead of claiming Excel parity.
+    for name in ("SUMSQ", "STDEV.S", "STDEV.P", "VAR.S", "VAR.P"):
+        semantics = lookup_function(name)["semantic_spec"]["semantics"]
+        assert "error values are ignored" in semantics["documented_behavior"]
+        assert "Workbook Forge propagates them" in semantics["error_profile"]
+        assert "unverified Workbook Forge profile" in semantics["error_profile"]
+    for name in ("LARGE", "SMALL"):
+        semantics = lookup_function(name)["semantic_spec"]["semantics"]
+        assert "not a whole number returns #NUM!" in semantics["position_profile"]
+    assert "appears first" in lookup_function("MODE.SNGL")["semantic_spec"]["semantics"]["tie_profile"]
+    averagea = lookup_function("AVERAGEA")["semantic_spec"]["semantics"]
+    assert "would be 7" in averagea["documentation_conflict"]
+    assert "follows the example" in averagea["documentation_conflict"]
+    sumproduct = lookup_function("SUMPRODUCT")["semantic_spec"]["semantics"]
+    assert "not used as fixture values" in sumproduct["documented_behavior"]
+    assert lookup_function("RANK")["implementation"]["category"] == "compatibility"

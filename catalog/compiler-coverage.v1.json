@@ -6,7 +6,7 @@
   "inventory_retrieved": "2026-09-24",
   "inventory_sha256": "d4f612b6ff7697538902aaf203703b395980ee5eecbf58b26ba8e1dcb8d38e68",
   "inventory_refresh_required": true,
-  "formula_fixture_sha256": "654263d8ecab0fe276749b69bfca312693ad11d0e1fe4dac47e90278b6fb95c4",
+  "formula_fixture_sha256": "022c51e2a2d00f7ef7bb34e6dd7199c435a3e141e72b7f3d129c14612ce5b3e5",
   "primary_source": "https://support.microsoft.com/en-us/excel/excel-functions-alphabetical",
   "target_build": "Microsoft 365 desktop; build/channel availability unverified",
   "udfs": "arbitrary add-ins/UDFs are in long-term scope through explicit typed bindings; not enumerable built-ins",
@@ -820,27 +820,44 @@
       "category": "Statistical",
       "availability": "unknown",
       "introduced_version_marker": null,
-      "shared_case_ids": [],
+      "shared_case_ids": [
+        "averagea-256-arguments-profile",
+        "averagea-direct-empty-text-profile",
+        "averagea-direct-logical-microsoft",
+        "averagea-direct-nonnumeric-text-microsoft",
+        "averagea-direct-numeric-text-microsoft",
+        "averagea-empty-cell-ignored-microsoft",
+        "averagea-error-argument-microsoft",
+        "averagea-error-in-range-profile",
+        "averagea-microsoft-example-header-cell",
+        "averagea-microsoft-example-text",
+        "averagea-no-arguments-profile",
+        "averagea-no-values-profile",
+        "averagea-numbers-only",
+        "averagea-reference-empty-text-microsoft",
+        "averagea-reference-logicals-microsoft",
+        "averagea-single-cell-reference-profile"
+      ],
       "languages": {
         "python": {
           "recognized": "catalogued",
           "parsed_syntax_probe": true,
           "preserved": "generic_normal_formula_path; per_function_unverified",
           "translated_source": "not_implemented",
-          "executable": "planned",
-          "tested_against_reference": "not_established",
+          "executable": "implemented_profile",
+          "tested_against_reference": "shared_expected_fixtures",
           "excel_observed": "not_established_by_this_mapping",
-          "unsupported_now": true
+          "unsupported_now": false
         },
         "rust": {
           "recognized": "catalogued",
           "parsed_syntax_probe": true,
           "preserved": "generic_normal_formula_path; per_function_unverified",
           "translated_source": "not_implemented",
-          "executable": "planned",
-          "tested_against_reference": "not_established",
+          "executable": "implemented_profile",
+          "tested_against_reference": "shared_expected_fixtures",
           "excel_observed": "not_established_by_this_mapping",
-          "unsupported_now": true
+          "unsupported_now": false
         }
       },
       "runtime_contract": "deterministic_excel_semantics_target"
@@ -2832,6 +2849,8 @@
         "counting-err-count-ms-example-extra-argument",
         "counting-err-count-ms-example-no-numbers",
         "randarray-truncates-dimensions",
+        "rank-eq-microsoft-correction-factor",
+        "rank-microsoft-correction-factor",
         "sequence-count-array-consumer-profile"
       ],
       "languages": {
@@ -9455,27 +9474,44 @@
       "category": "Statistical",
       "availability": "unknown",
       "introduced_version_marker": null,
-      "shared_case_ids": [],
+      "shared_case_ids": [
+        "large-empty-array-microsoft",
+        "large-error-in-array-profile",
+        "large-first-is-largest-microsoft",
+        "large-fractional-k-profile",
+        "large-k-above-count-microsoft",
+        "large-k-negative-microsoft",
+        "large-k-zero-microsoft",
+        "large-last-is-smallest-microsoft",
+        "large-microsoft-example-seventh",
+        "large-microsoft-example-third",
+        "large-negative-data",
+        "large-nonnumbers-ignored-profile",
+        "large-numeric-text-k-profile",
+        "large-range-k-profile",
+        "large-text-k-profile",
+        "large-wrong-argument-count-profile"
+      ],
       "languages": {
         "python": {
           "recognized": "catalogued",
           "parsed_syntax_probe": true,
           "preserved": "generic_normal_formula_path; per_function_unverified",
           "translated_source": "not_implemented",
-          "executable": "planned",
-          "tested_against_reference": "not_established",
+          "executable": "implemented_profile",
+          "tested_against_reference": "shared_expected_fixtures",
           "excel_observed": "not_established_by_this_mapping",
-          "unsupported_now": true
+          "unsupported_now": false
         },
         "rust": {
           "recognized": "catalogued",
           "parsed_syntax_probe": true,
           "preserved": "generic_normal_formula_path; per_function_unverified",
           "translated_source": "not_implemented",
-          "executable": "planned",
-          "tested_against_reference": "not_established",
+          "executable": "implemented_profile",
+          "tested_against_reference": "shared_expected_fixtures",
           "excel_observed": "not_established_by_this_mapping",
-          "unsupported_now": true
+          "unsupported_now": false
         }
       },
       "runtime_contract": "deterministic_excel_semantics_target"
@@ -10330,27 +10366,42 @@
       "category": "Statistical",
       "availability": "unknown",
       "introduced_version_marker": null,
-      "shared_case_ids": [],
+      "shared_case_ids": [
+        "median-direct-logical-and-text-microsoft",
+        "median-direct-nonnumeric-text-microsoft",
+        "median-duplicates",
+        "median-error-argument-microsoft",
+        "median-microsoft-example-even",
+        "median-microsoft-example-odd",
+        "median-microsoft-note-example",
+        "median-negative",
+        "median-no-arguments-profile",
+        "median-no-numbers-profile",
+        "median-reference-ignores-nonnumbers-keeps-zero",
+        "median-single",
+        "median-two-ranges",
+        "median-unsorted"
+      ],
       "languages": {
         "python": {
           "recognized": "catalogued",
           "parsed_syntax_probe": true,
           "preserved": "generic_normal_formula_path; per_function_unverified",
           "translated_source": "not_implemented",
-          "executable": "planned",
-          "tested_against_reference": "not_established",
+          "executable": "implemented_profile",
+          "tested_against_reference": "shared_expected_fixtures",
           "excel_observed": "not_established_by_this_mapping",
-          "unsupported_now": true
+          "unsupported_now": false
         },
         "rust": {
           "recognized": "catalogued",
           "parsed_syntax_probe": true,
           "preserved": "generic_normal_formula_path; per_function_unverified",
           "translated_source": "not_implemented",
-          "executable": "planned",
-          "tested_against_reference": "not_established",
+          "executable": "implemented_profile",
+          "tested_against_reference": "shared_expected_fixtures",
           "excel_observed": "not_established_by_this_mapping",
-          "unsupported_now": true
+          "unsupported_now": false
         }
       },
       "runtime_contract": "deterministic_excel_semantics_target"
@@ -10751,27 +10802,43 @@
       "category": "Statistical",
       "availability": "unknown",
       "introduced_version_marker": "2010",
-      "shared_case_ids": [],
+      "shared_case_ids": [
+        "mode-sngl-254-arguments-microsoft",
+        "mode-sngl-255-arguments-profile",
+        "mode-sngl-decimal",
+        "mode-sngl-direct-nonnumeric-text-microsoft",
+        "mode-sngl-direct-numeric-text-profile",
+        "mode-sngl-error-argument-microsoft",
+        "mode-sngl-microsoft-example",
+        "mode-sngl-microsoft-note-example",
+        "mode-sngl-most-frequent-later",
+        "mode-sngl-no-duplicates-microsoft",
+        "mode-sngl-reference-ignores-nonnumbers-microsoft",
+        "mode-sngl-tie-first-seen-profile",
+        "mode-sngl-tie-first-seen-reordered-profile",
+        "mode-sngl-two-ranges",
+        "mode-sngl-zero-included-microsoft"
+      ],
       "languages": {
         "python": {
           "recognized": "catalogued",
           "parsed_syntax_probe": true,
           "preserved": "generic_normal_formula_path; per_function_unverified",
           "translated_source": "not_implemented",
-          "executable": "planned",
-          "tested_against_reference": "not_established",
+          "executable": "implemented_profile",
+          "tested_against_reference": "shared_expected_fixtures",
           "excel_observed": "not_established_by_this_mapping",
-          "unsupported_now": true
+          "unsupported_now": false
         },
         "rust": {
           "recognized": "catalogued",
           "parsed_syntax_probe": true,
           "preserved": "generic_normal_formula_path; per_function_unverified",
           "translated_source": "not_implemented",
-          "executable": "planned",
-          "tested_against_reference": "not_established",
+          "executable": "implemented_profile",
+          "tested_against_reference": "shared_expected_fixtures",
           "excel_observed": "not_established_by_this_mapping",
-          "unsupported_now": true
+          "unsupported_now": false
         }
       },
       "runtime_contract": "deterministic_excel_semantics_target"
@@ -12818,27 +12885,46 @@
       "category": "Math and trigonometry",
       "availability": "unknown",
       "introduced_version_marker": null,
-      "shared_case_ids": [],
+      "shared_case_ids": [
+        "product-255-arguments-microsoft",
+        "product-256-arguments-profile",
+        "product-binary-fractions",
+        "product-direct-nonnumeric-text-profile",
+        "product-direct-values-profile",
+        "product-empty-argument-profile",
+        "product-error-in-range-profile",
+        "product-first-problem-wins-profile",
+        "product-microsoft-example-range",
+        "product-microsoft-example-range-and-number",
+        "product-microsoft-operator-equivalence",
+        "product-negative",
+        "product-no-arguments-profile",
+        "product-no-numbers-profile",
+        "product-overflow-profile",
+        "product-reference-ignores-nonnumbers",
+        "product-single-cell-reference-profile",
+        "product-zero-factor"
+      ],
       "languages": {
         "python": {
           "recognized": "catalogued",
           "parsed_syntax_probe": true,
           "preserved": "generic_normal_formula_path; per_function_unverified",
           "translated_source": "not_implemented",
-          "executable": "planned",
-          "tested_against_reference": "not_established",
+          "executable": "implemented_profile",
+          "tested_against_reference": "shared_expected_fixtures",
           "excel_observed": "not_established_by_this_mapping",
-          "unsupported_now": true
+          "unsupported_now": false
         },
         "rust": {
           "recognized": "catalogued",
           "parsed_syntax_probe": true,
           "preserved": "generic_normal_formula_path; per_function_unverified",
           "translated_source": "not_implemented",
-          "executable": "planned",
-          "tested_against_reference": "not_established",
+          "executable": "implemented_profile",
+          "tested_against_reference": "shared_expected_fixtures",
           "excel_observed": "not_established_by_this_mapping",
-          "unsupported_now": true
+          "unsupported_now": false
         }
       },
       "runtime_contract": "deterministic_excel_semantics_target"
@@ -13198,27 +13284,45 @@
       "category": "Compatibility",
       "availability": "unknown",
       "introduced_version_marker": null,
-      "shared_case_ids": [],
+      "shared_case_ids": [
+        "rank-direct-scalar-ref-profile",
+        "rank-error-in-ref-profile",
+        "rank-microsoft-after-duplicates",
+        "rank-microsoft-correction-factor",
+        "rank-microsoft-duplicate-ten",
+        "rank-microsoft-example-seven-ascending",
+        "rank-microsoft-example-tie",
+        "rank-nonnumeric-ignored-microsoft",
+        "rank-number-absent-profile",
+        "rank-numeric-text-number-profile",
+        "rank-order-any-nonzero-microsoft",
+        "rank-order-zero-microsoft",
+        "rank-single-cell-ref-profile",
+        "rank-text-number-profile",
+        "rank-text-order-profile",
+        "rank-two-descending",
+        "rank-wrong-argument-count-profile"
+      ],
       "languages": {
         "python": {
           "recognized": "catalogued",
           "parsed_syntax_probe": true,
           "preserved": "generic_normal_formula_path; per_function_unverified",
           "translated_source": "not_implemented",
-          "executable": "planned",
-          "tested_against_reference": "not_established",
+          "executable": "implemented_profile",
+          "tested_against_reference": "shared_expected_fixtures",
           "excel_observed": "not_established_by_this_mapping",
-          "unsupported_now": true
+          "unsupported_now": false
         },
         "rust": {
           "recognized": "catalogued",
           "parsed_syntax_probe": true,
           "preserved": "generic_normal_formula_path; per_function_unverified",
           "translated_source": "not_implemented",
-          "executable": "planned",
-          "tested_against_reference": "not_established",
+          "executable": "implemented_profile",
+          "tested_against_reference": "shared_expected_fixtures",
           "excel_observed": "not_established_by_this_mapping",
-          "unsupported_now": true
+          "unsupported_now": false
         }
       },
       "runtime_contract": "deterministic_excel_semantics_target"
@@ -13258,27 +13362,45 @@
       "category": "Statistical",
       "availability": "unknown",
       "introduced_version_marker": "2010",
-      "shared_case_ids": [],
+      "shared_case_ids": [
+        "rank-eq-direct-scalar-ref-profile",
+        "rank-eq-error-in-ref-profile",
+        "rank-eq-microsoft-after-duplicates",
+        "rank-eq-microsoft-correction-factor",
+        "rank-eq-microsoft-duplicate-ten",
+        "rank-eq-microsoft-example-seven-ascending",
+        "rank-eq-microsoft-example-tie",
+        "rank-eq-microsoft-example-two-descending",
+        "rank-eq-nonnumeric-ignored-microsoft",
+        "rank-eq-number-absent-profile",
+        "rank-eq-numeric-text-number-profile",
+        "rank-eq-order-any-nonzero-microsoft",
+        "rank-eq-order-zero-microsoft",
+        "rank-eq-single-cell-ref-profile",
+        "rank-eq-text-number-profile",
+        "rank-eq-text-order-profile",
+        "rank-eq-wrong-argument-count-profile"
+      ],
       "languages": {
         "python": {
           "recognized": "catalogued",
           "parsed_syntax_probe": true,
           "preserved": "generic_normal_formula_path; per_function_unverified",
           "translated_source": "not_implemented",
-          "executable": "planned",
-          "tested_against_reference": "not_established",
+          "executable": "implemented_profile",
+          "tested_against_reference": "shared_expected_fixtures",
           "excel_observed": "not_established_by_this_mapping",
-          "unsupported_now": true
+          "unsupported_now": false
         },
         "rust": {
           "recognized": "catalogued",
           "parsed_syntax_probe": true,
           "preserved": "generic_normal_formula_path; per_function_unverified",
           "translated_source": "not_implemented",
-          "executable": "planned",
-          "tested_against_reference": "not_established",
+          "executable": "implemented_profile",
+          "tested_against_reference": "shared_expected_fixtures",
           "excel_observed": "not_established_by_this_mapping",
-          "unsupported_now": true
+          "unsupported_now": false
         }
       },
       "runtime_contract": "deterministic_excel_semantics_target"
@@ -13820,6 +13942,8 @@
         "round-written-half-cent-goes-up",
         "round-written-half-goes-up-0-285",
         "sqrt-two-rounded",
+        "stdev-p-microsoft-example",
+        "stdev-s-microsoft-example",
         "syd-fractional-life-and-period-profile",
         "syd-fractional-period-profile",
         "syd-full-schedule-conserves-depreciable-base",
@@ -13838,6 +13962,10 @@
         "tvm-type-boolean-coercion-profile",
         "tvm-type-empty-text-coercion-profile",
         "tvm-type-numeric-text-coercion-profile",
+        "var-p-microsoft-example",
+        "var-p-microsoft-var-s-page-example",
+        "var-s-microsoft-example",
+        "var-s-microsoft-var-p-page-example",
         "vdb-blank-no-switch-coercion-profile",
         "vdb-empty-text-no-switch-coercion-profile",
         "vdb-fractional-life-final-tail",
@@ -14731,27 +14859,42 @@
       "category": "Statistical",
       "availability": "unknown",
       "introduced_version_marker": null,
-      "shared_case_ids": [],
+      "shared_case_ids": [
+        "small-array-error-before-k-profile",
+        "small-empty-array-microsoft",
+        "small-error-in-array-profile",
+        "small-first-is-smallest-microsoft",
+        "small-fractional-k-profile",
+        "small-k-above-count-microsoft",
+        "small-k-zero-microsoft",
+        "small-last-is-largest-microsoft",
+        "small-microsoft-example-fourth",
+        "small-microsoft-example-second",
+        "small-nonnumbers-ignored-profile",
+        "small-text-k-profile",
+        "small-two-dimensional",
+        "small-wrong-argument-count-profile"
+      ],
       "languages": {
         "python": {
           "recognized": "catalogued",
           "parsed_syntax_probe": true,
           "preserved": "generic_normal_formula_path; per_function_unverified",
           "translated_source": "not_implemented",
-          "executable": "planned",
-          "tested_against_reference": "not_established",
+          "executable": "implemented_profile",
+          "tested_against_reference": "shared_expected_fixtures",
           "excel_observed": "not_established_by_this_mapping",
-          "unsupported_now": true
+          "unsupported_now": false
         },
         "rust": {
           "recognized": "catalogued",
           "parsed_syntax_probe": true,
           "preserved": "generic_normal_formula_path; per_function_unverified",
           "translated_source": "not_implemented",
-          "executable": "planned",
-          "tested_against_reference": "not_established",
+          "executable": "implemented_profile",
+          "tested_against_reference": "shared_expected_fixtures",
           "excel_observed": "not_established_by_this_mapping",
-          "unsupported_now": true
+          "unsupported_now": false
         }
       },
       "runtime_contract": "deterministic_excel_semantics_target"
@@ -14983,27 +15126,41 @@
       "category": "Statistical",
       "availability": "unknown",
       "introduced_version_marker": "2010",
-      "shared_case_ids": [],
+      "shared_case_ids": [
+        "stdev-p-255-arguments-profile",
+        "stdev-p-constant-data",
+        "stdev-p-direct-logical-and-text-microsoft",
+        "stdev-p-direct-nonnumeric-text-microsoft",
+        "stdev-p-error-argument-microsoft",
+        "stdev-p-error-in-range-profile",
+        "stdev-p-example-full-precision",
+        "stdev-p-microsoft-example",
+        "stdev-p-no-arguments-profile",
+        "stdev-p-no-numbers-profile",
+        "stdev-p-one-value",
+        "stdev-p-reference-ignores-nonnumbers-microsoft",
+        "stdev-p-whole-result"
+      ],
       "languages": {
         "python": {
           "recognized": "catalogued",
           "parsed_syntax_probe": true,
           "preserved": "generic_normal_formula_path; per_function_unverified",
           "translated_source": "not_implemented",
-          "executable": "planned",
-          "tested_against_reference": "not_established",
+          "executable": "implemented_profile",
+          "tested_against_reference": "shared_expected_fixtures",
           "excel_observed": "not_established_by_this_mapping",
-          "unsupported_now": true
+          "unsupported_now": false
         },
         "rust": {
           "recognized": "catalogued",
           "parsed_syntax_probe": true,
           "preserved": "generic_normal_formula_path; per_function_unverified",
           "translated_source": "not_implemented",
-          "executable": "planned",
-          "tested_against_reference": "not_established",
+          "executable": "implemented_profile",
+          "tested_against_reference": "shared_expected_fixtures",
           "excel_observed": "not_established_by_this_mapping",
-          "unsupported_now": true
+          "unsupported_now": false
         }
       },
       "runtime_contract": "deterministic_excel_semantics_target"
@@ -15013,27 +15170,42 @@
       "category": "Statistical",
       "availability": "unknown",
       "introduced_version_marker": "2010",
-      "shared_case_ids": [],
+      "shared_case_ids": [
+        "stdev-s-255-arguments-profile",
+        "stdev-s-constant-data",
+        "stdev-s-direct-logical-and-text-microsoft",
+        "stdev-s-direct-nonnumeric-text-microsoft",
+        "stdev-s-error-argument-microsoft",
+        "stdev-s-error-in-range-profile",
+        "stdev-s-example-full-precision",
+        "stdev-s-microsoft-example",
+        "stdev-s-no-arguments-profile",
+        "stdev-s-no-numbers-profile",
+        "stdev-s-one-value-profile",
+        "stdev-s-reference-ignores-nonnumbers-microsoft",
+        "stdev-s-root-of-sevenths",
+        "stdev-s-two-values"
+      ],
       "languages": {
         "python": {
           "recognized": "catalogued",
           "parsed_syntax_probe": true,
           "preserved": "generic_normal_formula_path; per_function_unverified",
           "translated_source": "not_implemented",
-          "executable": "planned",
-          "tested_against_reference": "not_established",
+          "executable": "implemented_profile",
+          "tested_against_reference": "shared_expected_fixtures",
           "excel_observed": "not_established_by_this_mapping",
-          "unsupported_now": true
+          "unsupported_now": false
         },
         "rust": {
           "recognized": "catalogued",
           "parsed_syntax_probe": true,
           "preserved": "generic_normal_formula_path; per_function_unverified",
           "translated_source": "not_implemented",
-          "executable": "planned",
-          "tested_against_reference": "not_established",
+          "executable": "implemented_profile",
+          "tested_against_reference": "shared_expected_fixtures",
           "excel_observed": "not_established_by_this_mapping",
-          "unsupported_now": true
+          "unsupported_now": false
         }
       },
       "runtime_contract": "deterministic_excel_semantics_target"
@@ -15372,27 +15544,49 @@
       "category": "Math and trigonometry",
       "availability": "unknown",
       "introduced_version_marker": null,
-      "shared_case_ids": [],
+      "shared_case_ids": [
+        "sumproduct-comparison-product-microsoft-pattern",
+        "sumproduct-different-length-microsoft",
+        "sumproduct-dimensions-before-errors-profile",
+        "sumproduct-error-in-range-profile",
+        "sumproduct-first-array-error-first-profile",
+        "sumproduct-logical-array-entries-microsoft",
+        "sumproduct-long-formula-value",
+        "sumproduct-microsoft-long-formula-equivalence",
+        "sumproduct-negative-and-fraction",
+        "sumproduct-no-arguments-profile",
+        "sumproduct-nonnumeric-entries-microsoft",
+        "sumproduct-overflow-profile",
+        "sumproduct-row-against-column-microsoft",
+        "sumproduct-row-vectors",
+        "sumproduct-scalar-against-range-profile",
+        "sumproduct-scalar-logical-profile",
+        "sumproduct-scalars-profile",
+        "sumproduct-single-array",
+        "sumproduct-three-arrays",
+        "sumproduct-two-columns",
+        "sumproduct-two-dimensional"
+      ],
       "languages": {
         "python": {
           "recognized": "catalogued",
           "parsed_syntax_probe": true,
           "preserved": "generic_normal_formula_path; per_function_unverified",
           "translated_source": "not_implemented",
-          "executable": "planned",
-          "tested_against_reference": "not_established",
+          "executable": "implemented_profile",
+          "tested_against_reference": "shared_expected_fixtures",
           "excel_observed": "not_established_by_this_mapping",
-          "unsupported_now": true
+          "unsupported_now": false
         },
         "rust": {
           "recognized": "catalogued",
           "parsed_syntax_probe": true,
           "preserved": "generic_normal_formula_path; per_function_unverified",
           "translated_source": "not_implemented",
-          "executable": "planned",
-          "tested_against_reference": "not_established",
+          "executable": "implemented_profile",
+          "tested_against_reference": "shared_expected_fixtures",
           "excel_observed": "not_established_by_this_mapping",
-          "unsupported_now": true
+          "unsupported_now": false
         }
       },
       "runtime_contract": "deterministic_excel_semantics_target"
@@ -15402,27 +15596,43 @@
       "category": "Math and trigonometry",
       "availability": "unknown",
       "introduced_version_marker": null,
-      "shared_case_ids": [],
+      "shared_case_ids": [
+        "sumsq-256-arguments-profile",
+        "sumsq-binary-fractions",
+        "sumsq-direct-logical-and-text-microsoft",
+        "sumsq-direct-nonnumeric-text-microsoft",
+        "sumsq-empty-reference",
+        "sumsq-error-argument-microsoft",
+        "sumsq-error-in-range-profile",
+        "sumsq-microsoft-example",
+        "sumsq-negative",
+        "sumsq-no-arguments-profile",
+        "sumsq-overflow-profile",
+        "sumsq-range",
+        "sumsq-reference-ignores-nonnumbers",
+        "sumsq-single-cell-reference-profile",
+        "sumsq-two-ranges"
+      ],
       "languages": {
         "python": {
           "recognized": "catalogued",
           "parsed_syntax_probe": true,
           "preserved": "generic_normal_formula_path; per_function_unverified",
           "translated_source": "not_implemented",
-          "executable": "planned",
-          "tested_against_reference": "not_established",
+          "executable": "implemented_profile",
+          "tested_against_reference": "shared_expected_fixtures",
           "excel_observed": "not_established_by_this_mapping",
-          "unsupported_now": true
+          "unsupported_now": false
         },
         "rust": {
           "recognized": "catalogued",
           "parsed_syntax_probe": true,
           "preserved": "generic_normal_formula_path; per_function_unverified",
           "translated_source": "not_implemented",
-          "executable": "planned",
-          "tested_against_reference": "not_established",
+          "executable": "implemented_profile",
+          "tested_against_reference": "shared_expected_fixtures",
           "excel_observed": "not_established_by_this_mapping",
-          "unsupported_now": true
+          "unsupported_now": false
         }
       },
       "runtime_contract": "deterministic_excel_semantics_target"
@@ -17006,27 +17216,42 @@
       "category": "Statistical",
       "availability": "unknown",
       "introduced_version_marker": "2010",
-      "shared_case_ids": [],
+      "shared_case_ids": [
+        "var-p-255-arguments-profile",
+        "var-p-constant-data",
+        "var-p-direct-logical-and-text-microsoft",
+        "var-p-direct-nonnumeric-text-microsoft",
+        "var-p-error-argument-microsoft",
+        "var-p-error-in-range-profile",
+        "var-p-microsoft-example",
+        "var-p-microsoft-var-s-page-example",
+        "var-p-no-arguments-profile",
+        "var-p-no-numbers-profile",
+        "var-p-one-value",
+        "var-p-quarters",
+        "var-p-reference-ignores-nonnumbers-microsoft",
+        "var-p-whole-result"
+      ],
       "languages": {
         "python": {
           "recognized": "catalogued",
           "parsed_syntax_probe": true,
           "preserved": "generic_normal_formula_path; per_function_unverified",
           "translated_source": "not_implemented",
-          "executable": "planned",
-          "tested_against_reference": "not_established",
+          "executable": "implemented_profile",
+          "tested_against_reference": "shared_expected_fixtures",
           "excel_observed": "not_established_by_this_mapping",
-          "unsupported_now": true
+          "unsupported_now": false
         },
         "rust": {
           "recognized": "catalogued",
           "parsed_syntax_probe": true,
           "preserved": "generic_normal_formula_path; per_function_unverified",
           "translated_source": "not_implemented",
-          "executable": "planned",
-          "tested_against_reference": "not_established",
+          "executable": "implemented_profile",
+          "tested_against_reference": "shared_expected_fixtures",
           "excel_observed": "not_established_by_this_mapping",
-          "unsupported_now": true
+          "unsupported_now": false
         }
       },
       "runtime_contract": "deterministic_excel_semantics_target"
@@ -17036,27 +17261,43 @@
       "category": "Statistical",
       "availability": "unknown",
       "introduced_version_marker": "2010",
-      "shared_case_ids": [],
+      "shared_case_ids": [
+        "var-s-255-arguments-profile",
+        "var-s-constant-data",
+        "var-s-direct-logical-and-text-microsoft",
+        "var-s-direct-nonnumeric-text-microsoft",
+        "var-s-error-argument-microsoft",
+        "var-s-error-in-range-profile",
+        "var-s-example-full-precision",
+        "var-s-microsoft-example",
+        "var-s-microsoft-var-p-page-example",
+        "var-s-no-arguments-profile",
+        "var-s-no-numbers-profile",
+        "var-s-one-value-profile",
+        "var-s-reference-ignores-nonnumbers-microsoft",
+        "var-s-sevenths",
+        "var-s-thirds"
+      ],
       "languages": {
         "python": {
           "recognized": "catalogued",
           "parsed_syntax_probe": true,
           "preserved": "generic_normal_formula_path; per_function_unverified",
           "translated_source": "not_implemented",
-          "executable": "planned",
-          "tested_against_reference": "not_established",
+          "executable": "implemented_profile",
+          "tested_against_reference": "shared_expected_fixtures",
           "excel_observed": "not_established_by_this_mapping",
-          "unsupported_now": true
+          "unsupported_now": false
         },
         "rust": {
           "recognized": "catalogued",
           "parsed_syntax_probe": true,
           "preserved": "generic_normal_formula_path; per_function_unverified",
           "translated_source": "not_implemented",
-          "executable": "planned",
-          "tested_against_reference": "not_established",
+          "executable": "implemented_profile",
+          "tested_against_reference": "shared_expected_fixtures",
           "excel_observed": "not_established_by_this_mapping",
-          "unsupported_now": true
+          "unsupported_now": false
         }
       },
       "runtime_contract": "deterministic_excel_semantics_target"

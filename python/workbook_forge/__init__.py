@@ -2840,6 +2840,16 @@ def _eval(
             return _scalar_math_call(name, node.children, cells, sheet_name, budget)
         if name == "XOR":
             return _xor_call(node.children, cells, sheet_name, budget)
+        if name in _AGGREGATE_FUNCTIONS:
+            return _aggregate_call(name, node.children, cells, sheet_name, budget)
+        if name in {"LARGE", "SMALL"}:
+            return _order_statistic_call(name, node.children, cells, sheet_name, budget)
+        if name in {"RANK.EQ", "RANK"}:
+            return _rank_call(name, node.children, cells, sheet_name, budget)
+        if name == "AVERAGEA":
+            return _averagea_call(node.children, cells, sheet_name, budget)
+        if name == "SUMPRODUCT":
+            return _sumproduct_call(node.children, cells, sheet_name, budget)
         if name == "IF":
             if len(node.children) not in (2, 3):
                 return _arity(name, "2 or 3", len(node.children))
@@ -4097,6 +4107,332 @@ def _xor_call(
     if not tested:
         return ErrorValue("#VALUE!", "XOR has no logical values to test")
     return result
+
+
+_PLAIN_NUMBER_TEXT = re.compile(r"[+-]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:[eE][+-]?[0-9]+)?")
+_AGGREGATE_FUNCTIONS = {
+    "PRODUCT": 255,
+    "SUMSQ": 255,
+    "MEDIAN": 255,
+    "MODE.SNGL": 254,
+    "STDEV.S": 254,
+    "STDEV.P": 254,
+    "VAR.S": 254,
+    "VAR.P": 254,
+}
+
+
+def _scalar_argument(
+    child: _Node,
+    cells: Mapping[str, Scalar],
+    sheet_name: str,
+    budget: _WildcardBudget,
+) -> object:
+    """One scalar argument. A range or array is #VALUE!; an error is returned."""
+    value = _dereference(_eval(child, cells, sheet_name, budget))
+    if isinstance(value, (_Range, ArrayValue)):
+        return ErrorValue("#VALUE!", "argument must be a single value")
+    return value
+
+
+def _number_argument(
+    child: _Node,
+    cells: Mapping[str, Scalar],
+    sheet_name: str,
+    budget: _WildcardBudget,
+) -> float | ErrorValue:
+    """One scalar argument coerced to a number with the shared coercer."""
+    value = _scalar_argument(child, cells, sheet_name, budget)
+    if isinstance(value, ErrorValue):
+        return value
+    return _binary64(value)
+
+
+def _plain_number_text(text: str) -> float | None:
+    """Text that an aggregate reads as a number when typed directly.
+
+    An optional sign, digits with an optional decimal point, and an optional
+    exponent. Surrounding spaces, tabs and line breaks are ignored.
+    """
+    text = text.strip(" \t\r\n")
+    if _PLAIN_NUMBER_TEXT.fullmatch(text) is None:
+        return None
+    number = float(text)
+    return number if math.isfinite(number) else None
+
+
+def _collect_numbers(
+    child: _Node,
+    cells: Mapping[str, Scalar],
+    sheet_name: str,
+    budget: _WildcardBudget,
+    numbers: list[float],
+) -> ErrorValue | None:
+    """Append the numbers an aggregate reads from one argument.
+
+    Typed directly, numbers, logical values and plain numeric text count and
+    other text is #VALUE!. Inside a reference or array only numbers count. An
+    error value anywhere is returned, the first one in reading order.
+    """
+    evaluated = _eval(child, cells, sheet_name, budget)
+    referenced = _keeps_reference(child, evaluated)
+    for value in _flatten((_dereference(evaluated),)):
+        if isinstance(value, ErrorValue):
+            return value
+        if isinstance(value, bool):
+            if not referenced:
+                numbers.append(1.0 if value else 0.0)
+        elif isinstance(value, (int, float)):
+            number = _binary64(value)
+            if isinstance(number, ErrorValue):
+                return number
+            numbers.append(number)
+        elif isinstance(value, str) and not referenced:
+            number = _plain_number_text(value)
+            if number is None:
+                return ErrorValue("#VALUE!", f"{value!r} is not numeric")
+            numbers.append(number)
+    return None
+
+
+def _sorted_median(ordered: list[float]) -> float:
+    """The median of numbers already sorted in ascending order."""
+    middle = len(ordered) // 2
+    if len(ordered) % 2 == 1:
+        return ordered[middle]
+    low, high = ordered[middle - 1], ordered[middle]
+    total = low + high
+    return total / 2 if math.isfinite(total) else low / 2 + high / 2
+
+
+def _first_mode(numbers: list[float]) -> float | None:
+    """The most frequent number; among equals, the one that appears first."""
+    seen: dict[float, list[int]] = {}
+    for index, number in enumerate(numbers):
+        entry = seen.setdefault(number, [0, index])
+        entry[0] += 1
+    best: list[int] | None = None
+    for entry in seen.values():
+        if entry[0] > 1 and (best is None or entry[0] > best[0]):
+            best = entry
+    return None if best is None else numbers[best[1]]
+
+
+def _aggregate_call(
+    name: str,
+    children: tuple[_Node, ...],
+    cells: Mapping[str, Scalar],
+    sheet_name: str,
+    budget: _WildcardBudget,
+) -> object:
+    """PRODUCT, SUMSQ, MEDIAN, MODE.SNGL, STDEV.S, STDEV.P, VAR.S and VAR.P."""
+    arity_error = _arity_range(name, 1, _AGGREGATE_FUNCTIONS[name], len(children))
+    if arity_error is not None:
+        return arity_error
+    numbers: list[float] = []
+    for child in children:
+        error = _collect_numbers(child, cells, sheet_name, budget, numbers)
+        if error is not None:
+            return error
+    if name == "PRODUCT":
+        if not numbers:
+            return 0.0
+        product = 1.0
+        for number in numbers:
+            product *= number
+        return _finite_number(product)
+    if name == "SUMSQ":
+        total = 0.0
+        for number in numbers:
+            total += number * number
+        return _finite_number(total)
+    if name == "MEDIAN":
+        if not numbers:
+            return ErrorValue("#NUM!", "MEDIAN has no numbers")
+        return _finite_number(_sorted_median(sorted(numbers)))
+    if name == "MODE.SNGL":
+        mode = _first_mode(numbers)
+        if mode is None:
+            return ErrorValue("#N/A", "MODE.SNGL found no repeated number")
+        return _finite_number(mode)
+    sample = name in {"STDEV.S", "VAR.S"}
+    count = len(numbers)
+    if count < (2 if sample else 1):
+        return ErrorValue("#DIV/0!", f"{name} needs more numbers")
+    total = 0.0
+    for number in numbers:
+        total += number
+    mean = total / count
+    squares = 0.0
+    for number in numbers:
+        deviation = number - mean
+        squares += deviation * deviation
+    variance = squares / (count - 1 if sample else count)
+    if not math.isfinite(variance):
+        return ErrorValue("#NUM!", "result is outside the supported numeric range")
+    return _finite_number(math.sqrt(variance) if name.startswith("STDEV") else variance)
+
+
+def _order_statistic_call(
+    name: str,
+    children: tuple[_Node, ...],
+    cells: Mapping[str, Scalar],
+    sheet_name: str,
+    budget: _WildcardBudget,
+) -> object:
+    """LARGE and SMALL: the k-th largest or smallest number."""
+    arity_error = _arity_range(name, 2, 2, len(children))
+    if arity_error is not None:
+        return arity_error
+    numbers: list[float] = []
+    error = _collect_numbers(children[0], cells, sheet_name, budget, numbers)
+    if error is not None:
+        return error
+    position = _number_argument(children[1], cells, sheet_name, budget)
+    if isinstance(position, ErrorValue):
+        return position
+    if position != math.floor(position) or position < 1 or position > len(numbers):
+        return ErrorValue("#NUM!", f"{name} position is outside the data")
+    numbers.sort()
+    index = int(position)
+    return _finite_number(numbers[len(numbers) - index] if name == "LARGE" else numbers[index - 1])
+
+
+def _rank_call(
+    name: str,
+    children: tuple[_Node, ...],
+    cells: Mapping[str, Scalar],
+    sheet_name: str,
+    budget: _WildcardBudget,
+) -> object:
+    """RANK.EQ and RANK: one more than the count of numbers ahead of `number`."""
+    arity_error = _arity_range(name, 2, 3, len(children))
+    if arity_error is not None:
+        return arity_error
+    number = _number_argument(children[0], cells, sheet_name, budget)
+    if isinstance(number, ErrorValue):
+        return number
+    evaluated = _eval(children[1], cells, sheet_name, budget)
+    if isinstance(evaluated, ErrorValue):
+        return evaluated
+    if not _keeps_reference(children[1], evaluated):
+        return ErrorValue("#VALUE!", f"{name} needs a reference or array of numbers")
+    numbers: list[float] = []
+    for value in _flatten((_dereference(evaluated),)):
+        if isinstance(value, ErrorValue):
+            return value
+        if isinstance(value, (int, float)) and not isinstance(value, bool):
+            listed = _binary64(value)
+            if isinstance(listed, ErrorValue):
+                return listed
+            numbers.append(listed)
+    ascending = False
+    if len(children) == 3:
+        order = _number_argument(children[2], cells, sheet_name, budget)
+        if isinstance(order, ErrorValue):
+            return order
+        ascending = order != 0
+    if number not in numbers:
+        return ErrorValue("#N/A", f"{name} number is not in the list")
+    ahead = 0
+    for listed in numbers:
+        if (listed < number) if ascending else (listed > number):
+            ahead += 1
+    return float(ahead + 1)
+
+
+def _averagea_call(
+    children: tuple[_Node, ...],
+    cells: Mapping[str, Scalar],
+    sheet_name: str,
+    budget: _WildcardBudget,
+) -> object:
+    """AVERAGEA: like AVERAGE, but logical values and text in a reference count."""
+    arity_error = _arity_range("AVERAGEA", 1, 255, len(children))
+    if arity_error is not None:
+        return arity_error
+    total = 0.0
+    count = 0
+    for child in children:
+        evaluated = _eval(child, cells, sheet_name, budget)
+        referenced = _keeps_reference(child, evaluated)
+        for value in _flatten((_dereference(evaluated),)):
+            if isinstance(value, ErrorValue):
+                return value
+            if value is None:
+                continue
+            if isinstance(value, bool):
+                number = 1.0 if value else 0.0
+            elif isinstance(value, str):
+                if referenced:
+                    number = 0.0
+                else:
+                    parsed = _plain_number_text(value)
+                    if parsed is None:
+                        return ErrorValue("#VALUE!", f"{value!r} is not numeric")
+                    number = parsed
+            else:
+                converted = _binary64(value)
+                if isinstance(converted, ErrorValue):
+                    return converted
+                number = converted
+            total += number
+            count += 1
+    if count == 0:
+        return ErrorValue("#DIV/0!", "AVERAGEA has no values")
+    return _finite_number(total / count)
+
+
+def _value_matrix(value: object) -> list[list[object]]:
+    """The rows of a range, an array, or a single value as one cell."""
+    value = _dereference(value)
+    if isinstance(value, _Range):
+        return [
+            list(value.values[row * value.columns:(row + 1) * value.columns])
+            for row in range(value.rows)
+        ]
+    if isinstance(value, ArrayValue):
+        return [list(row) for row in value.rows]
+    return [[value]]
+
+
+def _sumproduct_call(
+    children: tuple[_Node, ...],
+    cells: Mapping[str, Scalar],
+    sheet_name: str,
+    budget: _WildcardBudget,
+) -> object:
+    """SUMPRODUCT: the sum of the products of corresponding entries."""
+    arity_error = _arity_range("SUMPRODUCT", 1, 255, len(children))
+    if arity_error is not None:
+        return arity_error
+    arrays = [_value_matrix(_eval(child, cells, sheet_name, budget)) for child in children]
+    rows = len(arrays[0])
+    columns = len(arrays[0][0]) if rows else 0
+    for array in arrays:
+        if len(array) != rows or any(len(row) != columns for row in array):
+            return ErrorValue("#VALUE!", "SUMPRODUCT arrays must have the same dimensions")
+    for array in arrays:
+        for row in array:
+            for value in row:
+                if isinstance(value, ErrorValue):
+                    return value
+    total = 0.0
+    for row in range(rows):
+        for column in range(columns):
+            product = 1.0
+            for array in arrays:
+                value = array[row][column]
+                # An entry that is not a number counts as zero.
+                if isinstance(value, (int, float)) and not isinstance(value, bool):
+                    number = _binary64(value)
+                    if isinstance(number, ErrorValue):
+                        return number
+                    product *= number
+                else:
+                    product *= 0.0
+            total += product
+    return _finite_number(total)
 
 
 def _function(
