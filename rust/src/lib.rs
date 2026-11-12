@@ -19,6 +19,7 @@ pub mod toolkit;
 pub mod volatile;
 #[cfg(target_arch = "wasm32")]
 pub mod wasm;
+mod worksheet_functions;
 pub mod xlsx;
 pub mod xml_patterns;
 pub use names::{DefinedName, DefinedNames, defined_name_error_code};
@@ -635,8 +636,18 @@ impl<'n> Parser<'n> {
                 self.expect(Token::RParen)?;
                 e
             }
-            Token::Ident(name) if name.eq_ignore_ascii_case("TRUE") => Expr::Bool(true),
-            Token::Ident(name) if name.eq_ignore_ascii_case("FALSE") => Expr::Bool(false),
+            // TRUE and FALSE are logical constants; TRUE() and FALSE() are the
+            // zero-argument functions that return them.
+            Token::Ident(name)
+                if name.eq_ignore_ascii_case("TRUE") && self.peek() != Some(&Token::LParen) =>
+            {
+                Expr::Bool(true)
+            }
+            Token::Ident(name)
+                if name.eq_ignore_ascii_case("FALSE") && self.peek() != Some(&Token::LParen) =>
+            {
+                Expr::Bool(false)
+            }
             Token::Ident(name) => self.parse_name_or_call(name, false)?,
             Token::QuotedSheet(name) => self.parse_name_or_call(name, true)?,
             other => {
@@ -1124,6 +1135,7 @@ fn eval(expr: &Expr, env: &Environment<'_>) -> Result<CalcValue, FormulaError> {
                 "IF" | "IFERROR" | "IFNA" | "IFS" | "SWITCH" => selection_call(name, args, env),
                 "XLOOKUP" | "XMATCH" => xlookup_family(name, args, env),
                 "INDEX" => index_call(name, args, env),
+                "CHOOSE" => worksheet_functions::choose_call(args, env),
                 _ => eval_call(name, args, env).map(scalar),
             }
         }
@@ -3749,6 +3761,27 @@ fn eval_call(name: &str, args: &[Expr], env: &Environment<'_>) -> Result<Value, 
         "NA" => {
             arity(name, args, 0, 0)?;
             return Ok(Value::Error(FormulaError::NA));
+        }
+        "SQRT" | "POWER" | "EXP" | "LN" | "LOG" | "LOG10" | "PI" | "SIGN" | "CEILING" | "FLOOR"
+        | "CEILING.MATH" | "FLOOR.MATH" | "MROUND" | "TRUE" | "FALSE" => {
+            return worksheet_functions::scalar_math_call(name, args, env);
+        }
+        "XOR" => return worksheet_functions::xor_call(args, env),
+        "PRODUCT" | "SUMSQ" | "MEDIAN" | "MODE.SNGL" | "STDEV.S" | "STDEV.P" | "VAR.S"
+        | "VAR.P" => {
+            return worksheet_functions::aggregate_call(name, args, env);
+        }
+        "LARGE" | "SMALL" => return worksheet_functions::order_statistic_call(name, args, env),
+        "RANK.EQ" | "RANK" => return worksheet_functions::rank_call(name, args, env),
+        "AVERAGEA" => return worksheet_functions::averagea_call(args, env),
+        "SUMPRODUCT" => return worksheet_functions::sumproduct_call(args, env),
+        "CONCATENATE" | "EXACT" | "PROPER" | "REPT" | "REPLACE" | "VALUE" | "CHAR" | "CODE" => {
+            return worksheet_functions::text_call(name, args, env);
+        }
+        "ROWS" | "COLUMNS" => return worksheet_functions::dimension_call(name, args, env),
+        "HLOOKUP" => return worksheet_functions::hlookup_call(args, env),
+        "NPV" | "IRR" | "XNPV" | "XIRR" | "RATE" | "MIRR" => {
+            return worksheet_functions::cash_flow_call(name, args, env);
         }
         "HOUR" | "MINUTE" | "SECOND" => {
             arity(name, args, 1, 1)?;
@@ -9115,6 +9148,30 @@ mod tests {
         assert_eq!(
             eval_masked("=SUM(UNIQUE(D1:D2,IF(TRUE,A2)))"),
             Ok(Value::Number(30.0))
+        );
+    }
+
+    // Workbook Forge profile: ROWS and COLUMNS measure a reference from its
+    // addresses and still apply the 100,000-cell range limit. Rows 1..10000
+    // by columns A..J are exactly 100,000 cells; one more row is over it.
+    #[test]
+    fn dimension_functions_apply_the_range_evaluation_limit() {
+        let empty = cells(&[]);
+        assert_eq!(
+            evaluate("=ROWS(A1:J10000)", &empty, "Sheet1"),
+            Ok(Value::Number(10000.0))
+        );
+        assert_eq!(
+            evaluate("=COLUMNS(A1:J10000)", &empty, "Sheet1"),
+            Ok(Value::Number(10.0))
+        );
+        assert_eq!(
+            evaluate("=ROWS(A1:J10001)", &empty, "Sheet1"),
+            Err(FormulaError::Num)
+        );
+        assert_eq!(
+            evaluate("=COLUMNS(A1:J10001)", &empty, "Sheet1"),
+            Err(FormulaError::Num)
         );
     }
 }

@@ -106,8 +106,7 @@ SUPPORTED_NOTES = {
         "hidden name (`unsupported_formula`), typed refusals by design. 3D spans "
         "and `FirstQuarter` (a 3D target) in `hb_3d_references.xlsx` are "
         "`unsupported_formula`. `hb_r1c1_looking_names.xlsx` reports "
-        "`invalid_reference` for the cell-shaped `XFE1`. "
-        "`hb_google_sheets_like.xlsx` reports `unsupported_formula` for CONCATENATE."
+        "`invalid_reference` for the cell-shaped `XFE1`."
     ),
     "r1c1-looking-names": (
         "`hb_r1c1_looking_names.xlsx`: three formulas calculate through their "
