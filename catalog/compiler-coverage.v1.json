@@ -6,7 +6,7 @@
   "inventory_retrieved": "2026-09-24",
   "inventory_sha256": "d4f612b6ff7697538902aaf203703b395980ee5eecbf58b26ba8e1dcb8d38e68",
   "inventory_refresh_required": true,
-  "formula_fixture_sha256": "022c51e2a2d00f7ef7bb34e6dd7199c435a3e141e72b7f3d129c14612ce5b3e5",
+  "formula_fixture_sha256": "c0df7719d2eb8acc48d7053c81beea313684f405b1df19f46987734747e71294",
   "primary_source": "https://support.microsoft.com/en-us/excel/excel-functions-alphabetical",
   "target_build": "Microsoft 365 desktop; build/channel availability unverified",
   "udfs": "arbitrary add-ins/UDFs are in long-term scope through explicit typed bindings; not enumerable built-ins",
@@ -1839,27 +1839,46 @@
       "category": "Text",
       "availability": "unknown",
       "introduced_version_marker": null,
-      "shared_case_ids": [],
+      "shared_case_ids": [
+        "char-128-refused-profile",
+        "char-255-refused-profile",
+        "char-256-profile",
+        "char-error-argument-profile",
+        "char-fraction-truncated-profile",
+        "char-line-feed-length",
+        "char-lowercase-a",
+        "char-microsoft-33",
+        "char-microsoft-65",
+        "char-negative-profile",
+        "char-no-arguments-profile",
+        "char-nonnumeric-text-profile",
+        "char-numeric-text-profile",
+        "char-range-argument-profile",
+        "char-space",
+        "char-tilde",
+        "char-zero-profile",
+        "code-char-round-trip"
+      ],
       "languages": {
         "python": {
           "recognized": "catalogued",
           "parsed_syntax_probe": true,
           "preserved": "generic_normal_formula_path; per_function_unverified",
           "translated_source": "not_implemented",
-          "executable": "planned",
-          "tested_against_reference": "not_established",
+          "executable": "implemented_profile",
+          "tested_against_reference": "shared_expected_fixtures",
           "excel_observed": "not_established_by_this_mapping",
-          "unsupported_now": true
+          "unsupported_now": false
         },
         "rust": {
           "recognized": "catalogued",
           "parsed_syntax_probe": true,
           "preserved": "generic_normal_formula_path; per_function_unverified",
           "translated_source": "not_implemented",
-          "executable": "planned",
-          "tested_against_reference": "not_established",
+          "executable": "implemented_profile",
+          "tested_against_reference": "shared_expected_fixtures",
           "excel_observed": "not_established_by_this_mapping",
-          "unsupported_now": true
+          "unsupported_now": false
         }
       },
       "runtime_contract": "deterministic_excel_semantics_target"
@@ -2109,27 +2128,57 @@
       "category": "Lookup and reference",
       "availability": "unknown",
       "introduced_version_marker": null,
-      "shared_case_ids": [],
+      "shared_case_ids": [
+        "choose-254-values-microsoft",
+        "choose-255-values-profile",
+        "choose-direct-value-stays-direct-profile",
+        "choose-empty-index-profile",
+        "choose-empty-selected-value-profile",
+        "choose-empty-unselected-value-profile",
+        "choose-index-below-one-fraction",
+        "choose-index-error-profile",
+        "choose-index-from-cell",
+        "choose-logical-index-profile",
+        "choose-microsoft-fourth",
+        "choose-microsoft-fraction-truncated",
+        "choose-microsoft-index-past-list",
+        "choose-microsoft-index-zero",
+        "choose-microsoft-literals",
+        "choose-microsoft-range-reference",
+        "choose-microsoft-range-reference-equivalence",
+        "choose-microsoft-second",
+        "choose-nested",
+        "choose-nonnumeric-index-profile",
+        "choose-number-result",
+        "choose-numeric-text-index-profile",
+        "choose-one-argument-profile",
+        "choose-range-index-profile",
+        "choose-reference-stays-reference-profile",
+        "choose-selected-error",
+        "choose-unselected-error-profile",
+        "columns-range-from-choose",
+        "rows-range-from-choose"
+      ],
       "languages": {
         "python": {
           "recognized": "catalogued",
           "parsed_syntax_probe": true,
           "preserved": "generic_normal_formula_path; per_function_unverified",
           "translated_source": "not_implemented",
-          "executable": "planned",
-          "tested_against_reference": "not_established",
+          "executable": "implemented_profile",
+          "tested_against_reference": "shared_expected_fixtures",
           "excel_observed": "not_established_by_this_mapping",
-          "unsupported_now": true
+          "unsupported_now": false
         },
         "rust": {
           "recognized": "catalogued",
           "parsed_syntax_probe": true,
           "preserved": "generic_normal_formula_path; per_function_unverified",
           "translated_source": "not_implemented",
-          "executable": "planned",
-          "tested_against_reference": "not_established",
+          "executable": "implemented_profile",
+          "tested_against_reference": "shared_expected_fixtures",
           "excel_observed": "not_established_by_this_mapping",
-          "unsupported_now": true
+          "unsupported_now": false
         }
       },
       "runtime_contract": "deterministic_excel_semantics_target"
@@ -2229,27 +2278,42 @@
       "category": "Text",
       "availability": "unknown",
       "introduced_version_marker": null,
-      "shared_case_ids": [],
+      "shared_case_ids": [
+        "code-char-round-trip",
+        "code-empty-cell-profile",
+        "code-empty-text-profile",
+        "code-error-argument-profile",
+        "code-first-character-only",
+        "code-logical-profile",
+        "code-lowercase-a",
+        "code-microsoft-a",
+        "code-microsoft-exclamation",
+        "code-non-ascii-refused-profile",
+        "code-number-profile",
+        "code-range-argument-profile",
+        "code-space",
+        "code-two-arguments-profile"
+      ],
       "languages": {
         "python": {
           "recognized": "catalogued",
           "parsed_syntax_probe": true,
           "preserved": "generic_normal_formula_path; per_function_unverified",
           "translated_source": "not_implemented",
-          "executable": "planned",
-          "tested_against_reference": "not_established",
+          "executable": "implemented_profile",
+          "tested_against_reference": "shared_expected_fixtures",
           "excel_observed": "not_established_by_this_mapping",
-          "unsupported_now": true
+          "unsupported_now": false
         },
         "rust": {
           "recognized": "catalogued",
           "parsed_syntax_probe": true,
           "preserved": "generic_normal_formula_path; per_function_unverified",
           "translated_source": "not_implemented",
-          "executable": "planned",
-          "tested_against_reference": "not_established",
+          "executable": "implemented_profile",
+          "tested_against_reference": "shared_expected_fixtures",
           "excel_observed": "not_established_by_this_mapping",
-          "unsupported_now": true
+          "unsupported_now": false
         }
       },
       "runtime_contract": "deterministic_excel_semantics_target"
@@ -2289,27 +2353,44 @@
       "category": "Lookup and reference",
       "availability": "unknown",
       "introduced_version_marker": null,
-      "shared_case_ids": [],
+      "shared_case_ids": [
+        "columns-absolute-reference",
+        "columns-computed-array",
+        "columns-direct-error-profile",
+        "columns-direct-number-profile",
+        "columns-empty-argument-profile",
+        "columns-error-cells-not-read-profile",
+        "columns-index-single-cell",
+        "columns-microsoft-reference",
+        "columns-ninety-thousand-cell-range",
+        "columns-no-arguments-profile",
+        "columns-range-from-choose",
+        "columns-reversed-corners",
+        "columns-sheet-qualified-reference",
+        "columns-single-cell",
+        "columns-single-error-cell-not-read-profile",
+        "columns-two-arguments-profile"
+      ],
       "languages": {
         "python": {
           "recognized": "catalogued",
           "parsed_syntax_probe": true,
           "preserved": "generic_normal_formula_path; per_function_unverified",
           "translated_source": "not_implemented",
-          "executable": "planned",
-          "tested_against_reference": "not_established",
+          "executable": "implemented_profile",
+          "tested_against_reference": "shared_expected_fixtures",
           "excel_observed": "not_established_by_this_mapping",
-          "unsupported_now": true
+          "unsupported_now": false
         },
         "rust": {
           "recognized": "catalogued",
           "parsed_syntax_probe": true,
           "preserved": "generic_normal_formula_path; per_function_unverified",
           "translated_source": "not_implemented",
-          "executable": "planned",
-          "tested_against_reference": "not_established",
+          "executable": "implemented_profile",
+          "tested_against_reference": "shared_expected_fixtures",
           "excel_observed": "not_established_by_this_mapping",
-          "unsupported_now": true
+          "unsupported_now": false
         }
       },
       "runtime_contract": "deterministic_excel_semantics_target"
@@ -2542,27 +2623,47 @@
       "category": "Text",
       "availability": "unknown",
       "introduced_version_marker": null,
-      "shared_case_ids": [],
+      "shared_case_ids": [
+        "concatenate-255-arguments-microsoft",
+        "concatenate-256-arguments-profile",
+        "concatenate-empty-argument-profile",
+        "concatenate-empty-cell-profile",
+        "concatenate-error-argument-profile",
+        "concatenate-microsoft-a1-b1-equivalence",
+        "concatenate-microsoft-ampersand-text",
+        "concatenate-microsoft-doubled-quote",
+        "concatenate-microsoft-first-last",
+        "concatenate-microsoft-hello-world",
+        "concatenate-microsoft-last-first",
+        "concatenate-microsoft-operator-equivalence",
+        "concatenate-microsoft-sentence",
+        "concatenate-no-arguments-profile",
+        "concatenate-number-and-logical-profile",
+        "concatenate-range-argument-profile",
+        "concatenate-result-at-text-limit",
+        "concatenate-result-over-text-limit-profile",
+        "concatenate-single-argument"
+      ],
       "languages": {
         "python": {
           "recognized": "catalogued",
           "parsed_syntax_probe": true,
           "preserved": "generic_normal_formula_path; per_function_unverified",
           "translated_source": "not_implemented",
-          "executable": "planned",
-          "tested_against_reference": "not_established",
+          "executable": "implemented_profile",
+          "tested_against_reference": "shared_expected_fixtures",
           "excel_observed": "not_established_by_this_mapping",
-          "unsupported_now": true
+          "unsupported_now": false
         },
         "rust": {
           "recognized": "catalogued",
           "parsed_syntax_probe": true,
           "preserved": "generic_normal_formula_path; per_function_unverified",
           "translated_source": "not_implemented",
-          "executable": "planned",
-          "tested_against_reference": "not_established",
+          "executable": "implemented_profile",
+          "tested_against_reference": "shared_expected_fixtures",
           "excel_observed": "not_established_by_this_mapping",
-          "unsupported_now": true
+          "unsupported_now": false
         }
       },
       "runtime_contract": "deterministic_excel_semantics_target"
@@ -2843,6 +2944,8 @@
       "availability": "unknown",
       "introduced_version_marker": null,
       "shared_case_ids": [
+        "choose-direct-value-stays-direct-profile",
+        "choose-reference-stays-reference-profile",
         "count",
         "counting-err-count-direct-error-argument",
         "counting-err-count-ms-example",
@@ -5630,27 +5733,42 @@
       "category": "Text",
       "availability": "unknown",
       "introduced_version_marker": null,
-      "shared_case_ids": [],
+      "shared_case_ids": [
+        "exact-accent-differs",
+        "exact-empty-cell-profile",
+        "exact-empty-texts",
+        "exact-error-argument-profile",
+        "exact-logical-and-text-profile",
+        "exact-logical-case-profile",
+        "exact-microsoft-case",
+        "exact-microsoft-same",
+        "exact-microsoft-space",
+        "exact-number-and-text-profile",
+        "exact-one-argument-profile",
+        "exact-range-argument-profile",
+        "exact-three-arguments-profile",
+        "exact-trailing-space"
+      ],
       "languages": {
         "python": {
           "recognized": "catalogued",
           "parsed_syntax_probe": true,
           "preserved": "generic_normal_formula_path; per_function_unverified",
           "translated_source": "not_implemented",
-          "executable": "planned",
-          "tested_against_reference": "not_established",
+          "executable": "implemented_profile",
+          "tested_against_reference": "shared_expected_fixtures",
           "excel_observed": "not_established_by_this_mapping",
-          "unsupported_now": true
+          "unsupported_now": false
         },
         "rust": {
           "recognized": "catalogued",
           "parsed_syntax_probe": true,
           "preserved": "generic_normal_formula_path; per_function_unverified",
           "translated_source": "not_implemented",
-          "executable": "planned",
-          "tested_against_reference": "not_established",
+          "executable": "implemented_profile",
+          "tested_against_reference": "shared_expected_fixtures",
           "excel_observed": "not_established_by_this_mapping",
-          "unsupported_now": true
+          "unsupported_now": false
         }
       },
       "runtime_contract": "deterministic_excel_semantics_target"
@@ -7418,27 +7536,79 @@
       "category": "Lookup and reference",
       "availability": "unknown",
       "introduced_version_marker": null,
-      "shared_case_ids": [],
+      "shared_case_ids": [
+        "hlookup-approximate-duplicate-last-profile",
+        "hlookup-approximate-false-below-true-profile",
+        "hlookup-approximate-logical-profile",
+        "hlookup-approximate-number-exact",
+        "hlookup-approximate-number-skips-other-types-profile",
+        "hlookup-approximate-text-skips-other-types-profile",
+        "hlookup-approximate-unsorted-profile",
+        "hlookup-arguments-read-in-order-profile",
+        "hlookup-computed-array-table",
+        "hlookup-direct-value-table-profile",
+        "hlookup-empty-first-row-cells-skipped-profile",
+        "hlookup-empty-lookup-argument-profile",
+        "hlookup-empty-lookup-value-profile",
+        "hlookup-empty-result-cell-profile",
+        "hlookup-error-in-first-row-skipped-profile",
+        "hlookup-error-in-result-cell-profile",
+        "hlookup-exact-duplicate-first-profile",
+        "hlookup-exact-number",
+        "hlookup-five-arguments-profile",
+        "hlookup-lookup-error-profile",
+        "hlookup-lookup-range-profile",
+        "hlookup-microsoft-approximate-number-above-all",
+        "hlookup-microsoft-approximate-number-below-all",
+        "hlookup-microsoft-approximate-number-between",
+        "hlookup-microsoft-approximate-text",
+        "hlookup-microsoft-axles",
+        "hlookup-microsoft-bearings-exact",
+        "hlookup-microsoft-below-smallest",
+        "hlookup-microsoft-case-insensitive",
+        "hlookup-microsoft-exact-not-found",
+        "hlookup-microsoft-exact-number-not-found",
+        "hlookup-microsoft-range-lookup-omitted",
+        "hlookup-microsoft-row-index-one",
+        "hlookup-microsoft-row-index-past-table",
+        "hlookup-microsoft-row-index-zero",
+        "hlookup-microsoft-wildcard-asterisk",
+        "hlookup-microsoft-wildcard-question-mark",
+        "hlookup-microsoft-wildcard-tilde",
+        "hlookup-number-does-not-match-numeric-text-profile",
+        "hlookup-range-lookup-one-profile",
+        "hlookup-range-lookup-text-profile",
+        "hlookup-range-lookup-zero-profile",
+        "hlookup-row-index-error-profile",
+        "hlookup-row-index-fraction-below-one-profile",
+        "hlookup-row-index-fraction-profile",
+        "hlookup-row-index-text-profile",
+        "hlookup-single-cell-table-profile",
+        "hlookup-single-cell-table-second-row",
+        "hlookup-two-arguments-profile",
+        "hlookup-wildcard-first-match-profile",
+        "hlookup-wildcard-not-in-approximate-profile"
+      ],
       "languages": {
         "python": {
           "recognized": "catalogued",
           "parsed_syntax_probe": true,
           "preserved": "generic_normal_formula_path; per_function_unverified",
           "translated_source": "not_implemented",
-          "executable": "planned",
-          "tested_against_reference": "not_established",
+          "executable": "implemented_profile",
+          "tested_against_reference": "shared_expected_fixtures",
           "excel_observed": "not_established_by_this_mapping",
-          "unsupported_now": true
+          "unsupported_now": false
         },
         "rust": {
           "recognized": "catalogued",
           "parsed_syntax_probe": true,
           "preserved": "generic_normal_formula_path; per_function_unverified",
           "translated_source": "not_implemented",
-          "executable": "planned",
-          "tested_against_reference": "not_established",
+          "executable": "implemented_profile",
+          "tested_against_reference": "shared_expected_fixtures",
           "excel_observed": "not_established_by_this_mapping",
-          "unsupported_now": true
+          "unsupported_now": false
         }
       },
       "runtime_contract": "deterministic_excel_semantics_target"
@@ -8554,8 +8724,10 @@
       "availability": "unknown",
       "introduced_version_marker": null,
       "shared_case_ids": [
+        "columns-index-single-cell",
         "index",
-        "index-area-number-out-of-reference"
+        "index-area-number-out-of-reference",
+        "rows-index-single-cell"
       ],
       "languages": {
         "python": {
@@ -8835,6 +9007,7 @@
       "availability": "unknown",
       "introduced_version_marker": null,
       "shared_case_ids": [
+        "hlookup-empty-result-cell-profile",
         "isblank"
       ],
       "languages": {
@@ -9645,7 +9818,12 @@
       "availability": "unknown",
       "introduced_version_marker": null,
       "shared_case_ids": [
+        "char-line-feed-length",
+        "concatenate-255-arguments-microsoft",
+        "concatenate-result-at-text-limit",
         "len",
+        "rept-at-length-limit",
+        "rept-two-characters-under-limit",
         "textfn-err-len-div0",
         "textfn-err-len-na",
         "textfn-err-len-value-cell"
@@ -12934,27 +13112,43 @@
       "category": "Text",
       "availability": "unknown",
       "introduced_version_marker": null,
-      "shared_case_ids": [],
+      "shared_case_ids": [
+        "proper-accented-letters-profile",
+        "proper-after-apostrophe",
+        "proper-all-uppercase",
+        "proper-digit-between-letters",
+        "proper-empty-cell-profile",
+        "proper-empty-text",
+        "proper-error-argument-profile",
+        "proper-logical-profile",
+        "proper-microsoft-after-digits",
+        "proper-microsoft-after-hyphen",
+        "proper-microsoft-title",
+        "proper-no-letters",
+        "proper-number-profile",
+        "proper-range-argument-profile",
+        "proper-two-arguments-profile"
+      ],
       "languages": {
         "python": {
           "recognized": "catalogued",
           "parsed_syntax_probe": true,
           "preserved": "generic_normal_formula_path; per_function_unverified",
           "translated_source": "not_implemented",
-          "executable": "planned",
-          "tested_against_reference": "not_established",
+          "executable": "implemented_profile",
+          "tested_against_reference": "shared_expected_fixtures",
           "excel_observed": "not_established_by_this_mapping",
-          "unsupported_now": true
+          "unsupported_now": false
         },
         "rust": {
           "recognized": "catalogued",
           "parsed_syntax_probe": true,
           "preserved": "generic_normal_formula_path; per_function_unverified",
           "translated_source": "not_implemented",
-          "executable": "planned",
-          "tested_against_reference": "not_established",
+          "executable": "implemented_profile",
+          "tested_against_reference": "shared_expected_fixtures",
           "excel_observed": "not_established_by_this_mapping",
-          "unsupported_now": true
+          "unsupported_now": false
         }
       },
       "runtime_contract": "deterministic_excel_semantics_target"
@@ -13620,27 +13814,47 @@
       "category": "Text",
       "availability": "unknown",
       "introduced_version_marker": null,
-      "shared_case_ids": [],
+      "shared_case_ids": [
+        "replace-count-past-end-profile",
+        "replace-error-argument-profile",
+        "replace-fractions-truncated-profile",
+        "replace-logical-new-text-profile",
+        "replace-microsoft-middle",
+        "replace-microsoft-number-end",
+        "replace-microsoft-number-start",
+        "replace-negative-count-profile",
+        "replace-nonnumeric-start-profile",
+        "replace-range-argument-profile",
+        "replace-result-over-text-limit-profile",
+        "replace-start-just-past-end-profile",
+        "replace-start-past-end-profile",
+        "replace-start-zero-profile",
+        "replace-supplementary-character-microsoft",
+        "replace-three-arguments-profile",
+        "replace-whole-text",
+        "replace-with-empty-text-deletes",
+        "replace-zero-characters-inserts"
+      ],
       "languages": {
         "python": {
           "recognized": "catalogued",
           "parsed_syntax_probe": true,
           "preserved": "generic_normal_formula_path; per_function_unverified",
           "translated_source": "not_implemented",
-          "executable": "planned",
-          "tested_against_reference": "not_established",
+          "executable": "implemented_profile",
+          "tested_against_reference": "shared_expected_fixtures",
           "excel_observed": "not_established_by_this_mapping",
-          "unsupported_now": true
+          "unsupported_now": false
         },
         "rust": {
           "recognized": "catalogued",
           "parsed_syntax_probe": true,
           "preserved": "generic_normal_formula_path; per_function_unverified",
           "translated_source": "not_implemented",
-          "executable": "planned",
-          "tested_against_reference": "not_established",
+          "executable": "implemented_profile",
+          "tested_against_reference": "shared_expected_fixtures",
           "excel_observed": "not_established_by_this_mapping",
-          "unsupported_now": true
+          "unsupported_now": false
         }
       },
       "runtime_contract": "deterministic_excel_semantics_target"
@@ -13680,27 +13894,48 @@
       "category": "Text",
       "availability": "unknown",
       "introduced_version_marker": null,
-      "shared_case_ids": [],
+      "shared_case_ids": [
+        "concatenate-result-at-text-limit",
+        "concatenate-result-over-text-limit-profile",
+        "replace-result-over-text-limit-profile",
+        "rept-at-length-limit",
+        "rept-empty-text-any-count-profile",
+        "rept-error-argument-profile",
+        "rept-fraction-below-zero-profile",
+        "rept-microsoft-asterisk-dash",
+        "rept-microsoft-dashes",
+        "rept-microsoft-fraction-truncated",
+        "rept-microsoft-length-limit",
+        "rept-microsoft-zero-times",
+        "rept-negative-count-profile",
+        "rept-nonnumeric-count-profile",
+        "rept-number-text-profile",
+        "rept-numeric-text-count-profile",
+        "rept-one-argument-profile",
+        "rept-range-argument-profile",
+        "rept-two-characters-over-limit",
+        "rept-two-characters-under-limit"
+      ],
       "languages": {
         "python": {
           "recognized": "catalogued",
           "parsed_syntax_probe": true,
           "preserved": "generic_normal_formula_path; per_function_unverified",
           "translated_source": "not_implemented",
-          "executable": "planned",
-          "tested_against_reference": "not_established",
+          "executable": "implemented_profile",
+          "tested_against_reference": "shared_expected_fixtures",
           "excel_observed": "not_established_by_this_mapping",
-          "unsupported_now": true
+          "unsupported_now": false
         },
         "rust": {
           "recognized": "catalogued",
           "parsed_syntax_probe": true,
           "preserved": "generic_normal_formula_path; per_function_unverified",
           "translated_source": "not_implemented",
-          "executable": "planned",
-          "tested_against_reference": "not_established",
+          "executable": "implemented_profile",
+          "tested_against_reference": "shared_expected_fixtures",
           "excel_observed": "not_established_by_this_mapping",
-          "unsupported_now": true
+          "unsupported_now": false
         }
       },
       "runtime_contract": "deterministic_excel_semantics_target"
@@ -14139,27 +14374,44 @@
       "category": "Lookup and reference",
       "availability": "unknown",
       "introduced_version_marker": null,
-      "shared_case_ids": [],
+      "shared_case_ids": [
+        "rows-absolute-reference",
+        "rows-computed-array",
+        "rows-direct-error-profile",
+        "rows-direct-number-profile",
+        "rows-empty-argument-profile",
+        "rows-error-cells-not-read-profile",
+        "rows-index-single-cell",
+        "rows-microsoft-reference",
+        "rows-ninety-thousand-cell-range",
+        "rows-no-arguments-profile",
+        "rows-range-from-choose",
+        "rows-reversed-corners",
+        "rows-sheet-qualified-reference",
+        "rows-single-cell",
+        "rows-single-error-cell-not-read-profile",
+        "rows-two-arguments-profile"
+      ],
       "languages": {
         "python": {
           "recognized": "catalogued",
           "parsed_syntax_probe": true,
           "preserved": "generic_normal_formula_path; per_function_unverified",
           "translated_source": "not_implemented",
-          "executable": "planned",
-          "tested_against_reference": "not_established",
+          "executable": "implemented_profile",
+          "tested_against_reference": "shared_expected_fixtures",
           "excel_observed": "not_established_by_this_mapping",
-          "unsupported_now": true
+          "unsupported_now": false
         },
         "rust": {
           "recognized": "catalogued",
           "parsed_syntax_probe": true,
           "preserved": "generic_normal_formula_path; per_function_unverified",
           "translated_source": "not_implemented",
-          "executable": "planned",
-          "tested_against_reference": "not_established",
+          "executable": "implemented_profile",
+          "tested_against_reference": "shared_expected_fixtures",
           "excel_observed": "not_established_by_this_mapping",
-          "unsupported_now": true
+          "unsupported_now": false
         }
       },
       "runtime_contract": "deterministic_excel_semantics_target"
@@ -14456,14 +14708,17 @@
         "array-power-scalar-broadcast-profile",
         "array-scalar-left-subtract-broadcast-profile",
         "array-subtract-scalar-broadcast-profile",
+        "columns-computed-array",
         "filter-array-fallback-preserves-shape-profile",
         "filter-generated-row-mask-profile",
+        "hlookup-computed-array-table",
         "if-false-array-branch-preserves-shape-profile",
         "if-selected-sequence-preserves-array-profile",
         "iferror-array-fallback-preserves-shape-profile",
         "iferror-array-value-passthrough-profile",
         "ifna-array-value-passthrough-profile",
         "ifs-selected-array-preserves-shape-profile",
+        "rows-computed-array",
         "sequence-100000-cell-limit-profile",
         "sequence-all-rows-omitted-profile",
         "sequence-and-array-consumer-profile",
@@ -15428,6 +15683,8 @@
       "availability": "unknown",
       "introduced_version_marker": null,
       "shared_case_ids": [
+        "choose-microsoft-range-reference",
+        "choose-microsoft-range-reference-equivalence",
         "counting-err-sum-still-propagates-error",
         "quoted-sheet-qualified-range",
         "randarray-equal-whole-bounds-sum",
@@ -17126,27 +17383,60 @@
       "category": "Text",
       "availability": "unknown",
       "introduced_version_marker": null,
-      "shared_case_ids": [],
+      "shared_case_ids": [
+        "value-accounting-parentheses-profile",
+        "value-ambiguous-date-text-profile",
+        "value-date-and-time-text-profile",
+        "value-empty-cell-profile",
+        "value-error-argument-profile",
+        "value-explicit-plus-profile",
+        "value-four-digit-group-profile",
+        "value-grouped-decimal",
+        "value-invalid-time-text-profile",
+        "value-iso-date-text-profile",
+        "value-leading-decimal-point-profile",
+        "value-logical-profile",
+        "value-long-date-text-profile",
+        "value-microsoft-currency",
+        "value-microsoft-empty-text",
+        "value-microsoft-not-a-number",
+        "value-microsoft-time-difference",
+        "value-misplaced-group-separator-profile",
+        "value-negative",
+        "value-negative-currency-profile",
+        "value-no-arguments-profile",
+        "value-noon-text",
+        "value-number-argument-profile",
+        "value-numeric-text-cell",
+        "value-other-currency-symbol-profile",
+        "value-percent",
+        "value-plain-decimal",
+        "value-range-argument-profile",
+        "value-scientific",
+        "value-surrounding-spaces-profile",
+        "value-time-text",
+        "value-trailing-currency-symbol-profile"
+      ],
       "languages": {
         "python": {
           "recognized": "catalogued",
           "parsed_syntax_probe": true,
           "preserved": "generic_normal_formula_path; per_function_unverified",
           "translated_source": "not_implemented",
-          "executable": "planned",
-          "tested_against_reference": "not_established",
+          "executable": "implemented_profile",
+          "tested_against_reference": "shared_expected_fixtures",
           "excel_observed": "not_established_by_this_mapping",
-          "unsupported_now": true
+          "unsupported_now": false
         },
         "rust": {
           "recognized": "catalogued",
           "parsed_syntax_probe": true,
           "preserved": "generic_normal_formula_path; per_function_unverified",
           "translated_source": "not_implemented",
-          "executable": "planned",
-          "tested_against_reference": "not_established",
+          "executable": "implemented_profile",
+          "tested_against_reference": "shared_expected_fixtures",
           "excel_observed": "not_established_by_this_mapping",
-          "unsupported_now": true
+          "unsupported_now": false
         }
       },
       "runtime_contract": "deterministic_excel_semantics_target"

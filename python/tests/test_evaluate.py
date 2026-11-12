@@ -697,3 +697,15 @@ def test_sort_and_unique_numeric_payloads_use_binary64():
     )
     assert isinstance(nonfinite_payload, ErrorValue)
     assert nonfinite_payload.code == "#NUM!"
+
+
+@pytest.mark.parametrize("name", ["ROWS", "COLUMNS"])
+def test_dimension_functions_apply_the_range_evaluation_limit(name):
+    """Workbook Forge profile: a reference is measured from its addresses, and
+    the 100,000-cell range limit still applies. Rows 1..10000 by columns A..J
+    are exactly 100,000 cells; one more row is over the limit."""
+    at_limit = evaluate(f"={name}(A1:J10000)")
+    assert at_limit == (10000 if name == "ROWS" else 10)
+    over_limit = evaluate_result(f"={name}(A1:J10001)")
+    assert isinstance(over_limit, ErrorValue)
+    assert over_limit.code == "#NUM!"

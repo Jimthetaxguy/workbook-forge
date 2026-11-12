@@ -64,7 +64,7 @@ workbook model. That path is a proposed next milestone, not a delivered feature.
 
 The coverage counts describe different things (catalog counts unchanged at `main` `c506165` since `580aacd` on
 2026-11-06; the rest of this assessment keeps its 2026-09-28 date): 521 inventoried functions,
-153 implemented formula functions, nine directly callable primitive functions,
+165 implemented formula functions, nine directly callable primitive functions,
 ten primitive binary operators, ten XML extraction patterns and nine workbook
 agent operations. None of these counts implies complete Excel support.
 

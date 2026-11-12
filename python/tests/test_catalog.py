@@ -352,3 +352,42 @@ def test_range_statistics_glossary_separates_documented_rules_from_profiles():
     sumproduct = lookup_function("SUMPRODUCT")["semantic_spec"]["semantics"]
     assert "not used as fixture values" in sumproduct["documented_behavior"]
     assert lookup_function("RANK")["implementation"]["category"] == "compatibility"
+
+
+def test_text_and_lookup_glossary_separates_documented_rules_from_profiles():
+    expected_arity = {
+        "CONCATENATE": (1, 255), "EXACT": (2, 2), "PROPER": (1, 1), "REPT": (2, 2),
+        "REPLACE": (4, 4), "VALUE": (1, 1), "CHAR": (1, 1), "CODE": (1, 1),
+        "CHOOSE": (2, 255), "HLOOKUP": (3, 4), "ROWS": (1, 1), "COLUMNS": (1, 1),
+    }
+    for name, (minimum, maximum) in expected_arity.items():
+        entry = lookup_function(name)
+        assert function_status(name, "python") == "conformance-tested"
+        assert function_status(name, "rust") == "conformance-tested"
+        assert entry["implementation"]["arity"] == {"min": minimum, "max": maximum}
+        assert entry["implementation"]["evidence_grade"] == "dual_engine"
+        assert "ms-" + name.lower() in entry["semantic_spec"]["source_refs"]
+        semantics = entry["semantic_spec"]["semantics"]
+        assert "Microsoft documents" in semantics["documented_behavior"]
+        assert semantics["compatibility_limit"] == "No behaviour of this function has been spot-checked in Excel."
+
+    # Where the evaluator refuses or departs from the page, the spec says so.
+    concatenate = lookup_function("CONCATENATE")["semantic_spec"]["semantics"]
+    assert "Hauser, Andreas" in concatenate["documentation_conflict"]
+    for name in ("CHAR", "CODE"):
+        semantics = lookup_function(name)["semantic_spec"]["semantics"]
+        assert "refuses" in semantics["code_profile"]
+        assert "Excel returns a" in semantics["code_profile"]
+    value = lookup_function("VALUE")["semantic_spec"]["semantics"]
+    assert "regional settings" in value["number_text_profile"]
+    assert "refused with #VALUE! rather than guessed" in value["number_text_profile"]
+    assert "DATEVALUE and TIMEVALUE" in value["date_time_text_profile"]
+    hlookup = lookup_function("HLOOKUP")["semantic_spec"]["semantics"]
+    assert "not asserted as Excel results" in hlookup["approximate_profile"]
+    assert "unverified Workbook Forge profiles" in hlookup["comparison_profile"]
+    choose = lookup_function("CHOOSE")["semantic_spec"]["semantics"]
+    assert "evaluates only the selected value" in choose["evaluation_profile"]
+    assert "not supported by the formula parser" in choose["reference_profile"]
+    for name in ("ROWS", "COLUMNS"):
+        semantics = lookup_function(name)["semantic_spec"]["semantics"]
+        assert "without reading its cells" in semantics["reference_profile"]

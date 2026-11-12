@@ -89,7 +89,7 @@ def test_every_catalog_function_evaluates_on_both_engines(matrix):
         if cells[("python-toolkit", "evaluate")] == "supported"
         and cells[("rust", "evaluate")] == "supported"
     }
-    assert len(evaluated) == 153
+    assert len(evaluated) == 165
     assert evaluated == names
     for name in names:
         assert functions[name][("python-canonical", "evaluate")] == "supported"

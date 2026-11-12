@@ -100,7 +100,7 @@ Every other row is `none`. The rules are in that tool's docstring, and
 Formulas a full calculation does not cover in these categories:
 
 - **cross-sheet**: `hb_3d_references.xlsx` reports `unsupported_formula` for its 3D spans and for the name `FirstQuarter`, whose target is a 3D span. The other files in this category have no calculation diagnostics.
-- **defined-names**: Names calculate in every engine ([defined names](defined-names.md)). `hb_defined_names.xlsx` reports its name cycle (`name_cycle`) and its hidden name (`unsupported_formula`), typed refusals by design. 3D spans and `FirstQuarter` (a 3D target) in `hb_3d_references.xlsx` are `unsupported_formula`. `hb_r1c1_looking_names.xlsx` reports `invalid_reference` for the cell-shaped `XFE1`. `hb_google_sheets_like.xlsx` reports `unsupported_formula` for CONCATENATE.
+- **defined-names**: Names calculate in every engine ([defined names](defined-names.md)). `hb_defined_names.xlsx` reports its name cycle (`name_cycle`) and its hidden name (`unsupported_formula`), typed refusals by design. 3D spans and `FirstQuarter` (a 3D target) in `hb_3d_references.xlsx` are `unsupported_formula`. `hb_r1c1_looking_names.xlsx` reports `invalid_reference` for the cell-shaped `XFE1`.
 - **hidden-names**: `hb_defined_names.xlsx` reports the formula using a hidden name as `unsupported_formula` by design; hidden names are kept, not calculated.
 - **in-cell-array-functions**: `hb_flatten_has_functions.xlsx` reports `unsupported_formula` for HAS, HASANY, HASALL, and FLATTEN.
 - **name-cycle**: `hb_defined_names.xlsx` reports its name cycle as `name_cycle` (`cycle` in the canonical model) by design.

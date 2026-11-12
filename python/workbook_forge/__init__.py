@@ -2850,6 +2850,14 @@ def _eval(
             return _averagea_call(node.children, cells, sheet_name, budget)
         if name == "SUMPRODUCT":
             return _sumproduct_call(node.children, cells, sheet_name, budget)
+        if name in _TEXT_FUNCTION_ARITY:
+            return _text_call(name, node.children, cells, sheet_name, budget)
+        if name == "CHOOSE":
+            return _choose_call(node.children, cells, sheet_name, budget)
+        if name in {"ROWS", "COLUMNS"}:
+            return _dimension_call(name, node.children, cells, sheet_name, budget)
+        if name == "HLOOKUP":
+            return _hlookup_call(node.children, cells, sheet_name, budget)
         if name == "IF":
             if len(node.children) not in (2, 3):
                 return _arity(name, "2 or 3", len(node.children))
@@ -4433,6 +4441,335 @@ def _sumproduct_call(
                     product *= 0.0
             total += product
     return _finite_number(total)
+
+
+_FORMATTED_NUMBER_TEXT = re.compile(
+    r"[+-]?\$?(?:(?:[0-9]{1,3}(?:,[0-9]{3})+|[0-9]+)(?:\.[0-9]*)?|\.[0-9]+)(?:[eE][+-]?[0-9]+)?%?"
+)
+_TEXT_FUNCTION_ARITY = {
+    "CONCATENATE": (1, 255),
+    "EXACT": (2, 2),
+    "PROPER": (1, 1),
+    "REPT": (2, 2),
+    "REPLACE": (4, 4),
+    "VALUE": (1, 1),
+    "CHAR": (1, 1),
+    "CODE": (1, 1),
+}
+
+
+def _bounded_text(text: str, name: str) -> str | ErrorValue:
+    """A text result within the 32,767-unit cell text limit."""
+    if _excel_text_length_units(text) > MAX_TEXT_LENGTH_UNITS:
+        return _text_length_error(name)
+    return text
+
+
+def _proper_case(text: str) -> str:
+    """PROPER: lowercase a cased letter after a cased letter, uppercase the rest.
+
+    Each character is mapped alone, so the result does not depend on context.
+    """
+    output: list[str] = []
+    after_letter = False
+    for character in text:
+        letter = character.islower() or character.isupper()
+        if not letter:
+            output.append(character)
+        elif after_letter:
+            output.append(character.lower())
+        else:
+            output.append(character.upper())
+        after_letter = letter
+    return "".join(output)
+
+
+def _formatted_number_text(text: str) -> float | None:
+    """Text VALUE reads as a number.
+
+    An optional sign, an optional dollar sign, digits that may be grouped in
+    threes by commas, an optional decimal part, an optional exponent and an
+    optional trailing percent sign.
+    """
+    text = text.strip(" \t\r\n")
+    if _FORMATTED_NUMBER_TEXT.fullmatch(text) is None:
+        return None
+    percent = text.endswith("%")
+    number = float(text.replace("$", "").replace(",", "").replace("%", ""))
+    if percent:
+        number /= 100.0
+    return number if math.isfinite(number) else None
+
+
+def _value_of(value: object) -> object:
+    """VALUE: numbers pass, an empty cell is 0, text is a number, date or time."""
+    if value is None:
+        return 0.0
+    if isinstance(value, bool):
+        return ErrorValue("#VALUE!", "VALUE does not convert a logical value")
+    if isinstance(value, (int, float)):
+        number = _binary64(value)
+        return number if isinstance(number, ErrorValue) else _finite_number(number)
+    if not isinstance(value, str):
+        return ErrorValue("#VALUE!", "VALUE requires text or a number")
+    number = _formatted_number_text(value)
+    if number is not None:
+        return _finite_number(number)
+    time = _date_time_text_call("TIMEVALUE", value)
+    if isinstance(time, ErrorValue):
+        return ErrorValue("#VALUE!", "VALUE text is not a recognized number, date or time")
+    # Text with a time and no date has no date serial to add.
+    serial = _date_time_text_call("DATEVALUE", value)
+    if isinstance(serial, ErrorValue):
+        serial = 0.0
+    return _finite_number(float(serial) + float(time))  # type: ignore[arg-type]
+
+
+def _replace_text(old: str, start: float, count: float, new: str) -> str | ErrorValue:
+    """REPLACE: `count` characters of `old` from one-based `start` become `new`."""
+    if start < 1 or count < 0:
+        return ErrorValue("#VALUE!", "REPLACE position and length must not be negative")
+    length = len(old)
+    begin = length if start - 1 >= length else int(start - 1)
+    end = length if count >= length - begin else begin + int(count)
+    return _bounded_text(old[:begin] + new + old[end:], "REPLACE")
+
+
+def _text_call(
+    name: str,
+    children: tuple[_Node, ...],
+    cells: Mapping[str, Scalar],
+    sheet_name: str,
+    budget: _WildcardBudget,
+) -> object:
+    """CONCATENATE, EXACT, PROPER, REPT, REPLACE, VALUE, CHAR and CODE."""
+    low, high = _TEXT_FUNCTION_ARITY[name]
+    arity_error = _arity_range(name, low, high, len(children))
+    if arity_error is not None:
+        return arity_error
+    values = _scalar_arguments(children, cells, sheet_name, budget)
+    if isinstance(values, ErrorValue):
+        return values
+    if name == "VALUE":
+        return _value_of(values[0])
+    if name in {"CHAR", "REPT", "REPLACE"}:
+        # Text first, then numbers, in argument order.
+        converted: list[object] = []
+        numeric = {"CHAR": {0}, "REPT": {1}, "REPLACE": {1, 2}}[name]
+        for index, value in enumerate(values):
+            item = _binary64(value) if index in numeric else _text(value)
+            if isinstance(item, ErrorValue):
+                return item
+            converted.append(math.trunc(item) if index in numeric else item)
+        if name == "CHAR":
+            code = converted[0]
+            # Codes 128 to 255 depend on the computer's character set.
+            if not 1 <= code <= 127:  # type: ignore[operator]
+                return ErrorValue("#VALUE!", "CHAR supports codes 1 through 127")
+            return chr(code)  # type: ignore[arg-type]
+        if name == "REPT":
+            text, times = converted
+            assert isinstance(text, str) and isinstance(times, int)
+            if times < 0:
+                return ErrorValue("#VALUE!", "REPT count must not be negative")
+            if not text:
+                return ""
+            if _excel_text_length_units(text) * times > MAX_TEXT_LENGTH_UNITS:
+                return _text_length_error("REPT")
+            return text * times
+        old, start, count, new = converted
+        return _replace_text(old, start, count, new)  # type: ignore[arg-type]
+    texts: list[str] = []
+    for value in values:
+        text = _text(value)
+        if isinstance(text, ErrorValue):
+            return text
+        texts.append(text)
+    if name == "CONCATENATE":
+        return _join_text_bounded(texts, "", "CONCATENATE")
+    if name == "EXACT":
+        return texts[0] == texts[1]
+    if name == "PROPER":
+        return _bounded_text(_proper_case(texts[0]), "PROPER")
+    first = texts[0][:1]
+    if not first or not first.isascii() or first == "\0":
+        return ErrorValue("#VALUE!", "CODE supports ASCII first characters only")
+    return float(ord(first))
+
+
+def _choose_call(
+    children: tuple[_Node, ...],
+    cells: Mapping[str, Scalar],
+    sheet_name: str,
+    budget: _WildcardBudget,
+) -> object:
+    """CHOOSE: evaluate only the selected value and keep it a reference."""
+    arity_error = _arity_range("CHOOSE", 2, 255, len(children))
+    if arity_error is not None:
+        return arity_error
+    index = _number_argument(children[0], cells, sheet_name, budget)
+    if isinstance(index, ErrorValue):
+        return index
+    index = math.trunc(index)
+    if index < 1 or index > len(children) - 1:
+        return ErrorValue("#VALUE!", "CHOOSE index is outside the list of values")
+    chosen = children[index]
+    return _with_reference(chosen, _eval(chosen, cells, sheet_name, budget))
+
+
+def _dimension_call(
+    name: str,
+    children: tuple[_Node, ...],
+    cells: Mapping[str, Scalar],
+    sheet_name: str,
+    budget: _WildcardBudget,
+) -> object:
+    """ROWS and COLUMNS. A reference is measured from its addresses.
+
+    Its cells are not read; the limit on the size of a range still applies.
+    """
+    arity_error = _arity_range(name, 1, 1, len(children))
+    if arity_error is not None:
+        return arity_error
+    child = children[0]
+    if child.kind == "cell":
+        rows = columns = 1
+    elif child.kind == "range":
+        start, end, _sheet = child.value  # type: ignore[misc]
+        try:
+            first_row, first_column = _coordinate(start)
+            last_row, last_column = _coordinate(end)
+        except ValueError as error:
+            return ErrorValue("#REF!", str(error))
+        rows = abs(first_row - last_row) + 1
+        columns = abs(first_column - last_column) + 1
+        if rows * columns > 100_000:
+            return ErrorValue("#NUM!", "range exceeds the 100000-cell evaluation limit")
+    else:
+        value = _dereference(_eval(child, cells, sheet_name, budget))
+        if isinstance(value, ErrorValue):
+            return value
+        if isinstance(value, _Range):
+            rows, columns = value.rows, value.columns
+        elif isinstance(value, ArrayValue):
+            rows = len(value.rows)
+            columns = len(value.rows[0]) if value.rows else 0
+        else:
+            rows = columns = 1
+    return float(rows if name == "ROWS" else columns)
+
+
+def _lookup_key(value: object) -> tuple[int, object] | None:
+    """What a lookup compares: a number, text without case, or a logical value.
+
+    The first item is the type; keys of different types never compare. An
+    empty cell and an error value have no key and never match.
+    """
+    value = _dereference(value)
+    if isinstance(value, bool):
+        return (2, value)
+    if isinstance(value, (int, float)):
+        number = _binary64(value)
+        return None if isinstance(number, ErrorValue) else (0, number)
+    if isinstance(value, str):
+        return (1, "".join(character.lower() for character in value))
+    return None
+
+
+def _approximate_position(keys: list[object], lookup: object) -> int | None:
+    """The largest key of the lookup's type not above it; the last of equals."""
+    wanted = _lookup_key(lookup)
+    if wanted is None:
+        return None
+    best: tuple[int, tuple[int, object]] | None = None
+    for index, value in enumerate(keys):
+        key = _lookup_key(value)
+        if key is None or key[0] != wanted[0] or key[1] > wanted[1]:  # type: ignore[operator]
+            continue
+        if best is None or not key[1] < best[1][1]:  # type: ignore[operator]
+            best = (index, key)
+    return None if best is None else best[0]
+
+
+def _exact_position(
+    keys: list[object], lookup: object, budget: _WildcardBudget
+) -> int | None | ErrorValue:
+    """The first key equal to the lookup; text lookups may hold wildcards."""
+    wanted = _lookup_key(lookup)
+    if wanted is None:
+        return None
+    pattern = _wildcard_pattern(lookup) if isinstance(lookup, str) else None
+    if isinstance(pattern, ErrorValue):
+        return pattern
+    for index, value in enumerate(keys):
+        if pattern is not None:
+            if not isinstance(value, str):
+                continue
+            matched = _wildcard_matches(pattern, value, budget)
+            if isinstance(matched, ErrorValue):
+                return matched
+        else:
+            matched = _lookup_key(value) == wanted
+        if matched:
+            return index
+    return None
+
+
+def _hlookup_call(
+    children: tuple[_Node, ...],
+    cells: Mapping[str, Scalar],
+    sheet_name: str,
+    budget: _WildcardBudget,
+) -> object:
+    """HLOOKUP: find a value in a table's first row, return one from its column."""
+    arity_error = _arity_range("HLOOKUP", 3, 4, len(children))
+    if arity_error is not None:
+        return arity_error
+    lookup = _scalar_argument(children[0], cells, sheet_name, budget)
+    if isinstance(lookup, ErrorValue):
+        return lookup
+    # The table is a range, a computed array, or one cell as a one-by-one
+    # table. A value typed directly is not a table.
+    table = _eval(children[1], cells, sheet_name, budget)
+    if isinstance(table, _Referenced) or children[1].kind == "cell":
+        table = _Range((_dereference(table),), 1, 1)
+    elif isinstance(table, ArrayValue):
+        table = _Range(
+            tuple(value for row in table.rows for value in row),
+            len(table.rows),
+            len(table.rows[0]),
+        )
+    if isinstance(table, ErrorValue):
+        return table
+    if not isinstance(table, _Range):
+        return ErrorValue("#VALUE!", "HLOOKUP table_array must be a reference or an array")
+    row = _number_argument(children[2], cells, sheet_name, budget)
+    if isinstance(row, ErrorValue):
+        return row
+    row = math.trunc(row)
+    if row < 1:
+        return ErrorValue("#VALUE!", "HLOOKUP row index must be at least 1")
+    if row > table.rows:
+        return ErrorValue("#REF!", "HLOOKUP row index is outside table_array")
+    approximate: bool | ErrorValue = True
+    if len(children) == 4:
+        flag = _scalar_argument(children[3], cells, sheet_name, budget)
+        if isinstance(flag, ErrorValue):
+            return flag
+        approximate = _truth(flag)
+        if isinstance(approximate, ErrorValue):
+            return approximate
+    keys = list(table.values[: table.columns])
+    found = (
+        _approximate_position(keys, lookup)
+        if approximate
+        else _exact_position(keys, lookup, budget)
+    )
+    if isinstance(found, ErrorValue):
+        return found
+    if found is None:
+        return ErrorValue("#N/A", "HLOOKUP value not found")
+    return table.values[(row - 1) * table.columns + found]
 
 
 def _function(

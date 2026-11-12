@@ -1135,6 +1135,7 @@ fn eval(expr: &Expr, env: &Environment<'_>) -> Result<CalcValue, FormulaError> {
                 "IF" | "IFERROR" | "IFNA" | "IFS" | "SWITCH" => selection_call(name, args, env),
                 "XLOOKUP" | "XMATCH" => xlookup_family(name, args, env),
                 "INDEX" => index_call(name, args, env),
+                "CHOOSE" => worksheet_functions::choose_call(args, env),
                 _ => eval_call(name, args, env).map(scalar),
             }
         }
@@ -3774,6 +3775,11 @@ fn eval_call(name: &str, args: &[Expr], env: &Environment<'_>) -> Result<Value, 
         "RANK.EQ" | "RANK" => return worksheet_functions::rank_call(name, args, env),
         "AVERAGEA" => return worksheet_functions::averagea_call(args, env),
         "SUMPRODUCT" => return worksheet_functions::sumproduct_call(args, env),
+        "CONCATENATE" | "EXACT" | "PROPER" | "REPT" | "REPLACE" | "VALUE" | "CHAR" | "CODE" => {
+            return worksheet_functions::text_call(name, args, env);
+        }
+        "ROWS" | "COLUMNS" => return worksheet_functions::dimension_call(name, args, env),
+        "HLOOKUP" => return worksheet_functions::hlookup_call(args, env),
         "HOUR" | "MINUTE" | "SECOND" => {
             arity(name, args, 1, 1)?;
             let serial = to_number(&eval_scalar(&args[0], env)?)?;
@@ -9139,6 +9145,30 @@ mod tests {
         assert_eq!(
             eval_masked("=SUM(UNIQUE(D1:D2,IF(TRUE,A2)))"),
             Ok(Value::Number(30.0))
+        );
+    }
+
+    // Workbook Forge profile: ROWS and COLUMNS measure a reference from its
+    // addresses and still apply the 100,000-cell range limit. Rows 1..10000
+    // by columns A..J are exactly 100,000 cells; one more row is over it.
+    #[test]
+    fn dimension_functions_apply_the_range_evaluation_limit() {
+        let empty = cells(&[]);
+        assert_eq!(
+            evaluate("=ROWS(A1:J10000)", &empty, "Sheet1"),
+            Ok(Value::Number(10000.0))
+        );
+        assert_eq!(
+            evaluate("=COLUMNS(A1:J10000)", &empty, "Sheet1"),
+            Ok(Value::Number(10.0))
+        );
+        assert_eq!(
+            evaluate("=ROWS(A1:J10001)", &empty, "Sheet1"),
+            Err(FormulaError::Num)
+        );
+        assert_eq!(
+            evaluate("=COLUMNS(A1:J10001)", &empty, "Sheet1"),
+            Err(FormulaError::Num)
         );
     }
 }

@@ -887,6 +887,90 @@
       "url": "https://support.microsoft.com/en-us/excel/functions/sumproduct-function",
       "kind": "function-semantics",
       "retrieved": "2026-11-12"
+    },
+    {
+      "id": "ms-datevalue",
+      "url": "https://support.microsoft.com/en-us/excel/functions/datevalue-function",
+      "kind": "function-semantics",
+      "retrieved": "2026-11-12"
+    },
+    {
+      "id": "ms-timevalue",
+      "url": "https://support.microsoft.com/en-us/excel/functions/timevalue-function",
+      "kind": "function-semantics",
+      "retrieved": "2026-11-12"
+    },
+    {
+      "id": "ms-concatenate",
+      "url": "https://support.microsoft.com/en-us/excel/functions/concatenate-function",
+      "kind": "function-semantics",
+      "retrieved": "2026-11-12"
+    },
+    {
+      "id": "ms-exact",
+      "url": "https://support.microsoft.com/en-us/excel/functions/exact-function",
+      "kind": "function-semantics",
+      "retrieved": "2026-11-12"
+    },
+    {
+      "id": "ms-proper",
+      "url": "https://support.microsoft.com/en-us/excel/functions/proper-function",
+      "kind": "function-semantics",
+      "retrieved": "2026-11-12"
+    },
+    {
+      "id": "ms-rept",
+      "url": "https://support.microsoft.com/en-us/excel/functions/rept-function",
+      "kind": "function-semantics",
+      "retrieved": "2026-11-12"
+    },
+    {
+      "id": "ms-replace",
+      "url": "https://support.microsoft.com/en-us/excel/functions/replace-function",
+      "kind": "function-semantics",
+      "retrieved": "2026-11-12"
+    },
+    {
+      "id": "ms-value",
+      "url": "https://support.microsoft.com/en-us/excel/functions/value-function",
+      "kind": "function-semantics",
+      "retrieved": "2026-11-12"
+    },
+    {
+      "id": "ms-char",
+      "url": "https://support.microsoft.com/en-us/excel/functions/char-function",
+      "kind": "function-semantics",
+      "retrieved": "2026-11-12"
+    },
+    {
+      "id": "ms-code",
+      "url": "https://support.microsoft.com/en-us/excel/functions/code-function",
+      "kind": "function-semantics",
+      "retrieved": "2026-11-12"
+    },
+    {
+      "id": "ms-choose",
+      "url": "https://support.microsoft.com/en-us/excel/functions/choose-function",
+      "kind": "function-semantics",
+      "retrieved": "2026-11-12"
+    },
+    {
+      "id": "ms-hlookup",
+      "url": "https://support.microsoft.com/en-us/excel/functions/hlookup-function",
+      "kind": "function-semantics",
+      "retrieved": "2026-11-12"
+    },
+    {
+      "id": "ms-rows",
+      "url": "https://support.microsoft.com/en-us/excel/functions/rows-function",
+      "kind": "function-semantics",
+      "retrieved": "2026-11-12"
+    },
+    {
+      "id": "ms-columns",
+      "url": "https://support.microsoft.com/en-us/excel/functions/columns-function",
+      "kind": "function-semantics",
+      "retrieved": "2026-11-12"
     }
   ],
   "categories": [
@@ -1220,6 +1304,70 @@
       "profile_class": "unclassified"
     },
     {
+      "name": "CHAR",
+      "category": "text",
+      "aliases": [],
+      "arity": {
+        "min": 1,
+        "max": 1
+      },
+      "availability": "legacy",
+      "status": {
+        "python": "conformance-tested",
+        "rust": "conformance-tested"
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
+    },
+    {
+      "name": "CHOOSE",
+      "category": "lookup-reference",
+      "aliases": [],
+      "arity": {
+        "min": 2,
+        "max": 255
+      },
+      "availability": "legacy",
+      "status": {
+        "python": "conformance-tested",
+        "rust": "conformance-tested"
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
+    },
+    {
+      "name": "CODE",
+      "category": "text",
+      "aliases": [],
+      "arity": {
+        "min": 1,
+        "max": 1
+      },
+      "availability": "legacy",
+      "status": {
+        "python": "conformance-tested",
+        "rust": "conformance-tested"
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
+    },
+    {
+      "name": "COLUMNS",
+      "category": "lookup-reference",
+      "aliases": [],
+      "arity": {
+        "min": 1,
+        "max": 1
+      },
+      "availability": "legacy",
+      "status": {
+        "python": "conformance-tested",
+        "rust": "conformance-tested"
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
+    },
+    {
       "name": "COMBIN",
       "category": "math-trigonometry",
       "aliases": [],
@@ -1260,6 +1408,22 @@
         "max": 253
       },
       "availability": "2019",
+      "status": {
+        "python": "conformance-tested",
+        "rust": "conformance-tested"
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
+    },
+    {
+      "name": "CONCATENATE",
+      "category": "text",
+      "aliases": [],
+      "arity": {
+        "min": 1,
+        "max": 255
+      },
+      "availability": "legacy",
       "status": {
         "python": "conformance-tested",
         "rust": "conformance-tested"
@@ -1652,6 +1816,22 @@
       "profile_class": "unclassified"
     },
     {
+      "name": "EXACT",
+      "category": "text",
+      "aliases": [],
+      "arity": {
+        "min": 2,
+        "max": 2
+      },
+      "availability": "legacy",
+      "status": {
+        "python": "conformance-tested",
+        "rust": "conformance-tested"
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
+    },
+    {
       "name": "EXP",
       "category": "math-trigonometry",
       "aliases": [],
@@ -1802,6 +1982,22 @@
       "arity": {
         "min": 1,
         "max": 255
+      },
+      "availability": "legacy",
+      "status": {
+        "python": "conformance-tested",
+        "rust": "conformance-tested"
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
+    },
+    {
+      "name": "HLOOKUP",
+      "category": "lookup-reference",
+      "aliases": [],
+      "arity": {
+        "min": 3,
+        "max": 4
       },
       "availability": "legacy",
       "status": {
@@ -2663,6 +2859,22 @@
       "profile_class": "unclassified"
     },
     {
+      "name": "PROPER",
+      "category": "text",
+      "aliases": [],
+      "arity": {
+        "min": 1,
+        "max": 1
+      },
+      "availability": "legacy",
+      "status": {
+        "python": "conformance-tested",
+        "rust": "conformance-tested"
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
+    },
+    {
       "name": "PV",
       "category": "financial",
       "aliases": [],
@@ -2775,6 +2987,38 @@
       "profile_class": "unclassified"
     },
     {
+      "name": "REPLACE",
+      "category": "text",
+      "aliases": [],
+      "arity": {
+        "min": 4,
+        "max": 4
+      },
+      "availability": "legacy",
+      "status": {
+        "python": "conformance-tested",
+        "rust": "conformance-tested"
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
+    },
+    {
+      "name": "REPT",
+      "category": "text",
+      "aliases": [],
+      "arity": {
+        "min": 2,
+        "max": 2
+      },
+      "availability": "legacy",
+      "status": {
+        "python": "conformance-tested",
+        "rust": "conformance-tested"
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
+    },
+    {
       "name": "RIGHT",
       "category": "text",
       "aliases": [],
@@ -2829,6 +3073,22 @@
       "arity": {
         "min": 2,
         "max": 2
+      },
+      "availability": "legacy",
+      "status": {
+        "python": "conformance-tested",
+        "rust": "conformance-tested"
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
+    },
+    {
+      "name": "ROWS",
+      "category": "lookup-reference",
+      "aliases": [],
+      "arity": {
+        "min": 1,
+        "max": 1
       },
       "availability": "legacy",
       "status": {
@@ -3303,6 +3563,22 @@
       "profile_class": "unclassified"
     },
     {
+      "name": "VALUE",
+      "category": "text",
+      "aliases": [],
+      "arity": {
+        "min": 1,
+        "max": 1
+      },
+      "availability": "legacy",
+      "status": {
+        "python": "conformance-tested",
+        "rust": "conformance-tested"
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
+    },
+    {
       "name": "VAR.P",
       "category": "statistical",
       "aliases": [],
@@ -3514,7 +3790,7 @@
   "coverage": {
     "catalog_completeness": "seeded-not-complete",
     "evaluator_completeness": "numeric-rounding-date-time-business-calendar-day-count-coupon-schedule-time-value-of-money-period-count-inversion-logical-selection-cumulative-payment-aggregation-and-basic-and-declining-balance-depreciation-slices-incrementally-conformance-tested-variable-declining-balance-date-aware-french-depreciation-and-odd-even-parity-functions-factorial-and-combinatorics-double-factorial-and-permutation-counts-greatest-common-divisor-and-least-common-multiple-bounded-rectangular-array-results-and-sequence-array-aware-lazy-selection-results-elementwise-array-operators-and-filter-selection-and-stable-sort-and-unique-array-functions",
-    "note": "The Microsoft function inventory contains 521 entries. One hundred fifty-three functions are conformance-tested with shared Python/Rust fixtures; the remaining 368 of the 521 inventoried functions are catalog-only. Criteria functions implement scalar criteria, comparison operators, case-insensitive text, wildcard escapes, and bounded range shapes. SUMIF and AVERAGEIF reject differently sized sum/average ranges even though Excel aligns those ranges from their top-left cell; that compatibility gap is explicit in semantic_specs. MINIFS and MAXIFS require matching range shapes, allow one required plus up to 126 additional criteria pairs, and return 0 when no numeric result matches. XLOOKUP and XMATCH support exact match_mode=0 with forward/reverse search_mode=1/-1 only; approximate, wildcard, binary, and array-spill results are unsupported. TEXTBEFORE and TEXTAFTER support scalar delimiter extraction, optional arguments, negative instance numbers, match_end, and lazy if_not_found; their Excel locale collation and supplementary-plane character behavior remain unverified. ISNA, ISERR, ISERROR, and NA cover scalar inspection and creation of supported Excel error values; array error predicates and unsupported-syntax conversions remain out of scope. INT, TRUNC, ROUNDUP, ROUNDDOWN, MOD, and QUOTIENT add scalar directed rounding, floor/truncation, remainder, and integer-quotient behavior. Fractional num_digits values are truncated toward zero as an implementation rule; Microsoft pages do not specify this case, and direct Excel spot-checks remain outstanding. MONTH, DAYS, EDATE, and EOMONTH use the 1900 serial system and preserve its serial-60 compatibility date; DAYS subtracts numeric serials including their fractional parts. EDATE and EOMONTH truncate fractional month counts toward zero; both month-shift functions return whole-day serials, and EDATE discards a start serial's time fraction as an implementation profile rule. Locale-dependent text-date parsing and workbook-specific 1904 date systems are not modeled; time-fraction handling for EDATE/EOMONTH has not been spot-checked in Excel. HOUR, MINUTE, and SECOND extract whole-second components from numeric 1900-system serials; the serial ceiling and negative/non-finite input errors are evaluator profile rules not stated on the function pages. Locale-dependent time text such as '6:45 PM' is documented by Microsoft but not parsed here. The shared serial-to-seconds precision correction and TIME fractional-component truncation are evaluator profile rules that need Excel spot-checks. TIME accepts components from 0 through 32767, normalizes overflow, and returns a fraction of a day. IFS and SWITCH use ordered short-circuit evaluation and first-match selection; selected results may preserve a rectangular array through evaluate_result, but are not projected into worksheet cells. SWITCH treats ASCII text as case-insensitive and non-ASCII text as exact, with no cross-type coercion or locale collation. Microsoft documents selection/default behavior but not all evaluation and comparison details; these evaluator profile rules need a direct Excel spot-check. WEEKDAY, WEEKNUM, and ISOWEEKNUM add numeric 1900-system date serials, documented return selectors, System 1 and ISO week rules, and time-fraction flooring. Fractional return_type coercion and exact 1900 serial-60 week behavior are evaluator-profile rules that still need Excel spot-checks. WORKDAY and NETWORKDAYS use a Saturday/Sunday business calendar and scalar or cell-range holidays. NETWORKDAYS counts weekday endpoints inclusively; reversed-range sign, fractional date serials, holiday-cell coercion, serial 0, and serial 60 are explicit evaluator profiles that still need direct Excel spot-checks. WORKDAY truncates noninteger day offsets as Microsoft documents; holiday-cell coercion remains unverified. WORKDAY.INTL and NETWORKDAYS.INTL share numeric weekend codes, Monday-first seven-character masks, and range-based holiday handling. NETWORKDAYS.INTL documents inclusive and reversed-range counts plus zero for an all-one weekend mask. Its last example prose says 22 while the result column says 20 for mask 0010001 with holidays; fixtures follow the result column; WORKDAY.INTL documents zero-offset behavior and rejects the all-one mask, but its exact error is unspecified. Numeric selector coercion, date fractions, serial boundaries, and holiday-cell coercion remain profiles; holiday array constants and locale-sensitive date text are not implemented. DAYS360 and YEARFRAC add a bounded 30/360 and year-fraction slice. The published DAYS360 rules cover US NASD and European methods and negative direction; non-month-end US endpoint wording, numeric and blank-cell method handling, optional-slot parsing, fractional date serials, and serial 60 remain evaluator profiles. YEARFRAC covers bases 0-4, documented integer truncation and error codes, and Microsoft examples. Basis 1 uses a year-segmented Actual/Actual profile and reversed dates use a signed result; Microsoft does not specify those details on its function page, so neither is claimed as verified Excel behavior. The 1900 date system and serial 60 remain explicit evaluator profiles. The six COUP schedule formulas share a maturity-anchored, backward-stepped date schedule in the evaluator and expose separate function-specific outputs. Microsoft documents argument truncation, valid frequencies 1/2/4, basis values 0-4, output definitions, and date/frequency/basis/order errors. The maturity-anchored schedule, period/count equality behavior outside the documented strict COUPNCD/COUPPCD boundaries, basis-specific day counts, serial-60 behavior, and pre-zero internal coupon dates remain evaluator profiles. COUPDAYS basis 1 uses actual adjacent coupon-date serial difference but has not been checked against Excel; ExcelFinancialFunctions compatibility notes identify leap-year COUPDAYS differences, so shared expected values are not treated as Excel oracles. FV, PV, and PMT add a scalar periodic-cash-flow slice with shared sign, timing, zero-rate, omission, and numeric-profile cases. NPER inverts the periodic cash-flow equation, preserves negative and fractional results, and checks zero-rate and logarithm-domain boundaries under explicit evaluator profiles. Exact internal precision and undocumented input errors remain unverified. IPMT and PPMT split PMT into period interest and principal components; PPMT is defined as PMT minus IPMT, and both use explicit timing, range, numeric, and error profiles pending direct Excel checks. At accepted Run 19, the shared fixture corpus contained 1,238 cases covering 112 implemented functions, with 409 of the 521 inventory entries catalog-only. Its accepted checkpoint and detailed case summary follow below. SLN and SYD add straight-line and sum-of-years-digits depreciation. DB adds the documented three-decimal rate and month-sensitive first/final periods; DDB adds the documented factor-based decline and salvage cap. VDB adds fractional-interval depreciation, optional straight-line switching, and a logarithmic-time geometric kernel; its split fractional-period behavior remains an evaluator profile because an Apache compatibility note reports a difference from Excel. Their bounds, truncation, coercion, error precedence, and high-range behavior remain evaluator profiles pending direct Excel checks. Apache ExcelFinancialFunctions and dual MIT/Apache Formualizer inform organization and numeric probes only; no code is copied. The Microsoft Office formula specification distinguishes normal-formula implicit intersection from array-entered full-range behavior and lists ISEVEN/ISODD as accepting range arguments. Run 19 adds bounded rectangular result arrays and SEQUENCE, and common aggregates/text/logical consumers flatten generated arrays. IF, IFERROR, IFNA, IFS, and SWITCH also preserve the selected result-array shape. IFERROR array error replacement remains element-wise unsupported, and explicit empty IF result slots return #VALUE! as an unverified Workbook Forge profile. Formula-cell implicit intersection, legacy array entry, dynamic spill placement and spill references remain unmodeled; local #VALUE! range fixtures still mark evaluator boundaries, not Excel expectations. Microsoft lists worksheet number precision as 15 digits. The EVEN/ODD fixtures using 16-digit values near 2^53 are Workbook Forge binary64 parser/evaluator boundary probes, not Excel numerical oracles. Run 16 adds FACT, COMBIN, and COMBINA. The Python and Rust kernels form exact integer factorial/binomial results and round once to binary64 with ties-to-even; Apache Commons Math informs the symmetric multiplicative pattern without copied code or a runtime dependency. Within FACT, COMBIN, and COMBINA arguments, plain integer literals, unary signs, +, -, *, and nonnegative integer-power expressions preserve exact source integers through the 2^53 argument boundary, subject to a 65,536-bit intermediate cap. Exact integer division forms a ratio and rounds once to binary64; mixed or decimal operands use binary64 division. Decimal/scientific literals can round before the check. Scalar coercion, truncation-before-domain order for negative fractions, mixed-error precedence, and local #NUM! overflow behavior remain Workbook Forge profiles where Microsoft sources are silent. Standalone expression arithmetic can preserve Python integers while Rust uses binary64 operators; exact-source cross-language assertions are scoped to the three named function arguments. Range errors are kept separate from Excel implicit-intersection and array-entry behavior because the function evaluator does not model general worksheet formula context. The Python workbook adapter separately handles explicitly targeted scalar formulas and static dependencies, without implicit intersection or array entry. Run 17 adds FACTDOUBLE, PERMUT, and PERMUTATIONA with Microsoft-linked semantics and independent bounded exact-integer kernels. FACTDOUBLE is range-capable in the Office formula specification but Workbook Forge retains a scalar-only local range boundary; PERMUTATIONA 0^0, negative-input handling, coercion, output rounding, and overflow remain evaluator profiles pending direct Excel checks. No source code is copied and runtime dependencies remain empty. Run 18 adds GCD and LCM with Microsoft-linked argument, truncation, error, and 2^53 boundary rules. Both are range-capable in MS-OE376, but range calls remain a local unsupported boundary until formula-cell context is modeled. GCD(0,0), LCM zero behavior, mixed-input order, coercion, and negative-fraction order are explicitly local profiles pending Excel checks. Run 19 adds SEQUENCE with an immutable rectangular ArrayValue and shape-preserving evaluate_result API in Python and Rust. Thirty-eight shared cases cover Microsoft’s 4×5 shape example, row-major progression, optional slots, ranges, nested SUM, dimension/coercion/error profiles and the 100000-cell local cap. Formualizer v0.7.0 informs the separation between pre-allocation shape bounds and workbook spill projection; its MIT/Apache-2.0 release is an architecture reference only and no code was copied. No direct Excel spot-checks were run.. Run 20 adds elementwise binary operators and FILTER to the bounded array result layer. The accepted slice has 113 functions with shared Python/Rust fixture parity, 1,301 shared fixtures, 84 detailed specs, 107 source records, 16 OSS patterns, and 408 catalog-only inventory functions. Sixty-three new shared cases cover all advertised binary operators, exact-shape pairing, scalar broadcasting, cell errors, Microsoft's AND/OR include-mask examples, vertical and horizontal FILTER masks, fallback behavior, comparison-coercion and error-precedence profiles, and shape/error boundaries. Numeric, blank, and empty-text mask coercion; explicit missing fallback; row-major mask error order; lazy fallback; array-valued fallback shape; and binary comparison collation/coercion and left-to-right binary-operator error precedence are Workbook Forge profiles. Python and Rust return shaped formula results without worksheet spill projection. Jev's scope result remains advisory; independent semantic/catalog reviews and the full Python/Rust and schema gates passed before acceptance. No Excel spot-checks were run; no source code was copied and no runtime dependency was added. Run 21 adds bounded targeted scalar formula calculation to the Python workbook adapter and aligns CONCAT numeric text, argument, and UTF-16 text limits; its 21 new shared text cases supplement the workbook package cases. Run 22 adds SORT and UNIQUE with 44 shared cases, including four review regressions for oversized ranges, binary64 output, and reversed-range normalization, plus direct API checks for non-finite SORT key order. SORT and UNIQUE preserve array shape but do not project worksheet spill cells. Their comparison, coercion, output precision, selector, and empty-result details are explicitly Workbook Forge profiles where Microsoft documentation is incomplete. Shared fixtures establish implementation parity, not Excel compatibility; no direct Excel Desktop checks were run. No source code was copied and no runtime dependency was added."
+    "note": "The Microsoft function inventory contains 521 entries. One hundred sixty-five functions are conformance-tested with shared Python/Rust fixtures; the remaining 356 of the 521 inventoried functions are catalog-only. Criteria functions implement scalar criteria, comparison operators, case-insensitive text, wildcard escapes, and bounded range shapes. SUMIF and AVERAGEIF reject differently sized sum/average ranges even though Excel aligns those ranges from their top-left cell; that compatibility gap is explicit in semantic_specs. MINIFS and MAXIFS require matching range shapes, allow one required plus up to 126 additional criteria pairs, and return 0 when no numeric result matches. XLOOKUP and XMATCH support exact match_mode=0 with forward/reverse search_mode=1/-1 only; approximate, wildcard, binary, and array-spill results are unsupported. TEXTBEFORE and TEXTAFTER support scalar delimiter extraction, optional arguments, negative instance numbers, match_end, and lazy if_not_found; their Excel locale collation and supplementary-plane character behavior remain unverified. ISNA, ISERR, ISERROR, and NA cover scalar inspection and creation of supported Excel error values; array error predicates and unsupported-syntax conversions remain out of scope. INT, TRUNC, ROUNDUP, ROUNDDOWN, MOD, and QUOTIENT add scalar directed rounding, floor/truncation, remainder, and integer-quotient behavior. Fractional num_digits values are truncated toward zero as an implementation rule; Microsoft pages do not specify this case, and direct Excel spot-checks remain outstanding. MONTH, DAYS, EDATE, and EOMONTH use the 1900 serial system and preserve its serial-60 compatibility date; DAYS subtracts numeric serials including their fractional parts. EDATE and EOMONTH truncate fractional month counts toward zero; both month-shift functions return whole-day serials, and EDATE discards a start serial's time fraction as an implementation profile rule. Locale-dependent text-date parsing and workbook-specific 1904 date systems are not modeled; time-fraction handling for EDATE/EOMONTH has not been spot-checked in Excel. HOUR, MINUTE, and SECOND extract whole-second components from numeric 1900-system serials; the serial ceiling and negative/non-finite input errors are evaluator profile rules not stated on the function pages. Locale-dependent time text such as '6:45 PM' is documented by Microsoft but not parsed here. The shared serial-to-seconds precision correction and TIME fractional-component truncation are evaluator profile rules that need Excel spot-checks. TIME accepts components from 0 through 32767, normalizes overflow, and returns a fraction of a day. IFS and SWITCH use ordered short-circuit evaluation and first-match selection; selected results may preserve a rectangular array through evaluate_result, but are not projected into worksheet cells. SWITCH treats ASCII text as case-insensitive and non-ASCII text as exact, with no cross-type coercion or locale collation. Microsoft documents selection/default behavior but not all evaluation and comparison details; these evaluator profile rules need a direct Excel spot-check. WEEKDAY, WEEKNUM, and ISOWEEKNUM add numeric 1900-system date serials, documented return selectors, System 1 and ISO week rules, and time-fraction flooring. Fractional return_type coercion and exact 1900 serial-60 week behavior are evaluator-profile rules that still need Excel spot-checks. WORKDAY and NETWORKDAYS use a Saturday/Sunday business calendar and scalar or cell-range holidays. NETWORKDAYS counts weekday endpoints inclusively; reversed-range sign, fractional date serials, holiday-cell coercion, serial 0, and serial 60 are explicit evaluator profiles that still need direct Excel spot-checks. WORKDAY truncates noninteger day offsets as Microsoft documents; holiday-cell coercion remains unverified. WORKDAY.INTL and NETWORKDAYS.INTL share numeric weekend codes, Monday-first seven-character masks, and range-based holiday handling. NETWORKDAYS.INTL documents inclusive and reversed-range counts plus zero for an all-one weekend mask. Its last example prose says 22 while the result column says 20 for mask 0010001 with holidays; fixtures follow the result column; WORKDAY.INTL documents zero-offset behavior and rejects the all-one mask, but its exact error is unspecified. Numeric selector coercion, date fractions, serial boundaries, and holiday-cell coercion remain profiles; holiday array constants and locale-sensitive date text are not implemented. DAYS360 and YEARFRAC add a bounded 30/360 and year-fraction slice. The published DAYS360 rules cover US NASD and European methods and negative direction; non-month-end US endpoint wording, numeric and blank-cell method handling, optional-slot parsing, fractional date serials, and serial 60 remain evaluator profiles. YEARFRAC covers bases 0-4, documented integer truncation and error codes, and Microsoft examples. Basis 1 uses a year-segmented Actual/Actual profile and reversed dates use a signed result; Microsoft does not specify those details on its function page, so neither is claimed as verified Excel behavior. The 1900 date system and serial 60 remain explicit evaluator profiles. The six COUP schedule formulas share a maturity-anchored, backward-stepped date schedule in the evaluator and expose separate function-specific outputs. Microsoft documents argument truncation, valid frequencies 1/2/4, basis values 0-4, output definitions, and date/frequency/basis/order errors. The maturity-anchored schedule, period/count equality behavior outside the documented strict COUPNCD/COUPPCD boundaries, basis-specific day counts, serial-60 behavior, and pre-zero internal coupon dates remain evaluator profiles. COUPDAYS basis 1 uses actual adjacent coupon-date serial difference but has not been checked against Excel; ExcelFinancialFunctions compatibility notes identify leap-year COUPDAYS differences, so shared expected values are not treated as Excel oracles. FV, PV, and PMT add a scalar periodic-cash-flow slice with shared sign, timing, zero-rate, omission, and numeric-profile cases. NPER inverts the periodic cash-flow equation, preserves negative and fractional results, and checks zero-rate and logarithm-domain boundaries under explicit evaluator profiles. Exact internal precision and undocumented input errors remain unverified. IPMT and PPMT split PMT into period interest and principal components; PPMT is defined as PMT minus IPMT, and both use explicit timing, range, numeric, and error profiles pending direct Excel checks. At accepted Run 19, the shared fixture corpus contained 1,238 cases covering 112 implemented functions, with 409 of the 521 inventory entries catalog-only. Its accepted checkpoint and detailed case summary follow below. SLN and SYD add straight-line and sum-of-years-digits depreciation. DB adds the documented three-decimal rate and month-sensitive first/final periods; DDB adds the documented factor-based decline and salvage cap. VDB adds fractional-interval depreciation, optional straight-line switching, and a logarithmic-time geometric kernel; its split fractional-period behavior remains an evaluator profile because an Apache compatibility note reports a difference from Excel. Their bounds, truncation, coercion, error precedence, and high-range behavior remain evaluator profiles pending direct Excel checks. Apache ExcelFinancialFunctions and dual MIT/Apache Formualizer inform organization and numeric probes only; no code is copied. The Microsoft Office formula specification distinguishes normal-formula implicit intersection from array-entered full-range behavior and lists ISEVEN/ISODD as accepting range arguments. Run 19 adds bounded rectangular result arrays and SEQUENCE, and common aggregates/text/logical consumers flatten generated arrays. IF, IFERROR, IFNA, IFS, and SWITCH also preserve the selected result-array shape. IFERROR array error replacement remains element-wise unsupported, and explicit empty IF result slots return #VALUE! as an unverified Workbook Forge profile. Formula-cell implicit intersection, legacy array entry, dynamic spill placement and spill references remain unmodeled; local #VALUE! range fixtures still mark evaluator boundaries, not Excel expectations. Microsoft lists worksheet number precision as 15 digits. The EVEN/ODD fixtures using 16-digit values near 2^53 are Workbook Forge binary64 parser/evaluator boundary probes, not Excel numerical oracles. Run 16 adds FACT, COMBIN, and COMBINA. The Python and Rust kernels form exact integer factorial/binomial results and round once to binary64 with ties-to-even; Apache Commons Math informs the symmetric multiplicative pattern without copied code or a runtime dependency. Within FACT, COMBIN, and COMBINA arguments, plain integer literals, unary signs, +, -, *, and nonnegative integer-power expressions preserve exact source integers through the 2^53 argument boundary, subject to a 65,536-bit intermediate cap. Exact integer division forms a ratio and rounds once to binary64; mixed or decimal operands use binary64 division. Decimal/scientific literals can round before the check. Scalar coercion, truncation-before-domain order for negative fractions, mixed-error precedence, and local #NUM! overflow behavior remain Workbook Forge profiles where Microsoft sources are silent. Standalone expression arithmetic can preserve Python integers while Rust uses binary64 operators; exact-source cross-language assertions are scoped to the three named function arguments. Range errors are kept separate from Excel implicit-intersection and array-entry behavior because the function evaluator does not model general worksheet formula context. The Python workbook adapter separately handles explicitly targeted scalar formulas and static dependencies, without implicit intersection or array entry. Run 17 adds FACTDOUBLE, PERMUT, and PERMUTATIONA with Microsoft-linked semantics and independent bounded exact-integer kernels. FACTDOUBLE is range-capable in the Office formula specification but Workbook Forge retains a scalar-only local range boundary; PERMUTATIONA 0^0, negative-input handling, coercion, output rounding, and overflow remain evaluator profiles pending direct Excel checks. No source code is copied and runtime dependencies remain empty. Run 18 adds GCD and LCM with Microsoft-linked argument, truncation, error, and 2^53 boundary rules. Both are range-capable in MS-OE376, but range calls remain a local unsupported boundary until formula-cell context is modeled. GCD(0,0), LCM zero behavior, mixed-input order, coercion, and negative-fraction order are explicitly local profiles pending Excel checks. Run 19 adds SEQUENCE with an immutable rectangular ArrayValue and shape-preserving evaluate_result API in Python and Rust. Thirty-eight shared cases cover Microsoft’s 4×5 shape example, row-major progression, optional slots, ranges, nested SUM, dimension/coercion/error profiles and the 100000-cell local cap. Formualizer v0.7.0 informs the separation between pre-allocation shape bounds and workbook spill projection; its MIT/Apache-2.0 release is an architecture reference only and no code was copied. No direct Excel spot-checks were run.. Run 20 adds elementwise binary operators and FILTER to the bounded array result layer. The accepted slice has 113 functions with shared Python/Rust fixture parity, 1,301 shared fixtures, 84 detailed specs, 107 source records, 16 OSS patterns, and 408 catalog-only inventory functions. Sixty-three new shared cases cover all advertised binary operators, exact-shape pairing, scalar broadcasting, cell errors, Microsoft's AND/OR include-mask examples, vertical and horizontal FILTER masks, fallback behavior, comparison-coercion and error-precedence profiles, and shape/error boundaries. Numeric, blank, and empty-text mask coercion; explicit missing fallback; row-major mask error order; lazy fallback; array-valued fallback shape; and binary comparison collation/coercion and left-to-right binary-operator error precedence are Workbook Forge profiles. Python and Rust return shaped formula results without worksheet spill projection. Jev's scope result remains advisory; independent semantic/catalog reviews and the full Python/Rust and schema gates passed before acceptance. No Excel spot-checks were run; no source code was copied and no runtime dependency was added. Run 21 adds bounded targeted scalar formula calculation to the Python workbook adapter and aligns CONCAT numeric text, argument, and UTF-16 text limits; its 21 new shared text cases supplement the workbook package cases. Run 22 adds SORT and UNIQUE with 44 shared cases, including four review regressions for oversized ranges, binary64 output, and reversed-range normalization, plus direct API checks for non-finite SORT key order. SORT and UNIQUE preserve array shape but do not project worksheet spill cells. Their comparison, coercion, output precision, selector, and empty-result details are explicitly Workbook Forge profiles where Microsoft documentation is incomplete. Shared fixtures establish implementation parity, not Excel compatibility; no direct Excel Desktop checks were run. No source code was copied and no runtime dependency was added."
   },
   "semantic_specs": {
     "AMORDEGRC": {
@@ -8284,6 +8560,382 @@
         "ms-sumproduct",
         "ms-ooxml-formula-evaluation",
         "ms-excel-precision-limits"
+      ]
+    },
+    "CONCATENATE": {
+      "arguments": [
+        {
+          "name": "text1",
+          "kind": "text-item",
+          "required": true
+        },
+        {
+          "name": "text_n",
+          "kind": "text-item",
+          "required": false,
+          "max_additional": 254
+        }
+      ],
+      "returns": {
+        "kind": "text",
+        "shape": "scalar"
+      },
+      "semantics": {
+        "definition": "Joins two or more text items into one text.",
+        "documented_behavior": "Microsoft documents a required text1 and up to 255 items with a total of up to 8,192 characters; items may be text, numbers, or cell references; =A1 & B1 returns the same value as =CONCATENATE(A1,B1); CONCATENATE is kept for compatibility and CONCAT replaces it. Examples: the items Stream population for, A2, a space, A3, is, A4, /mile. give Stream population for brook trout species is 32/mile.; CONCATENATE(B2,\" \",C2) is Andreas Hauser; CONCATENATE(B3,\" & \",C3) is Fourth & Pine.",
+        "documentation_conflict": "Microsoft's example CONCATENATE(C2,\", \",B2) is described as giving Andreas, Hauser, but in its own data C2 is Hauser and B2 is Andreas, so the formula gives Hauser, Andreas. Workbook Forge follows the formula and data. Microsoft also renders the common-problem example CONCATENATE(\"Hello \"\"World\") without the space that the text literal contains; the fixture keeps the space.",
+        "text_profile": "Text arguments use the shared text conversion: a number is rendered with the shortest round-tripping decimal form, a logical value as TRUE or FALSE, and an empty cell as empty text. Microsoft does not specify these conversions for this function; they are unverified Workbook Forge profiles.",
+        "result_limit": "A result over 32,767 UTF-16 code units returns #VALUE!; the unit counting is the evaluator profile used to enforce Excel's documented 32,767-character cell text limit. Microsoft's 8,192-character total for CONCATENATE is not enforced separately; texts up to the cell limit are joined.",
+        "argument_profile": "Every argument is a single value. Workbook Forge has no formula-cell or array-entry context and returns #VALUE! for a range or array argument as a local scalar boundary; that output is not asserted as an Excel result. An explicitly empty argument and an argument count outside the documented syntax also return #VALUE!. Range rejection takes precedence, then the first error value in argument order, then conversions from left to right and the function's own checks. Microsoft does not specify these precedence rules; they are unverified Workbook Forge profiles.",
+        "compatibility_limit": "No behaviour of this function has been spot-checked in Excel."
+      },
+      "source_refs": [
+        "ms-concatenate",
+        "ms-ooxml-formula-evaluation",
+        "ms-excel-precision-limits"
+      ]
+    },
+    "EXACT": {
+      "arguments": [
+        {
+          "name": "text1",
+          "kind": "text",
+          "required": true
+        },
+        {
+          "name": "text2",
+          "kind": "text",
+          "required": true
+        }
+      ],
+      "returns": {
+        "kind": "logical",
+        "shape": "scalar"
+      },
+      "semantics": {
+        "definition": "Returns TRUE when two texts are exactly the same and FALSE otherwise.",
+        "documented_behavior": "Microsoft documents that EXACT is case-sensitive and ignores formatting differences; EXACT(word,word) is TRUE, EXACT(Word,word) is FALSE, and EXACT(w ord,word) is FALSE.",
+        "comparison_profile": "After text conversion the two texts are compared character by character with no case folding and no Unicode normalization, so a precomposed letter and the same letter written with a combining mark are different.",
+        "text_profile": "Text arguments use the shared text conversion: a number is rendered with the shortest round-tripping decimal form, a logical value as TRUE or FALSE, and an empty cell as empty text. Microsoft does not specify these conversions for this function; they are unverified Workbook Forge profiles. A number therefore equals the text of that number.",
+        "argument_profile": "Every argument is a single value. Workbook Forge has no formula-cell or array-entry context and returns #VALUE! for a range or array argument as a local scalar boundary; that output is not asserted as an Excel result. An explicitly empty argument and an argument count outside the documented syntax also return #VALUE!. Range rejection takes precedence, then the first error value in argument order, then conversions from left to right and the function's own checks. Microsoft does not specify these precedence rules; they are unverified Workbook Forge profiles.",
+        "compatibility_limit": "No behaviour of this function has been spot-checked in Excel."
+      },
+      "source_refs": [
+        "ms-exact",
+        "ms-ooxml-formula-evaluation"
+      ]
+    },
+    "PROPER": {
+      "arguments": [
+        {
+          "name": "text",
+          "kind": "text",
+          "required": true
+        }
+      ],
+      "returns": {
+        "kind": "text",
+        "shape": "scalar"
+      },
+      "semantics": {
+        "definition": "Capitalizes the first letter of a text and every letter that follows a character other than a letter, and makes all other letters lowercase.",
+        "documented_behavior": "Microsoft documents that PROPER capitalizes the first letter and any other letters that follow any character other than a letter and converts all other letters to lowercase; this is a TITLE becomes This Is A Title, 2-way street becomes 2-Way Street, and 76BudGet becomes 76Budget.",
+        "letter_profile": "A letter is a character with the Unicode Lowercase or Uppercase property. Each letter is mapped on its own with the full Unicode case mapping of the runtime, without context, so one letter may become several characters. Python and Rust carry their own Unicode tables; a letter added or changed between their Unicode versions can differ between the engines. Microsoft does not define which characters are letters; this is an unverified Workbook Forge profile.",
+        "text_profile": "Text arguments use the shared text conversion: a number is rendered with the shortest round-tripping decimal form, a logical value as TRUE or FALSE, and an empty cell as empty text. Microsoft does not specify these conversions for this function; they are unverified Workbook Forge profiles.",
+        "result_limit": "A result over 32,767 UTF-16 code units returns #VALUE!; the unit counting is the evaluator profile used to enforce Excel's documented 32,767-character cell text limit.",
+        "argument_profile": "Every argument is a single value. Workbook Forge has no formula-cell or array-entry context and returns #VALUE! for a range or array argument as a local scalar boundary; that output is not asserted as an Excel result. An explicitly empty argument and an argument count outside the documented syntax also return #VALUE!. Range rejection takes precedence, then the first error value in argument order, then conversions from left to right and the function's own checks. Microsoft does not specify these precedence rules; they are unverified Workbook Forge profiles.",
+        "compatibility_limit": "No behaviour of this function has been spot-checked in Excel."
+      },
+      "source_refs": [
+        "ms-proper",
+        "ms-ooxml-formula-evaluation",
+        "ms-excel-precision-limits"
+      ]
+    },
+    "REPT": {
+      "arguments": [
+        {
+          "name": "text",
+          "kind": "text",
+          "required": true
+        },
+        {
+          "name": "number_times",
+          "kind": "number",
+          "required": true
+        }
+      ],
+      "returns": {
+        "kind": "text",
+        "shape": "scalar"
+      },
+      "semantics": {
+        "definition": "Repeats text a given number of times.",
+        "documented_behavior": "Microsoft documents number_times as a positive number; 0 returns empty text; a number_times that is not an integer is truncated; a result longer than 32,767 characters returns #VALUE!; REPT(\"*-\",3) is *-*-*- and REPT(\"-\",10) is ten dashes.",
+        "count_profile": "number_times is truncated toward zero first, so a value between -1 and 0 repeats zero times. A negative count after truncation returns #VALUE!; Microsoft does not name this error. Empty text repeated any number of times is empty text.",
+        "text_profile": "Text arguments use the shared text conversion: a number is rendered with the shortest round-tripping decimal form, a logical value as TRUE or FALSE, and an empty cell as empty text. Microsoft does not specify these conversions for this function; they are unverified Workbook Forge profiles. Number arguments use the shared scalar numeric coercer: blank values, logical values, empty text, and ASCII numeric text convert to numbers and other text returns #VALUE!. This is an unverified Workbook Forge profile.",
+        "result_limit": "A result over 32,767 UTF-16 code units returns #VALUE!; the unit counting is the evaluator profile used to enforce Excel's documented 32,767-character cell text limit.",
+        "argument_profile": "Every argument is a single value. Workbook Forge has no formula-cell or array-entry context and returns #VALUE! for a range or array argument as a local scalar boundary; that output is not asserted as an Excel result. An explicitly empty argument and an argument count outside the documented syntax also return #VALUE!. Range rejection takes precedence, then the first error value in argument order, then conversions from left to right and the function's own checks. Microsoft does not specify these precedence rules; they are unverified Workbook Forge profiles.",
+        "compatibility_limit": "No behaviour of this function has been spot-checked in Excel."
+      },
+      "source_refs": [
+        "ms-rept",
+        "ms-ooxml-formula-evaluation",
+        "ms-excel-precision-limits"
+      ]
+    },
+    "REPLACE": {
+      "arguments": [
+        {
+          "name": "old_text",
+          "kind": "text",
+          "required": true
+        },
+        {
+          "name": "start_num",
+          "kind": "number",
+          "required": true
+        },
+        {
+          "name": "num_chars",
+          "kind": "number",
+          "required": true
+        },
+        {
+          "name": "new_text",
+          "kind": "text",
+          "required": true
+        }
+      ],
+      "returns": {
+        "kind": "text",
+        "shape": "scalar"
+      },
+      "semantics": {
+        "definition": "Replaces num_chars characters of old_text, starting at the one-based position start_num, with new_text.",
+        "documented_behavior": "Microsoft documents the four required arguments; REPLACE(abcdefghijk,6,5,\"*\") is abcde*k, REPLACE(2009,3,2,\"10\") is 2010, and REPLACE(123456,1,3,\"@\") is @456; in workbooks set to Compatibility Version 2 a surrogate pair counts as one character.",
+        "character_profile": "Positions and lengths count Unicode scalar values, so a character outside the Basic Multilingual Plane is one character, as it is in LEN and MID in this evaluator. This matches Microsoft's Compatibility Version 2 description; the earlier counting, in which a surrogate pair is two characters, is not modelled.",
+        "position_profile": "start_num and num_chars are truncated toward zero. A start_num below 1 or a negative num_chars returns #VALUE!. A start_num past the end of old_text appends new_text, and a num_chars that runs past the end replaces up to the end. Microsoft documents none of these cases; they are unverified Workbook Forge profiles.",
+        "text_profile": "Text arguments use the shared text conversion: a number is rendered with the shortest round-tripping decimal form, a logical value as TRUE or FALSE, and an empty cell as empty text. Microsoft does not specify these conversions for this function; they are unverified Workbook Forge profiles. Number arguments use the shared scalar numeric coercer: blank values, logical values, empty text, and ASCII numeric text convert to numbers and other text returns #VALUE!. This is an unverified Workbook Forge profile.",
+        "result_limit": "A result over 32,767 UTF-16 code units returns #VALUE!; the unit counting is the evaluator profile used to enforce Excel's documented 32,767-character cell text limit.",
+        "argument_profile": "Every argument is a single value. Workbook Forge has no formula-cell or array-entry context and returns #VALUE! for a range or array argument as a local scalar boundary; that output is not asserted as an Excel result. An explicitly empty argument and an argument count outside the documented syntax also return #VALUE!. Range rejection takes precedence, then the first error value in argument order, then conversions from left to right and the function's own checks. Microsoft does not specify these precedence rules; they are unverified Workbook Forge profiles.",
+        "compatibility_limit": "No behaviour of this function has been spot-checked in Excel."
+      },
+      "source_refs": [
+        "ms-replace",
+        "ms-ooxml-formula-evaluation",
+        "ms-excel-precision-limits"
+      ]
+    },
+    "VALUE": {
+      "arguments": [
+        {
+          "name": "text",
+          "kind": "text",
+          "required": true
+        }
+      ],
+      "returns": {
+        "kind": "number",
+        "shape": "scalar"
+      },
+      "semantics": {
+        "definition": "Converts text that represents a number to a number.",
+        "documented_behavior": "Microsoft documents that text can be in any of the constant number, date, or time formats recognized by Excel and that other text returns #VALUE!; VALUE(\"$1,000\") is 1000 and VALUE(\"16:48:00\")-VALUE(\"12:00:00\") is 0.2.",
+        "number_text_profile": "Excel's recognized formats depend on the regional settings of the computer. Workbook Forge reads one fixed grammar: optional surrounding spaces, an optional sign, an optional dollar sign, digits that may be grouped by commas (one to three digits, then groups of exactly three), an optional decimal point and digits, an optional exponent, and an optional trailing percent sign that divides by 100. Parentheses for negative amounts, other currency symbols, a trailing currency symbol, spaces inside the number, and comma decimal separators are refused with #VALUE! rather than guessed.",
+        "date_time_text_profile": "Text that is not a number is read with the date and time forms that DATEVALUE and TIMEVALUE accept in this evaluator, which exclude forms whose day and month order depends on regional settings. The result is the date serial, if the text has a date, plus the time as a fraction of a day. All other text returns #VALUE!.",
+        "value_profile": "A number is returned as it is, an empty cell is 0, and a logical value returns #VALUE!. Microsoft does not document non-text arguments; these are unverified Workbook Forge profiles.",
+        "numeric_profile": "Inputs and results are finite binary64 numbers. A result that is not finite returns #NUM!, and a zero result carries no sign. Microsoft does not specify a function-specific overflow code; this profile has not been spot-checked in Excel.",
+        "argument_profile": "Every argument is a single value. Workbook Forge has no formula-cell or array-entry context and returns #VALUE! for a range or array argument as a local scalar boundary; that output is not asserted as an Excel result. An explicitly empty argument and an argument count outside the documented syntax also return #VALUE!. Range rejection takes precedence, then the first error value in argument order, then conversions from left to right and the function's own checks. Microsoft does not specify these precedence rules; they are unverified Workbook Forge profiles.",
+        "compatibility_limit": "No behaviour of this function has been spot-checked in Excel."
+      },
+      "source_refs": [
+        "ms-value",
+        "ms-datevalue",
+        "ms-timevalue",
+        "ms-ooxml-formula-evaluation"
+      ]
+    },
+    "CHAR": {
+      "arguments": [
+        {
+          "name": "number",
+          "kind": "number",
+          "required": true
+        }
+      ],
+      "returns": {
+        "kind": "text",
+        "shape": "scalar"
+      },
+      "semantics": {
+        "definition": "Returns the character for a code number.",
+        "documented_behavior": "Microsoft documents a number between 1 and 255 that selects a character from the character set used by the computer: the Macintosh character set on Macintosh and ANSI on Windows; CHAR(65) is A and CHAR(33) is !.",
+        "code_profile": "The number is truncated toward zero. Codes 1 to 127 return the ASCII character, which the Windows and Macintosh character sets share. Codes 128 to 255 differ between those character sets, so Workbook Forge refuses them with #VALUE! instead of choosing one; Excel returns a character for them. Codes below 1 or above 255 return #VALUE!; Microsoft does not name that error.",
+        "text_profile": "Number arguments use the shared scalar numeric coercer: blank values, logical values, empty text, and ASCII numeric text convert to numbers and other text returns #VALUE!. This is an unverified Workbook Forge profile.",
+        "argument_profile": "Every argument is a single value. Workbook Forge has no formula-cell or array-entry context and returns #VALUE! for a range or array argument as a local scalar boundary; that output is not asserted as an Excel result. An explicitly empty argument and an argument count outside the documented syntax also return #VALUE!. Range rejection takes precedence, then the first error value in argument order, then conversions from left to right and the function's own checks. Microsoft does not specify these precedence rules; they are unverified Workbook Forge profiles.",
+        "compatibility_limit": "No behaviour of this function has been spot-checked in Excel."
+      },
+      "source_refs": [
+        "ms-char",
+        "ms-ooxml-formula-evaluation"
+      ]
+    },
+    "CODE": {
+      "arguments": [
+        {
+          "name": "text",
+          "kind": "text",
+          "required": true
+        }
+      ],
+      "returns": {
+        "kind": "number",
+        "shape": "scalar"
+      },
+      "semantics": {
+        "definition": "Returns the code number of the first character of a text.",
+        "documented_behavior": "Microsoft documents that the returned code corresponds to the character set used by the computer: the Macintosh character set on Macintosh and ANSI on Windows; CODE(\"A\") is 65 and CODE(\"!\") is 33.",
+        "code_profile": "A first character in ASCII returns its ASCII code, which the Windows and Macintosh character sets share. Any other first character depends on the character set of the computer, so Workbook Forge refuses it with #VALUE! instead of choosing one; Excel returns a number for it. Empty text has no first character and returns #VALUE!; Microsoft does not document that case.",
+        "text_profile": "Text arguments use the shared text conversion: a number is rendered with the shortest round-tripping decimal form, a logical value as TRUE or FALSE, and an empty cell as empty text. Microsoft does not specify these conversions for this function; they are unverified Workbook Forge profiles.",
+        "argument_profile": "Every argument is a single value. Workbook Forge has no formula-cell or array-entry context and returns #VALUE! for a range or array argument as a local scalar boundary; that output is not asserted as an Excel result. An explicitly empty argument and an argument count outside the documented syntax also return #VALUE!. Range rejection takes precedence, then the first error value in argument order, then conversions from left to right and the function's own checks. Microsoft does not specify these precedence rules; they are unverified Workbook Forge profiles.",
+        "compatibility_limit": "No behaviour of this function has been spot-checked in Excel."
+      },
+      "source_refs": [
+        "ms-code",
+        "ms-ooxml-formula-evaluation"
+      ]
+    },
+    "CHOOSE": {
+      "arguments": [
+        {
+          "name": "index_num",
+          "kind": "number",
+          "required": true
+        },
+        {
+          "name": "value1",
+          "kind": "formula-value",
+          "required": true
+        },
+        {
+          "name": "value_n",
+          "kind": "formula-value",
+          "required": false,
+          "max_additional": 253
+        }
+      ],
+      "returns": {
+        "kind": "selected-value",
+        "shape": "scalar-or-rectangular-array"
+      },
+      "semantics": {
+        "definition": "Returns the value argument selected by index_num.",
+        "documented_behavior": "Microsoft documents an index_num between 1 and 254 and 1 to 254 value arguments; index_num 1 returns value1, 2 returns value2, and so on; an index_num less than 1 or greater than the number of the last value returns #VALUE!; a fractional index_num is truncated to the lowest integer; value arguments can be range references, so SUM(CHOOSE(2,A1:A10,B1:B10,C1:C10)) evaluates to SUM(B1:B10); CHOOSE(2,A2,A3,A4,A5) is the value of A3, and CHOOSE(3,\"Wide\",115,\"world\",8) is world.",
+        "index_profile": "index_num is one value read with the shared scalar numeric coercer, so numeric text and logical values are accepted, and it is truncated toward zero. A range or array index_num returns #VALUE! as a local scalar boundary: Microsoft describes an array index_num that evaluates every value, and that form is not implemented. An error value in index_num is returned.",
+        "evaluation_profile": "Workbook Forge evaluates only the selected value, so an error in another value argument is not reached. Microsoft does not specify the evaluation order.",
+        "reference_profile": "A selected cell reference or range stays a reference for the function that receives it, as a branch selected by IF does. The range operator form shown by Microsoft, A2:CHOOSE(2,A3,A4,A5), is not supported by the formula parser.",
+        "explicit_omission_profile": "An explicitly empty index_num or selected value returns #VALUE!; an explicitly empty value that is not selected is never read. Microsoft does not document empty value slots.",
+        "compatibility_limit": "No behaviour of this function has been spot-checked in Excel."
+      },
+      "source_refs": [
+        "ms-choose",
+        "ms-ooxml-formula-evaluation"
+      ]
+    },
+    "HLOOKUP": {
+      "arguments": [
+        {
+          "name": "lookup_value",
+          "kind": "scalar",
+          "required": true
+        },
+        {
+          "name": "table_array",
+          "kind": "reference-range-or-array",
+          "required": true
+        },
+        {
+          "name": "row_index_num",
+          "kind": "number",
+          "required": true
+        },
+        {
+          "name": "range_lookup",
+          "kind": "logical",
+          "required": false,
+          "default": true
+        }
+      ],
+      "returns": {
+        "kind": "table-value",
+        "shape": "scalar"
+      },
+      "semantics": {
+        "definition": "Searches the first row of a table for a value and returns the value in the same column from the row given by row_index_num.",
+        "documented_behavior": "Microsoft documents that first-row values can be text, numbers, or logical values; uppercase and lowercase text are equivalent; a row_index_num less than 1 returns #VALUE! and one greater than the number of rows returns #REF!; range_lookup TRUE or omitted returns an approximate match, the largest value less than lookup_value when no exact match exists, and requires the first row in ascending order (numbers, then text, then FALSE, then TRUE); a lookup_value smaller than the smallest first-row value returns #N/A; range_lookup FALSE finds an exact match or returns #N/A, and a text lookup_value may then use the wildcards ? and * with ~ as the escape. Examples over the Axles, Bearings, Bolts table: HLOOKUP(\"Axles\",A1:C4,2,TRUE)=4, HLOOKUP(\"Bearings\",A1:C4,3,FALSE)=7, HLOOKUP(\"B\",A1:C4,3,TRUE)=5, HLOOKUP(\"Bolts\",A1:C4,4)=11.",
+        "table_profile": "table_array is a range, a computed array, or a single-cell reference, which is a table of one row and one column. A value typed directly is not a table and returns #VALUE!. Array constants are not supported by the formula parser, so Microsoft's array-constant example cannot be entered.",
+        "comparison_profile": "Only first-row values of the same type as lookup_value are compared: numbers with numbers by value, text with text after per-character Unicode lowercasing and then by code point, logical values with FALSE before TRUE. A number never matches numeric text. Empty cells and error values in the first row are never candidates, and an empty lookup_value matches nothing and returns #N/A. Microsoft does not specify comparison across types, the text collation, or these empty and error cases; they are unverified Workbook Forge profiles, and Excel's text order may differ from code point order outside ASCII letters and digits.",
+        "exact_profile": "An exact lookup returns the leftmost match. A text lookup_value containing ?, * or ~ is a wildcard pattern matched against text values only, within the evaluator's shared wildcard work limit.",
+        "approximate_profile": "An approximate lookup uses the largest first-row value that is not above lookup_value, and the rightmost one when several are equal. The result does not depend on the row being sorted; Microsoft says an unsorted row may give an incorrect value in Excel, so results on unsorted rows are not asserted as Excel results. Wildcards are ordinary characters in an approximate lookup.",
+        "argument_profile": "Arguments are read in order and the first problem is returned: lookup_value (an error value is returned; a range or array returns #VALUE!), then table_array, then row_index_num (shared scalar numeric coercer, truncated toward zero, then the documented bounds), then range_lookup (shared logical conversion: a number is TRUE unless zero, an empty cell or empty text is FALSE, other text returns #VALUE!). An explicitly empty argument returns #VALUE!. Microsoft does not specify this precedence.",
+        "result_profile": "The returned cell value is passed through unchanged: an error value there is the result, and an empty cell gives an empty result.",
+        "compatibility_limit": "No behaviour of this function has been spot-checked in Excel."
+      },
+      "source_refs": [
+        "ms-hlookup",
+        "ms-wildcard-criteria",
+        "ms-ooxml-formula-evaluation"
+      ]
+    },
+    "ROWS": {
+      "arguments": [
+        {
+          "name": "array",
+          "kind": "reference-range-or-array",
+          "required": true
+        }
+      ],
+      "returns": {
+        "kind": "number",
+        "shape": "scalar"
+      },
+      "semantics": {
+        "definition": "Returns the number of rows in a reference or array.",
+        "documented_behavior": "Microsoft documents one required argument that is an array, an array formula, or a reference to a range of cells; ROWS(C1:E4)=4 and ROWS({1,2,3;4,5,6})=2.",
+        "reference_profile": "A cell reference or range written in the formula is measured from its addresses without reading its cells, so error values inside it do not matter. A range of more than 100,000 cells returns #NUM!, the evaluator's limit for every range, so the dimensions of larger references, including whole rows and columns of the grid, are not reported; inside a workbook model such a reference is refused with a resource-limit diagnostic instead. A reference returned by another function, such as CHOOSE or INDEX, is measured from the value that function returns.",
+        "value_profile": "A computed array is measured by its shape. A single value typed or computed directly counts as one row and one column, and an error value typed or computed directly is returned. Microsoft does not document single values; this is an unverified Workbook Forge profile.",
+        "argument_profile": "An explicitly empty argument and an argument count other than one return #VALUE!. Array constants are not supported by the formula parser, so Microsoft's array-constant example cannot be entered.",
+        "compatibility_limit": "No behaviour of this function has been spot-checked in Excel."
+      },
+      "source_refs": [
+        "ms-rows",
+        "ms-ooxml-formula-evaluation"
+      ]
+    },
+    "COLUMNS": {
+      "arguments": [
+        {
+          "name": "array",
+          "kind": "reference-range-or-array",
+          "required": true
+        }
+      ],
+      "returns": {
+        "kind": "number",
+        "shape": "scalar"
+      },
+      "semantics": {
+        "definition": "Returns the number of columns in a reference or array.",
+        "documented_behavior": "Microsoft documents one required argument that is an array, an array formula, or a reference to a range of cells; COLUMNS(C1:E4)=3 and COLUMNS({1,2,3;4,5,6})=3.",
+        "reference_profile": "A cell reference or range written in the formula is measured from its addresses without reading its cells, so error values inside it do not matter. A range of more than 100,000 cells returns #NUM!, the evaluator's limit for every range, so the dimensions of larger references, including whole rows and columns of the grid, are not reported; inside a workbook model such a reference is refused with a resource-limit diagnostic instead. A reference returned by another function, such as CHOOSE or INDEX, is measured from the value that function returns.",
+        "value_profile": "A computed array is measured by its shape. A single value typed or computed directly counts as one row and one column, and an error value typed or computed directly is returned. Microsoft does not document single values; this is an unverified Workbook Forge profile.",
+        "argument_profile": "An explicitly empty argument and an argument count other than one return #VALUE!. Array constants are not supported by the formula parser, so Microsoft's array-constant example cannot be entered.",
+        "compatibility_limit": "No behaviour of this function has been spot-checked in Excel."
+      },
+      "source_refs": [
+        "ms-columns",
+        "ms-ooxml-formula-evaluation"
       ]
     }
   }
