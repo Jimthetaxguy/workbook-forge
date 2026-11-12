@@ -1,0 +1,2 @@
+toolchain: Verus is '0.2026.11.02.8bf68ee', toolchain.lock wants '0.2026.11.05.31e44e6'
+toolchain: MISMATCH, refusing to run. Install the pinned versions (README.md, Install).

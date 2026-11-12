@@ -1,2 +1,4 @@
-cheat-check: OK (no assume, admit, external_body or no-decreases escape hatches in src/)
+toolchain: OK (Verus 0.2026.11.02.8bf68ee, rustc 1.99.1 (58cf8f9c3 2026-10-13), Z3 version 4.16.0 - 64 bit)
+spec-lock: OK (27 locked items match spec.lock, no escape hatches)
+cheat-check: OK (no assume, admit, axiom, external_body, external specs or no-decreases escape hatches in src/)
 verification results:: 19 verified, 0 errors
