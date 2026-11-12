@@ -354,8 +354,9 @@ Added with the product shell (default `not-execute` view):
 16. Array result. `=SEQUENCE(3,2)` leaves the cell blank, raises the notice,
     and selecting the cell previews 1 to 6 in three rows of two (Microsoft's
     SEQUENCE definition).
-17. Theme. The toggle switches the page and the grid together and writes
-    nothing to `localStorage` or `sessionStorage`.
+17. Theme. The toggle switches the page and the grid together. Afterwards
+    `localStorage`, `sessionStorage` and cookies are empty, and every
+    IndexedDB store holds zero entries.
 18. Narrow screen. At 375 px every app bar control is on screen and the side
     panel covers the grid at full width.
 
@@ -481,7 +482,12 @@ The default URL is the user view and always runs `not-execute`.
 - **Notices.** A toast. Information fades after nine seconds; an error stays
   until dismissed.
 - **Theme.** Light or dark from the system setting, with a toggle. The choice
-  is kept in memory for the visit; nothing is written to browser storage.
+  is kept in memory for the visit. No workbook data or preference is written
+  to browser storage. Univer 1.2.0's interface package does create an
+  IndexedDB database named `UniverLocalStorage` when the page loads; it stays
+  empty here, because the Univer features that write to browser storage (the
+  emoji picker and the mobile function panel) are not mounted on this page.
+  Acceptance item 17 checks that it holds no entries.
 - **Suggestions.** In every mode where Forge calculates, the in-cell
   suggestion list and argument help are replaced with Forge's own function
   list and wording, so the editor does not suggest a function Forge would

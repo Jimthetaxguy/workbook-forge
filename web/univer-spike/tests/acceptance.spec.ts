@@ -1053,6 +1053,30 @@ test('theme: the toggle switches the frame and the grid together and stores noth
   await page.locator('#theme-toggle').click();
   expect(await theme()).toEqual({ frame: 'dark', grid: true });
   expect(await page.evaluate(() => [localStorage.length, sessionStorage.length, document.cookie])).toEqual([0, 0, '']);
+  // Univer's interface package opens an IndexedDB database of its own when the
+  // page loads. Nothing in this shell writes to it, so every store in every
+  // database must be empty: no workbook data and no preference.
+  const stored = await page.evaluate(async () => {
+    const counts: Record<string, number> = {};
+    for (const { name } of await indexedDB.databases()) {
+      if (!name) continue;
+      const db = await new Promise<IDBDatabase>((resolve, reject) => {
+        const request = indexedDB.open(name);
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+      for (const store of Array.from(db.objectStoreNames)) {
+        counts[`${name}/${store}`] = await new Promise<number>((resolve, reject) => {
+          const request = db.transaction(store, 'readonly').objectStore(store).count();
+          request.onsuccess = () => resolve(request.result);
+          request.onerror = () => reject(request.error);
+        });
+      }
+      db.close();
+    }
+    return counts;
+  });
+  expect(Object.values(stored).every((count) => count === 0), JSON.stringify(stored)).toBe(true);
 });
 
 // A phone-width screen: every control stays reachable, nothing scrolls
