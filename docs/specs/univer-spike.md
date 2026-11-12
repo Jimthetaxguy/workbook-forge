@@ -360,7 +360,10 @@ too long for the column, the view draws it with the decimals rounded to what
 fits. It used to draw scientific notation: in a default 88 px column,
 0.08663094803653162 was drawn as 8.6631E-02 and -2683.3114976001525 as
 -2.68E+03. They are now drawn as 0.0866309 and -2683.3115 (the default font,
-11 pt Arial).
+11 pt Arial). A number is never drawn in more than 11 characters, not counting
+a minus sign, however wide the column: with room to spare the same two numbers
+are drawn as 0.086630948 and -2683.311498, and the formula bar is where the
+rest is read.
 
 Only the drawn text changes. The number Forge holds, the number in Univer's
 model, the formula bar, a copy and the exported file are untouched, and a cell
@@ -395,15 +398,19 @@ attempt to show exponential format. If the number has too many significant
 digits, the display shall be truncated. The optimal method of display is based
 on the available cell width. If the number cannot be displayed using any of
 these formats in the available width, the application shall show "#" across
-the width of the cell." On when to switch: "If the exponent is bigger than the
-size allowed, a floating point number cannot fit, so try exponential
-notation. Similarly, for negative exponents, check if there is space for even
-one (non-zero) digit in floating point format. Finally, if there isn't room
-for all of the significant digits in floating point format (for a negative
-exponent), exponential format shall display more digits if the exponent is
-less than -3." And: "For general formatting in cells, max overall length for
-cell display is 11, not including negative sign, but includes leading zeros
-and decimal separator." Microsoft's troubleshooting article "Long numbers are
+the width of the cell." On when to switch: "The cell value shall have at least
+five digits for xE-xx. If the exponent is bigger than the size allowed, a
+floating point number cannot fit, so try exponential notation. Similarly, for
+negative exponents, check if there is space for even one (non-zero) digit in
+floating point format. Finally, if there isn't room for all of the significant
+digits in floating point format (for a negative exponent), exponential format
+shall display more digits if the exponent is less than -3. (The 3 is because
+E-xx takes 4 characters, and the leading 0 in floating point takes only 1
+character. Thus, for an exponent less than -3, there is more than 3 additional
+leading 0's, more than enough to compensate for the size of the E-xx.)" And,
+headed "Floating point rule": "For general formatting in cells, max overall
+length for cell display is 11, not including negative sign, but includes
+leading zeros and decimal separator." Microsoft's troubleshooting article "Long numbers are
 displayed incorrectly in Excel"
 (https://learn.microsoft.com/en-us/troubleshoot/microsoft-365-apps/excel/long-numbers-incorrectly-in-excel)
 gives the same figure: "Default number format in Excel is General therefore
@@ -416,10 +423,13 @@ you can display up to 11 digits in a cell."
 1. A number whose whole-number part has 12 or more digits is drawn in
    scientific notation, whatever the column width: 123456789012 is
    1.23457E+11.
-2. Any other number is drawn as typed when that fits.
-3. When it does not fit, the decimals are rounded to the longest text that
-   fits, at most 11 characters not counting a minus sign. 25.76 becomes 25.8
-   and then 26; closing zeros are not drawn.
+2. Any other number is drawn as typed when that is at most 11 characters,
+   not counting a minus sign, and fits: 12345678901 and 1234567.891.
+3. Otherwise the decimals are rounded to the longest text of at most 11
+   characters that fits. In a narrow column 25.76 becomes 25.8 and then 26. In
+   a column of any width 2683.3114976001525 is 2683.311498,
+   0.08663094803653162 is 0.086630948 and pi is 3.141592654. Closing zeros
+   are not drawn.
 4. Scientific notation is used instead, with the longest mantissa that fits in
    the same 11 characters, when the whole-number part does not fit (12345678901
    in a default column is 1.235E+10), when the rounded decimals would be all
@@ -432,13 +442,10 @@ you can display up to 11 digits in a cell."
 **Which parts are Workbook Forge's own.** These are not stated by Microsoft
 and none was observed in Excel:
 
-- A number that fits is drawn as typed even when it is longer than 11
-  characters. The standard caps General at 11 characters at any width, so by
-  its text a wide column would show 2683.311498 where this view shows
-  2683.3114976, and 1.23457E-05 where this view shows 0.0000123456789. The
-  owner asked for "as typed when it fits"; the choice is one early return in
-  `generalNumberText`.
 - "12 or more digits" is read as the digits of the whole-number part.
+- The 11 characters are applied to scientific notation as well
+  (1.23457E+11). The standard states them under its floating point rule and
+  gives no length for the exponential form.
 - "Fits" means the text and one more digit of clearance fit in the column
   less 2 px of padding on each side. This is Univer's own test for a General
   number that is too long, kept so the view has one notion of fitting. Excel
@@ -450,6 +457,16 @@ and none was observed in Excel:
   gives 25.76 as 26, which is what is followed.
 - Whether scientific notation "shows more digits" is decided by counting how
   many of the number's digits each form has room for; a tie stays decimal.
+  The standard does not say how its "exponent" is counted. Counted as in
+  1.23E-04, 0.000123456789 has an exponent below -3, yet both forms have room
+  for six of its digits (0.000123457 and 1.23457E-04), so the decimal form
+  stays; the standard's own sum (four characters for E-xx against "more than
+  3 additional leading 0's") starts the switch at four zeros after the
+  decimal point, which is the same answer. 0.0000123456789 is 1.23457E-05 on
+  either reading.
+- The standard's "at least five digits for xE-xx" is read as the five
+  characters the shortest scientific text takes (1E-05); a text that does not
+  fit is not drawn, and no separate test is made.
 - 0, with no minus sign, for a number below one half that fits in no other
   form. Before this change the view drew 0 there for any number below one; a
   number from one half up now rounds to 1 or shows number signs.
@@ -476,13 +493,25 @@ General-number acceptance test asserts it is true and that the drawn text is
 the rounded decimal, so an upgrade that moves the method fails the suite.
 Nothing in `node_modules` is patched.
 
-The number that is rounded is the one Univer shows for the cell. Univer trims
-floating-point noise from a General number before showing it (to 12
-significant digits when that is within 1e-10 of the number, otherwise to 15),
-and its formula bar and the text it puts on the clipboard show that trimmed
-number: 0.0866309480365 for 0.08663094803653162. That was so before this
-change and is not changed by it. Forge's number, Univer's raw cell value, a
-paste on the same page and the export keep every digit.
+The number that is rounded is the one the cell holds, not the one Univer
+shows. Univer trims floating-point noise from a General number before showing
+it (to 12 significant digits when that is within 1e-10 of the number,
+otherwise to 15). Rounding the trimmed number again can go wrong:
+1.23456789049999 is trimmed to 1.2345678905 and would then round up to
+1.234567891, where the number itself rounds to 1.23456789. So the drawing
+reads the cell's stored number (`worksheet.getCellRaw`, public in Univer)
+whenever it is the shown number to within the trim, and the shown number
+otherwise. Univer's formula bar and the text it puts on the clipboard still
+show the trimmed number: 0.0866309480365 for 0.08663094803653162. That was so
+before this change and is not changed by it. Forge's number, Univer's raw cell
+value, a paste on the same page and the export keep every digit.
+
+**Correction of 2026-11-12.** As first committed, rule 2 drew a number as
+typed whenever it fitted, even beyond 11 characters (2683.3114976 in a wide
+column), following the owner's brief. The standard's notes cap General at 11
+characters at any width, and the primary source outranks the brief, so the cap
+now applies everywhere. The same commit moved the rounding from Univer's shown
+number to the stored number.
 
 ## Absent-cell authoring on imported workbooks
 
@@ -664,10 +693,15 @@ the grid canvas is asked to draw during a full repaint.
     formula bar shows 2683.3114976 in full and at least 12 significant digits
     of the two long numbers. The host reports that the drawing rule is
     installed.
-30. Wider column. In `op_styles_number_formats.xlsx`, 2683.3114976 is drawn in
-    full in the 154 px column and rounded in the 88 px column beside it, and
-    the cells with number formats draw the same text as before (2024-02-29,
-    12.75%, $1,234.50, 6.02E+23 and the rest).
+30. Wide column. In `op_styles_number_formats.xlsx`, 2683.3114976 is drawn as
+    2683.311498 in the 154 px column and shorter in the 88 px column beside
+    it. In the same wide column 0.08663094803653162 is drawn as 0.086630948,
+    -2683.3114976001525 as -2683.311498, 0.0000123456789 as 1.23457E-05,
+    `=PI()` as 3.141592654, 12345678901 and 1234567.891 as typed,
+    123456789012 as 1.23457E+11 and 1.23456789049999 as 1.23456789. No number
+    is drawn in more than 11 characters besides a minus sign, and the cells
+    with number formats draw the same text as before (2024-02-29, 12.75%,
+    $1,234.50, 6.02E+23 and the rest).
 31. Narrow column. In a 34 px column, 25.76 is drawn as 26 (Microsoft's
     example), 123456 as number signs and 0.0866 as the longest rounding that
     fits. The view cannot resize a column, so the test narrows one with
@@ -675,9 +709,11 @@ the grid canvas is asked to draw during a full repaint.
 
 In items 29 to 31 each expected text is the longest entry, of a list rounded
 by hand in the test, that the stated fitting rule lets into the column,
-measured in the test with the font the text was drawn in. None is taken from
-Univer's output or from either engine. With the drawing rule taken out, all
-three fail (checked by removing it).
+measured in the test with the font the text was drawn in; the wide-column
+texts of item 30 are the numbers cut to 11 characters by hand. None is taken
+from Univer's output or from either engine. With the drawing rule taken out,
+all three fail, and with the rounding put back on Univer's shown number item
+30 fails on 1.23456789049999 (both checked by doing it).
 
 **Repaint latency gate.** A typed commit into A1 of the event-log fixture
 must repaint its dependent B1 in under 100 ms, measured from the adapter's

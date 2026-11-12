@@ -13,9 +13,11 @@
 // cell is replaced. Nothing else is touched: the cell's value, the formula
 // bar, a copy and an export never pass through here.
 //
-// The number that is rounded is the one Univer shows for the cell, which is
-// also what its formula bar shows: Forge's number with floating-point noise
-// trimmed by Univer (at most 15 significant digits).
+// The number that is rounded is the one the cell holds. Univer shows a
+// General number with floating-point noise trimmed (to 12 or 15 significant
+// digits), and rounding that a second time can turn ...49999 into ...5 and
+// then round it up, so the stored number is rounded instead whenever it is
+// the shown number in more digits.
 //
 // `_applyNumberDisplay` is private to Univer 1.2.0. If an upgrade renames or
 // removes it, `installGeneralNumberDisplay` returns false and the "general
@@ -52,8 +54,9 @@ function redraw(skeleton: SpreadsheetSkeleton, row: number, col: number, fontCac
   if (!cell || style.stf === BooleanNumber.TRUE || fontCache.documentSkeleton) return;
   if (cell.t !== CellValueType.NUMBER && ((cell.t !== undefined && cell.t !== null) || typeof cell.v !== 'number')) return;
   if (!isDefaultFormat(style.n?.pattern)) return;
-  const value = numberOf(cell.v);
-  if (value === null) return;
+  const shown = numberOf(cell.v);
+  if (shown === null) return;
+  const value = storedNumber(skeleton, row, col, shown);
   const available = innerWidth(skeleton, row, col, fontCache, style);
   if (available <= 0) return;
   const width = (text: string) => FontCache.getMeasureText(text, fontCache.fontString).width;
@@ -72,6 +75,16 @@ function numberOf(shown: unknown): number | null {
   if (typeof shown !== 'string' || !shown.includes('E')) return null;
   const value = Number(shown);
   return Number.isFinite(value) && String(value).toUpperCase() === shown ? value : null;
+}
+
+/** Univer keeps 12 significant digits of a General number at the fewest: half a unit in the twelfth is 5e-12 of the number. */
+const TRIMMED_WITHIN = 1e-11;
+
+/** The number the cell holds when it is `shown` in more digits; `shown` itself otherwise. */
+function storedNumber(skeleton: SpreadsheetSkeleton, row: number, col: number, shown: number): number {
+  const stored = skeleton.worksheet.getCellRaw(row, col)?.v;
+  if (typeof stored !== 'number' || !Number.isFinite(stored)) return shown;
+  return Math.abs(stored - shown) <= Math.abs(stored) * TRIMMED_WITHIN ? stored : shown;
 }
 
 /**

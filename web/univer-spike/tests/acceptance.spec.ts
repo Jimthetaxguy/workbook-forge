@@ -1750,13 +1750,15 @@ test.describe('general numbers', () => {
     return { drawn: texts[0], expected: await longestFitting(page, seen[0].font, candidates, columnWidth) };
   }
 
-  // Rounded by hand, one decimal fewer on each step.
+  // Rounded by hand, one decimal fewer on each step. Each list starts at
+  // eleven characters, not counting a minus sign: the most a General number
+  // is drawn in at any width.
   //   0.08663094803653162: 0.086630948|0 down, 0.08663094|8 up, 0.0866309|4 down, 0.086630|9 up, 0.08663|0 down, ...
-  const SMALL = ['0.08663094803653162', '0.086630948', '0.08663095', '0.0866309', '0.086631', '0.08663', '0.0866', '0.087', '0.09', '0.1', '0'];
+  const SMALL = ['0.086630948', '0.08663095', '0.0866309', '0.086631', '0.08663', '0.0866', '0.087', '0.09', '0.1', '0'];
   //   -2683.3114976001525: .311497|6 up, .31149|7 up to .3115 (closing zero not drawn), .311|4 down, ...
-  const NEGATIVE = ['-2683.3114976001525', '-2683.311498', '-2683.3115', '-2683.311', '-2683.31', '-2683.3', '-2683'];
-  //   2683.3114976 has twelve characters, one more than a rounded General number takes.
-  const TWELVE_CHARS = ['2683.3114976', '2683.311498', '2683.3115', '2683.311', '2683.31', '2683.3', '2683'];
+  const NEGATIVE = ['-2683.311498', '-2683.3115', '-2683.311', '-2683.31', '-2683.3', '-2683'];
+  //   2683.3114976 has twelve characters, one more than a General number is drawn in.
+  const TWELVE_CHARS = ['2683.311498', '2683.3115', '2683.311', '2683.31', '2683.3', '2683'];
   //   123456789012 is 1.23456789012 times ten to the 11th: 1.23456|7 up, 1.2345|6 up, 1.234|5 up, 1.23|4 down, ...
   const TWELVE_DIGITS = ['1.23457E+11', '1.2346E+11', '1.235E+11', '1.23E+11', '1.2E+11', '1E+11'];
   //   Ten times that, from a formula: the same digits, ten to the 12th.
@@ -1790,8 +1792,9 @@ test.describe('general numbers', () => {
     expect(twelveChars.drawn).toBe(twelveChars.expected);
     expect(twelveDigits.drawn).toBe(twelveDigits.expected);
     expect(thirteenDigits.drawn).toBe(thirteenDigits.expected);
-    // An 88px column has no room for any of the three as typed, and room for
-    // more than their whole-number part: each is drawn as a shorter decimal.
+    // An 88px column has no room for eleven characters of any of the three,
+    // and room for more than their whole-number part: each is drawn as a
+    // shorter decimal.
     for (const [shown, typed] of [[small, SMALL], [negative, NEGATIVE], [twelveChars, TWELVE_CHARS]] as const) {
       expect(typed.slice(1, -1), String(shown.drawn)).toContain(shown.drawn);
     }
@@ -1858,7 +1861,13 @@ test.describe('general numbers', () => {
     expect(errors).toEqual([]);
   });
 
-  test('a wider column draws the number in full, and cells with a number format are drawn as before', async ({ page }) => {
+  // The Office Open XML standard's notes on General, as Microsoft prints them:
+  // "The application shall attempt to display the full number up to 11 digits
+  // (inc. decimal point)" and "max overall length for cell display is 11, not
+  // including negative sign, but includes leading zeros and decimal
+  // separator." So a column with room to spare still draws eleven characters
+  // of a longer number, and the formula bar is where the rest is read.
+  test('a wide column draws a long number in at most 11 characters, and cells with a number format are drawn as before', async ({ page }) => {
     const errors = await boot(page, 'not-execute');
     // fixtures/corpus/op_styles_number_formats.xlsx: column A is 18 characters
     // (126px), column B 22 (154px) and column C the default 88px, after a 46px
@@ -1878,20 +1887,55 @@ test.describe('general numbers', () => {
     const C = 46 + 126 + 154 + 44;
     await typeAt(B, 13, '2683.3114976');
     await typeAt(C, 13, '2683.3114976');
-    expect(
-      await page.evaluate(() => (window as any).__spike.then((s: any) => ['B13', 'C13'].map((address) => s.adapter.cell('Formats', address).raw))),
-    ).toEqual([2683.3114976, 2683.3114976]);
+    // More numbers in the 154px column, each with the text eleven characters
+    // of it make, cut and rounded by hand.
+    const WIDE: [string, number | string, string][] = [
+      ['B14', 0.08663094803653162, '0.086630948'], // 0. and nine decimals: .086630948|0 down
+      ['B15', -2683.3114976001525, '-2683.311498'], // the minus sign is not counted: .311497|6 up
+      ['B16', 0.0000123456789, '1.23457E-05'], // 0.000012346 has five of its digits, 1.23456|789 up has six
+      ['B17', '=PI()', '3.141592654'], // 3.141592653|58979 up
+      ['B18', 12345678901, '12345678901'], // eleven digits, in full
+      ['B19', 123456789012, '1.23457E+11'], // twelve digits: 1.23456|789012 up
+      ['B20', 1.23456789049999, '1.23456789'], // 1.234567890|49999 down, closing zero not drawn
+      ['B21', 1234567.891, '1234567.891'], // eleven characters, as typed
+    ];
+    const held = await page.evaluate(async (cells) => {
+      const s = await (window as any).__spike;
+      await s.adapter.edit(
+        cells.map(([address, entry]) => (typeof entry === 'string' ? { sheet: 'Formats', address, formula: entry } : { sheet: 'Formats', address, value: entry })),
+        'general numbers',
+      );
+      await s.adapter.idle();
+      return ['B13', 'C13', ...cells.map(([address]) => address)].map((address) => s.adapter.cell('Formats', address).raw);
+    }, WIDE.map(([address, entry]) => [address, entry] as const));
+    // Pi to the last digit of a double, from any table of its digits: 3.14159265358979|3.
+    expect(held).toEqual([2683.3114976, 2683.3114976, ...WIDE.map(([, entry]) => (entry === '=PI()' ? 3.141592653589793 : entry))]);
 
     const drawn = await drawnTexts(page);
     const texts = drawn.map(({ text }) => text);
     const general = drawn.filter(({ text }) => TWELVE_CHARS.includes(text));
     const font = general[0]?.font ?? '';
-    // The same number, drawn once in full and once rounded.
+    // The same number in two columns: eleven characters of it where there is
+    // room, fewer in the default column, and nowhere all twelve.
     const wide = await longestFitting(page, font, TWELVE_CHARS, 154);
     const narrow = await longestFitting(page, font, TWELVE_CHARS, 88);
-    expect(wide).toBe('2683.3114976');
+    expect(wide).toBe('2683.311498');
     expect(narrow).not.toBe(wide);
     expect([...new Set(general.map(({ text }) => text))].sort()).toEqual([wide, narrow].sort());
+    for (const [address, , expected] of WIDE) {
+      // The column has room for the text, so the eleven characters are the limit, not the width.
+      expect(await longestFitting(page, font, [expected], 154), address).toBe(expected);
+      expect(texts, `${address} ${expected}`).toContain(expected);
+    }
+    // No number is drawn in more than eleven characters besides a minus sign:
+    // not as typed, not as the formula bar shows it, and not rounded twice.
+    const tooLong = texts.filter((text) => /^-?[\d.]+(E[+-]\d+)?$/.test(text) && text.replace(/^-/, '').length > 11);
+    expect(tooLong).toEqual([]);
+    for (const wrong of ['1.234567891', '0.000012346', '123456789012', '3.141592653', '2683.311497']) {
+      expect(texts, wrong).not.toContain(wrong);
+    }
+    // Scientific notation is drawn for the small number, the twelve digits and the formatted B7 only.
+    expect([...new Set(texts.filter((text) => SCIENTIFIC.test(text)))].sort()).toEqual(['1.23457E+11', '1.23457E-05', '6.02E+23'].sort());
 
     // Cells with a number format of their own are not General and keep the
     // text their format gives (worked from the fixture's XML in the display
@@ -1899,7 +1943,11 @@ test.describe('general numbers', () => {
     for (const formatted of ['2024-02-29', '12.75%', '$1,234.50', '-42.75', '6.02E+23', ' 3/8', '9,877', '42:00']) {
       expect(texts, formatted).toContain(formatted);
     }
-    expect(await page.evaluate(() => (window as any).__spike.then((s: any) => s.adapter.divergence()))).toEqual([]);
+    // divergence() reports Univer's trimmed showing of a number of more than
+    // 12 significant digits as a "displayed" difference (see the test above
+    // and the spec's known limits). Nothing else may differ.
+    const divergence: string[] = await page.evaluate(() => (window as any).__spike.then((s: any) => s.adapter.divergence()));
+    expect(divergence.filter((message) => !/^Formats!B(14|15|17|20) displayed /.test(message))).toEqual([]);
     expect(errors).toEqual([]);
   });
 

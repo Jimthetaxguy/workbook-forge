@@ -16,7 +16,8 @@
   and fill (the handle, Ctrl+D, Ctrl+R) work on values and formulas, and the
   handle continues number, text-and-number and day and month name series.
   A number with no number format that is too long for its column is drawn
-  with its decimals rounded, as Excel's General format describes.
+  with its decimals rounded, and never in more than 11 characters, as Excel's
+  General format describes.
   [`univer-spike/FLOWS.md`](univer-spike/FLOWS.md) lists the user flows.
 
 Findings, configuration matrix, contract and results:

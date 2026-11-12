@@ -8,12 +8,12 @@
 //     is shown as typed; a cell that is not wide enough rounds the decimals;
 //     12 or more digits use scientific notation.
 //   The Office Open XML standard's notes on the General format, as printed
-//     on Microsoft Learn (NumberingFormat class): at most 11 characters, not
-//     counting the minus sign; when to switch to exponential notation; "#"
-//     across the cell when nothing fits.
+//     on Microsoft Learn (NumberingFormat class): at most 11 characters at
+//     any cell width, not counting the minus sign; when to switch to
+//     exponential notation; "#" across the cell when nothing fits.
 // The spec lists which parts of the rule are Workbook Forge's own.
 
-/** The most characters a rounded General number takes, not counting a minus sign. */
+/** The most characters a General number is drawn in at any cell width, not counting a minus sign. */
 export const GENERAL_MAX_CHARS = 11;
 /** A whole-number part of this many digits or more is always drawn in scientific notation. */
 export const SCIENTIFIC_FROM_DIGITS = 12;
@@ -102,10 +102,11 @@ function longest(
  * `fits(text)` is true when `text` can be drawn in the cell. The steps:
  *
  * 1. A whole-number part of 12 or more digits: scientific notation, always.
- * 2. Otherwise the number as typed, when that fits.
+ * 2. Otherwise the number as typed, when that is at most 11 characters, not
+ *    counting the minus sign, and fits.
  * 3. Otherwise the decimals are rounded (a half goes away from zero) to the
- *    longest text that fits, at most 11 characters not counting the minus
- *    sign. 25.76 becomes 25.8 and then 26.
+ *    longest text of at most 11 characters that fits. 25.76 becomes 25.8 and
+ *    then 26; 2683.3114976 is 2683.311498 however wide the cell.
  * 4. Scientific notation instead, with the longest mantissa that fits in the
  *    same 11 characters, when the whole-number part does not fit, when the
  *    rounded decimals would have no digit other than zero, or when the number
@@ -130,8 +131,8 @@ export function generalNumberText(value: number, fits: (text: string) => boolean
   );
   if (number.exponent + 1 >= SCIENTIFIC_FROM_DIGITS) return exponential?.text ?? null;
 
-  const typed = sign + plain(number);
-  if (fits(typed)) return typed;
+  const typed = plain(number);
+  if (typed.length <= GENERAL_MAX_CHARS && fits(sign + typed)) return sign + typed;
 
   // Characters of the whole-number part; a number below one starts with "0".
   const whole = Math.max(number.exponent + 1, 1);

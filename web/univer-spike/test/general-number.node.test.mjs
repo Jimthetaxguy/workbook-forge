@@ -29,25 +29,63 @@ test("Microsoft's example: 25.76 shows as 26 in a cell that is not wide enough",
   assert.equal(drawn(25.76, 1), null);
 });
 
-test('a number that fits is drawn as typed', () => {
+test('a number of at most eleven characters that fits is drawn as typed', () => {
   assert.equal(generalNumberText(0, anyWidth), '0');
   assert.equal(generalNumberText(42, anyWidth), '42');
   assert.equal(generalNumberText(-42.75, anyWidth), '-42.75');
   assert.equal(generalNumberText(0.5, anyWidth), '0.5');
   // Eleven digits is still below the scientific threshold.
   assert.equal(generalNumberText(12345678901, anyWidth), '12345678901');
-  // Our rule: a number that fits is not cut to eleven characters.
-  assert.equal(generalNumberText(0.123456789012, anyWidth), '0.123456789012');
-  assert.equal(drawn(0.123456789012, 14), '0.123456789012');
+  // Eleven characters with the decimal point; the minus sign is not counted.
+  assert.equal(generalNumberText(1234567.891, anyWidth), '1234567.891');
+  assert.equal(generalNumberText(0.123456789, anyWidth), '0.123456789');
+  assert.equal(generalNumberText(-1234567.891, anyWidth), '-1234567.891');
   // A very small number is written out, not handed over as JavaScript's 1.23e-7.
   assert.equal(generalNumberText(0.000000123, anyWidth), '0.000000123');
+});
+
+// The standard's notes, as Microsoft prints them: "The application shall
+// attempt to display the full number up to 11 digits (inc. decimal point)"
+// and "max overall length for cell display is 11, not including negative
+// sign, but includes leading zeros and decimal separator." Each expected text
+// is the number cut to eleven characters by hand, rounded as Microsoft's
+// Support page rounds 25.76 to 26.
+test('a number longer than eleven characters is rounded to eleven however wide the cell', () => {
+  // 2683. is five characters, so six decimals: .311497|6 rounds up.
+  assert.equal(generalNumberText(2683.3114976001525, anyWidth), '2683.311498');
+  assert.equal(generalNumberText(-2683.3114976001525, anyWidth), '-2683.311498');
+  assert.equal(generalNumberText(2683.3114976, anyWidth), '2683.311498');
+  // 0. is two characters, so nine decimals: .086630948|0 rounds down.
+  assert.equal(generalNumberText(0.08663094803653162, anyWidth), '0.086630948');
+  // Pi is 3.141592653|58979: the nine decimals round up.
+  assert.equal(generalNumberText(Math.PI, anyWidth), '3.141592654');
+  assert.equal(generalNumberText(1 / 3, anyWidth), '0.333333333');
+  assert.equal(generalNumberText(2 / 3, anyWidth), '0.666666667');
+  // Fourteen characters as typed: nine decimals, .123456789|012.
+  assert.equal(generalNumberText(0.123456789012, anyWidth), '0.123456789');
+  assert.equal(drawn(0.123456789012, 14), '0.123456789');
+  // Ten and eleven whole digits leave no room for a decimal: a half rounds away from zero.
+  assert.equal(generalNumberText(1234567890.5, anyWidth), '1234567891');
+  assert.equal(generalNumberText(12345678901.5, anyWidth), '12345678902');
+  // Eleven digits are drawn in full and twelve in scientific notation: 1.23456|789012 rounds up.
+  assert.equal(generalNumberText(12345678901, anyWidth), '12345678901');
+  assert.equal(generalNumberText(123456789012, anyWidth), '1.23457E+11');
+  // Below 0.001 with too many digits: 0.000012346 has room for five of them
+  // and 1.23457E-05 for six (1.23456|789 rounds up), so scientific notation.
+  assert.equal(generalNumberText(0.0000123456789, anyWidth), '1.23457E-05');
+  // One zero fewer and both forms have room for six digits: the decimal stays.
+  assert.equal(generalNumberText(0.000123456789, anyWidth), '0.000123457');
+  // Floating-point noise is beyond the eleventh character: 0.1 + 0.2 is 0.30000000000000004.
+  assert.equal(generalNumberText(0.1 + 0.2, anyWidth), '0.3');
+  // 1.234567890|49999 rounds down, and the closing zero is not drawn.
+  assert.equal(generalNumberText(1.23456789049999, anyWidth), '1.23456789');
 });
 
 test('0.08663094803653162 is rounded to the decimals that fit, never to scientific notation', () => {
   const value = 0.08663094803653162;
   // The digits are 0.0866309480365...; each line rounds at one place fewer.
-  assert.equal(generalNumberText(value, anyWidth), '0.08663094803653162');
-  assert.equal(drawn(value, 18), '0.086630948'); // eleven characters at most
+  assert.equal(generalNumberText(value, anyWidth), '0.086630948'); // eleven characters at most
+  assert.equal(drawn(value, 18), '0.086630948');
   assert.equal(drawn(value, 11), '0.086630948'); // ...9480|3 rounds down
   assert.equal(drawn(value, 10), '0.08663095'); // ...094|8 rounds up
   assert.equal(drawn(value, 9), '0.0866309'); // ...309|4 rounds down
@@ -64,8 +102,8 @@ test('0.08663094803653162 is rounded to the decimals that fit, never to scientif
 
 test('-2683.3114976001525 keeps its whole-number part and loses decimals', () => {
   const value = -2683.3114976001525;
-  assert.equal(generalNumberText(value, anyWidth), '-2683.3114976001525');
   // Eleven characters not counting the minus sign: 2683.311498 (...1497|6 rounds up).
+  assert.equal(generalNumberText(value, anyWidth), '-2683.311498');
   assert.equal(drawn(value, 18), '-2683.311498');
   assert.equal(drawn(value, 12), '-2683.311498');
   // Five decimals round to .31150 (...3114|9 with a carry); the closing zero is not drawn.
@@ -187,10 +225,9 @@ test('what cannot be drawn at all is null, and the cell shows number signs', () 
 });
 
 test('every drawn text fits its cell and has at most eleven characters besides a minus sign', () => {
-  // Twelve typed characters or fewer are left out: a number that fits is drawn as typed.
-  const values = [0.08663094803653162, -2683.3114976001525, 1 / 3, -2 / 3, Math.PI * 1e5, -Math.E / 1e7, 123456789012.345, 6.02214076e23];
+  const values = [0.08663094803653162, -2683.3114976001525, 2683.3114976, 25.76, 1 / 3, -2 / 3, Math.PI * 1e5, -Math.E / 1e7, 123456789012.345, 6.02214076e23];
   for (const value of values) {
-    for (let room = 0; room <= 16; room++) {
+    for (let room = 0; room <= 24; room++) {
       const text = drawn(value, room);
       if (text === null) continue;
       assert.ok(text.length <= room, `${value} in ${room}: ${text}`);
