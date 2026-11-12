@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { createBlankWorkbook, initSync, openXlsx, replayJson, sha256Hex } from '../pkg/workbook_forge.js';
+import { copyFormulasJson, createBlankWorkbook, initSync, openXlsx, replayJson, sha256Hex } from '../pkg/workbook_forge.js';
 import { ForgeEngine, utcOffsetMinutes } from '../src/engine.ts';
 
 const wasmBytes = readFileSync(new URL('../pkg/workbook_forge_bg.wasm', import.meta.url));
@@ -448,4 +448,84 @@ test('snapshot carries cell presentation and column widths', () => {
   const plain = call(engine, 'snapshot').value.sheets[0];
   assert.equal('columnWidths' in plain, false);
   assert.deepEqual(plain.cells.A1, { value: 10 });
+});
+
+// copyFormulas: what a formula becomes when its cell is copied elsewhere.
+// Expected references are Microsoft's, from "Switch between relative,
+// absolute, and mixed references" (support.microsoft.com, article
+// dfec08cd-ae65-4f56-839e-5f0d8d0baca9): copied two cells down and two cells
+// to the right, $A$1 stays $A$1, A$1 becomes C$1, $A1 becomes $A3 and A1
+// becomes C3; and =B4*C4 copied from D4 to D5 becomes =B5*C5 while
+// =$B$4*$C$4 stays the same. The outer brackets are the toolkit's own fully
+// bracketed spelling, not Excel's.
+test('copyFormulas moves relative references, keeps absolute ones, and reads no workbook', () => {
+  const engine = new ForgeEngine({ openXlsx, createBlankWorkbook, copyFormulasJson });
+  // No workbook is open: the command is stateless.
+  const copied = call(engine, 'copyFormulas', {
+    items: [
+      { formula: '$A$1', rowDelta: 2, columnDelta: 2 },
+      { formula: 'A$1', rowDelta: 2, columnDelta: 2 },
+      { formula: '$A1', rowDelta: 2, columnDelta: 2 },
+      { formula: 'A1', rowDelta: 2, columnDelta: 2 },
+      { formula: 'B4*C4', rowDelta: 1, columnDelta: 0 },
+      { formula: '=$B$4*$C$4', rowDelta: 1, columnDelta: 0 },
+      { formula: 'A1', rowDelta: -1, columnDelta: 0 },
+      { formula: 'B2', rowDelta: 0, columnDelta: -2 },
+      { formula: '1+', rowDelta: 1, columnDelta: 0 },
+    ],
+  });
+  assert.equal(copied.ok, true, JSON.stringify(copied.error));
+  const formulas = copied.value.formulas;
+  assert.deepEqual(formulas.slice(0, 6), [
+    { formula: '$A$1' },
+    { formula: 'C$1' },
+    { formula: '$A3' },
+    { formula: 'C3' },
+    { formula: '(B5*C5)' },
+    { formula: '($B$4*$C$4)' },
+  ]);
+  // Row 0 and the column left of A do not exist: each is refused on its own.
+  assert.equal(formulas[6].error.code, 'invalid_reference');
+  assert.equal(formulas[7].error.code, 'invalid_reference');
+  assert.equal(formulas[8].error.code, 'parse_error');
+  assert.equal(call(engine, 'snapshot').error.code, 'no_workbook');
+});
+
+test('copyFormulas results calculate as Excel\'s relative copy does, and nothing is logged', () => {
+  const engine = new ForgeEngine({ openXlsx, createBlankWorkbook, copyFormulasJson });
+  call(engine, 'newWorkbook', { sheetName: 'Sheet1' });
+  const edits = [
+    { sheet: 'Sheet1', address: 'A1', value: 1 },
+    { sheet: 'Sheet1', address: 'A2', value: 2 },
+    { sheet: 'Sheet1', address: 'A3', value: 3 },
+    { sheet: 'Sheet1', address: 'B1', formula: 'A1*10' },
+  ];
+  assert.equal(call(engine, 'applyEdits', { edits, expectedRevision: '0' }).ok, true);
+  const before = call(engine, 'log', { fromSeq: 0 }).value.total;
+  const copied = call(engine, 'copyFormulas', {
+    items: [
+      { formula: 'A1*10', rowDelta: 1, columnDelta: 0 },
+      { formula: 'A1*10', rowDelta: 2, columnDelta: 0 },
+    ],
+  }).value.formulas;
+  assert.deepEqual(copied, [{ formula: '(A2*10)' }, { formula: '(A3*10)' }]);
+  assert.equal(call(engine, 'log', { fromSeq: 0 }).value.total, before);
+  assert.equal(call(engine, 'snapshot').value.revision, '1');
+  const filled = [
+    { sheet: 'Sheet1', address: 'B2', formula: copied[0].formula },
+    { sheet: 'Sheet1', address: 'B3', formula: copied[1].formula },
+  ];
+  assert.equal(call(engine, 'applyEdits', { edits: filled, expectedRevision: '1' }).ok, true);
+  const values = call(engine, 'calculate').value.values;
+  // 1*10, 2*10, 3*10 by hand.
+  assert.deepEqual([values['Sheet1!B1'], values['Sheet1!B2'], values['Sheet1!B3']], [10, 20, 30]);
+});
+
+test('copyFormulas is refused by an engine build without it and for malformed items', () => {
+  const old = new ForgeEngine({ openXlsx, createBlankWorkbook });
+  assert.equal(call(old, 'copyFormulas', { items: [] }).error.code, 'unsupported');
+  const engine = new ForgeEngine({ openXlsx, createBlankWorkbook, copyFormulasJson });
+  assert.equal(call(engine, 'copyFormulas', { items: 'A1' }).error.code, 'invalid_request');
+  assert.equal(call(engine, 'copyFormulas', { items: [{ formula: 'A1', rowDelta: 1.5, columnDelta: 0 }] }).error.code, 'invalid_request');
+  assert.deepEqual(call(engine, 'copyFormulas', { items: [] }), { ok: true, value: { formulas: [] } });
 });

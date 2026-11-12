@@ -13,8 +13,10 @@ import type {
   Calculation,
   CalcContext,
   CommandMeta,
+  CopiedFormula,
   Edit,
   EventMessage,
+  FormulaCopy,
   LogEvent,
   LogPage,
   ReplayResult,
@@ -40,6 +42,8 @@ export interface ForgeWasm {
   createBlankWorkbook(sheetName: string): ForgeWorkbook;
   sha256Hex?(bytes: Uint8Array): string;
   replayJson?(bytes: Uint8Array, events: string): string;
+  /** Relative-reference copy of formulas (absent on older builds and mocks). */
+  copyFormulasJson?(items: string): string;
 }
 
 export interface ForgeWorkbook {
@@ -339,9 +343,22 @@ export class ForgeEngine {
         const { baseline, events } = args as Commands['replay']['args'];
         return this.replay(baseline, events);
       }
+      case 'copyFormulas':
+        return this.copyFormulas((args as Commands['copyFormulas']['args']).items);
       default:
         return fail('unknown_command', `unknown command ${String(command)}`);
     }
+  }
+
+  /** Stateless: needs no open workbook and leaves the log alone. */
+  private copyFormulas(items: FormulaCopy[]): Result<{ formulas: CopiedFormula[] }> {
+    if (!this.wasm.copyFormulasJson) return fail('unsupported', 'this WASM build has no copyFormulasJson');
+    if (!Array.isArray(items)) return fail('invalid_request', 'items must be an array');
+    const request = items.map((item) => ({ formula: item.formula, row_delta: item.rowDelta, column_delta: item.columnDelta }));
+    const out = JSON.parse(this.wasm.copyFormulasJson(JSON.stringify(request))) as
+      | { ok: true; formulas: CopiedFormula[] }
+      | { ok: false; error: EngineError };
+    return out.ok ? { ok: true, value: { formulas: out.formulas } } : { ok: false, error: out.error };
   }
 
   private withWorkbook(fn: (wb: ForgeWorkbook) => Result<unknown>): Result<unknown> {
