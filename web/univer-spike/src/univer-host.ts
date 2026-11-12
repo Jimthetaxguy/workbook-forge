@@ -20,6 +20,7 @@ import { UniverSheetsPlugin } from '@univerjs/sheets';
 import { UniverSheetsUIPlugin } from '@univerjs/sheets-ui';
 import { UniverUIPlugin } from '@univerjs/ui';
 import type { FunctionHelp } from './formula-plugins';
+import { installGeneralNumberDisplay } from './general-display';
 import '@univerjs/sheets/facade';
 import '@univerjs/ui/facade';
 import '@univerjs/docs-ui/facade';
@@ -47,6 +48,12 @@ export interface UniverHost {
    * of Univer's own entries were removed; 0 when no formula plugins are loaded.
    */
   setFunctionHelp(help: FunctionHelp[]): number;
+  /**
+   * True when General numbers are drawn by Forge's rule (rounded decimals
+   * when a number is too long for its cell). False means this Univer version
+   * no longer has the drawing step that rule replaces; see general-display.ts.
+   */
+  generalNumberDisplay: boolean;
 }
 
 /**
@@ -89,6 +96,8 @@ export interface HostOptions {
 
 export async function createUniverHost(container: HTMLElement, mode: Mode, options: HostOptions = {}): Promise<UniverHost> {
   const formulaPlugins = mode !== 'no-formula-plugins';
+  // Before any sheet is drawn: the grid draws through this from its first frame.
+  const generalNumberDisplay = installGeneralNumberDisplay();
   const formula = formulaPlugins ? await import('./formula-plugins') : null;
   const locales = [DesignEnUS, UIEnUS, DocsUIEnUS, SheetsEnUS, SheetsUIEnUS, ...(formula?.locales ?? [])];
   const univer = new Univer({
@@ -115,7 +124,14 @@ export async function createUniverHost(container: HTMLElement, mode: Mode, optio
   });
   if (formula) formula.registerSheetsFormula(univer, mode);
   const univerAPI = FUniver.newAPI(univer);
-  return { univer, univerAPI, mode, formulaPlugins, setFunctionHelp: (help) => formula?.setFunctionHelp(univer, help) ?? 0 };
+  return {
+    univer,
+    univerAPI,
+    mode,
+    formulaPlugins,
+    setFunctionHelp: (help) => formula?.setFunctionHelp(univer, help) ?? 0,
+    generalNumberDisplay,
+  };
 }
 
 export { UniverInstanceType };

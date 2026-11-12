@@ -1687,6 +1687,293 @@ test.describe('everyday editing: clear, paste and fill', () => {
   });
 });
 
+// General numbers. Microsoft, "Available number formats in Excel": General
+// numbers "are displayed just the way you type them. However, if the cell is
+// not wide enough to show the entire number, the General format rounds the
+// numbers with decimals. The General number format also uses scientific
+// (exponential) notation for large numbers (12 or more digits)."
+//
+// What is asserted is the text the grid canvas is asked to draw. Which
+// rounding fits a column depends on the font, so each expected text is the
+// longest of a list rounded by hand that the stated rule lets in: the text
+// and one more digit of clearance within the column less 2px of padding on
+// each side, measured here with the font the text was drawn in.
+test.describe('general numbers', () => {
+  // The test reads the clipboard itself, to see what a copy carries.
+  test.use({ permissions: ['clipboard-read', 'clipboard-write'] });
+
+  test.beforeEach(async ({ page }) => {
+    await page.addInitScript(() => {
+      const drawn: { text: string; font: string }[] = [];
+      (window as any).__drawnText = drawn;
+      const original = CanvasRenderingContext2D.prototype.fillText;
+      CanvasRenderingContext2D.prototype.fillText = function (this: CanvasRenderingContext2D, ...args: Parameters<typeof original>) {
+        drawn.push({ text: String(args[0]), font: this.font });
+        return original.apply(this, args);
+      };
+    });
+  });
+
+  /** Every text the page draws on a canvas when it repaints the whole grid. */
+  async function drawnTexts(page: Page) {
+    await page.evaluate(() => {
+      (window as any).__drawnText.length = 0;
+    });
+    // A change of window height makes the grid draw every cell again.
+    const size = page.viewportSize()!;
+    await page.setViewportSize({ width: size.width, height: size.height === 800 ? 812 : 800 });
+    await page.waitForTimeout(700);
+    return page.evaluate(() => (window as any).__drawnText as { text: string; font: string }[]);
+  }
+
+  /**
+   * The text the rule expects: the first of `candidates` (they are listed
+   * longest first) that fits a column `columnWidth` px wide when drawn in `font`.
+   */
+  function longestFitting(page: Page, font: string, candidates: string[], columnWidth: number) {
+    return page.evaluate(
+      ({ candidates, font, room }) => {
+        const context = document.createElement('canvas').getContext('2d')!;
+        context.font = font;
+        const width = (text: string) => context.measureText(text).width;
+        return candidates.find((text) => width(text) + width('0') <= room) ?? null;
+      },
+      { candidates, font, room: columnWidth - 2 - 2 },
+    );
+  }
+
+  /** The one text among `candidates` that was drawn, and the text the rule expects in its place. */
+  async function drawing(page: Page, drawn: { text: string; font: string }[], candidates: string[], columnWidth: number) {
+    const seen = drawn.filter(({ text }) => candidates.includes(text));
+    const texts = [...new Set(seen.map(({ text }) => text))];
+    if (texts.length !== 1) return { drawn: texts, expected: null };
+    return { drawn: texts[0], expected: await longestFitting(page, seen[0].font, candidates, columnWidth) };
+  }
+
+  // Rounded by hand, one decimal fewer on each step.
+  //   0.08663094803653162: 0.086630948|0 down, 0.08663094|8 up, 0.0866309|4 down, 0.086630|9 up, 0.08663|0 down, ...
+  const SMALL = ['0.08663094803653162', '0.086630948', '0.08663095', '0.0866309', '0.086631', '0.08663', '0.0866', '0.087', '0.09', '0.1', '0'];
+  //   -2683.3114976001525: .311497|6 up, .31149|7 up to .3115 (closing zero not drawn), .311|4 down, ...
+  const NEGATIVE = ['-2683.3114976001525', '-2683.311498', '-2683.3115', '-2683.311', '-2683.31', '-2683.3', '-2683'];
+  //   2683.3114976 has twelve characters, one more than a rounded General number takes.
+  const TWELVE_CHARS = ['2683.3114976', '2683.311498', '2683.3115', '2683.311', '2683.31', '2683.3', '2683'];
+  //   123456789012 is 1.23456789012 times ten to the 11th: 1.23456|7 up, 1.2345|6 up, 1.234|5 up, 1.23|4 down, ...
+  const TWELVE_DIGITS = ['1.23457E+11', '1.2346E+11', '1.235E+11', '1.23E+11', '1.2E+11', '1E+11'];
+  //   Ten times that, from a formula: the same digits, ten to the 12th.
+  const THIRTEEN_DIGITS = ['1.23457E+12', '1.2346E+12', '1.235E+12', '1.23E+12', '1.2E+12', '1E+12'];
+  const SCIENTIFIC = /E[+-]\d/;
+
+  test('a number too long for its column is drawn with rounded decimals, and in scientific notation only from 12 digits', async ({ page }) => {
+    const errors = await boot(page, 'not-execute');
+    await page.locator('#new').click();
+    await expect(page.locator('#status')).toHaveText('New workbook · All changes calculated · Version 0');
+    await page.waitForTimeout(400);
+    // The grid draws General numbers by Forge's rule. This is false when a
+    // Univer upgrade has moved the drawing step that rule replaces.
+    expect(await page.evaluate(() => (window as any).__spike.then((s: any) => s.host.generalNumberDisplay))).toBe(true);
+
+    await typeInto(page, 'A1', '0.08663094803653162');
+    await typeInto(page, 'A2', '-2683.3114976001525');
+    await typeInto(page, 'A3', '123456789012');
+    await typeInto(page, 'A4', '=A3*10');
+    await typeInto(page, 'A5', '2683.3114976');
+    await typeInto(page, 'A6', '25.76');
+
+    const drawn = await drawnTexts(page);
+    const small = await drawing(page, drawn, SMALL, 88);
+    const negative = await drawing(page, drawn, NEGATIVE, 88);
+    const twelveChars = await drawing(page, drawn, TWELVE_CHARS, 88);
+    const twelveDigits = await drawing(page, drawn, TWELVE_DIGITS, 88);
+    const thirteenDigits = await drawing(page, drawn, THIRTEEN_DIGITS, 88);
+    expect(small.drawn).toBe(small.expected);
+    expect(negative.drawn).toBe(negative.expected);
+    expect(twelveChars.drawn).toBe(twelveChars.expected);
+    expect(twelveDigits.drawn).toBe(twelveDigits.expected);
+    expect(thirteenDigits.drawn).toBe(thirteenDigits.expected);
+    // An 88px column has no room for any of the three as typed, and room for
+    // more than their whole-number part: each is drawn as a shorter decimal.
+    for (const [shown, typed] of [[small, SMALL], [negative, NEGATIVE], [twelveChars, TWELVE_CHARS]] as const) {
+      expect(typed.slice(1, -1), String(shown.drawn)).toContain(shown.drawn);
+    }
+    // A number that fits is drawn as typed.
+    const texts = drawn.map(({ text }) => text);
+    expect(texts).toContain('25.76');
+    // Scientific notation is drawn for the two numbers of 12 and 13 digits and for nothing else.
+    expect([...new Set(texts.filter((text) => SCIENTIFIC.test(text)))].sort()).toEqual([twelveDigits.expected, thirteenDigits.expected].sort());
+
+    // Only the drawing is rounded. Univer's model and Forge hold every digit.
+    const held = await page.evaluate(async () => {
+      const s = await (window as any).__spike;
+      const snapshot = await s.client.snapshot();
+      const calc = await s.client.calculate();
+      const cells = snapshot.value.sheets[0].cells;
+      return {
+        univer: ['A1', 'A2', 'A3', 'A4', 'A5'].map((address) => s.adapter.cell('Sheet1', address).raw),
+        forge: [cells.A1.value, cells.A2.value, cells.A3.value, calc.value.values['Sheet1!A4'], cells.A5.value],
+        // Univer shows a General number with floating-point noise trimmed (at
+        // most 15 significant digits) and divergence() reports that as a
+        // "displayed" difference for A1 and A2. That is how the view was
+        // before this rule and it is not the drawing: see the spec's known
+        // limits. Nothing else may differ.
+        divergence: (s.adapter.divergence() as string[]).filter((message) => !/^Sheet1!A[12] displayed /.test(message)),
+        foreignWrites: s.adapter.audit.foreignWrites,
+      };
+    });
+    const FULL = [0.08663094803653162, -2683.3114976001525, 123456789012, 1234567890120, 2683.3114976];
+    expect(held.univer).toEqual(FULL);
+    expect(held.forge).toEqual(FULL);
+    expect(held.divergence).toEqual([]);
+    expect(held.foreignWrites).toEqual([]);
+
+    // The formula bar shows the number, not its drawing: every digit of a
+    // number of up to 12 significant digits, and at least 12 of a longer one
+    // (0.0866309480365|3 and -2683.31149760|0, rounded by hand).
+    expect(await formulaBarFor(page, 'A5')).toBe('2683.3114976');
+    expect(await formulaBarFor(page, 'A3')).toBe('123456789012');
+    expect(Number(await formulaBarFor(page, 'A1')).toPrecision(12)).toBe('0.0866309480365');
+    expect(Number(await formulaBarFor(page, 'A2')).toPrecision(12)).toBe('-2683.31149760');
+
+    // A copy carries the number too. The text for other programs is what the
+    // formula bar shows; a paste on this page is Forge's own copy, digit for digit.
+    await copyCells(page, 'A5');
+    expect(await page.evaluate(() => navigator.clipboard.readText())).toBe('2683.3114976');
+    await copyCells(page, 'A1', 'A2');
+    await selectCells(page, 'C1');
+    await page.keyboard.press('Control+V');
+    await settle(page);
+    expect(await cellsOf(page, ['C1', 'C2'])).toEqual({ C1: [null, 0.08663094803653162], C2: [null, -2683.3114976001525] });
+
+    // And so does the exported file.
+    const reopened = await page.evaluate(async () => {
+      const s = await (window as any).__spike;
+      const bytes: Uint8Array = await s.adapter.exportXlsx();
+      const { client, worker } = s.startForgeWorker();
+      await client.open(bytes);
+      const [snapshot, calc] = await Promise.all([client.snapshot(), client.calculate()]);
+      worker.terminate();
+      const cells = snapshot.value.sheets[0].cells;
+      return [cells.A1.value, cells.A2.value, cells.A3.value, calc.value.values['Sheet1!A4'], cells.A5.value, cells.C1.value, cells.C2.value];
+    });
+    expect(reopened).toEqual([...FULL, 0.08663094803653162, -2683.3114976001525]);
+    expect(errors).toEqual([]);
+  });
+
+  test('a wider column draws the number in full, and cells with a number format are drawn as before', async ({ page }) => {
+    const errors = await boot(page, 'not-execute');
+    // fixtures/corpus/op_styles_number_formats.xlsx: column A is 18 characters
+    // (126px), column B 22 (154px) and column C the default 88px, after a 46px
+    // row header. Rows 1 to 11 of column B carry number formats; row 13 is empty.
+    await page.locator('#file').setInputFiles('../../fixtures/corpus/op_styles_number_formats.xlsx');
+    await expect(page.locator('#status')).toHaveText('op_styles_number_formats.xlsx · All changes calculated · Version 0');
+    await page.waitForTimeout(400);
+    const origin = await gridOrigin(page);
+    const typeAt = async (x: number, row: number, text: string) => {
+      await page.mouse.click(origin.x + x, origin.y + ROW1_CENTRE + (row - 1) * 24);
+      await page.waitForTimeout(150);
+      await page.keyboard.type(text, { delay: 15 });
+      await page.keyboard.press('Enter');
+      await settle(page);
+    };
+    const B = 46 + 126 + 77;
+    const C = 46 + 126 + 154 + 44;
+    await typeAt(B, 13, '2683.3114976');
+    await typeAt(C, 13, '2683.3114976');
+    expect(
+      await page.evaluate(() => (window as any).__spike.then((s: any) => ['B13', 'C13'].map((address) => s.adapter.cell('Formats', address).raw))),
+    ).toEqual([2683.3114976, 2683.3114976]);
+
+    const drawn = await drawnTexts(page);
+    const texts = drawn.map(({ text }) => text);
+    const general = drawn.filter(({ text }) => TWELVE_CHARS.includes(text));
+    const font = general[0]?.font ?? '';
+    // The same number, drawn once in full and once rounded.
+    const wide = await longestFitting(page, font, TWELVE_CHARS, 154);
+    const narrow = await longestFitting(page, font, TWELVE_CHARS, 88);
+    expect(wide).toBe('2683.3114976');
+    expect(narrow).not.toBe(wide);
+    expect([...new Set(general.map(({ text }) => text))].sort()).toEqual([wide, narrow].sort());
+
+    // Cells with a number format of their own are not General and keep the
+    // text their format gives (worked from the fixture's XML in the display
+    // test above; B7 is 6.022E+23 in the built-in format 0.00E+00).
+    for (const formatted of ['2024-02-29', '12.75%', '$1,234.50', '-42.75', '6.02E+23', ' 3/8', '9,877', '42:00']) {
+      expect(texts, formatted).toContain(formatted);
+    }
+    expect(await page.evaluate(() => (window as any).__spike.then((s: any) => s.adapter.divergence()))).toEqual([]);
+    expect(errors).toEqual([]);
+  });
+
+  // Microsoft, "Available number formats in Excel" (Excel for the web):
+  // "If the cell isn't wide enough to show the entire number, this format
+  // rounds the number. For example, 25.76 shows as 26." The Office Open XML
+  // standard's notes on General: "If the number cannot be displayed using any
+  // of these formats in the available width, the application shall show "#"
+  // across the width of the cell."
+  //
+  // The view cannot resize a column yet, so column B is narrowed the way an
+  // opened file's width is applied: Univer's own column-width change, which
+  // touches no cell. At 34px there is 30px of room: 26 with its clearance is
+  // about 24px in 11pt Arial, 25.8 about 37px, and 1E+05 about 51px.
+  test('a narrow column draws 25.76 as 26, and number signs for a number with no room', async ({ page }) => {
+    const errors = await boot(page, 'not-execute');
+    await page.locator('#new').click();
+    await expect(page.locator('#status')).toHaveText('New workbook · All changes calculated · Version 0');
+    await page.waitForTimeout(400);
+    const state = await page.evaluate(async () => {
+      const s = await (window as any).__spike;
+      const workbook = s.host.univerAPI.getActiveWorkbook();
+      const sheet = workbook.getActiveSheet();
+      const narrowed = await s.host.univerAPI.executeCommand('sheet.mutation.set-worksheet-col-width', {
+        unitId: workbook.getId(),
+        subUnitId: sheet.getSheetId(),
+        ranges: [{ startRow: 0, endRow: 0, startColumn: 1, endColumn: 1 }],
+        colWidth: 34,
+      });
+      await s.adapter.edit(
+        [
+          { sheet: 'Sheet1', address: 'A1', value: 25.76 },
+          { sheet: 'Sheet1', address: 'A2', value: 123456 },
+          { sheet: 'Sheet1', address: 'B1', value: 25.76 },
+          { sheet: 'Sheet1', address: 'B2', value: 123456 },
+          { sheet: 'Sheet1', address: 'B3', value: 0.0866 },
+        ],
+        'general numbers',
+      );
+      await s.adapter.idle();
+      return { narrowed, widths: [sheet.getColumnWidth(0), sheet.getColumnWidth(1)] };
+    });
+    expect(state).toEqual({ narrowed: true, widths: [88, 34] });
+
+    const drawn = await drawnTexts(page);
+    // Row numbers are drawn too; cells are told apart by their font, taken from A1, which fits as typed.
+    const font = drawn.find(({ text }) => text === '25.76')?.font ?? '';
+    const cells = [...new Set(drawn.filter((entry) => entry.font === font).map(({ text }) => text))];
+    const signs = await page.evaluate((cellFont) => {
+      const context = document.createElement('canvas').getContext('2d')!;
+      context.font = cellFont;
+      return '#'.repeat(Math.max(1, Math.floor((34 - 2 - 2) / context.measureText('#').width)));
+    }, font);
+    // 0.0866 rounds to 0.087, 0.09 and 0.1, and to 0 when not even 0.1 fits.
+    const small = await longestFitting(page, font, ['0.0866', '0.087', '0.09', '0.1', '0'], 34);
+    expect(await longestFitting(page, font, ['25.76', '25.8', '26'], 34)).toBe('26');
+    expect(signs).toMatch(/^#{2,}$/);
+    expect(small).not.toBeNull();
+    expect(cells.sort()).toEqual(['25.76', '123456', '26', signs, small].sort());
+
+    const after = await page.evaluate(async () => {
+      const s = await (window as any).__spike;
+      return {
+        held: ['A1', 'A2', 'B1', 'B2', 'B3'].map((address) => s.adapter.cell('Sheet1', address).raw),
+        divergence: s.adapter.divergence(),
+        foreignWrites: s.adapter.audit.foreignWrites,
+        notices: s.adapter.notices,
+      };
+    });
+    expect(after).toEqual({ held: [25.76, 123456, 25.76, 123456, 0.0866], divergence: [], foreignWrites: [], notices: [] });
+    expect(errors).toEqual([]);
+  });
+});
+
 // A phone-width screen: every control stays reachable, nothing scrolls
 // sideways, and the side panel covers the grid instead of squeezing it.
 test('narrow screen: controls stay reachable at 375px and the panel overlays the grid', async ({ page }) => {
