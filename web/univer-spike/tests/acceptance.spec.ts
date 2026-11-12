@@ -33,9 +33,12 @@ async function boot(page: Page, mode: string) {
       { timeout: 15_000 },
     );
   }
-  // First click focuses Univer's canvas; the editor is ready after it.
-  await clickCell(page, 'H5');
-  await page.waitForTimeout(400);
+  if (mode !== 'engine-only' && mode !== 'no-formula-plugins') {
+    await focusGrid(page);
+  } else {
+    await clickCell(page, 'H5');
+    await page.waitForTimeout(400);
+  }
   return errors;
 }
 
@@ -43,17 +46,17 @@ async function boot(page: Page, mode: string) {
 // half a 24px row).
 const ROW1_CENTRE = 32;
 
-// The grid canvas's page position. Measured rather than fixed because the
-// notices above the grid wrap differently with the host's fonts, which moves
-// the grid down by a row's height on some machines.
+// The grid canvas's page position. Measured rather than fixed because the app
+// bar, the Developer strip and an open side panel all move or resize it.
 async function gridOrigin(page: Page) {
   return page.evaluate(() => {
     const rects = [...document.querySelectorAll('canvas')]
       .map((canvas) => canvas.getBoundingClientRect())
       .filter((rect) => rect.width > 0 && rect.height > 0);
     // Before Univer renders (or in modes without a grid) fall back to the
-    // default 1280x800 layout, where the grid canvas starts at y=202.
-    if (rects.length === 0) return { x: 0, y: 202 };
+    // default 1280x800 layout, where the grid canvas starts at y=76 (a 48px
+    // app bar and Univer's 28px formula bar).
+    if (rects.length === 0) return { x: 0, y: 76 };
     const grid = rects.reduce((a, b) => (a.width * a.height >= b.width * b.height ? a : b));
     return { x: grid.x, y: grid.y };
   });
@@ -65,6 +68,33 @@ async function clickCell(page: Page, address: string) {
     origin.x + COLS[address[0]],
     origin.y + ROW1_CENTRE + (Number(address.slice(1)) - 1) * 24,
   );
+}
+
+// The first click focuses Univer's canvas; the editor is ready after it. The
+// canvas is drawn a moment after the workbook and its editors exist, so click
+// until the selection actually lands on H5.
+async function focusGrid(page: Page) {
+  const selected = () =>
+    page.evaluate(() =>
+      (window as any).__spike.then((s: any) => {
+        try {
+          return s.host.univerAPI.getActiveWorkbook().getActiveSheet().getSelection().getActiveRange().getA1Notation();
+        } catch {
+          return null;
+        }
+      }),
+    );
+  await expect
+    .poll(
+      async () => {
+        await clickCell(page, 'H5');
+        await page.waitForTimeout(100);
+        return selected();
+      },
+      { timeout: 10_000 },
+    )
+    .toBe('H5');
+  await page.waitForTimeout(300);
 }
 
 /** Type into a cell through Univer's real cell editor and commit with Enter. */
@@ -264,21 +294,25 @@ for (const mode of ['not-execute', 'load-only']) {
     test('structural and out-of-scope mutations are blocked with a visible notice', async ({ page }) => {
       await boot(page, mode);
       const before = await view(page);
-      for (const id of [
-        'sheet.command.insert-row-before',
-        'sheet.command.insert-col-before',
-        'sheet.command.remove-row-confirm',
-        'sheet.command.insert-sheet',
-        'sheet.command.auto-fill',
-        'univer.command.paste',
-        'sheet.command.clear-selection-content',
+      // The notice says what is unavailable in plain words; the command id
+      // goes to the audit (and the Developer strip), not to the reader.
+      for (const [id, sentence] of [
+        ['sheet.command.insert-row-before', 'Inserting rows and columns is not available yet.'],
+        ['sheet.command.insert-col-before', 'Inserting rows and columns is not available yet.'],
+        ['sheet.command.remove-row-confirm', 'Deleting rows and columns is not available yet.'],
+        ['sheet.command.insert-sheet', 'Adding, removing and renaming sheets is not available yet.'],
+        ['sheet.command.auto-fill', 'Fill is not available yet.'],
+        ['univer.command.paste', 'Paste is not available yet. Type the values in instead.'],
+        ['sheet.command.clear-selection-content', 'Clearing cells with Delete is not available yet. Type over the cell, or use Undo.'],
       ]) {
         const result = await page.evaluate(
           (commandId) => (window as any).__spike.then((s: any) => s.host.univerAPI.executeCommand(commandId)),
           id,
         );
         expect(result, id).toBe(false);
-        await expect(page.locator('#notices')).toContainText(`Blocked ${id}`);
+        await expect(page.locator('#notices'), id).toHaveText(sentence);
+        await expect(page.locator('#notice'), id).toBeVisible();
+        expect(await page.evaluate(() => (window as any).__spike.then((s: any) => s.adapter.audit.blocked.at(-1))), id).toBe(id);
       }
       const after = await view(page);
       expect(after.audit.blocked).toEqual(expect.arrayContaining(['sheet.command.insert-row-before', 'sheet.command.auto-fill', 'univer.command.paste']));
@@ -289,7 +323,8 @@ for (const mode of ['not-execute', 'load-only']) {
           return { sheets: wb.getSheets().length, rows: wb.getActiveSheet().getMaxRows(), cols: wb.getActiveSheet().getMaxColumns() };
         }),
       );
-      expect(shape).toEqual({ sheets: 1, rows: 20, cols: 10 });
+      // The view shows at least 200 rows and 26 columns of an opened workbook.
+      expect(shape).toEqual({ sheets: 1, rows: 200, cols: 26 });
       expectDisplayed(after, INITIAL);
       expectUniverNeverCalculated(after);
     });
@@ -327,7 +362,7 @@ for (const mode of ['not-execute', 'load-only']) {
       // A formula typed into absent H1 over a range that is mostly blank.
       await typeInto(page, 'H1', '=SUM(A1:A3)');
       let v = await read();
-      expect(v.notices.filter((n) => n.startsWith('Forge rejected'))).toEqual([]);
+      expect(v.notices.filter((n) => n.startsWith('Change not applied'))).toEqual([]);
       expect(v.revision).toBe('1');
       expect(v.h1.displayed).toBe(10);
       expect(v.h1.formula).toBe('=SUM(A1:A3)');
@@ -469,6 +504,9 @@ test('blank workbook authors new cells, evaluates formulas and exports locally',
   expect(roundTrip.calculation.values['Sheet1!H1']).toBe(30);
   expect(roundTrip.calculation.values['Sheet1!I1']).toBe(40);
   expect(requests.every((request) => request.method === 'GET' && request.postData === null)).toBe(true);
+  // Every request is for the page's own files: no fonts, scripts or calls to another site.
+  const origin = new URL(page.url()).origin;
+  expect(requests.map((request) => request.url).filter((url) => !url.startsWith(`${origin}/`) && !/^(data|blob):/.test(url))).toEqual([]);
   expect(errors).toEqual([]);
 });
 
@@ -735,7 +773,7 @@ test('text columns: a cell typed where none existed inherits its Text (@) row or
   expect(cells.B4).toMatchObject({ value: 5 });
   expect(cells.A3).toMatchObject({ value: 7 });
   const notices = await page.evaluate(() => (window as any).__spike.then((s: any) => s.adapter.notices as string[]));
-  expect(notices.filter((n: string) => n.startsWith('Forge rejected'))).toEqual([]);
+  expect(notices.filter((n: string) => n.startsWith('Change not applied'))).toEqual([]);
   expect(errors).toEqual([]);
 });
 
@@ -749,7 +787,7 @@ test('toolbar: the default view hides developer controls and ?dev=1 shows them',
       bar,
       modeVisible: await page.locator('#mode').isVisible(),
       developerVisible: await page.locator('#developer').isVisible(),
-      issuesVisible: await page.locator('#formula-issues').isVisible(),
+      issuesVisible: (await page.locator('#formula-issues').isVisible()) || (await page.locator('#issues-toggle').isVisible()),
       xlookupNoteVisible: await page.locator('#formula-support').isVisible(),
       title: await page.title(),
     };
@@ -765,7 +803,7 @@ test('toolbar: the default view hides developer controls and ?dev=1 shows them',
   expect(plain.bar).not.toContain('(Forge)');
   expect(plain.bar).not.toMatch(/\br\d+\b/);
   expect(plain.bar).not.toContain('not-execute');
-  expect(plain.title).toBe('Workbook Forge');
+  expect(plain.title).toBe('univer-spike-chain.xlsx · Workbook Forge');
   for (const label of ['Workbook Forge', 'New workbook', 'Download .xlsx', 'Undo', 'Redo', 'Your workbook stays on this device. Use Download to save a copy.']) {
     expect(plain.bar).toContain(label);
   }
@@ -794,8 +832,10 @@ test('toolbar: the default view hides developer controls and ?dev=1 shows them',
 });
 
 // Formula issues lists Forge's calculation diagnostics, e.g. an XLOOKUP mode
-// outside the supported subset, and hides again once the formula is fixed.
-test('formula issues: an unsupported XLOOKUP mode is listed with a count, and the section hides when fixed', async ({ page }) => {
+// outside the supported subset or a function Forge does not implement. The
+// app bar button shows only while there are some; its panel lists each one,
+// and clicking one selects the cell.
+test('formula issues: refused formulas are counted and listed, clicking one selects its cell, and the button hides when fixed', async ({ page }) => {
   await boot(page, 'not-execute');
   await page.locator('#new').click();
   await page.waitForFunction(
@@ -805,16 +845,237 @@ test('formula issues: an unsupported XLOOKUP mode is listed with a count, and th
   );
   await page.waitForTimeout(400);
   await expect(page.locator('#status')).toHaveText('New workbook · All changes calculated · Version 0');
+  await expect(page.locator('#issues-toggle')).toBeHidden();
   await expect(page.locator('#formula-issues')).toBeHidden();
   await typeInto(page, 'C1', 'pear');
   await typeInto(page, 'D1', '3');
   await typeInto(page, 'E1', '=XLOOKUP("p*",C1:C2,D1:D2,,2)');
-  await expect(page.locator('#formula-issues')).toBeVisible();
+  await expect(page.locator('#issues-toggle')).toBeVisible();
   await expect(page.locator('#formula-issue-count')).toHaveText('1');
-  await page.locator('#formula-issues > summary').click();
+  await page.locator('#issues-toggle').click();
+  await expect(page.locator('#formula-issues')).toBeVisible();
+  await expect(page.locator('#panel-title')).toHaveText('Formula issues');
   await expect(page.locator('#formula-issue-list')).toContainText('Sheet1!E1');
   await expect(page.locator('#formula-issue-list')).toContainText('match_mode');
+
+  // A function outside the catalog (BESSELJ is an Excel function Forge does
+  // not implement) is refused the same way, and its cell stays blank.
+  await typeInto(page, 'F1', '=BESSELJ(D1,1)');
+  await expect(page.locator('#formula-issue-count')).toHaveText('2');
+  await expect(page.locator('#formula-issue-list')).toContainText('Sheet1!F1');
+  await expect(page.locator('#formula-issue-list')).toContainText('unsupported function BESSELJ');
+  expect(await page.evaluate(() => (window as any).__spike.then((s: any) => s.adapter.cell('Sheet1', 'F1')))).toEqual({
+    raw: null,
+    displayed: null,
+    formula: '=BESSELJ(D1,1)',
+  });
+
+  // Clicking an issue moves the selection to its cell.
+  await clickCell(page, 'A1');
+  await page.locator('#formula-issue-list .issue', { hasText: 'Sheet1!E1' }).click();
+  await expect.poll(() => page.evaluate(() => (window as any).__spike.then((s: any) => s.adapter.formulaBarText()))).toBe('=XLOOKUP("p*",C1:C2,D1:D2,,2)');
+
+  // The panel narrows the grid, so cells are found again from the canvas.
   await typeInto(page, 'E1', '=XLOOKUP("pear",C1:C2,D1:D2)');
+  await expect(page.locator('#formula-issue-count')).toHaveText('1');
+  await typeInto(page, 'F1', '=D1*2');
+  await expect(page.locator('#issues-toggle')).toBeHidden();
   await expect(page.locator('#formula-issues')).toBeHidden();
+  await expect(page.locator('#panel')).toBeHidden();
+  // Independent arithmetic: D1 = 3, so the lookup is 3 and F1 = 3 * 2 = 6.
+  expect(await page.evaluate(() => (window as any).__spike.then((s: any) => [s.adapter.cell('Sheet1', 'E1').raw, s.adapter.cell('Sheet1', 'F1').raw]))).toEqual([3, 6]);
   await expect(page.locator('#status')).toHaveText(/^New workbook · All changes calculated · Version \d+$/);
+});
+
+// A workbook's look comes through: number formats, bold, colors, alignment
+// and column widths. Expected values are read from the fixture's XML
+// (fixtures/corpus/op_styles_number_formats.xlsx), not from either engine:
+//   <col min=1 width=18>, <col min=2 width=22>
+//   A1 s=1: bold, font color FF1F4E79
+//   B1 s=2: 45351 as yyyy-mm-dd (45292 is 2024-01-01, plus 59 days), fill FFFFF2CC, right
+//   B4 s=5: 0.1275 as 0.00%;  B5: 1234.5 as "$"#,##0.00
+//   B6: -42.75 as #,##0.00;[Red]-#,##0.00;  B10: 9876543.21 as #,##0, (thousands)
+//   B8: 0.375 as # ?/?;  B11: 1.75 days as [h]:mm
+test('display: an opened workbook keeps its number formats, cell styles and column widths, and exports the same values', async ({ page }) => {
+  const errors = await boot(page, 'not-execute');
+  await page.locator('#file').setInputFiles('../../fixtures/corpus/op_styles_number_formats.xlsx');
+  await expect(page.locator('#status')).toHaveText('op_styles_number_formats.xlsx · All changes calculated · Version 0');
+  await expect(page).toHaveTitle('op_styles_number_formats.xlsx · Workbook Forge');
+  const seen = await page.evaluate(() =>
+    (window as any).__spike.then((s: any) => {
+      const sheet = s.host.univerAPI.getActiveWorkbook().getActiveSheet();
+      const shown = (address: string) => sheet.getRange(address).getDisplayValue();
+      return {
+        sheet: sheet.getSheetName(),
+        widths: [sheet.getColumnWidth(0), sheet.getColumnWidth(1), sheet.getColumnWidth(2)],
+        a1: sheet.getRange('A1').getCellStyleData(),
+        b1: sheet.getRange('B1').getCellStyleData(),
+        shown: ['B1', 'B4', 'B5', 'B6', 'B8', 'B10', 'B11'].map(shown),
+        forge: ['B1', 'B4', 'B6'].map((address) => s.adapter.cell('Formats', address).raw),
+        divergence: s.adapter.divergence(),
+        notices: s.adapter.notices,
+      };
+    }),
+  );
+  expect(seen.sheet).toBe('Formats');
+  // Excel column widths are in characters; the view draws 7px per character.
+  // Column C has no width in the file and keeps the default 88px.
+  expect(seen.widths).toEqual([18 * 7, 22 * 7, 88]);
+  expect(seen.a1).toEqual({ bl: 1, cl: { rgb: '#1F4E79' } });
+  expect(seen.b1).toEqual({ n: { pattern: 'yyyy-mm-dd' }, bg: { rgb: '#FFF2CC' }, ht: 3 });
+  // '# ?/?' pads the absent whole-number part with the space from the code.
+  expect(seen.shown).toEqual(['2024-02-29', '12.75%', '$1,234.50', '-42.75', ' 3/8', '9,877', '42:00']);
+  // The format changes what is drawn, never the value Forge holds.
+  expect(seen.forge).toEqual([45351, 0.1275, -42.75]);
+  expect(seen.divergence).toEqual([]);
+  expect(seen.notices).toEqual([]);
+  expect(errors).toEqual([]);
+});
+
+// The status bar totals the selection from Forge's values. Fixture row 1 is
+// 10, 20, 25, 75, 55, 185: A1:C1 sums to 55 over 3 cells (average 55/3 =
+// 18.3333333333 at twelve significant digits); one cell shows no totals.
+test('status bar: a selection shows Average, Count and Sum, and follows edits and a new workbook', async ({ page }) => {
+  await boot(page, 'not-execute');
+  const stats = page.locator('#selection-stats');
+  await clickCell(page, 'A1');
+  await expect(stats).toHaveText('');
+  await page.keyboard.down('Shift');
+  await clickCell(page, 'C1');
+  await page.keyboard.up('Shift');
+  await expect(stats).toHaveText('Average 18.3333333333Count 3Sum 55');
+  // A1 = 20 makes B1 = 40 and C1 = 45: sum 105, average 35.
+  await page.evaluate(() => (window as any).__spike.then((s: any) => s.adapter.edit([{ sheet: 'Sheet1', address: 'A1', value: 20 }], 'totals')));
+  await expect(stats).toHaveText('Average 35Count 3Sum 105');
+  await page.locator('#new').click();
+  await expect(page.locator('#status')).toHaveText('New workbook · All changes calculated · Version 0');
+  await expect(stats).toHaveText('');
+});
+
+// The Functions panel lists exactly the catalog's implemented functions, and
+// the in-cell suggestions offer the same set in the same words.
+test('functions: the panel lists the catalog, search narrows it, and suggestions offer only what Forge calculates', async ({ page }) => {
+  const catalog = JSON.parse(readFileSync('../../catalog/formulas.json', 'utf8')) as { functions: { name: string }[] };
+  const inventory = JSON.parse(readFileSync('../../catalog/function_inventory.json', 'utf8')) as { functions: unknown[] };
+  const total = catalog.functions.length;
+  await boot(page, 'not-execute');
+  await expect(page.locator('#panel')).toBeHidden();
+  await page.locator('#functions-toggle').click();
+  await expect(page.locator('#functions')).toBeVisible();
+  await expect(page.locator('#functions-toggle')).toHaveAttribute('aria-expanded', 'true');
+  await expect(page.locator('#function-coverage')).toContainText(`${total} of the ${inventory.functions.length} functions`);
+  await expect(page.locator('#function-count')).toHaveText(`${total} functions`);
+  const listed = await page.locator('#function-list .fn code b').allTextContents();
+  expect([...listed].sort()).toEqual(catalog.functions.map((f) => f.name).sort());
+
+  await page.locator('#function-search').fill('xlookup');
+  await expect(page.locator('#function-count')).toHaveText(`1 of ${total} functions`);
+  await expect(page.locator('#function-list .fn:visible')).toHaveCount(1);
+  await expect(page.locator('#function-list .fn:visible')).toContainText('XLOOKUP(lookup_value, lookup_array, return_array, [if_not_found], [match_mode], [search_mode])');
+  await expect(page.locator('#function-list .fn:visible')).toContainText('Exact match only');
+  await page.locator('#function-search').fill('no such function');
+  await expect(page.locator('#function-count')).toHaveText(`0 of ${total} functions`);
+  await expect(page.locator('#function-empty')).toBeVisible();
+  await page.locator('#panel-close').click();
+  await expect(page.locator('#panel')).toBeHidden();
+  await expect(page.locator('#functions-toggle')).toHaveAttribute('aria-expanded', 'false');
+
+  // Typing a formula: XLOOKUP is offered with Forge's summary. The BESSEL
+  // functions, which Univer knows and Forge does not implement, are not
+  // offered at all.
+  expect(catalog.functions.filter((f) => f.name.startsWith('BESSEL'))).toEqual([]);
+  const suggestions = page.locator('[data-u-comp="sheets-formula-editor"]');
+  await clickCell(page, 'C3');
+  await page.keyboard.type('=xl', { delay: 30 });
+  await expect(suggestions).toContainText('XLOOKUP');
+  await expect(suggestions).toContainText('Finds a value in one range and returns the matching item from another.');
+  await page.keyboard.type('ookup(10,a1:c1,a1:c1)', { delay: 15 });
+  // Univer refreshes the list 300 ms after the last keystroke, and while it
+  // is open Enter picks a suggestion instead of committing. Past the opening
+  // bracket the list closes on its own.
+  await expect(suggestions).toHaveCount(0);
+  await page.keyboard.press('Enter');
+  // Independent: 10 is A1, so the lookup returns A1 = 10.
+  await expect.poll(() => page.evaluate(() => (window as any).__spike.then((s: any) => s.adapter.cell('Sheet1', 'C3').raw))).toBe(10);
+  await clickCell(page, 'C4');
+  await page.keyboard.type('=bessel', { delay: 30 });
+  await page.waitForTimeout(500);
+  await expect(suggestions).toHaveCount(0);
+  await page.keyboard.press('Escape');
+});
+
+// A formula that returns several cells is not spilled into the grid. The cell
+// stays blank, a notice says so, and selecting it previews the values.
+// SEQUENCE(3,2) is 1..6 filled row by row (Microsoft's SEQUENCE definition).
+test('array result: the cell stays blank and selecting it previews the values', async ({ page }) => {
+  await boot(page, 'not-execute');
+  await page.locator('#new').click();
+  await page.waitForFunction(
+    () => (window as any).__spike.then((s: any) => s.adapter.docUnitIds().length === 2),
+    null,
+    { timeout: 15_000 },
+  );
+  await page.waitForTimeout(400);
+  await typeInto(page, 'B2', '=SEQUENCE(3,2)');
+  await expect(page.locator('#notices')).toHaveText('Sheet1!B2 returns 3 by 2 values. The grid shows one value per cell, so the cell stays blank. Select it to preview the result.');
+  await expect(page.locator('#notice')).toHaveAttribute('data-kind', 'info');
+  // Enter moved the selection to B3, which has no array.
+  await expect(page.locator('#array-chip')).toBeHidden();
+  await clickCell(page, 'B2');
+  await expect(page.locator('#array-chip')).toHaveText('Array result: 3 by 2');
+  await expect(page.locator('#array-result')).toBeVisible();
+  await expect(page.locator('#panel-title')).toHaveText('Array result');
+  expect(await page.locator('#array-table tr').evaluateAll((rows) => rows.map((row) => [...row.children].map((cell) => cell.textContent)))).toEqual([
+    ['1', '2'],
+    ['3', '4'],
+    ['5', '6'],
+  ]);
+  const grid = await page.evaluate(() =>
+    (window as any).__spike.then((s: any) => ['B2', 'C2', 'B3', 'C3', 'B4', 'C4'].map((address) => s.adapter.cell('Sheet1', address).displayed)),
+  );
+  expect(grid, 'nothing is placed into the grid').toEqual([null, null, null, null, null, null]);
+  // Moving off the cell closes the preview.
+  await clickCell(page, 'A1');
+  await expect(page.locator('#array-chip')).toBeHidden();
+  await expect(page.locator('#panel')).toBeHidden();
+});
+
+// The theme follows the device and can be switched for the visit. Nothing is
+// written to browser storage: the page keeps no state between visits.
+test('theme: the toggle switches the frame and the grid together and stores nothing', async ({ page }) => {
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await boot(page, 'not-execute');
+  const theme = () => page.evaluate(() => ({ frame: document.documentElement.dataset.theme, grid: document.documentElement.classList.contains('univer-dark') }));
+  expect(await theme()).toEqual({ frame: 'dark', grid: true });
+  await expect(page.locator('#theme-toggle')).toHaveAttribute('aria-label', 'Switch to light theme');
+  await page.locator('#theme-toggle').click();
+  expect(await theme()).toEqual({ frame: 'light', grid: false });
+  await page.locator('#theme-toggle').click();
+  expect(await theme()).toEqual({ frame: 'dark', grid: true });
+  expect(await page.evaluate(() => [localStorage.length, sessionStorage.length, document.cookie])).toEqual([0, 0, '']);
+});
+
+// A phone-width screen: every control stays reachable, nothing scrolls
+// sideways, and the side panel covers the grid instead of squeezing it.
+test('narrow screen: controls stay reachable at 375px and the panel overlays the grid', async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 700 });
+  await page.goto('/');
+  await page.evaluate(() => (window as any).__spike.then(() => undefined));
+  for (const id of ['undo', 'redo', 'new', 'export', 'functions-toggle', 'theme-toggle']) {
+    const box = await page.locator(`#${id}`).boundingBox();
+    expect(box, id).not.toBeNull();
+    expect(box!.x, id).toBeGreaterThanOrEqual(0);
+    expect(box!.x + box!.width, id).toBeLessThanOrEqual(375);
+    expect(box!.width, id).toBeGreaterThanOrEqual(32);
+    expect(box!.height, id).toBeGreaterThanOrEqual(32);
+  }
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(375);
+  await expect(page.locator('#privacy')).toContainText('Your workbook stays on this device.');
+  const before = await page.locator('#app').boundingBox();
+  await page.locator('#functions-toggle').click();
+  await expect(page.locator('#functions')).toBeVisible();
+  expect((await page.locator('#app').boundingBox())!.width).toBe(before!.width);
+  expect((await page.locator('#panel').boundingBox())!.width).toBe(375);
+  await page.locator('#panel-close').click();
+  await expect(page.locator('#panel')).toBeHidden();
 });

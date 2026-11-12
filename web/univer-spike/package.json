@@ -14,7 +14,9 @@
     "@univerjs/sheets": "1.2.0",
     "@univerjs/sheets-formula": "1.2.0",
     "@univerjs/sheets-formula-ui": "1.2.0",
+    "@univerjs/sheets-numfmt": "1.2.0",
     "@univerjs/sheets-ui": "1.2.0",
+    "@univerjs/themes": "1.2.0",
     "@univerjs/ui": "1.2.0",
     "@workbook-forge/engine": "file:../forge-engine",
     "react": "18.3.1",
@@ -32,6 +34,7 @@
     "typecheck": "tsc -p .",
     "test:e2e": "bash scripts/e2e.sh",
     "check:licenses": "node scripts/check-licenses.mjs",
+    "check:functions": "node --experimental-strip-types --no-warnings scripts/check-function-notes.mjs",
     "size": "node scripts/bundle-size.mjs"
   }
 }
