@@ -1,0 +1,39 @@
+=== 1. weakened ensures: parts only need to sum to AT MOST the total
+--- spec lock:
+locked item changed: contract allocate.rs::allocate
+spec-lock: FAIL (1 problem(s)). A person must review and run 'python3 spec_lock.py approve'.
+(exit 1)
+--- grep layer:
+cheat-check: OK (no assume, admit, axiom, external_body, external specs or no-decreases escape hatches in src/)
+(exit 0)
+
+=== 2. added assume inside a proof block
+--- spec lock:
+round_to_place.rs:80: banned escape hatch assume(
+spec-lock: FAIL (1 problem(s)). A person must review and run 'python3 spec_lock.py approve'.
+(exit 1)
+--- grep layer:
+src/round_to_place.rs:80:        assume(false);
+cheat-check: FAIL (escape hatch found above)
+(exit 1)
+
+=== 3. added external_body on the allocator
+--- spec lock:
+allocate.rs:89: banned escape hatch #[verifier::external_body]
+locked item changed: contract allocate.rs::allocate
+unlocked trusted code: trusted allocate.rs::allocate #[verifier::external_body]
+spec-lock: FAIL (3 problem(s)). A person must review and run 'python3 spec_lock.py approve'.
+(exit 1)
+--- grep layer:
+src/allocate.rs:89:#[verifier::external_body]
+cheat-check: FAIL (escape hatch found above)
+(exit 1)
+
+=== 4. allowed: an extra proof hint in an exec body (no contract change)
+--- spec lock:
+spec-lock: OK (27 locked items match spec.lock, no escape hatches)
+(exit 0)
+--- grep layer:
+cheat-check: OK (no assume, admit, axiom, external_body, external specs or no-decreases escape hatches in src/)
+(exit 0)
+
