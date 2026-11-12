@@ -283,3 +283,34 @@ def test_day_count_glossary_separates_documented_rules_from_profiles():
     assert "does not specify this multi-year algorithm" in year_semantics["actual_actual_profile"]
     assert "does not specify the sign behavior" in year_semantics["signed_reverse_profile"]
     assert "may return an incorrect result" in year_semantics["february_warning"]
+
+
+def test_scalar_math_glossary_separates_documented_rules_from_profiles():
+    expected_arity = {
+        "SQRT": (1, 1), "POWER": (2, 2), "EXP": (1, 1), "LN": (1, 1), "LOG": (1, 2),
+        "LOG10": (1, 1), "PI": (0, 0), "SIGN": (1, 1), "CEILING": (2, 2), "FLOOR": (2, 2),
+        "CEILING.MATH": (1, 3), "FLOOR.MATH": (1, 3), "MROUND": (2, 2), "TRUE": (0, 0),
+        "FALSE": (0, 0), "XOR": (1, 254),
+    }
+    for name, (minimum, maximum) in expected_arity.items():
+        entry = lookup_function(name)
+        assert function_status(name, "python") == "conformance-tested"
+        assert function_status(name, "rust") == "conformance-tested"
+        assert entry["implementation"]["arity"] == {"min": minimum, "max": maximum}
+        assert entry["implementation"]["evidence_grade"] == "dual_engine"
+        source_id = "ms-" + name.lower().replace(".", "-")
+        assert source_id in entry["semantic_spec"]["source_refs"]
+        assert "Microsoft documents" in entry["semantic_spec"]["semantics"]["documented_behavior"]
+
+    for name in ("CEILING", "FLOOR", "CEILING.MATH", "FLOOR.MATH"):
+        semantics = lookup_function(name)["semantic_spec"]["semantics"]
+        assert "unverified Workbook Forge profile" in semantics["sign_profile"]
+        assert "unverified Workbook Forge profile" in semantics["rounding_profile"]
+    mround = lookup_function("MROUND")["semantic_spec"]["semantics"]
+    assert "MROUND(6.05,0.1)=6.0 and MROUND(7.05,0.1)=7.1" in mround["documented_behavior"]
+    assert "unverified Workbook Forge profile" in mround["rounding_profile"]
+    power = lookup_function("POWER")["semantic_spec"]["semantics"]
+    assert "have not been checked and may differ" in power["domain_profile"]
+    xor = lookup_function("XOR")["semantic_spec"]["semantics"]
+    assert "odd number" in xor["definition"]
+    assert "unverified Workbook Forge profiles" in xor["coercion_profile"]

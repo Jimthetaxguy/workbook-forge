@@ -2836,6 +2836,10 @@ def _eval(
             return _text_extract(name, node.children, cells, sheet_name, budget)
         if name == "TRUNC":
             return _trunc_call(node.children, cells, sheet_name, budget)
+        if name in _SCALAR_MATH_ARITY:
+            return _scalar_math_call(name, node.children, cells, sheet_name, budget)
+        if name == "XOR":
+            return _xor_call(node.children, cells, sheet_name, budget)
         if name == "IF":
             if len(node.children) not in (2, 3):
                 return _arity(name, "2 or 3", len(node.children))
@@ -3846,6 +3850,253 @@ def _integer_formula_call(name: str, args: tuple[object, ...]) -> object:
     if number == 0:
         return 1.0
     return _binomial_float(number + chosen - 1, chosen)
+
+
+# Everyday worksheet functions: scalar math, aggregates, text, lookup and
+# cash-flow finance. Each states its Workbook Forge profile in the catalog's
+# semantic spec. The Rust evaluator implements the same rules by hand.
+
+_SCALAR_MATH_ARITY = {
+    "PI": (0, 0),
+    "TRUE": (0, 0),
+    "FALSE": (0, 0),
+    "SQRT": (1, 1),
+    "EXP": (1, 1),
+    "LN": (1, 1),
+    "LOG10": (1, 1),
+    "SIGN": (1, 1),
+    "LOG": (1, 2),
+    "POWER": (2, 2),
+    "CEILING": (2, 2),
+    "FLOOR": (2, 2),
+    "MROUND": (2, 2),
+    "CEILING.MATH": (1, 3),
+    "FLOOR.MATH": (1, 3),
+}
+
+
+def _arity_range(name: str, low: int, high: int, actual: int) -> ErrorValue | None:
+    if low <= actual <= high:
+        return None
+    return _arity(name, str(low) if low == high else f"{low} through {high}", actual)
+
+
+def _binary64(value: object) -> float | ErrorValue:
+    """Coerce one scalar to a finite binary64 number with the shared coercer."""
+    number = _number(value)
+    if isinstance(number, ErrorValue):
+        return number
+    try:
+        result = float(number)
+    except OverflowError:
+        return ErrorValue("#NUM!", "number is outside the supported numeric range")
+    if not math.isfinite(result):
+        return ErrorValue("#NUM!", "number is outside the supported numeric range")
+    return result
+
+
+def _scalar_arguments(
+    children: tuple[_Node, ...],
+    cells: Mapping[str, Scalar],
+    sheet_name: str,
+    budget: _WildcardBudget,
+) -> list[object] | ErrorValue:
+    """Scalar arguments in order.
+
+    A range or array argument is #VALUE!; after that the first error value in
+    argument order is returned.
+    """
+    values = [_dereference(_eval(child, cells, sheet_name, budget)) for child in children]
+    if any(isinstance(value, (_Range, ArrayValue)) for value in values):
+        return ErrorValue("#VALUE!", "argument must be a single value")
+    for value in values:
+        if isinstance(value, ErrorValue):
+            return value
+    return values
+
+
+def _number_arguments(
+    children: tuple[_Node, ...],
+    cells: Mapping[str, Scalar],
+    sheet_name: str,
+    budget: _WildcardBudget,
+) -> list[float] | ErrorValue:
+    """Scalar arguments coerced to numbers left to right."""
+    values = _scalar_arguments(children, cells, sheet_name, budget)
+    if isinstance(values, ErrorValue):
+        return values
+    numbers: list[float] = []
+    for value in values:
+        number = _binary64(value)
+        if isinstance(number, ErrorValue):
+            return number
+        numbers.append(number)
+    return numbers
+
+
+def _finite_number(result: float) -> float | ErrorValue:
+    """A finite result; a zero result carries no sign."""
+    if not math.isfinite(result):
+        return ErrorValue("#NUM!", "result is outside the supported numeric range")
+    return result if result else 0.0
+
+
+def _multiple_count(number: float, significance: float, upward: bool) -> float | ErrorValue:
+    """How many whole multiples of `significance` the rounded number holds.
+
+    The quotient is rounded to a whole number by the evaluator's directed
+    rounding rule, so a quotient within `_BOUNDARY_STEPS` binary64 values of a
+    whole number is that whole number: 0.3/0.1 is three multiples, not 2.99.
+    """
+    quotient = number / significance
+    if not math.isfinite(quotient):
+        return ErrorValue("#NUM!", "quotient is outside the supported numeric range")
+    mode = "away-from-zero" if (quotient > 0) == upward else "toward-zero"
+    return _round_to_precision(quotient, 0, mode)
+
+
+def _multiple_product(count: float | ErrorValue, significance: float) -> float | ErrorValue:
+    """`count` multiples of `significance` as one binary64 product.
+
+    A product that is not a whole number and lies within `_BOUNDARY_STEPS`
+    binary64 values of its own 15-significant-digit decimal is returned as
+    that decimal, so 15 multiples of 0.1 are 1.5 and not 1.5000000000000002.
+    """
+    if isinstance(count, ErrorValue):
+        return count
+    product = count * significance
+    if not math.isfinite(product):
+        return ErrorValue("#NUM!", "result is outside the supported numeric range")
+    if product == 0 or product == math.floor(product):
+        return _finite_number(product)
+    magnitude = abs(product)
+    written = decimal.Decimal(f"{magnitude:.14e}")
+    if _steps_to(magnitude, written) <= _BOUNDARY_STEPS:
+        return _finite_number(math.copysign(float(written), product))
+    return _finite_number(product)
+
+
+def _rounded_multiple(name: str, numbers: list[float]) -> float | ErrorValue:
+    number = numbers[0]
+    if name in {"CEILING", "FLOOR"}:
+        significance = numbers[1]
+        if significance == 0:
+            if name == "CEILING":
+                return 0.0
+            return ErrorValue("#DIV/0!", "FLOOR significance is zero")
+        if number > 0 and significance < 0:
+            return ErrorValue("#NUM!", f"{name} of a positive number needs positive significance")
+        count = _multiple_count(number, significance, name == "CEILING")
+        return _multiple_product(count, significance)
+    if name in {"CEILING.MATH", "FLOOR.MATH"}:
+        significance = abs(numbers[1]) if len(numbers) > 1 else 1.0
+        mode = numbers[2] if len(numbers) > 2 else 0.0
+        if significance == 0:
+            return 0.0
+        # A nonzero mode reverses the direction for negative numbers only.
+        reverse = number < 0 and mode != 0
+        upward = (name == "CEILING.MATH") != reverse
+        return _multiple_product(_multiple_count(number, significance, upward), significance)
+    # MROUND rounds the computed binary64 quotient half away from zero.
+    multiple = numbers[1]
+    if (number > 0 and multiple < 0) or (number < 0 and multiple > 0):
+        return ErrorValue("#NUM!", "MROUND number and multiple must have the same sign")
+    if number == 0 or multiple == 0:
+        return 0.0
+    quotient = number / multiple
+    if not math.isfinite(quotient):
+        return ErrorValue("#NUM!", "quotient is outside the supported numeric range")
+    lower = float(math.floor(quotient))
+    count = lower + 1.0 if quotient - lower >= 0.5 else lower
+    return _multiple_product(count, multiple)
+
+
+def _scalar_math_call(
+    name: str,
+    children: tuple[_Node, ...],
+    cells: Mapping[str, Scalar],
+    sheet_name: str,
+    budget: _WildcardBudget,
+) -> object:
+    low, high = _SCALAR_MATH_ARITY[name]
+    arity_error = _arity_range(name, low, high, len(children))
+    if arity_error is not None:
+        return arity_error
+    numbers = _number_arguments(children, cells, sheet_name, budget)
+    if isinstance(numbers, ErrorValue):
+        return numbers
+    if name == "PI":
+        return math.pi
+    if name in {"TRUE", "FALSE"}:
+        return name == "TRUE"
+    if name == "SIGN":
+        return 1.0 if numbers[0] > 0 else (-1.0 if numbers[0] < 0 else 0.0)
+    if name in {"CEILING", "FLOOR", "CEILING.MATH", "FLOOR.MATH", "MROUND"}:
+        return _rounded_multiple(name, numbers)
+    try:
+        if name == "SQRT":
+            if numbers[0] < 0:
+                return ErrorValue("#NUM!", "SQRT of a negative number")
+            return _finite_number(math.sqrt(numbers[0]))
+        if name == "POWER":
+            return _finite_number(math.pow(numbers[0], numbers[1]))
+        if name == "EXP":
+            return _finite_number(math.exp(numbers[0]))
+        if name in {"LN", "LOG10"}:
+            if numbers[0] <= 0:
+                return ErrorValue("#NUM!", f"{name} needs a positive number")
+            return _finite_number(math.log(numbers[0]) if name == "LN" else math.log10(numbers[0]))
+        number = numbers[0]
+        base = numbers[1] if len(numbers) > 1 else 10.0
+        if number <= 0 or base <= 0:
+            return ErrorValue("#NUM!", "LOG needs a positive number and a positive base")
+        if base == 1:
+            return ErrorValue("#DIV/0!", "LOG base 1 has no logarithm")
+        if base == 10:
+            return _finite_number(math.log10(number))
+        if base == 2:
+            return _finite_number(math.log2(number))
+        return _finite_number(math.log(number) / math.log(base))
+    except (OverflowError, ValueError):
+        # math raises where binary64 arithmetic gives an infinity or a NaN.
+        return ErrorValue("#NUM!", f"{name} result is outside the numeric domain")
+
+
+def _keeps_reference(child: _Node, value: object) -> bool:
+    """Whether an argument reads as a reference or array rather than a typed value."""
+    return _returns_reference(child) or isinstance(value, (_Referenced, _Range, ArrayValue))
+
+
+def _xor_call(
+    children: tuple[_Node, ...],
+    cells: Mapping[str, Scalar],
+    sheet_name: str,
+    budget: _WildcardBudget,
+) -> object:
+    """XOR: TRUE when an odd number of logical values are TRUE.
+
+    Text and empty cells inside an array or reference are ignored, as for AND
+    and OR. Every argument is evaluated, in order.
+    """
+    arity_error = _arity_range("XOR", 1, 254, len(children))
+    if arity_error is not None:
+        return arity_error
+    tested = False
+    result = False
+    for child in children:
+        evaluated = _eval(child, cells, sheet_name, budget)
+        referenced = _keeps_reference(child, evaluated)
+        for value in _flatten((_dereference(evaluated),)):
+            if referenced and (value is None or isinstance(value, str)):
+                continue
+            tested = True
+            truth = _truth(value)
+            if isinstance(truth, ErrorValue):
+                return truth
+            result = result != truth
+    if not tested:
+        return ErrorValue("#VALUE!", "XOR has no logical values to test")
+    return result
 
 
 def _function(

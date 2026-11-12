@@ -19,6 +19,7 @@ pub mod toolkit;
 pub mod volatile;
 #[cfg(target_arch = "wasm32")]
 pub mod wasm;
+mod worksheet_functions;
 pub mod xlsx;
 pub mod xml_patterns;
 pub use names::{DefinedName, DefinedNames, defined_name_error_code};
@@ -635,8 +636,18 @@ impl<'n> Parser<'n> {
                 self.expect(Token::RParen)?;
                 e
             }
-            Token::Ident(name) if name.eq_ignore_ascii_case("TRUE") => Expr::Bool(true),
-            Token::Ident(name) if name.eq_ignore_ascii_case("FALSE") => Expr::Bool(false),
+            // TRUE and FALSE are logical constants; TRUE() and FALSE() are the
+            // zero-argument functions that return them.
+            Token::Ident(name)
+                if name.eq_ignore_ascii_case("TRUE") && self.peek() != Some(&Token::LParen) =>
+            {
+                Expr::Bool(true)
+            }
+            Token::Ident(name)
+                if name.eq_ignore_ascii_case("FALSE") && self.peek() != Some(&Token::LParen) =>
+            {
+                Expr::Bool(false)
+            }
             Token::Ident(name) => self.parse_name_or_call(name, false)?,
             Token::QuotedSheet(name) => self.parse_name_or_call(name, true)?,
             other => {
@@ -3750,6 +3761,11 @@ fn eval_call(name: &str, args: &[Expr], env: &Environment<'_>) -> Result<Value, 
             arity(name, args, 0, 0)?;
             return Ok(Value::Error(FormulaError::NA));
         }
+        "SQRT" | "POWER" | "EXP" | "LN" | "LOG" | "LOG10" | "PI" | "SIGN" | "CEILING" | "FLOOR"
+        | "CEILING.MATH" | "FLOOR.MATH" | "MROUND" | "TRUE" | "FALSE" => {
+            return worksheet_functions::scalar_math_call(name, args, env);
+        }
+        "XOR" => return worksheet_functions::xor_call(args, env),
         "HOUR" | "MINUTE" | "SECOND" => {
             arity(name, args, 1, 1)?;
             let serial = to_number(&eval_scalar(&args[0], env)?)?;

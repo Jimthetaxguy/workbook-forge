@@ -506,15 +506,15 @@
       "name": "CEILING",
       "known": true,
       "category": "Compatibility",
-      "python": "catalogued",
-      "rust": "catalogued"
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
     },
     "CEILING.MATH": {
       "name": "CEILING.MATH",
       "known": true,
       "category": "Math and trigonometry",
-      "python": "catalogued",
-      "rust": "catalogued"
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
     },
     "CEILING.PRECISE": {
       "name": "CEILING.PRECISE",
@@ -1255,8 +1255,8 @@
       "name": "EXP",
       "known": true,
       "category": "Math and trigonometry",
-      "python": "catalogued",
-      "rust": "catalogued"
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
     },
     "EXPAND": {
       "name": "EXPAND",
@@ -1332,8 +1332,8 @@
       "name": "FALSE",
       "known": true,
       "category": "Logical",
-      "python": "catalogued",
-      "rust": "catalogued"
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
     },
     "FDIST": {
       "name": "FDIST",
@@ -1402,15 +1402,15 @@
       "name": "FLOOR",
       "known": true,
       "category": "Compatibility",
-      "python": "catalogued",
-      "rust": "catalogued"
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
     },
     "FLOOR.MATH": {
       "name": "FLOOR.MATH",
       "known": true,
       "category": "Math and trigonometry",
-      "python": "catalogued",
-      "rust": "catalogued"
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
     },
     "FLOOR.PRECISE": {
       "name": "FLOOR.PRECISE",
@@ -2123,22 +2123,22 @@
       "name": "LN",
       "known": true,
       "category": "Math and trigonometry",
-      "python": "catalogued",
-      "rust": "catalogued"
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
     },
     "LOG": {
       "name": "LOG",
       "known": true,
       "category": "Math and trigonometry",
-      "python": "catalogued",
-      "rust": "catalogued"
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
     },
     "LOG10": {
       "name": "LOG10",
       "known": true,
       "category": "Math and trigonometry",
-      "python": "catalogued",
-      "rust": "catalogued"
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
     },
     "LOGEST": {
       "name": "LOGEST",
@@ -2354,8 +2354,8 @@
       "name": "MROUND",
       "known": true,
       "category": "Math and trigonometry",
-      "python": "catalogued",
-      "rust": "catalogued"
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
     },
     "MULTINOMIAL": {
       "name": "MULTINOMIAL",
@@ -2676,8 +2676,8 @@
       "name": "PI",
       "known": true,
       "category": "Math and trigonometry",
-      "python": "catalogued",
-      "rust": "catalogued"
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
     },
     "PIVOTBY": {
       "name": "PIVOTBY",
@@ -2711,8 +2711,8 @@
       "name": "POWER",
       "known": true,
       "category": "Math and trigonometry",
-      "python": "catalogued",
-      "rust": "catalogued"
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
     },
     "PPMT": {
       "name": "PPMT",
@@ -3068,8 +3068,8 @@
       "name": "SIGN",
       "known": true,
       "category": "Math and trigonometry",
-      "python": "catalogued",
-      "rust": "catalogued"
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
     },
     "SIN": {
       "name": "SIN",
@@ -3138,8 +3138,8 @@
       "name": "SQRT",
       "known": true,
       "category": "Math and trigonometry",
-      "python": "catalogued",
-      "rust": "catalogued"
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
     },
     "SQRTPI": {
       "name": "SQRTPI",
@@ -3516,8 +3516,8 @@
       "name": "TRUE",
       "known": true,
       "category": "Logical",
-      "python": "catalogued",
-      "rust": "catalogued"
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
     },
     "TRUNC": {
       "name": "TRUNC",
@@ -3740,8 +3740,8 @@
       "name": "XOR",
       "known": true,
       "category": "Logical",
-      "python": "catalogued",
-      "rust": "catalogued"
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
     },
     "YEAR": {
       "name": "YEAR",

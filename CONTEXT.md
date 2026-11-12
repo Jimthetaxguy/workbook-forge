@@ -99,8 +99,8 @@ Build an **SDK for Excel in agent-ready formats**: expose supported workbook dat
 The [current-state findings](docs/toolkit-delivery.md#current-state-findings) separate delivered capabilities from evidence limits. Native named-input compositions and cell-based workbook expressions remain separate authoring interfaces; the canonical binding path is on `main` and is not yet the general export API.
 The native primitive interface adds nine functions and ten binary operators, typed native values, named-input composition and inspectable operation identities without requiring a workbook. Both packages provide the canonical catalog and expression schema. All three PR boundary findings are fixed; final independent review also closed a direct-call size-limit mismatch. Contributor evidence and the outstanding Excel acceptance gate are recorded in `docs/toolkit-delivery.md`.
 At the 2026-09-28 toolkit checkpoint (`32f49e2`), coverage was 115 implemented functions, 85 detailed semantic specs, 110 source records and 1,371 shared fixtures, and the suite ran 923 Python and 88 Rust tests. Those are checkpoint figures, not the tree today and not Excel-wide compatibility. Catalog numbers on `main` `c506165` are unchanged from `580aacd` (derivation in `docs/history/coverage-and-test-counts-2026-11-06.md`):
-- `catalog/formulas.json`: 123 implemented functions of the 521-entry inventory (398 catalog-only), 86 detailed semantic specs, 116 source records.
-- `fixtures/formula-cases.jsonl`: 1,691 cases.
+- `catalog/formulas.json`: 139 implemented functions of the 521-entry inventory (382 catalog-only), 102 detailed semantic specs, 132 source records.
+- `fixtures/formula-cases.jsonl`: 1,891 cases.
 - Test totals are the clean-tree gate of `580aacd` on 2026-11-06, not a later gate: 4,037 Python tests, 233 Rust tests plus 1 ignored release benchmark, 15 forge-engine Node tests.
 FILTER, SORT, and UNIQUE return bounded, shape-preserving arrays; worksheet spill projection remains unsupported.
 
