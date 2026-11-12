@@ -422,3 +422,30 @@ test('replay of NOW()+RAND() returns the logged pass under a non-UTC zone', () =
   assert.equal(typeof painted.calc.now_ms, 'number');
   assert.match(painted.calc.seed, /^\d+$/);
 });
+
+// Presentation is read from the workbook's own XML, not from the engine:
+// fixtures/corpus/op_styles_number_formats.xlsx sets <col width="18" min="1">
+// and <col width="22" min="2">; A1 uses a bold font colored FF1F4E79; B1 uses
+// numFmt "yyyy-mm-dd", solid fill FFFFF2CC and horizontal="right"; B4 uses
+// built-in numFmtId 10, which ECMA-376 18.8.30 defines as 0.00%. General
+// (numFmtId 0) is the default and is left out.
+test('snapshot carries cell presentation and column widths', () => {
+  const styled = readFileSync(new URL('../../../fixtures/corpus/op_styles_number_formats.xlsx', import.meta.url));
+  const engine = new ForgeEngine({ openXlsx, createBlankWorkbook });
+  assert.equal(call(engine, 'open', { bytes: new Uint8Array(styled) }).ok, true);
+  const sheet = call(engine, 'snapshot').value.sheets[0];
+  assert.deepEqual(sheet.columnWidths, { A: 18, B: 22 });
+  assert.deepEqual(sheet.cells.A1, { value: 'date', style: { bold: true, fontColor: 'FF1F4E79' } });
+  assert.deepEqual(sheet.cells.B1, {
+    value: 45351,
+    style: { numberFormat: 'yyyy-mm-dd', fillColor: 'FFFFF2CC', horizontal: 'right' },
+  });
+  assert.equal(sheet.cells.B4.style.numberFormat, '0.00%');
+  assert.equal(sheet.cells.B4.value, 0.1275);
+
+  // A workbook with no presentation carries neither field.
+  assert.equal(call(engine, 'open', { bytes: new Uint8Array(fixture) }).ok, true);
+  const plain = call(engine, 'snapshot').value.sheets[0];
+  assert.equal('columnWidths' in plain, false);
+  assert.deepEqual(plain.cells.A1, { value: 10 });
+});
