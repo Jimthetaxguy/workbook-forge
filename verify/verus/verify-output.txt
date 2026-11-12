@@ -1,0 +1,2 @@
+cheat-check: OK (no assume, admit, external_body or no-decreases escape hatches in src/)
+verification results:: 19 verified, 0 errors
