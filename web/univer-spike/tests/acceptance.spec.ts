@@ -301,9 +301,15 @@ for (const mode of ['not-execute', 'load-only']) {
         ['sheet.command.insert-col-before', 'Inserting rows and columns is not available yet.'],
         ['sheet.command.remove-row-confirm', 'Deleting rows and columns is not available yet.'],
         ['sheet.command.insert-sheet', 'Adding, removing and renaming sheets is not available yet.'],
-        ['sheet.command.auto-fill', 'Fill is not available yet.'],
-        ['univer.command.paste', 'Paste is not available yet. Type the values in instead.'],
-        ['sheet.command.clear-selection-content', 'Clearing cells with Delete is not available yet. Type over the cell, or use Undo.'],
+        // Fill, paste and clear reach Forge through the fill handle, Ctrl+D,
+        // Ctrl+R, Ctrl+V and Delete (see "everyday editing" below). Every
+        // other way in is still refused.
+        ['sheet.command.auto-fill', 'Fill options are not available yet.'],
+        ['univer.command.paste', 'Paste with Ctrl+V (Cmd+V on a Mac). Pasting from the menu and Paste Special are not available yet.'],
+        ['univer.command.cut', 'Cut is not available yet. Copy and paste, then clear the original with Delete.'],
+        ['sheet.command.clear-selection-format', 'Clearing formats is not available yet. Delete clears the contents.'],
+        ['sheet.command.clear-selection-all', 'Clearing formats is not available yet. Delete clears the contents.'],
+        ['sheet.command.delete-range-move-left', 'That way of clearing cells is not available yet. Select the cells and press Delete.'],
       ]) {
         const result = await page.evaluate(
           (commandId) => (window as any).__spike.then((s: any) => s.host.univerAPI.executeCommand(commandId)),
@@ -1077,6 +1083,534 @@ test('theme: the toggle switches the frame and the grid together and stores noth
     return counts;
   });
   expect(Object.values(stored).every((count) => count === 0), JSON.stringify(stored)).toBe(true);
+});
+
+// ---- everyday editing: clear, paste and fill ----------------------------
+//
+// Each action is one Forge edit, so one step of undo. Expected values are
+// hand arithmetic on the chain fixture (A1=10, B1=A1*2=20, C1=B1+5=25,
+// D1=C1*3=75, E1=D1-B1=55, F1=SUM(A1:E1)=185) or Microsoft's own examples:
+//   "Switch between relative, absolute, and mixed references"
+//   https://support.microsoft.com/en-us/office/switch-between-relative-absolute-and-mixed-references-dfec08cd-ae65-4f56-839e-5f0d8d0baca9
+//   "Fill data automatically in worksheet cells"
+//   https://support.microsoft.com/en-us/office/fill-data-automatically-in-worksheet-cells-74e31bdd-d993-45da-aa82-35a236c5b5db
+//   "Enter a series of numbers, dates, or other items"
+//   https://support.microsoft.com/en-us/office/enter-a-series-of-numbers-dates-or-other-items-41e0bbf2-7198-4d78-8545-fdd4709976b4
+//   "Fill a formula down into adjacent cells"
+//   https://support.microsoft.com/en-us/office/fill-a-formula-down-into-adjacent-cells-041edfe2-05bc-40e6-b933-ef48c3f308c6
+
+/** `[formula, value]` for each address; a blank cell is `[null, null]`. */
+async function cellsOf(page: Page, addresses: string[]) {
+  return page.evaluate(
+    (list) =>
+      (window as any).__spike.then((s: any) =>
+        Object.fromEntries(list.map((a: string) => [a, [s.adapter.cell('Sheet1', a).formula, s.adapter.cell('Sheet1', a).raw]])),
+      ),
+    addresses,
+  ) as Promise<Record<string, [string | null, unknown]>>;
+}
+
+async function editState(page: Page) {
+  return page.evaluate(() =>
+    (window as any).__spike.then((s: any) => ({
+      revision: Number(s.adapter.revision),
+      selection: s.host.univerAPI.getActiveWorkbook().getActiveSheet().getSelection().getActiveRange().getA1Notation() as string,
+      notice: (document.querySelector('#notices')?.textContent ?? '') as string,
+      blocked: s.adapter.audit.blocked as string[],
+      divergence: s.adapter.divergence() as string[],
+      foreignWrites: s.adapter.audit.foreignWrites as string[],
+    })),
+  );
+}
+
+async function cellCentre(page: Page, address: string) {
+  const origin = await gridOrigin(page);
+  return { x: origin.x + COLS[address[0]], y: origin.y + ROW1_CENTRE + (Number(address.slice(1)) - 1) * 24 };
+}
+
+/** Select one cell, or a range by clicking one corner and shift-clicking the other. */
+async function selectCells(page: Page, from: string, to = from) {
+  // Two quick clicks on one cell would open its editor, so let any earlier click age first.
+  await page.waitForTimeout(550);
+  await clickCell(page, from);
+  if (to !== from) {
+    await page.keyboard.down('Shift');
+    await clickCell(page, to);
+    await page.keyboard.up('Shift');
+  }
+  await page.waitForTimeout(250);
+}
+
+// The fill handle is the small square on the selection's bottom-right corner:
+// 44px right of and 12px below the centre of an 88 by 24 cell.
+async function fillHandle(page: Page, corner: string) {
+  const centre = await cellCentre(page, corner);
+  return { x: centre.x + 43, y: centre.y + 11 };
+}
+
+/** Drag the fill handle of a selection whose bottom-right cell is `corner` to the cell `to`. */
+async function dragFillHandle(page: Page, corner: string, to: string) {
+  const handle = await fillHandle(page, corner);
+  const target = await cellCentre(page, to);
+  await page.mouse.move(handle.x, handle.y);
+  await page.waitForTimeout(120);
+  await page.mouse.down();
+  await page.mouse.move((handle.x + target.x) / 2, (handle.y + target.y) / 2, { steps: 6 });
+  await page.mouse.move(target.x, target.y, { steps: 6 });
+  await page.waitForTimeout(120);
+  await page.mouse.up();
+  await settle(page);
+}
+
+async function pasteText(page: Page, address: string, text: string) {
+  await page.evaluate((value) => navigator.clipboard.writeText(value), text);
+  await selectCells(page, address);
+  await page.keyboard.press('Control+V');
+  await settle(page);
+}
+
+async function copyCells(page: Page, from: string, to = from) {
+  await selectCells(page, from, to);
+  await page.keyboard.press('Control+C');
+  await page.waitForTimeout(250);
+}
+
+const BLANK: [null, null] = [null, null];
+
+test.describe('everyday editing: clear, paste and fill', () => {
+  // The page writes to the clipboard when it copies. It is never allowed to
+  // read it: a paste arrives in the browser's own paste event.
+  test.use({ permissions: ['clipboard-write'] });
+
+  test.beforeEach(async ({ page }) => {
+    await page.addInitScript(() => {
+      (window as any).__clipboardReads = 0;
+      for (const name of ['read', 'readText'] as const) {
+        const original = (Clipboard.prototype as any)[name];
+        (Clipboard.prototype as any)[name] = function (...args: unknown[]) {
+          (window as any).__clipboardReads += 1;
+          return original.apply(this, args);
+        };
+      }
+    });
+  });
+
+  test.afterEach(async ({ page }) => {
+    const state = await editState(page);
+    expect(state.divergence, 'Univer shows what Forge holds').toEqual([]);
+    expect(state.foreignWrites, 'cell writes not from the projection').toEqual([]);
+    expect(await page.evaluate(() => (window as any).__clipboardReads), 'clipboard reads asked for').toBe(0);
+    expectUniverNeverCalculated(await view(page));
+  });
+
+  test('Delete clears the selected cells as one step and Ctrl+Z brings them back', async ({ page }) => {
+    const errors = await boot(page, 'not-execute');
+    await selectCells(page, 'B1', 'C1');
+    await page.keyboard.press('Delete');
+    await settle(page);
+    // B1 and C1 are empty, so D1 = 0*3 = 0, E1 = 0-0 = 0, F1 = 10+0+0+0+0 = 10.
+    expect(await cellsOf(page, ['A1', 'B1', 'C1', 'D1', 'E1', 'F1'])).toEqual({
+      A1: [null, 10], B1: BLANK, C1: BLANK, D1: ['=C1*3', 0], E1: ['=D1-B1', 0], F1: ['=SUM(A1:E1)', 10],
+    });
+    expect((await editState(page)).revision).toBe(1);
+    const snapshot = (await forge(page)).snapshot.sheets[0].cells;
+    expect(snapshot.B1?.formula ?? null).toBeNull();
+    expect(snapshot.C1?.formula ?? null).toBeNull();
+
+    await page.keyboard.press('Control+Z');
+    await settle(page);
+    const v = await view(page);
+    expectDisplayed(v, INITIAL);
+    expect(await cellsOf(page, ['B1', 'C1'])).toEqual({ B1: ['=A1*2', 20], C1: ['=B1+5', 25] });
+    expect((await editState(page)).revision).toBe(2);
+
+    // Nothing is held in H5:H6, so there is nothing to clear and nothing to undo.
+    await selectCells(page, 'H5', 'H6');
+    await page.keyboard.press('Delete');
+    await settle(page);
+    const after = await editState(page);
+    expect(after.revision).toBe(2);
+    expect(after.blocked).toEqual([]);
+    expect(errors).toEqual([]);
+  });
+
+  test('text pasted from another program lands as if typed, as one step', async ({ page }) => {
+    const errors = await boot(page, 'not-execute');
+    // Three rows by two columns; the last cell is empty.
+    await pasteText(page, 'A2', '5\t=A2*2\n7\t=A3*2\nhello\t');
+    expect(await cellsOf(page, ['A2', 'B2', 'A3', 'B3', 'A4', 'B4'])).toEqual({
+      A2: [null, 5], B2: ['=A2*2', 10], A3: [null, 7], B3: ['=A3*2', 14], A4: [null, 'hello'], B4: BLANK,
+    });
+    let state = await editState(page);
+    expect(state.revision).toBe(1);
+    expect(state.selection).toBe('A2:B4');
+    expectDisplayed(await view(page), INITIAL);
+
+    // A quoted cell keeps its line break and stays one cell.
+    await pasteText(page, 'A6', '"two\nlines"\t3');
+    expect(await cellsOf(page, ['A6', 'B6', 'A7'])).toEqual({ A6: [null, 'two\nlines'], B6: [null, 3], A7: BLANK });
+    expect((await editState(page)).revision).toBe(2);
+
+    await page.keyboard.press('Control+Z');
+    await settle(page);
+    await page.keyboard.press('Control+Z');
+    await settle(page);
+    expect(await cellsOf(page, ['A2', 'B2', 'A3', 'B3', 'A4', 'A6', 'B6'])).toEqual({
+      A2: BLANK, B2: BLANK, A3: BLANK, B3: BLANK, A4: BLANK, A6: BLANK, B6: BLANK,
+    });
+    state = await editState(page);
+    expect(state.revision).toBe(4);
+    expect(state.blocked).toEqual([]);
+    expect(errors).toEqual([]);
+  });
+
+  test('a copied formula moves its relative references and keeps its absolute ones', async ({ page }) => {
+    const errors = await boot(page, 'not-execute');
+    // Microsoft's table: copied two cells down and two cells to the right,
+    // $A$1 stays $A$1, A$1 becomes C$1, $A1 becomes $A3 and A1 becomes C3.
+    await typeInto(page, 'D3', '=$A$1+A$1+$A1+A1');
+    expect(await cellsOf(page, ['D3'])).toEqual({ D3: ['=$A$1+A$1+$A1+A1', 40] }); // 10+10+10+10
+    await copyCells(page, 'D3');
+    await selectCells(page, 'F5');
+    await page.keyboard.press('Control+V');
+    await settle(page);
+    // $A$1=10, C$1=25, $A3 and C3 are empty: 10+25+0+0 = 35.
+    expect(await cellsOf(page, ['F5'])).toEqual({ F5: ['=$A$1+C$1+$A3+C3', 35] });
+    expect((await editState(page)).revision).toBe(2);
+
+    // Microsoft's example: =B4*C4 copied from D4 to D5 becomes =B5*C5, and
+    // =$B$4*$C$4 copied the same way stays exactly the same.
+    await typeInto(page, 'B4', '3');
+    await typeInto(page, 'C4', '4');
+    await typeInto(page, 'D4', '=B4*C4');
+    await typeInto(page, 'E4', '=$B$4*$C$4');
+    await copyCells(page, 'D4', 'E4');
+    await selectCells(page, 'D5');
+    await page.keyboard.press('Control+V');
+    await settle(page);
+    expect(await cellsOf(page, ['D4', 'E4', 'D5', 'E5'])).toEqual({
+      D4: ['=B4*C4', 12], E4: ['=$B$4*$C$4', 12], D5: ['=B5*C5', 0], E5: ['=$B$4*$C$4', 12],
+    });
+    let state = await editState(page);
+    expect(state.revision).toBe(7);
+    expect(state.selection).toBe('D5:E5');
+
+    // A copy is what the cells held when they were copied.
+    await copyCells(page, 'B1');
+    await typeInto(page, 'B1', '99');
+    await selectCells(page, 'B8');
+    await page.keyboard.press('Control+V');
+    await settle(page);
+    expect(await cellsOf(page, ['B1', 'B8'])).toEqual({ B1: [null, 99], B8: ['=A8*2', 0] });
+
+    // One step of undo takes the whole paste back.
+    await page.keyboard.press('Control+Z');
+    await settle(page);
+    expect(await cellsOf(page, ['B8'])).toEqual({ B8: BLANK });
+    state = await editState(page);
+    expect(state.revision).toBe(10);
+    expect(state.blocked).toEqual([]);
+    expect(errors).toEqual([]);
+  });
+
+  test('Ctrl+R and Ctrl+D copy across and down, and the browser does not see the keys', async ({ page }) => {
+    const errors = await boot(page, 'not-execute');
+    await page.evaluate(() => {
+      (window as any).__shortcuts = [];
+      window.addEventListener('keydown', (event) => {
+        if (event.ctrlKey && /^[dr]$/i.test(event.key)) (window as any).__shortcuts.push([event.key.toLowerCase(), event.defaultPrevented]);
+      });
+    });
+    await selectCells(page, 'F1', 'G1');
+    await page.keyboard.press('Control+R');
+    await settle(page);
+    // G1 = SUM(B1:F1) = 20+25+75+55+185 = 360.
+    expect(await cellsOf(page, ['G1'])).toEqual({ G1: ['=SUM(B1:F1)', 360] });
+    expect((await editState(page)).revision).toBe(1);
+
+    await selectCells(page, 'A1', 'F3');
+    await page.keyboard.press('Control+D');
+    await settle(page);
+    // Rows 2 and 3 repeat row 1: 10, 20, 25, 75, 55, 185.
+    for (const row of [2, 3]) {
+      expect(await cellsOf(page, ['A', 'B', 'C', 'D', 'E', 'F'].map((col) => `${col}${row}`))).toEqual({
+        [`A${row}`]: [null, 10],
+        [`B${row}`]: [`=A${row}*2`, 20],
+        [`C${row}`]: [`=B${row}+5`, 25],
+        [`D${row}`]: [`=C${row}*3`, 75],
+        [`E${row}`]: [`=D${row}-B${row}`, 55],
+        [`F${row}`]: [`=SUM(A${row}:E${row})`, 185],
+      });
+    }
+    let state = await editState(page);
+    expect(state.revision).toBe(2);
+    expect(state.selection).toBe('A1:F3');
+
+    await page.keyboard.press('Control+Z');
+    await settle(page);
+    expect(await cellsOf(page, ['A2', 'F2', 'A3', 'F3', 'G1'])).toEqual({ A2: BLANK, F2: BLANK, A3: BLANK, F3: BLANK, G1: ['=SUM(B1:F1)', 360] });
+    state = await editState(page);
+    expect(state.revision).toBe(3);
+    expect(state.blocked).toEqual([]);
+    // Ctrl+R reloads the page and Ctrl+D bookmarks it unless the page takes the key.
+    expect(await page.evaluate(() => (window as any).__shortcuts)).toEqual([['r', true], ['d', true]]);
+    expect(errors).toEqual([]);
+  });
+
+  test('the fill handle copies formulas down, right, up and left, and a refused drag changes nothing', async ({ page }) => {
+    const errors = await boot(page, 'not-execute');
+    await pasteText(page, 'A2', '3\n4');
+    await selectCells(page, 'B1');
+    await dragFillHandle(page, 'B1', 'B3');
+    // B2 = A2*2 = 6, B3 = A3*2 = 8.
+    expect(await cellsOf(page, ['B2', 'B3', 'B4'])).toEqual({ B2: ['=A2*2', 6], B3: ['=A3*2', 8], B4: BLANK });
+    let state = await editState(page);
+    expect(state.revision).toBe(2);
+    expect(state.selection).toBe('B1:B3');
+
+    await selectCells(page, 'F1');
+    await dragFillHandle(page, 'F1', 'H1');
+    // G1 = SUM(B1:F1) = 360, H1 = SUM(C1:G1) = 25+75+55+185+360 = 700.
+    expect(await cellsOf(page, ['G1', 'H1', 'I1'])).toEqual({ G1: ['=SUM(B1:F1)', 360], H1: ['=SUM(C1:G1)', 700], I1: BLANK });
+    state = await editState(page);
+    expect(state.revision).toBe(3);
+    expect(state.selection).toBe('F1:H1');
+
+    await typeInto(page, 'C5', '=A5+1');
+    await selectCells(page, 'C5');
+    await dragFillHandle(page, 'C5', 'C3');
+    // C4 = A4+1 = 0+1 = 1, C3 = A3+1 = 4+1 = 5.
+    expect(await cellsOf(page, ['C2', 'C3', 'C4', 'C5'])).toEqual({ C2: BLANK, C3: ['=A3+1', 5], C4: ['=A4+1', 1], C5: ['=A5+1', 1] });
+    state = await editState(page);
+    expect(state.revision).toBe(5);
+    expect(state.selection).toBe('C3:C5');
+
+    await typeInto(page, 'B7', '2');
+    await typeInto(page, 'E7', '=D7*2');
+    await selectCells(page, 'E7');
+    await dragFillHandle(page, 'E7', 'C7');
+    // C7 = B7*2 = 4, D7 = C7*2 = 8, E7 = D7*2 = 16.
+    expect(await cellsOf(page, ['B7', 'C7', 'D7', 'E7'])).toEqual({ B7: [null, 2], C7: ['=B7*2', 4], D7: ['=C7*2', 8], E7: ['=D7*2', 16] });
+    state = await editState(page);
+    expect(state.revision).toBe(8);
+    expect(state.selection).toBe('C7:E7');
+
+    // =A5+1 one column to the left would point before column A: refused whole.
+    await selectCells(page, 'C5');
+    await dragFillHandle(page, 'C5', 'B5');
+    expect(await cellsOf(page, ['B5', 'C5'])).toEqual({ B5: BLANK, C5: ['=A5+1', 1] });
+    state = await editState(page);
+    expect(state.revision).toBe(8);
+    expect(state.notice).toBe('Change not applied. The formula in C5 cannot be copied: at B5 it would point outside the sheet.');
+
+    // The next drag works, and one undo takes it back.
+    await selectCells(page, 'H1');
+    await dragFillHandle(page, 'H1', 'H2');
+    // H2 = SUM(C2:G2); those cells are empty.
+    expect(await cellsOf(page, ['H2'])).toEqual({ H2: ['=SUM(C2:G2)', 0] });
+    expect((await editState(page)).revision).toBe(9);
+    await page.keyboard.press('Control+Z');
+    await settle(page);
+    expect(await cellsOf(page, ['H1', 'H2'])).toEqual({ H1: ['=SUM(C1:G1)', 700], H2: BLANK });
+    expect((await editState(page)).revision).toBe(10);
+    expect(errors).toEqual([]);
+  });
+
+  test('a double click on the fill handle fills down, dragging it back clears, and a click on it does nothing', async ({ page }) => {
+    const errors = await boot(page, 'not-execute');
+    await pasteText(page, 'A2', '3\n4\n5');
+    await selectCells(page, 'B1');
+    const handle = await fillHandle(page, 'B1');
+    await page.mouse.dblclick(handle.x, handle.y);
+    await settle(page);
+    // Down as far as column A has entries: B2 = 6, B3 = 8, B4 = 10.
+    expect(await cellsOf(page, ['B2', 'B3', 'B4', 'B5'])).toEqual({ B2: ['=A2*2', 6], B3: ['=A3*2', 8], B4: ['=A4*2', 10], B5: BLANK });
+    let state = await editState(page);
+    expect(state.revision).toBe(2);
+    expect(state.selection).toBe('B1:B4');
+
+    // Dragging the handle back over the selection clears what it gives up.
+    await selectCells(page, 'B1', 'B4');
+    await dragFillHandle(page, 'B4', 'B2');
+    expect(await cellsOf(page, ['B1', 'B2', 'B3', 'B4'])).toEqual({ B1: ['=A1*2', 20], B2: ['=A2*2', 6], B3: BLANK, B4: BLANK });
+    state = await editState(page);
+    expect(state.revision).toBe(3);
+    expect(state.selection).toBe('B1:B2');
+
+    // The grid toolkit remembers a drag that changed nothing (here, one back
+    // over empty cells); a click on another cell's handle must not replay it.
+    await selectCells(page, 'H5', 'H7');
+    await dragFillHandle(page, 'H7', 'H5');
+    state = await editState(page);
+    expect(state.revision).toBe(3);
+    expect(state.selection).toBe('H5');
+    await selectCells(page, 'C1');
+    const other = await fillHandle(page, 'C1');
+    await page.mouse.click(other.x, other.y);
+    await settle(page);
+    expect(await cellsOf(page, ['C1', 'C2', 'B3'])).toEqual({ C1: ['=B1+5', 25], C2: BLANK, B3: BLANK });
+    state = await editState(page);
+    expect(state.revision).toBe(3);
+    expect(state.selection).toBe('C1');
+    expect(state.blocked).toEqual([]);
+
+    await page.keyboard.press('Control+Z');
+    await settle(page);
+    expect(await cellsOf(page, ['B3', 'B4'])).toEqual({ B3: ['=A3*2', 8], B4: ['=A4*2', 10] });
+    await page.keyboard.press('Control+Z');
+    await settle(page);
+    expect(await cellsOf(page, ['B2', 'B3', 'B4'])).toEqual({ B2: BLANK, B3: BLANK, B4: BLANK });
+    expect((await editState(page)).revision).toBe(5);
+    expect(errors).toEqual([]);
+  });
+
+  test('a formula cell clicked while another cell is being edited keeps its outline and fill handle', async ({ page }) => {
+    const errors = await boot(page, 'not-execute');
+    // Open an editor with a double click and leave it by clicking a formula
+    // cell. The grid toolkit used to erase that cell's outline, so the first
+    // drag from its corner selected cells instead of filling them.
+    await selectCells(page, 'H5');
+    const h5 = await cellCentre(page, 'H5');
+    await page.mouse.dblclick(h5.x, h5.y);
+    await page.waitForTimeout(400);
+    await selectCells(page, 'F1');
+    await dragFillHandle(page, 'F1', 'F3');
+    expect(await cellsOf(page, ['F2', 'F3'])).toEqual({ F2: ['=SUM(A2:E2)', 0], F3: ['=SUM(A3:E3)', 0] });
+    let state = await editState(page);
+    expect(state.revision).toBe(1);
+    expect(state.selection).toBe('F1:F3');
+
+    // The everyday case: type a value, then click a formula cell.
+    await selectCells(page, 'A2');
+    await page.keyboard.type('4');
+    await selectCells(page, 'B1');
+    await settle(page);
+    await dragFillHandle(page, 'B1', 'B2');
+    expect(await cellsOf(page, ['A2', 'B2', 'F2'])).toEqual({ A2: [null, 4], B2: ['=A2*2', 8], F2: ['=SUM(A2:E2)', 12] });
+    state = await editState(page);
+    expect(state.revision).toBe(3);
+    expect(state.selection).toBe('B1:B2');
+
+    // A formula still being typed hides the outline as before and commits normally.
+    await selectCells(page, 'H8');
+    await page.keyboard.type('=A1+');
+    await clickCell(page, 'B1');
+    await page.keyboard.press('Enter');
+    await settle(page);
+    expect(await cellsOf(page, ['H8'])).toEqual({ H8: ['=A1+B1', 30] });
+    expect((await editState(page)).blocked).toEqual([]);
+    expect(errors).toEqual([]);
+  });
+
+  test('the fill handle refuses what Excel would continue as a series and copies a single number', async ({ page }) => {
+    const errors = await boot(page, 'not-execute');
+    const series = 'Fill copies formulas and repeated values. Continuing a series (1, 2, 3, dates, Item 1, Monday) is not available yet. Ctrl+D and Ctrl+R copy as they are.';
+    // Microsoft: two numbers set a pattern (1, 3 continues 5, 7, 9).
+    await pasteText(page, 'H1', '1\n3');
+    await selectCells(page, 'H1', 'H2');
+    await dragFillHandle(page, 'H2', 'H4');
+    expect(await cellsOf(page, ['H1', 'H2', 'H3', 'H4'])).toEqual({ H1: [null, 1], H2: [null, 3], H3: BLANK, H4: BLANK });
+    let state = await editState(page);
+    expect(state.revision).toBe(1);
+    expect(state.notice).toBe(series);
+    expect(state.blocked.at(-1)).toBe('sheet.command.auto-fill');
+    await page.locator('#notice-close').click();
+
+    // Microsoft: Item1 continues Item2, Item3.
+    await typeInto(page, 'I1', 'Item 1');
+    await selectCells(page, 'I1');
+    await dragFillHandle(page, 'I1', 'I3');
+    expect(await cellsOf(page, ['I1', 'I2', 'I3'])).toEqual({ I1: [null, 'Item 1'], I2: BLANK, I3: BLANK });
+    state = await editState(page);
+    expect(state.revision).toBe(2);
+    expect(state.notice).toBe(series);
+    await page.locator('#notice-close').click();
+
+    // Microsoft: "For the series 2, 2, 2, 2..., type 2 in first cell only."
+    await typeInto(page, 'G1', '2');
+    await selectCells(page, 'G1');
+    await dragFillHandle(page, 'G1', 'G3');
+    expect(await cellsOf(page, ['G1', 'G2', 'G3', 'G4'])).toEqual({ G1: [null, 2], G2: [null, 2], G3: [null, 2], G4: BLANK });
+    expect((await editState(page)).revision).toBe(4);
+
+    // Ctrl+D copies the top cell down whatever it holds.
+    await selectCells(page, 'H1', 'H3');
+    await page.keyboard.press('Control+D');
+    await settle(page);
+    expect(await cellsOf(page, ['H1', 'H2', 'H3', 'H4'])).toEqual({ H1: [null, 1], H2: [null, 1], H3: [null, 1], H4: BLANK });
+    expect((await editState(page)).revision).toBe(5);
+    expect(errors).toEqual([]);
+  });
+
+  test('cut is refused, and a paste whose formula would leave the sheet changes nothing', async ({ page }) => {
+    const errors = await boot(page, 'not-execute');
+    await selectCells(page, 'B1');
+    await page.keyboard.press('Control+X');
+    await settle(page);
+    let state = await editState(page);
+    expect(state.notice).toBe('Cut is not available yet. Copy and paste, then clear the original with Delete.');
+    expect(state.blocked.at(-1)).toMatch(/cut$/);
+    expect(state.revision).toBe(0);
+    await page.locator('#notice-close').click();
+
+    // =A1*2 one column to the left would point before column A.
+    await copyCells(page, 'B1');
+    await selectCells(page, 'A3');
+    await page.keyboard.press('Control+V');
+    await settle(page);
+    state = await editState(page);
+    expect(state.notice).toBe('Change not applied. The formula in B1 cannot be copied: at A3 it would point outside the sheet.');
+    expect(state.revision).toBe(0);
+    expect(await cellsOf(page, ['A3', 'B1'])).toEqual({ A3: BLANK, B1: ['=A1*2', 20] });
+    expectDisplayed(await view(page), INITIAL);
+    expect(errors).toEqual([]);
+  });
+
+  test('a copy repeats over a selection it fits a whole number of times, and a long paste grows the grid', async ({ page }) => {
+    const errors = await boot(page, 'not-execute');
+    // A1:B1 (10 and =A1*2) into A3:D4: two across and two down.
+    await copyCells(page, 'A1', 'B1');
+    await selectCells(page, 'A3', 'D4');
+    await page.keyboard.press('Control+V');
+    await settle(page);
+    for (const row of [3, 4]) {
+      expect(await cellsOf(page, [`A${row}`, `B${row}`, `C${row}`, `D${row}`, `E${row}`])).toEqual({
+        [`A${row}`]: [null, 10], [`B${row}`]: [`=A${row}*2`, 20], [`C${row}`]: [null, 10], [`D${row}`]: [`=C${row}*2`, 20], [`E${row}`]: BLANK,
+      });
+    }
+    let state = await editState(page);
+    expect(state.revision).toBe(1);
+    expect(state.selection).toBe('A3:D4');
+    await page.keyboard.press('Control+Z');
+    await settle(page);
+    expect(await cellsOf(page, ['A3', 'B3', 'C3', 'D3', 'A4', 'D4'])).toEqual({ A3: BLANK, B3: BLANK, C3: BLANK, D3: BLANK, A4: BLANK, D4: BLANK });
+    expect((await editState(page)).revision).toBe(2);
+
+    // Three columns is not a whole number of two-column copies: one copy at the top left.
+    await selectCells(page, 'A6', 'C6');
+    await page.keyboard.press('Control+V');
+    await settle(page);
+    expect(await cellsOf(page, ['A6', 'B6', 'C6'])).toEqual({ A6: [null, 10], B6: ['=A6*2', 20], C6: BLANK });
+    state = await editState(page);
+    expect(state.revision).toBe(3);
+    expect(state.selection).toBe('A6:B6');
+
+    // 300 rows from row 10: the last is row 309, and the grid keeps 100 rows beyond it.
+    const lines = Array.from({ length: 300 }, (_, i) => `${i + 10}\t=A${i + 10}*2`).join('\n');
+    await pasteText(page, 'A10', lines);
+    expect(await cellsOf(page, ['A10', 'B10', 'A309', 'B309', 'A310'])).toEqual({
+      A10: [null, 10], B10: ['=A10*2', 20], A309: [null, 309], B309: ['=A309*2', 618], A310: BLANK,
+    });
+    expect((await editState(page)).revision).toBe(4);
+    const shape = await page.evaluate(() =>
+      (window as any).__spike.then((s: any) => {
+        const sheet = s.host.univerAPI.getActiveWorkbook().getActiveSheet();
+        return { rows: sheet.getMaxRows(), cols: sheet.getMaxColumns() };
+      }),
+    );
+    expect(shape).toEqual({ rows: 409, cols: 26 });
+    expect(errors).toEqual([]);
+  });
 });
 
 // A phone-width screen: every control stays reachable, nothing scrolls

@@ -32,6 +32,7 @@
     "dev": "vite",
     "build": "vite build",
     "typecheck": "tsc -p .",
+    "test:unit": "node --experimental-strip-types --no-warnings --test test/*.node.test.mjs",
     "test:e2e": "bash scripts/e2e.sh",
     "check:licenses": "node scripts/check-licenses.mjs",
     "check:functions": "node --experimental-strip-types --no-warnings scripts/check-function-notes.mjs",
