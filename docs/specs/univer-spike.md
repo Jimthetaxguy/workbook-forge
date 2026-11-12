@@ -295,15 +295,46 @@ text) are in `src/range-edits.ts` with unit tests in
   the only Microsoft support for it found was a
   [Q&A answer](https://learn.microsoft.com/en-us/answers/questions/5907196/how-to-propogate-a-formula-through-an-entire-colum),
   not product documentation.
-- **Series are refused, not copied.** Excel continues a series where the fill
-  handle is dragged from two or more numbers, a date, or text ending in a
-  number or naming a day or month ([fill data
+- **Series.** Excel continues a series where the fill handle is dragged from
+  two or more numbers, a date, or text ending in a number or naming a day or
+  month ([fill data
   automatically](https://support.microsoft.com/en-us/office/fill-data-automatically-in-worksheet-cells-74e31bdd-d993-45da-aa82-35a236c5b5db),
   [enter a series](https://support.microsoft.com/en-us/office/enter-a-series-of-numbers-dates-or-other-items-41e0bbf2-7198-4d78-8545-fdd4709976b4),
   [project values in a series](https://support.microsoft.com/en-us/office/project-values-in-a-series-5311f5cf-149e-4d06-81dd-5aaad87e5400)).
-  A copy there would not match Excel, so the drag is refused with a notice. A
-  single number copies, as it does in Excel ("For the series 2, 2, 2, 2...,
-  type 2 in first cell only"). Ctrl+D and Ctrl+R always copy.
+  `planLine` decides each column of a fill down or up, and each row of a fill
+  across, on its own. Three kinds are continued:
+  - Numbers. Two or more typed numbers continue their straight line: evenly
+    spaced numbers keep their step (1, 2 gives 3, 4, 5; 1, 3 gives 5, 7, 9;
+    100, 95 gives 90, 85), and unevenly spaced numbers follow their
+    least-squares line (3, 5, 8 gives 31/3 then 77/6). Dragging up or left
+    runs the line backwards, which is Microsoft's "drag up or to the left" to
+    fill in decreasing order ([automatically number
+    rows](https://support.microsoft.com/en-us/office/automatically-number-rows-in-excel-76ce49e3-d8d2-459b-bd85-ee1d3973e6e6)).
+    Results are ordinary double arithmetic and are not rounded, so a long
+    series of fractions may differ from Excel in its last digit.
+  - Text ending in a whole number, such as `Item1` or `Product 1`. One cell
+    counts up by one (`Item2`, `Item3`, `Item4`); two or more evenly spaced
+    cells set the step.
+  - Day and month names, short or long (`Mon`, `Monday`, `Jan`, `January`).
+    One cell gives the next name (Monday gives Tuesday, Wednesday, Thursday);
+    two or more set the step (Monday, Wednesday gives Friday). The list wraps
+    round, and the source's capitals are kept.
+
+  Every other series is refused with a notice, because a copy there would
+  not match Excel: dates and times (formats are not filled, so a date would
+  arrive as a bare number), a line that mixes kinds or has a formula or a
+  blank among its series cells, text whose number is not at its end or has a
+  leading zero, text numbers that are not evenly spaced, a text series that
+  would count below zero, names in mixed case, and a lone `May` (it is in
+  both month lists). A single number copies, as it does in Excel ("For the
+  series 2, 2, 2, 2..., type 2 in first cell only"). Ctrl+D and Ctrl+R always
+  copy.
+
+  Not taken from Microsoft and not observed in Excel: the least-squares rule
+  for three or more uneven numbers (Microsoft calls the fill a "linear
+  best-fit trend" and states least squares for the Series command), wrapping
+  a name list round, running names and text numbers backwards when dragged up
+  or left, and keeping the source's capitals.
 - **All or nothing.** If any formula in a paste or fill cannot be copied, or
   would point outside the sheet, nothing is written and the notice names the
   cell. Excel would write `#REF!` in that cell instead.
@@ -375,10 +406,10 @@ placeholder cells, and the UI has no special path for it.
 `web/univer-spike/tests/acceptance.spec.ts`, headless Chromium (Playwright
 1.64.1 driving system Chromium 156), production build served statically:
 **15 passed** on 2026-10-27. That figure is the snapshot from that day's run.
-The suite in this file now defines 35 tests. The six added with the product
-shell are listed after item 12 and the ten added with clear, paste and fill
-after item 18; a run of all 35 is recorded in `docs/run-history.md` (Run 29) as
-branch-local evidence.
+The suite in this file now defines 36 tests. The six added with the product
+shell are listed after item 12, and the ten added with clear, paste and fill
+and the one added with series fill after item 18; a run of all 36 is recorded
+in `docs/run-history.md` (Run 30) as branch-local evidence.
 
 For `not-execute` and `load-only`:
 
@@ -472,8 +503,11 @@ functions, and no calculation by Univer.
 25. Leaving an editor. After a double click opens an editor, or a value is
     typed, clicking a formula cell and dragging its handle fills on the first
     drag; a formula that is still being typed can still pick a cell by click.
-26. Series. Dragging from 1, 3 or from `Item 1` is refused with the series
-    notice; a single 2 copies; Ctrl+D copies 1, 3 as they are.
+26. Series. Dragging from 1, 3 fills 5, 7, 9 as one undoable step; `Item1`
+    fills `Item2` to `Item4`; `Monday` fills Tuesday to Thursday across a
+    row; dragging up from 5, 6 fills 4 and 3; a single 2 copies; dragging
+    `Item1` up two cells is refused whole; `Q1 2024` and a date cell are
+    refused with the series notice; Ctrl+D copies 1, 3 as they are.
 27. Refusals. Cut is refused; a paste whose formula would point outside the
     sheet changes nothing and names the cell.
 28. Shape. A 1 by 2 copy fills a 2 by 4 selection; a selection that is not a
@@ -544,8 +578,9 @@ tools. Vite 7.3.7 (esbuild/rollup) is used instead.
   results, forward/reverse linear search, and optional `if_not_found`. Other
   match/search modes and array spills remain unsupported.
 - Paste and fill write values and formulas, never formats. Cut, pasting from
-  a menu, Paste Special, clearing formats and continuing a series are refused
-  with a notice.
+  a menu, Paste Special and clearing formats are refused with a notice. The
+  fill handle continues numbers, text ending in a number and day and month
+  names; date and time series, growth series and other patterns are refused.
 - Pasted text is read as if typed, so text such as `1,234`, `12%` or a date
   stays text, exactly as typing it does today.
 - A formula that would point outside the sheet refuses the whole paste or

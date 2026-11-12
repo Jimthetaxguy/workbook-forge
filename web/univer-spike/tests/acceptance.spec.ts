@@ -1502,43 +1502,117 @@ test.describe('everyday editing: clear, paste and fill', () => {
     expect(errors).toEqual([]);
   });
 
-  test('the fill handle refuses what Excel would continue as a series and copies a single number', async ({ page }) => {
+  test('the fill handle continues number, text and name series, copies a single number and refuses other patterns', async ({ page }) => {
     const errors = await boot(page, 'not-execute');
-    const series = 'Fill copies formulas and repeated values. Continuing a series (1, 2, 3, dates, Item 1, Monday) is not available yet. Ctrl+D and Ctrl+R copy as they are.';
-    // Microsoft: two numbers set a pattern (1, 3 continues 5, 7, 9).
+    const refused =
+      'Fill continues numbers (1, 2, 3), text ending in a number (Item 1) and day and month names. Dates, times and other patterns are not available yet. Ctrl+D and Ctrl+R copy as they are.';
+    // Microsoft: 1, 3 continues 5, 7, 9.
     await pasteText(page, 'H1', '1\n3');
     await selectCells(page, 'H1', 'H2');
-    await dragFillHandle(page, 'H2', 'H4');
-    expect(await cellsOf(page, ['H1', 'H2', 'H3', 'H4'])).toEqual({ H1: [null, 1], H2: [null, 3], H3: BLANK, H4: BLANK });
+    await dragFillHandle(page, 'H2', 'H5');
+    expect(await cellsOf(page, ['H1', 'H2', 'H3', 'H4', 'H5', 'H6'])).toEqual({ H1: [null, 1], H2: [null, 3], H3: [null, 5], H4: [null, 7], H5: [null, 9], H6: BLANK });
     let state = await editState(page);
-    expect(state.revision).toBe(1);
-    expect(state.notice).toBe(series);
-    expect(state.blocked.at(-1)).toBe('sheet.command.auto-fill');
-    await page.locator('#notice-close').click();
-
-    // Microsoft: Item1 continues Item2, Item3.
-    await typeInto(page, 'I1', 'Item 1');
-    await selectCells(page, 'I1');
-    await dragFillHandle(page, 'I1', 'I3');
-    expect(await cellsOf(page, ['I1', 'I2', 'I3'])).toEqual({ I1: [null, 'Item 1'], I2: BLANK, I3: BLANK });
-    state = await editState(page);
     expect(state.revision).toBe(2);
-    expect(state.notice).toBe(series);
-    await page.locator('#notice-close').click();
+    expect(state.selection).toBe('H1:H5');
+    expect(state.blocked).toEqual([]);
+    // The series is one edit: one undo takes all of it back.
+    await page.keyboard.press('Control+Z');
+    await settle(page);
+    expect(await cellsOf(page, ['H2', 'H3', 'H4', 'H5'])).toEqual({ H2: [null, 3], H3: BLANK, H4: BLANK, H5: BLANK });
+    expect((await editState(page)).revision).toBe(3);
+
+    // Microsoft: Item1 continues Item2, Item3, Item4.
+    await typeInto(page, 'I1', 'Item1');
+    await selectCells(page, 'I1');
+    await dragFillHandle(page, 'I1', 'I4');
+    expect(await cellsOf(page, ['I1', 'I2', 'I3', 'I4', 'I5'])).toEqual({ I1: [null, 'Item1'], I2: [null, 'Item2'], I3: [null, 'Item3'], I4: [null, 'Item4'], I5: BLANK });
+    expect((await editState(page)).revision).toBe(5);
+
+    // Microsoft: Monday continues Tuesday, Wednesday, Thursday. Filled across a row.
+    await typeInto(page, 'A6', 'Monday');
+    await selectCells(page, 'A6');
+    await dragFillHandle(page, 'A6', 'D6');
+    expect(await cellsOf(page, ['A6', 'B6', 'C6', 'D6', 'E6'])).toEqual({ A6: [null, 'Monday'], B6: [null, 'Tuesday'], C6: [null, 'Wednesday'], D6: [null, 'Thursday'], E6: BLANK });
+    state = await editState(page);
+    expect(state.revision).toBe(7);
+    expect(state.selection).toBe('A6:D6');
+
+    // Microsoft: drag up to fill in decreasing order. Above 5, 6 come 4 and 3.
+    await pasteText(page, 'G4', '5\n6');
+    await selectCells(page, 'G4', 'G5');
+    await dragFillHandle(page, 'G5', 'G2');
+    expect(await cellsOf(page, ['G1', 'G2', 'G3', 'G4', 'G5'])).toEqual({ G1: BLANK, G2: [null, 3], G3: [null, 4], G4: [null, 5], G5: [null, 6] });
+    state = await editState(page);
+    expect(state.revision).toBe(9);
+    expect(state.selection).toBe('G2:G5');
 
     // Microsoft: "For the series 2, 2, 2, 2..., type 2 in first cell only."
-    await typeInto(page, 'G1', '2');
-    await selectCells(page, 'G1');
-    await dragFillHandle(page, 'G1', 'G3');
-    expect(await cellsOf(page, ['G1', 'G2', 'G3', 'G4'])).toEqual({ G1: [null, 2], G2: [null, 2], G3: [null, 2], G4: BLANK });
-    expect((await editState(page)).revision).toBe(4);
+    await typeInto(page, 'C3', '2');
+    await selectCells(page, 'C3');
+    await dragFillHandle(page, 'C3', 'C5');
+    expect(await cellsOf(page, ['C3', 'C4', 'C5', 'C6'])).toEqual({ C3: [null, 2], C4: [null, 2], C5: [null, 2], C6: [null, 'Wednesday'] });
+    expect((await editState(page)).revision).toBe(11);
+
+    // Counting back from Item1 gives Item0 and then nothing: the whole drag is refused.
+    await typeInto(page, 'E9', 'Item1');
+    await selectCells(page, 'E9');
+    await dragFillHandle(page, 'E9', 'E7');
+    expect(await cellsOf(page, ['E7', 'E8', 'E9'])).toEqual({ E7: BLANK, E8: BLANK, E9: [null, 'Item1'] });
+    state = await editState(page);
+    expect(state.revision).toBe(12);
+    expect(state.notice).toBe('Change not applied. The series cannot be continued as far as E7.');
+    await page.locator('#notice-close').click();
+
+    // A number inside the text is a pattern this page does not continue: nothing is written.
+    await typeInto(page, 'A8', 'Q1 2024');
+    await selectCells(page, 'A8');
+    await dragFillHandle(page, 'A8', 'A10');
+    expect(await cellsOf(page, ['A8', 'A9', 'A10'])).toEqual({ A8: [null, 'Q1 2024'], A9: BLANK, A10: BLANK });
+    state = await editState(page);
+    expect(state.revision).toBe(13);
+    expect(state.notice).toBe(refused);
+    expect(state.blocked.at(-1)).toBe('sheet.command.auto-fill');
+    await page.locator('#notice-close').click();
 
     // Ctrl+D copies the top cell down whatever it holds.
     await selectCells(page, 'H1', 'H3');
     await page.keyboard.press('Control+D');
     await settle(page);
     expect(await cellsOf(page, ['H1', 'H2', 'H3', 'H4'])).toEqual({ H1: [null, 1], H2: [null, 1], H3: [null, 1], H4: BLANK });
-    expect((await editState(page)).revision).toBe(5);
+    expect((await editState(page)).revision).toBe(14);
+    expect(errors).toEqual([]);
+  });
+
+  test('the fill handle refuses a date, which Excel would continue day by day', async ({ page }) => {
+    const errors = await boot(page, 'not-execute');
+    // fixtures/corpus/op_styles_number_formats.xlsx: B1 holds 45351 drawn as yyyy-mm-dd.
+    // Column A is 18 characters (126px) and column B 22 (154px), after a 46px row header.
+    await page.locator('#file').setInputFiles('../../fixtures/corpus/op_styles_number_formats.xlsx');
+    await expect(page.locator('#status')).toHaveText('op_styles_number_formats.xlsx · All changes calculated · Version 0');
+    const held = () =>
+      page.evaluate(() => (window as any).__spike.then((s: any) => ['B1', 'B2', 'B3'].map((address) => s.adapter.cell('Formats', address).raw)));
+    const before = await held();
+    expect(before[0]).toBe(45351);
+    const origin = await gridOrigin(page);
+    const b1 = { x: origin.x + 46 + 126 + 77, y: origin.y + ROW1_CENTRE };
+    await page.waitForTimeout(550);
+    await page.mouse.click(b1.x, b1.y);
+    await settle(page);
+    await page.mouse.move(b1.x + 76, b1.y + 11);
+    await page.waitForTimeout(120);
+    await page.mouse.down();
+    await page.mouse.move(b1.x + 38, b1.y + 30, { steps: 6 });
+    await page.mouse.move(b1.x, b1.y + 48, { steps: 6 });
+    await page.waitForTimeout(120);
+    await page.mouse.up();
+    await settle(page);
+    const state = await editState(page);
+    expect(state.notice).toBe(
+      'Fill continues numbers (1, 2, 3), text ending in a number (Item 1) and day and month names. Dates, times and other patterns are not available yet. Ctrl+D and Ctrl+R copy as they are.',
+    );
+    expect(state.blocked.at(-1)).toBe('sheet.command.auto-fill');
+    expect(state.revision).toBe(0);
+    expect(await held()).toEqual(before);
     expect(errors).toEqual([]);
   });
 

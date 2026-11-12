@@ -16,6 +16,7 @@ import {
   isSeriesLine,
   parseClipboardText,
   pasteShape,
+  planLine,
   union,
 } from '../src/range-edits.ts';
 
@@ -125,6 +126,98 @@ test('series: what Excel would continue is told apart from what it copies', () =
   assert.equal(isSeriesLine([undefined, value(null)], none), false);
   // One number beside a formula or a label is still a single number.
   assert.equal(isSeriesLine([value(5), formula('A1+1', 6), value('Total')], none), false);
+});
+
+// The series a fill continues. Sources for the expected values:
+//   "Project values in a series" (1, 2 gives 3, 4, 5; 1, 3 gives 5, 7, 9; 100, 95 gives 90, 85; best fit for more values)
+//   https://support.microsoft.com/en-us/office/project-values-in-a-series-5311f5cf-149e-4d06-81dd-5aaad87e5400
+//   "Fill data automatically in worksheet cells" (2, 4 gives 6, 8; a single 2 repeats)
+//   https://support.microsoft.com/en-us/office/fill-data-automatically-in-worksheet-cells-74e31bdd-d993-45da-aa82-35a236c5b5db
+//   "Enter a series of numbers, dates, or other items" (Item1 gives Item2, Item3, Item4; Monday gives Tuesday,
+//   Wednesday, Thursday; Monday, Wednesday gives Friday)
+//   https://support.microsoft.com/en-us/office/enter-a-series-of-numbers-dates-or-other-items-41e0bbf2-7198-4d78-8545-fdd4709976b4
+//   "Automatically number rows in Excel" (drag up or left to fill in decreasing order)
+//   https://support.microsoft.com/en-us/office/automatically-number-rows-in-excel-76ce49e3-d8d2-459b-bd85-ee1d3973e6e6
+//   "What is Excel?" (Jan and Feb, 2014 and 2015 start a series)
+//   https://support.microsoft.com/en-us/excel/get-started/what-is-excel
+const plan = (...values) => planLine(values.map(value), values.map(() => false));
+const next = (p, from, count) => Array.from({ length: count }, (_, i) => p.at(from + i));
+
+test('series: evenly spaced numbers keep their step, in Microsoft\'s own examples', () => {
+  assert.deepEqual(next(plan(1, 2), 2, 3), [3, 4, 5]);
+  assert.deepEqual(next(plan(1, 3), 2, 3), [5, 7, 9]);
+  assert.deepEqual(next(plan(100, 95), 2, 2), [90, 85]);
+  assert.deepEqual(next(plan(2, 4), 2, 2), [6, 8]);
+  assert.deepEqual(next(plan(2014, 2015), 2, 2), [2016, 2017]);
+  // Three evenly spaced values keep the same step: 10, 20, 30 then 40, 50.
+  assert.deepEqual(next(plan(10, 20, 30), 3, 2), [40, 50]);
+  // Dragging up or left runs the series backwards: before 1, 2 come 0 and -1.
+  assert.deepEqual([plan(1, 2).at(-1), plan(1, 2).at(-2)], [0, -1]);
+  // The source cells keep their own values.
+  assert.deepEqual(next(plan(1, 3), 0, 2), [1, 3]);
+});
+
+test('series: unevenly spaced numbers follow their least-squares line', () => {
+  // 3, 5, 8 at x = 0, 1, 2: the mean of y is 16/3 at x = 1 and the slope is
+  // ((0-1)(3-16/3) + (2-1)(8-16/3)) / 2 = 5/2. So x = 3 gives 16/3 + 5 = 31/3,
+  // x = 4 gives 16/3 + 15/2 = 77/6, and x = -1 gives 16/3 - 5 = 1/3.
+  const p = plan(3, 5, 8);
+  const close = (got, want) => assert.ok(Math.abs(got - want) < 1e-12, `${got} is not ${want}`);
+  close(p.at(3), 31 / 3);
+  close(p.at(4), 77 / 6);
+  close(p.at(-1), 1 / 3);
+  assert.deepEqual(next(p, 0, 3), [3, 5, 8]);
+  // A series that leaves the range of numbers has no value there.
+  assert.equal(plan(1e308, 1.7e308).at(2), undefined);
+});
+
+test('series: text ending in a number counts up', () => {
+  assert.deepEqual(next(plan('Item1'), 1, 3), ['Item2', 'Item3', 'Item4']);
+  assert.deepEqual(next(plan('Product 9'), 1, 2), ['Product 10', 'Product 11']);
+  // Two cells set the step: Item1, Item3 then Item5, Item7.
+  assert.deepEqual(next(plan('Item1', 'Item3'), 2, 2), ['Item5', 'Item7']);
+  // Backwards it stops at zero; there is no Item-1.
+  assert.deepEqual([plan('Item1').at(-1), plan('Item1').at(-2)], ['Item0', undefined]);
+  for (const refused of [['Item 01'], ['Q1 2024'], ['1st Period'], ['Item1', 'Item3', 'Item4'], ['Item1', 'Part2'], ['-1'], ['Item1', 2]]) {
+    assert.equal(plan(...refused).kind, 'refuse', JSON.stringify(refused));
+  }
+});
+
+test('series: day and month names continue their list and wrap round', () => {
+  assert.deepEqual(next(plan('Monday'), 1, 3), ['Tuesday', 'Wednesday', 'Thursday']);
+  // Monday, Wednesday skips every other day: Friday, then Sunday and Tuesday.
+  assert.deepEqual(next(plan('Monday', 'Wednesday'), 2, 3), ['Friday', 'Sunday', 'Tuesday']);
+  assert.deepEqual(next(plan('Jan', 'Feb'), 2, 2), ['Mar', 'Apr']);
+  assert.deepEqual(next(plan('Fri'), 1, 3), ['Sat', 'Sun', 'Mon']);
+  assert.deepEqual(next(plan('November'), 1, 3), ['December', 'January', 'February']);
+  // Before Monday comes Sunday.
+  assert.equal(plan('Monday').at(-1), 'Sunday');
+  // The source's capitals are kept.
+  assert.deepEqual(next(plan('mon'), 1, 1), ['tue']);
+  assert.deepEqual(next(plan('MARCH'), 1, 1), ['APRIL']);
+  // Apr, May is the short list; May, June is the long one.
+  assert.deepEqual(next(plan('Apr', 'May'), 2, 1), ['Jun']);
+  assert.deepEqual(next(plan('May', 'June'), 2, 1), ['July']);
+  for (const refused of [['May'], ['mONDAY'], ['Mon', 'Tuesday'], ['Mon', 'tue'], ['Mon', 'Tue', 'Thu'], ['Jan', 'Mon'], [' jan ']]) {
+    assert.equal(plan(...refused).kind, 'refuse', JSON.stringify(refused));
+  }
+});
+
+test('series: what Excel copies is copied, and dates and mixed lines are refused', () => {
+  const none = [false, false, false];
+  // Microsoft: "For the series 2, 2, 2, 2..., type 2 in first cell only."
+  assert.equal(plan(2).kind, 'copy');
+  assert.equal(plan('Total').kind, 'copy');
+  assert.equal(plan(true, false).kind, 'copy');
+  assert.equal(planLine([formula('A1*2', 20), formula('A2*2', 40)], none).kind, 'copy');
+  assert.equal(planLine([value(5), formula('A1+1', 6), value('Total')], none).kind, 'copy');
+  // A number drawn as a date or a time is a date series, which is not built.
+  assert.equal(planLine([value(46000)], [true]).kind, 'refuse');
+  assert.equal(planLine([value(46000), value(46001)], [true, true]).kind, 'refuse');
+  // A formula or a blank among the numbers, and numbers mixed with text.
+  assert.equal(planLine([value(1), value(2), formula('A1+1', 3)], none).kind, 'refuse');
+  assert.equal(planLine([value(1), undefined, value(3)], none).kind, 'refuse');
+  assert.equal(planLine([value(1), value(2), value('Total')], none).kind, 'refuse');
 });
 
 test('date formats: date and time codes are recognised, number codes are not', () => {
