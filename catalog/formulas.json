@@ -971,6 +971,42 @@
       "url": "https://support.microsoft.com/en-us/excel/functions/columns-function",
       "kind": "function-semantics",
       "retrieved": "2026-11-12"
+    },
+    {
+      "id": "ms-npv",
+      "url": "https://support.microsoft.com/en-us/excel/functions/npv-function",
+      "kind": "function-semantics",
+      "retrieved": "2026-11-12"
+    },
+    {
+      "id": "ms-irr",
+      "url": "https://support.microsoft.com/en-us/excel/functions/irr-function",
+      "kind": "function-semantics",
+      "retrieved": "2026-11-12"
+    },
+    {
+      "id": "ms-xnpv",
+      "url": "https://support.microsoft.com/en-us/excel/functions/xnpv-function",
+      "kind": "function-semantics",
+      "retrieved": "2026-11-12"
+    },
+    {
+      "id": "ms-xirr",
+      "url": "https://support.microsoft.com/en-us/excel/functions/xirr-function",
+      "kind": "function-semantics",
+      "retrieved": "2026-11-12"
+    },
+    {
+      "id": "ms-rate",
+      "url": "https://support.microsoft.com/en-us/excel/functions/rate-function",
+      "kind": "function-semantics",
+      "retrieved": "2026-11-12"
+    },
+    {
+      "id": "ms-mirr",
+      "url": "https://support.microsoft.com/en-us/excel/functions/mirr-function",
+      "kind": "function-semantics",
+      "retrieved": "2026-11-12"
     }
   ],
   "categories": [
@@ -2139,6 +2175,22 @@
       "profile_class": "unclassified"
     },
     {
+      "name": "IRR",
+      "category": "financial",
+      "aliases": [],
+      "arity": {
+        "min": 1,
+        "max": 2
+      },
+      "availability": "legacy",
+      "status": {
+        "python": "conformance-tested",
+        "rust": "conformance-tested"
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
+    },
+    {
       "name": "ISBLANK",
       "category": "information",
       "aliases": [],
@@ -2555,6 +2607,22 @@
       "profile_class": "unclassified"
     },
     {
+      "name": "MIRR",
+      "category": "financial",
+      "aliases": [],
+      "arity": {
+        "min": 3,
+        "max": 3
+      },
+      "availability": "legacy",
+      "status": {
+        "python": "conformance-tested",
+        "rust": "conformance-tested"
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
+    },
+    {
       "name": "MOD",
       "category": "math-trigonometry",
       "aliases": [],
@@ -2705,6 +2773,22 @@
       "arity": {
         "min": 3,
         "max": 5
+      },
+      "availability": "legacy",
+      "status": {
+        "python": "conformance-tested",
+        "rust": "conformance-tested"
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
+    },
+    {
+      "name": "NPV",
+      "category": "financial",
+      "aliases": [],
+      "arity": {
+        "min": 2,
+        "max": 255
       },
       "availability": "legacy",
       "status": {
@@ -2979,6 +3063,22 @@
         "max": 3
       },
       "availability": "2010",
+      "status": {
+        "python": "conformance-tested",
+        "rust": "conformance-tested"
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
+    },
+    {
+      "name": "RATE",
+      "category": "financial",
+      "aliases": [],
+      "arity": {
+        "min": 3,
+        "max": 6
+      },
+      "availability": "legacy",
       "status": {
         "python": "conformance-tested",
         "rust": "conformance-tested"
@@ -3707,6 +3807,22 @@
       "profile_class": "unclassified"
     },
     {
+      "name": "XIRR",
+      "category": "financial",
+      "aliases": [],
+      "arity": {
+        "min": 2,
+        "max": 3
+      },
+      "availability": "legacy",
+      "status": {
+        "python": "conformance-tested",
+        "rust": "conformance-tested"
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
+    },
+    {
       "name": "XLOOKUP",
       "category": "lookup-reference",
       "aliases": [],
@@ -3731,6 +3847,22 @@
         "max": 4
       },
       "availability": "2021",
+      "status": {
+        "python": "conformance-tested",
+        "rust": "conformance-tested"
+      },
+      "evidence_grade": "dual_engine",
+      "profile_class": "unclassified"
+    },
+    {
+      "name": "XNPV",
+      "category": "financial",
+      "aliases": [],
+      "arity": {
+        "min": 3,
+        "max": 3
+      },
+      "availability": "legacy",
       "status": {
         "python": "conformance-tested",
         "rust": "conformance-tested"
@@ -3790,7 +3922,7 @@
   "coverage": {
     "catalog_completeness": "seeded-not-complete",
     "evaluator_completeness": "numeric-rounding-date-time-business-calendar-day-count-coupon-schedule-time-value-of-money-period-count-inversion-logical-selection-cumulative-payment-aggregation-and-basic-and-declining-balance-depreciation-slices-incrementally-conformance-tested-variable-declining-balance-date-aware-french-depreciation-and-odd-even-parity-functions-factorial-and-combinatorics-double-factorial-and-permutation-counts-greatest-common-divisor-and-least-common-multiple-bounded-rectangular-array-results-and-sequence-array-aware-lazy-selection-results-elementwise-array-operators-and-filter-selection-and-stable-sort-and-unique-array-functions",
-    "note": "The Microsoft function inventory contains 521 entries. One hundred sixty-five functions are conformance-tested with shared Python/Rust fixtures; the remaining 356 of the 521 inventoried functions are catalog-only. Criteria functions implement scalar criteria, comparison operators, case-insensitive text, wildcard escapes, and bounded range shapes. SUMIF and AVERAGEIF reject differently sized sum/average ranges even though Excel aligns those ranges from their top-left cell; that compatibility gap is explicit in semantic_specs. MINIFS and MAXIFS require matching range shapes, allow one required plus up to 126 additional criteria pairs, and return 0 when no numeric result matches. XLOOKUP and XMATCH support exact match_mode=0 with forward/reverse search_mode=1/-1 only; approximate, wildcard, binary, and array-spill results are unsupported. TEXTBEFORE and TEXTAFTER support scalar delimiter extraction, optional arguments, negative instance numbers, match_end, and lazy if_not_found; their Excel locale collation and supplementary-plane character behavior remain unverified. ISNA, ISERR, ISERROR, and NA cover scalar inspection and creation of supported Excel error values; array error predicates and unsupported-syntax conversions remain out of scope. INT, TRUNC, ROUNDUP, ROUNDDOWN, MOD, and QUOTIENT add scalar directed rounding, floor/truncation, remainder, and integer-quotient behavior. Fractional num_digits values are truncated toward zero as an implementation rule; Microsoft pages do not specify this case, and direct Excel spot-checks remain outstanding. MONTH, DAYS, EDATE, and EOMONTH use the 1900 serial system and preserve its serial-60 compatibility date; DAYS subtracts numeric serials including their fractional parts. EDATE and EOMONTH truncate fractional month counts toward zero; both month-shift functions return whole-day serials, and EDATE discards a start serial's time fraction as an implementation profile rule. Locale-dependent text-date parsing and workbook-specific 1904 date systems are not modeled; time-fraction handling for EDATE/EOMONTH has not been spot-checked in Excel. HOUR, MINUTE, and SECOND extract whole-second components from numeric 1900-system serials; the serial ceiling and negative/non-finite input errors are evaluator profile rules not stated on the function pages. Locale-dependent time text such as '6:45 PM' is documented by Microsoft but not parsed here. The shared serial-to-seconds precision correction and TIME fractional-component truncation are evaluator profile rules that need Excel spot-checks. TIME accepts components from 0 through 32767, normalizes overflow, and returns a fraction of a day. IFS and SWITCH use ordered short-circuit evaluation and first-match selection; selected results may preserve a rectangular array through evaluate_result, but are not projected into worksheet cells. SWITCH treats ASCII text as case-insensitive and non-ASCII text as exact, with no cross-type coercion or locale collation. Microsoft documents selection/default behavior but not all evaluation and comparison details; these evaluator profile rules need a direct Excel spot-check. WEEKDAY, WEEKNUM, and ISOWEEKNUM add numeric 1900-system date serials, documented return selectors, System 1 and ISO week rules, and time-fraction flooring. Fractional return_type coercion and exact 1900 serial-60 week behavior are evaluator-profile rules that still need Excel spot-checks. WORKDAY and NETWORKDAYS use a Saturday/Sunday business calendar and scalar or cell-range holidays. NETWORKDAYS counts weekday endpoints inclusively; reversed-range sign, fractional date serials, holiday-cell coercion, serial 0, and serial 60 are explicit evaluator profiles that still need direct Excel spot-checks. WORKDAY truncates noninteger day offsets as Microsoft documents; holiday-cell coercion remains unverified. WORKDAY.INTL and NETWORKDAYS.INTL share numeric weekend codes, Monday-first seven-character masks, and range-based holiday handling. NETWORKDAYS.INTL documents inclusive and reversed-range counts plus zero for an all-one weekend mask. Its last example prose says 22 while the result column says 20 for mask 0010001 with holidays; fixtures follow the result column; WORKDAY.INTL documents zero-offset behavior and rejects the all-one mask, but its exact error is unspecified. Numeric selector coercion, date fractions, serial boundaries, and holiday-cell coercion remain profiles; holiday array constants and locale-sensitive date text are not implemented. DAYS360 and YEARFRAC add a bounded 30/360 and year-fraction slice. The published DAYS360 rules cover US NASD and European methods and negative direction; non-month-end US endpoint wording, numeric and blank-cell method handling, optional-slot parsing, fractional date serials, and serial 60 remain evaluator profiles. YEARFRAC covers bases 0-4, documented integer truncation and error codes, and Microsoft examples. Basis 1 uses a year-segmented Actual/Actual profile and reversed dates use a signed result; Microsoft does not specify those details on its function page, so neither is claimed as verified Excel behavior. The 1900 date system and serial 60 remain explicit evaluator profiles. The six COUP schedule formulas share a maturity-anchored, backward-stepped date schedule in the evaluator and expose separate function-specific outputs. Microsoft documents argument truncation, valid frequencies 1/2/4, basis values 0-4, output definitions, and date/frequency/basis/order errors. The maturity-anchored schedule, period/count equality behavior outside the documented strict COUPNCD/COUPPCD boundaries, basis-specific day counts, serial-60 behavior, and pre-zero internal coupon dates remain evaluator profiles. COUPDAYS basis 1 uses actual adjacent coupon-date serial difference but has not been checked against Excel; ExcelFinancialFunctions compatibility notes identify leap-year COUPDAYS differences, so shared expected values are not treated as Excel oracles. FV, PV, and PMT add a scalar periodic-cash-flow slice with shared sign, timing, zero-rate, omission, and numeric-profile cases. NPER inverts the periodic cash-flow equation, preserves negative and fractional results, and checks zero-rate and logarithm-domain boundaries under explicit evaluator profiles. Exact internal precision and undocumented input errors remain unverified. IPMT and PPMT split PMT into period interest and principal components; PPMT is defined as PMT minus IPMT, and both use explicit timing, range, numeric, and error profiles pending direct Excel checks. At accepted Run 19, the shared fixture corpus contained 1,238 cases covering 112 implemented functions, with 409 of the 521 inventory entries catalog-only. Its accepted checkpoint and detailed case summary follow below. SLN and SYD add straight-line and sum-of-years-digits depreciation. DB adds the documented three-decimal rate and month-sensitive first/final periods; DDB adds the documented factor-based decline and salvage cap. VDB adds fractional-interval depreciation, optional straight-line switching, and a logarithmic-time geometric kernel; its split fractional-period behavior remains an evaluator profile because an Apache compatibility note reports a difference from Excel. Their bounds, truncation, coercion, error precedence, and high-range behavior remain evaluator profiles pending direct Excel checks. Apache ExcelFinancialFunctions and dual MIT/Apache Formualizer inform organization and numeric probes only; no code is copied. The Microsoft Office formula specification distinguishes normal-formula implicit intersection from array-entered full-range behavior and lists ISEVEN/ISODD as accepting range arguments. Run 19 adds bounded rectangular result arrays and SEQUENCE, and common aggregates/text/logical consumers flatten generated arrays. IF, IFERROR, IFNA, IFS, and SWITCH also preserve the selected result-array shape. IFERROR array error replacement remains element-wise unsupported, and explicit empty IF result slots return #VALUE! as an unverified Workbook Forge profile. Formula-cell implicit intersection, legacy array entry, dynamic spill placement and spill references remain unmodeled; local #VALUE! range fixtures still mark evaluator boundaries, not Excel expectations. Microsoft lists worksheet number precision as 15 digits. The EVEN/ODD fixtures using 16-digit values near 2^53 are Workbook Forge binary64 parser/evaluator boundary probes, not Excel numerical oracles. Run 16 adds FACT, COMBIN, and COMBINA. The Python and Rust kernels form exact integer factorial/binomial results and round once to binary64 with ties-to-even; Apache Commons Math informs the symmetric multiplicative pattern without copied code or a runtime dependency. Within FACT, COMBIN, and COMBINA arguments, plain integer literals, unary signs, +, -, *, and nonnegative integer-power expressions preserve exact source integers through the 2^53 argument boundary, subject to a 65,536-bit intermediate cap. Exact integer division forms a ratio and rounds once to binary64; mixed or decimal operands use binary64 division. Decimal/scientific literals can round before the check. Scalar coercion, truncation-before-domain order for negative fractions, mixed-error precedence, and local #NUM! overflow behavior remain Workbook Forge profiles where Microsoft sources are silent. Standalone expression arithmetic can preserve Python integers while Rust uses binary64 operators; exact-source cross-language assertions are scoped to the three named function arguments. Range errors are kept separate from Excel implicit-intersection and array-entry behavior because the function evaluator does not model general worksheet formula context. The Python workbook adapter separately handles explicitly targeted scalar formulas and static dependencies, without implicit intersection or array entry. Run 17 adds FACTDOUBLE, PERMUT, and PERMUTATIONA with Microsoft-linked semantics and independent bounded exact-integer kernels. FACTDOUBLE is range-capable in the Office formula specification but Workbook Forge retains a scalar-only local range boundary; PERMUTATIONA 0^0, negative-input handling, coercion, output rounding, and overflow remain evaluator profiles pending direct Excel checks. No source code is copied and runtime dependencies remain empty. Run 18 adds GCD and LCM with Microsoft-linked argument, truncation, error, and 2^53 boundary rules. Both are range-capable in MS-OE376, but range calls remain a local unsupported boundary until formula-cell context is modeled. GCD(0,0), LCM zero behavior, mixed-input order, coercion, and negative-fraction order are explicitly local profiles pending Excel checks. Run 19 adds SEQUENCE with an immutable rectangular ArrayValue and shape-preserving evaluate_result API in Python and Rust. Thirty-eight shared cases cover Microsoft’s 4×5 shape example, row-major progression, optional slots, ranges, nested SUM, dimension/coercion/error profiles and the 100000-cell local cap. Formualizer v0.7.0 informs the separation between pre-allocation shape bounds and workbook spill projection; its MIT/Apache-2.0 release is an architecture reference only and no code was copied. No direct Excel spot-checks were run.. Run 20 adds elementwise binary operators and FILTER to the bounded array result layer. The accepted slice has 113 functions with shared Python/Rust fixture parity, 1,301 shared fixtures, 84 detailed specs, 107 source records, 16 OSS patterns, and 408 catalog-only inventory functions. Sixty-three new shared cases cover all advertised binary operators, exact-shape pairing, scalar broadcasting, cell errors, Microsoft's AND/OR include-mask examples, vertical and horizontal FILTER masks, fallback behavior, comparison-coercion and error-precedence profiles, and shape/error boundaries. Numeric, blank, and empty-text mask coercion; explicit missing fallback; row-major mask error order; lazy fallback; array-valued fallback shape; and binary comparison collation/coercion and left-to-right binary-operator error precedence are Workbook Forge profiles. Python and Rust return shaped formula results without worksheet spill projection. Jev's scope result remains advisory; independent semantic/catalog reviews and the full Python/Rust and schema gates passed before acceptance. No Excel spot-checks were run; no source code was copied and no runtime dependency was added. Run 21 adds bounded targeted scalar formula calculation to the Python workbook adapter and aligns CONCAT numeric text, argument, and UTF-16 text limits; its 21 new shared text cases supplement the workbook package cases. Run 22 adds SORT and UNIQUE with 44 shared cases, including four review regressions for oversized ranges, binary64 output, and reversed-range normalization, plus direct API checks for non-finite SORT key order. SORT and UNIQUE preserve array shape but do not project worksheet spill cells. Their comparison, coercion, output precision, selector, and empty-result details are explicitly Workbook Forge profiles where Microsoft documentation is incomplete. Shared fixtures establish implementation parity, not Excel compatibility; no direct Excel Desktop checks were run. No source code was copied and no runtime dependency was added."
+    "note": "The Microsoft function inventory contains 521 entries. One hundred seventy-one functions are conformance-tested with shared Python/Rust fixtures; the remaining 350 of the 521 inventoried functions are catalog-only. Criteria functions implement scalar criteria, comparison operators, case-insensitive text, wildcard escapes, and bounded range shapes. SUMIF and AVERAGEIF reject differently sized sum/average ranges even though Excel aligns those ranges from their top-left cell; that compatibility gap is explicit in semantic_specs. MINIFS and MAXIFS require matching range shapes, allow one required plus up to 126 additional criteria pairs, and return 0 when no numeric result matches. XLOOKUP and XMATCH support exact match_mode=0 with forward/reverse search_mode=1/-1 only; approximate, wildcard, binary, and array-spill results are unsupported. TEXTBEFORE and TEXTAFTER support scalar delimiter extraction, optional arguments, negative instance numbers, match_end, and lazy if_not_found; their Excel locale collation and supplementary-plane character behavior remain unverified. ISNA, ISERR, ISERROR, and NA cover scalar inspection and creation of supported Excel error values; array error predicates and unsupported-syntax conversions remain out of scope. INT, TRUNC, ROUNDUP, ROUNDDOWN, MOD, and QUOTIENT add scalar directed rounding, floor/truncation, remainder, and integer-quotient behavior. Fractional num_digits values are truncated toward zero as an implementation rule; Microsoft pages do not specify this case, and direct Excel spot-checks remain outstanding. MONTH, DAYS, EDATE, and EOMONTH use the 1900 serial system and preserve its serial-60 compatibility date; DAYS subtracts numeric serials including their fractional parts. EDATE and EOMONTH truncate fractional month counts toward zero; both month-shift functions return whole-day serials, and EDATE discards a start serial's time fraction as an implementation profile rule. Locale-dependent text-date parsing and workbook-specific 1904 date systems are not modeled; time-fraction handling for EDATE/EOMONTH has not been spot-checked in Excel. HOUR, MINUTE, and SECOND extract whole-second components from numeric 1900-system serials; the serial ceiling and negative/non-finite input errors are evaluator profile rules not stated on the function pages. Locale-dependent time text such as '6:45 PM' is documented by Microsoft but not parsed here. The shared serial-to-seconds precision correction and TIME fractional-component truncation are evaluator profile rules that need Excel spot-checks. TIME accepts components from 0 through 32767, normalizes overflow, and returns a fraction of a day. IFS and SWITCH use ordered short-circuit evaluation and first-match selection; selected results may preserve a rectangular array through evaluate_result, but are not projected into worksheet cells. SWITCH treats ASCII text as case-insensitive and non-ASCII text as exact, with no cross-type coercion or locale collation. Microsoft documents selection/default behavior but not all evaluation and comparison details; these evaluator profile rules need a direct Excel spot-check. WEEKDAY, WEEKNUM, and ISOWEEKNUM add numeric 1900-system date serials, documented return selectors, System 1 and ISO week rules, and time-fraction flooring. Fractional return_type coercion and exact 1900 serial-60 week behavior are evaluator-profile rules that still need Excel spot-checks. WORKDAY and NETWORKDAYS use a Saturday/Sunday business calendar and scalar or cell-range holidays. NETWORKDAYS counts weekday endpoints inclusively; reversed-range sign, fractional date serials, holiday-cell coercion, serial 0, and serial 60 are explicit evaluator profiles that still need direct Excel spot-checks. WORKDAY truncates noninteger day offsets as Microsoft documents; holiday-cell coercion remains unverified. WORKDAY.INTL and NETWORKDAYS.INTL share numeric weekend codes, Monday-first seven-character masks, and range-based holiday handling. NETWORKDAYS.INTL documents inclusive and reversed-range counts plus zero for an all-one weekend mask. Its last example prose says 22 while the result column says 20 for mask 0010001 with holidays; fixtures follow the result column; WORKDAY.INTL documents zero-offset behavior and rejects the all-one mask, but its exact error is unspecified. Numeric selector coercion, date fractions, serial boundaries, and holiday-cell coercion remain profiles; holiday array constants and locale-sensitive date text are not implemented. DAYS360 and YEARFRAC add a bounded 30/360 and year-fraction slice. The published DAYS360 rules cover US NASD and European methods and negative direction; non-month-end US endpoint wording, numeric and blank-cell method handling, optional-slot parsing, fractional date serials, and serial 60 remain evaluator profiles. YEARFRAC covers bases 0-4, documented integer truncation and error codes, and Microsoft examples. Basis 1 uses a year-segmented Actual/Actual profile and reversed dates use a signed result; Microsoft does not specify those details on its function page, so neither is claimed as verified Excel behavior. The 1900 date system and serial 60 remain explicit evaluator profiles. The six COUP schedule formulas share a maturity-anchored, backward-stepped date schedule in the evaluator and expose separate function-specific outputs. Microsoft documents argument truncation, valid frequencies 1/2/4, basis values 0-4, output definitions, and date/frequency/basis/order errors. The maturity-anchored schedule, period/count equality behavior outside the documented strict COUPNCD/COUPPCD boundaries, basis-specific day counts, serial-60 behavior, and pre-zero internal coupon dates remain evaluator profiles. COUPDAYS basis 1 uses actual adjacent coupon-date serial difference but has not been checked against Excel; ExcelFinancialFunctions compatibility notes identify leap-year COUPDAYS differences, so shared expected values are not treated as Excel oracles. FV, PV, and PMT add a scalar periodic-cash-flow slice with shared sign, timing, zero-rate, omission, and numeric-profile cases. NPER inverts the periodic cash-flow equation, preserves negative and fractional results, and checks zero-rate and logarithm-domain boundaries under explicit evaluator profiles. Exact internal precision and undocumented input errors remain unverified. IPMT and PPMT split PMT into period interest and principal components; PPMT is defined as PMT minus IPMT, and both use explicit timing, range, numeric, and error profiles pending direct Excel checks. At accepted Run 19, the shared fixture corpus contained 1,238 cases covering 112 implemented functions, with 409 of the 521 inventory entries catalog-only. Its accepted checkpoint and detailed case summary follow below. SLN and SYD add straight-line and sum-of-years-digits depreciation. DB adds the documented three-decimal rate and month-sensitive first/final periods; DDB adds the documented factor-based decline and salvage cap. VDB adds fractional-interval depreciation, optional straight-line switching, and a logarithmic-time geometric kernel; its split fractional-period behavior remains an evaluator profile because an Apache compatibility note reports a difference from Excel. Their bounds, truncation, coercion, error precedence, and high-range behavior remain evaluator profiles pending direct Excel checks. Apache ExcelFinancialFunctions and dual MIT/Apache Formualizer inform organization and numeric probes only; no code is copied. The Microsoft Office formula specification distinguishes normal-formula implicit intersection from array-entered full-range behavior and lists ISEVEN/ISODD as accepting range arguments. Run 19 adds bounded rectangular result arrays and SEQUENCE, and common aggregates/text/logical consumers flatten generated arrays. IF, IFERROR, IFNA, IFS, and SWITCH also preserve the selected result-array shape. IFERROR array error replacement remains element-wise unsupported, and explicit empty IF result slots return #VALUE! as an unverified Workbook Forge profile. Formula-cell implicit intersection, legacy array entry, dynamic spill placement and spill references remain unmodeled; local #VALUE! range fixtures still mark evaluator boundaries, not Excel expectations. Microsoft lists worksheet number precision as 15 digits. The EVEN/ODD fixtures using 16-digit values near 2^53 are Workbook Forge binary64 parser/evaluator boundary probes, not Excel numerical oracles. Run 16 adds FACT, COMBIN, and COMBINA. The Python and Rust kernels form exact integer factorial/binomial results and round once to binary64 with ties-to-even; Apache Commons Math informs the symmetric multiplicative pattern without copied code or a runtime dependency. Within FACT, COMBIN, and COMBINA arguments, plain integer literals, unary signs, +, -, *, and nonnegative integer-power expressions preserve exact source integers through the 2^53 argument boundary, subject to a 65,536-bit intermediate cap. Exact integer division forms a ratio and rounds once to binary64; mixed or decimal operands use binary64 division. Decimal/scientific literals can round before the check. Scalar coercion, truncation-before-domain order for negative fractions, mixed-error precedence, and local #NUM! overflow behavior remain Workbook Forge profiles where Microsoft sources are silent. Standalone expression arithmetic can preserve Python integers while Rust uses binary64 operators; exact-source cross-language assertions are scoped to the three named function arguments. Range errors are kept separate from Excel implicit-intersection and array-entry behavior because the function evaluator does not model general worksheet formula context. The Python workbook adapter separately handles explicitly targeted scalar formulas and static dependencies, without implicit intersection or array entry. Run 17 adds FACTDOUBLE, PERMUT, and PERMUTATIONA with Microsoft-linked semantics and independent bounded exact-integer kernels. FACTDOUBLE is range-capable in the Office formula specification but Workbook Forge retains a scalar-only local range boundary; PERMUTATIONA 0^0, negative-input handling, coercion, output rounding, and overflow remain evaluator profiles pending direct Excel checks. No source code is copied and runtime dependencies remain empty. Run 18 adds GCD and LCM with Microsoft-linked argument, truncation, error, and 2^53 boundary rules. Both are range-capable in MS-OE376, but range calls remain a local unsupported boundary until formula-cell context is modeled. GCD(0,0), LCM zero behavior, mixed-input order, coercion, and negative-fraction order are explicitly local profiles pending Excel checks. Run 19 adds SEQUENCE with an immutable rectangular ArrayValue and shape-preserving evaluate_result API in Python and Rust. Thirty-eight shared cases cover Microsoft’s 4×5 shape example, row-major progression, optional slots, ranges, nested SUM, dimension/coercion/error profiles and the 100000-cell local cap. Formualizer v0.7.0 informs the separation between pre-allocation shape bounds and workbook spill projection; its MIT/Apache-2.0 release is an architecture reference only and no code was copied. No direct Excel spot-checks were run.. Run 20 adds elementwise binary operators and FILTER to the bounded array result layer. The accepted slice has 113 functions with shared Python/Rust fixture parity, 1,301 shared fixtures, 84 detailed specs, 107 source records, 16 OSS patterns, and 408 catalog-only inventory functions. Sixty-three new shared cases cover all advertised binary operators, exact-shape pairing, scalar broadcasting, cell errors, Microsoft's AND/OR include-mask examples, vertical and horizontal FILTER masks, fallback behavior, comparison-coercion and error-precedence profiles, and shape/error boundaries. Numeric, blank, and empty-text mask coercion; explicit missing fallback; row-major mask error order; lazy fallback; array-valued fallback shape; and binary comparison collation/coercion and left-to-right binary-operator error precedence are Workbook Forge profiles. Python and Rust return shaped formula results without worksheet spill projection. Jev's scope result remains advisory; independent semantic/catalog reviews and the full Python/Rust and schema gates passed before acceptance. No Excel spot-checks were run; no source code was copied and no runtime dependency was added. Run 21 adds bounded targeted scalar formula calculation to the Python workbook adapter and aligns CONCAT numeric text, argument, and UTF-16 text limits; its 21 new shared text cases supplement the workbook package cases. Run 22 adds SORT and UNIQUE with 44 shared cases, including four review regressions for oversized ranges, binary64 output, and reversed-range normalization, plus direct API checks for non-finite SORT key order. SORT and UNIQUE preserve array shape but do not project worksheet spill cells. Their comparison, coercion, output precision, selector, and empty-result details are explicitly Workbook Forge profiles where Microsoft documentation is incomplete. Shared fixtures establish implementation parity, not Excel compatibility; no direct Excel Desktop checks were run. No source code was copied and no runtime dependency was added."
   },
   "semantic_specs": {
     "AMORDEGRC": {
@@ -8935,6 +9067,270 @@
       },
       "source_refs": [
         "ms-columns",
+        "ms-ooxml-formula-evaluation"
+      ]
+    },
+    "NPV": {
+      "arguments": [
+        {
+          "name": "rate",
+          "kind": "number-per-period",
+          "required": true
+        },
+        {
+          "name": "value1",
+          "kind": "number-reference-range-or-array",
+          "required": true
+        },
+        {
+          "name": "value_n",
+          "kind": "number-reference-range-or-array",
+          "required": false,
+          "max_additional": 253
+        }
+      ],
+      "returns": {
+        "kind": "number",
+        "shape": "scalar"
+      },
+      "semantics": {
+        "definition": "Returns the net present value of a series of cash flows one period apart, the first one period from now, at a discount rate per period.",
+        "documented_behavior": "Microsoft documents a required rate and 1 to 254 value arguments that are equally spaced in time and occur at the end of each period; the order of the values is the order of the cash flows; the investment begins one period before the value1 cash flow, so a cash flow at the start of the first period is added to the result rather than included in the values; in an array or reference only numbers are counted and empty cells, logical values, text, or error values are ignored. Examples: with rate 0.1 and values -10000, 3000, 4200, 6800 the result is $1,188.44; with rate 0.08, NPV(A2,A4:A8)+A3 for returns 8000, 9200, 10000, 12000, 14500 and an initial cost of -40000 is $1,922.06, and with a sixth value of -9000 it is ($3,749.47).",
+        "equation": "NPV is the sum over i = 1..n of value_i / (1 + rate)^i. Microsoft's page shows the formula as an image; its three examples reproduce under this equation.",
+        "value_profile": "values is read by the aggregate rule. Typed directly, a number, a logical value (TRUE is 1, FALSE is 0), or text holding a plain decimal number counts and other text returns #VALUE!. Inside a cell reference, range, or computed array only numbers count; text, logical values, and empty cells are ignored and do not take a period, while a zero is a cash flow. A single value is a one-entry series. Array constants are not supported by the formula parser. Microsoft's sentence on directly typed logical values and text is not clear enough to implement; counting them is a Workbook Forge profile shared with the other aggregates.",
+        "error_profile": "An error value anywhere in the arguments, including inside a reference or array, is returned; the first one in reading order wins. This is an unverified Workbook Forge profile. Microsoft's page says error values in an array or reference are ignored; Workbook Forge returns them so that a broken input never yields a number.",
+        "rate_profile": "A rate or guess argument is a single value converted with the shared scalar numeric coercer: blank values, logical values, empty text, and ASCII numeric text convert to numbers and other text returns #VALUE!. A range or array there returns #VALUE! as a local scalar boundary. An explicitly empty argument and an argument count outside the documented syntax return #VALUE!. These are unverified Workbook Forge profiles. A rate of -100 percent returns #DIV/0! because every discount factor is zero; this is checked after the values are read. A rate below -100 percent is evaluated with the equation as written. Microsoft documents neither case.",
+        "empty_profile": "When no number is counted the result is 0. Microsoft does not document this case.",
+        "implementation": "The discount factor is built by repeated multiplication by 1 + rate, and the quotients are added in cash-flow order with a binary64 left fold. A discount factor that underflows to zero returns #NUM!.",
+        "order_profile": "Arguments are read one at a time from left to right, each one completely, and the first problem met is returned: a wrong argument count first, then for each argument in turn its error value or its value that cannot be read. The function's own checks follow in the order this specification lists them. Microsoft does not specify precedence among several problems; this is an unverified Workbook Forge profile.",
+        "numeric_profile": "Inputs and results are finite binary64 numbers. A result that is not finite returns #NUM!, and a zero result carries no sign. Microsoft does not specify a function-specific overflow code; this profile has not been spot-checked in Excel.",
+        "compatibility_limit": "No behaviour of this function has been spot-checked in Excel."
+      },
+      "source_refs": [
+        "ms-npv",
+        "ms-ooxml-formula-evaluation",
+        "ms-excel-precision-limits"
+      ]
+    },
+    "IRR": {
+      "arguments": [
+        {
+          "name": "values",
+          "kind": "number-reference-range-or-array",
+          "required": true
+        },
+        {
+          "name": "guess",
+          "kind": "number",
+          "required": false,
+          "default": 0.1
+        }
+      ],
+      "returns": {
+        "kind": "number",
+        "shape": "scalar"
+      },
+      "semantics": {
+        "definition": "Returns the internal rate of return of a series of cash flows one period apart: the rate at which their net present value, with the first flow undiscounted, is zero.",
+        "documented_behavior": "Microsoft documents that values is an array or a reference to cells that contain numbers and must contain at least one positive and one negative value; the order of values is the order of the cash flows; text, logical values, and empty cells in an array or reference are ignored; Excel uses an iterative technique that starts with guess and cycles until the result is accurate within 0.00001 percent, returning #NUM! if no result is found after 20 tries; an omitted guess is 0.1; NPV(IRR(A2:A7),A2:A7) is effectively 0. Examples for -70000, 12000, 15000, 18000, 21000, 26000: IRR(A2:A6) is -2.1%, IRR(A2:A7) is 8.7%, and IRR(A2:A4,-10%) is -44.4%.",
+        "equation": "IRR is a rate r above -100 percent with sum over i = 0..n-1 of value_i / (1 + r)^i = 0.",
+        "iteration_profile": "Microsoft says only that Excel uses an iterative technique; the technique here is a Workbook Forge profile and Excel's internal method is not known. Workbook Forge uses Newton's method on the rate with the analytic slope of the equation, starting from guess. A try computes one Newton step. A step that would put the rate at or below -100 percent moves the rate halfway to -100 percent instead and still counts as a try. The result is the rate after a Newton step that moved it by no more than 0.0000001 (0.00001 percent), which is how the documented accuracy is applied. After 20 tries without such a step the result is #NUM!. A guess at or below -100 percent, a value or slope that is not finite, and a zero slope also return #NUM!. Where the equation has several roots, or the search does not settle, Excel may return a different root or a number where Workbook Forge returns #NUM!, and the reverse; only results on which both converge to the same root are expected to agree, and then only within the documented accuracy.",
+        "value_profile": "values is read by the aggregate rule. Typed directly, a number, a logical value (TRUE is 1, FALSE is 0), or text holding a plain decimal number counts and other text returns #VALUE!. Inside a cell reference, range, or computed array only numbers count; text, logical values, and empty cells are ignored and do not take a period, while a zero is a cash flow. A single value is a one-entry series. Array constants are not supported by the formula parser.",
+        "error_profile": "An error value anywhere in the arguments, including inside a reference or array, is returned; the first one in reading order wins. This is an unverified Workbook Forge profile.",
+        "sign_profile": "Without at least one positive and one negative number the result is #NUM!. Microsoft states the requirement without naming the error. The check comes after guess is read.",
+        "guess_profile": "A rate or guess argument is a single value converted with the shared scalar numeric coercer: blank values, logical values, empty text, and ASCII numeric text convert to numbers and other text returns #VALUE!. A range or array there returns #VALUE! as a local scalar boundary. An explicitly empty argument and an argument count outside the documented syntax return #VALUE!. These are unverified Workbook Forge profiles. An explicitly empty guess returns #VALUE!; the default applies only when the argument is left out.",
+        "implementation": "Each try evaluates the value and the slope with additions, multiplications and divisions only, in cash-flow order, so both engines compute the same binary64 steps.",
+        "order_profile": "Arguments are read one at a time from left to right, each one completely, and the first problem met is returned: a wrong argument count first, then for each argument in turn its error value or its value that cannot be read. The function's own checks follow in the order this specification lists them. Microsoft does not specify precedence among several problems; this is an unverified Workbook Forge profile.",
+        "numeric_profile": "Inputs and results are finite binary64 numbers. A result that is not finite returns #NUM!, and a zero result carries no sign. Microsoft does not specify a function-specific overflow code; this profile has not been spot-checked in Excel.",
+        "compatibility_limit": "No behaviour of this function has been spot-checked in Excel."
+      },
+      "source_refs": [
+        "ms-irr",
+        "ms-npv",
+        "ms-ooxml-formula-evaluation"
+      ]
+    },
+    "XNPV": {
+      "arguments": [
+        {
+          "name": "rate",
+          "kind": "number",
+          "required": true
+        },
+        {
+          "name": "values",
+          "kind": "number-range-or-array",
+          "required": true
+        },
+        {
+          "name": "dates",
+          "kind": "date-serial-range-or-array",
+          "required": true
+        }
+      ],
+      "returns": {
+        "kind": "number",
+        "shape": "scalar"
+      },
+      "semantics": {
+        "definition": "Returns the net present value of cash flows on given dates, discounted to the first date on a 365-day year.",
+        "documented_behavior": "Microsoft documents that the first payment corresponds to a cost or payment at the beginning of the investment and later payments are discounted on a 365-day year; the values must contain at least one positive and one negative value; the first date begins the schedule and all other dates must be later but may occur in any order; numbers in dates are truncated to integers; a nonnumeric argument returns #VALUE!; a number in dates that is not a valid date returns #VALUE!; a date that precedes the starting date returns #NUM!; a different number of values and dates returns #NUM!. Example: XNPV(.09,A2:A6,B2:B6) for -10000, 2750, 4250, 3250, 2750 on 1/1/2008, 3/1/2008, 10/30/2008, 2/15/2009, 4/1/2009 is $2,086.65; January 1, 2008 is serial number 39448.",
+        "equation": "XNPV is the sum over i of P_i / (1 + rate)^((d_i - d_1) / 365). Microsoft's page shows the formula as an image; its example reproduces under this equation.",
+        "schedule_profile": "values and dates are each a range, a computed array, or a single value, read row by row and paired in reading order. Every entry must be a number: text (including a date held as text), a logical value, or an empty cell returns #VALUE! and is neither skipped nor read as zero. Microsoft documents #VALUE! for a nonnumeric argument on the XNPV page; treating logical values and empty cells as nonnumeric is a Workbook Forge profile. Dates are truncated toward zero to whole days. A date outside serial numbers 0 through 2,958,465 (December 31, 9999) returns #VALUE!. A different number of values and dates returns #NUM!, and so does a date before the first date. Every date is validated before the counts are compared, and the counts before the date order; Microsoft does not specify that order. Time is counted in 365-day years from the first date. Serial numbers are used as given; the workbook's 1900 or 1904 date system does not change differences between dates.",
+        "sign_profile": "Microsoft says the values must contain a positive and a negative value but names no error for XNPV; Workbook Forge does not enforce it and evaluates the equation.",
+        "rate_profile": "A rate or guess argument is a single value converted with the shared scalar numeric coercer: blank values, logical values, empty text, and ASCII numeric text convert to numbers and other text returns #VALUE!. A range or array there returns #VALUE! as a local scalar boundary. An explicitly empty argument and an argument count outside the documented syntax return #VALUE!. These are unverified Workbook Forge profiles. A rate at or below -100 percent returns #NUM!; the check comes after the schedule checks. A negative rate above -100 percent is evaluated with the equation. Microsoft documents neither case, and Excel's handling of negative rates has not been checked.",
+        "error_profile": "An error value anywhere in the arguments, including inside a reference or array, is returned; the first one in reading order wins. This is an unverified Workbook Forge profile.",
+        "implementation": "The quotients are added in reading order with a binary64 left fold. Fractional powers use the platform's binary64 power function, which can differ in the last digit between the Python engine, the native Rust engine, and the WebAssembly build.",
+        "order_profile": "Arguments are read one at a time from left to right, each one completely, and the first problem met is returned: a wrong argument count first, then for each argument in turn its error value or its value that cannot be read. The function's own checks follow in the order this specification lists them. Microsoft does not specify precedence among several problems; this is an unverified Workbook Forge profile.",
+        "numeric_profile": "Inputs and results are finite binary64 numbers. A result that is not finite returns #NUM!, and a zero result carries no sign. Microsoft does not specify a function-specific overflow code; this profile has not been spot-checked in Excel.",
+        "compatibility_limit": "No behaviour of this function has been spot-checked in Excel."
+      },
+      "source_refs": [
+        "ms-xnpv",
+        "ms-date-systems",
+        "ms-ooxml-formula-evaluation"
+      ]
+    },
+    "XIRR": {
+      "arguments": [
+        {
+          "name": "values",
+          "kind": "number-range-or-array",
+          "required": true
+        },
+        {
+          "name": "dates",
+          "kind": "date-serial-range-or-array",
+          "required": true
+        },
+        {
+          "name": "guess",
+          "kind": "number",
+          "required": false,
+          "default": 0.1
+        }
+      ],
+      "returns": {
+        "kind": "number",
+        "shape": "scalar"
+      },
+      "semantics": {
+        "definition": "Returns the internal rate of return of cash flows on given dates: the rate at which their XNPV is zero.",
+        "documented_behavior": "Microsoft documents that the values must contain at least one positive and one negative value, otherwise XIRR returns #NUM!; dates may occur in any order and problems can occur if dates are entered as text; numbers in dates are truncated to integers; a number in dates that is not a valid date returns #VALUE!; a date that precedes the starting date returns #NUM!; a different number of values and dates returns #NUM!; an omitted guess is 0.1; Excel uses an iterative technique with a changing rate, starting with guess, until the result is accurate within 0.000001 percent, and returns #NUM! if no result is found after 100 tries. Example: XIRR(A3:A7,B3:B7,0.1) for -10000, 2750, 4250, 3250, 2750 on 1-Jan-08, 1-Mar-08, 30-Oct-08, 15-Feb-09, 1-Apr-09 is 0.373362535, or 37.34%.",
+        "equation": "XIRR is a rate r above -100 percent with sum over i of P_i / (1 + r)^((d_i - d_1) / 365) = 0.",
+        "documentation_note": "Solving Microsoft's equation for its example in 60-digit arithmetic gives 0.3733625335..., which differs from the printed 0.373362535 by 1.5E-9, inside the documented accuracy. Workbook Forge returns the more accurate root; fixtures compare at seven decimal places, where both agree.",
+        "iteration_profile": "Microsoft says only that Excel uses an iterative technique; the technique here is a Workbook Forge profile and Excel's internal method is not known. Workbook Forge uses Newton's method on the rate with the analytic slope of the equation, starting from guess. A try computes one Newton step. A step that would put the rate at or below -100 percent moves the rate halfway to -100 percent instead and still counts as a try. The result is the rate after a Newton step that moved it by no more than 0.00000001 (0.000001 percent), which is how the documented accuracy is applied. After 100 tries without such a step the result is #NUM!. A guess at or below -100 percent, a value or slope that is not finite, and a zero slope also return #NUM!. Where the equation has several roots, or the search does not settle, Excel may return a different root or a number where Workbook Forge returns #NUM!, and the reverse; only results on which both converge to the same root are expected to agree, and then only within the documented accuracy.",
+        "schedule_profile": "values and dates are each a range, a computed array, or a single value, read row by row and paired in reading order. Every entry must be a number: text (including a date held as text), a logical value, or an empty cell returns #VALUE! and is neither skipped nor read as zero. Microsoft documents #VALUE! for a nonnumeric argument on the XNPV page; treating logical values and empty cells as nonnumeric is a Workbook Forge profile. Dates are truncated toward zero to whole days. A date outside serial numbers 0 through 2,958,465 (December 31, 9999) returns #VALUE!. A different number of values and dates returns #NUM!, and so does a date before the first date. Every date is validated before the counts are compared, and the counts before the date order; Microsoft does not specify that order. Time is counted in 365-day years from the first date. Serial numbers are used as given; the workbook's 1900 or 1904 date system does not change differences between dates.",
+        "sign_profile": "Without at least one positive and one negative value the result is #NUM!, as Microsoft documents. The check comes after the schedule checks.",
+        "guess_profile": "A rate or guess argument is a single value converted with the shared scalar numeric coercer: blank values, logical values, empty text, and ASCII numeric text convert to numbers and other text returns #VALUE!. A range or array there returns #VALUE! as a local scalar boundary. An explicitly empty argument and an argument count outside the documented syntax return #VALUE!. These are unverified Workbook Forge profiles. An explicitly empty guess returns #VALUE!; the default applies only when the argument is left out.",
+        "error_profile": "An error value anywhere in the arguments, including inside a reference or array, is returned; the first one in reading order wins. This is an unverified Workbook Forge profile.",
+        "implementation": "Each try evaluates the value and the slope in reading order with a binary64 left fold. Fractional powers use the platform's binary64 power function, which can differ in the last digit between the Python engine, the native Rust engine, and the WebAssembly build. Results that agree within the documented accuracy can therefore differ in their last digits between engines.",
+        "order_profile": "Arguments are read one at a time from left to right, each one completely, and the first problem met is returned: a wrong argument count first, then for each argument in turn its error value or its value that cannot be read. The function's own checks follow in the order this specification lists them. Microsoft does not specify precedence among several problems; this is an unverified Workbook Forge profile.",
+        "numeric_profile": "Inputs and results are finite binary64 numbers. A result that is not finite returns #NUM!, and a zero result carries no sign. Microsoft does not specify a function-specific overflow code; this profile has not been spot-checked in Excel.",
+        "compatibility_limit": "No behaviour of this function has been spot-checked in Excel."
+      },
+      "source_refs": [
+        "ms-xirr",
+        "ms-xnpv",
+        "ms-date-systems",
+        "ms-ooxml-formula-evaluation"
+      ]
+    },
+    "RATE": {
+      "arguments": [
+        {
+          "name": "nper",
+          "kind": "number-of-payment-periods",
+          "required": true
+        },
+        {
+          "name": "pmt",
+          "kind": "payment-per-period-number",
+          "required": true
+        },
+        {
+          "name": "pv",
+          "kind": "present-value-number",
+          "required": true
+        },
+        {
+          "name": "fv",
+          "kind": "future-value-number",
+          "required": false,
+          "default": 0
+        },
+        {
+          "name": "type",
+          "kind": "payment-timing-selector-0-or-1",
+          "required": false,
+          "default": 0
+        },
+        {
+          "name": "guess",
+          "kind": "number",
+          "required": false,
+          "default": 0.1
+        }
+      ],
+      "returns": {
+        "kind": "number",
+        "shape": "scalar"
+      },
+      "semantics": {
+        "definition": "Returns the interest rate per period of an annuity.",
+        "documented_behavior": "Microsoft documents that RATE is calculated by iteration and can have zero or more solutions; if the successive results do not converge to within 0.0000001 after 20 iterations, RATE returns #NUM!; fv omitted is 0; type is 0 or omitted for payments at the end of the period and 1 for the beginning; guess omitted is 10 percent; if pmt is omitted, fv must be included. Examples for 4 years, a payment of -200, and a loan of 8000: RATE(A2*12,A3,A4) is 1% and RATE(A2*12,A3,A4)*12 is 9.24%.",
+        "equation": "RATE is a rate r above -100 percent that satisfies the annuity equation on Microsoft's PV page: pv*(1+r)^nper + pmt*(1+r*type)*((1+r)^nper - 1)/r + fv = 0, and pmt*nper + pv + fv = 0 at a zero rate.",
+        "iteration_profile": "Microsoft says only that Excel uses an iterative technique; the technique here is a Workbook Forge profile and Excel's internal method is not known. Workbook Forge uses Newton's method on the rate with the analytic slope of the equation, starting from guess. A try computes one Newton step. A step that would put the rate at or below -100 percent moves the rate halfway to -100 percent instead and still counts as a try. The result is the rate after a Newton step that moved it by no more than 0.0000001, which is how the documented accuracy is applied. After 20 tries without such a step the result is #NUM!. A guess at or below -100 percent, a value or slope that is not finite, and a zero slope also return #NUM!. Where the equation has several roots, or the search does not settle, Excel may return a different root or a number where Workbook Forge returns #NUM!, and the reverse; only results on which both converge to the same root are expected to agree, and then only within the documented accuracy. At a rate of exactly zero a try uses the limit of the equation and of its slope. The annuity equation can also hold at -100 percent itself, for example when every payment is made at the start of the period and fv is 0; that is not a rate above -100 percent. A search that settles within 0.0000001 of -100 percent therefore returns #NUM!, and so does a genuine rate that close to the boundary.",
+        "argument_profile": "Every argument is a single value converted with the shared scalar numeric coercer: blank values, logical values, empty text, and ASCII numeric text convert to numbers and other text returns #VALUE!. A range or array argument returns #VALUE! as a local scalar boundary, before any error value; then the first error value in argument order is returned. An explicitly empty fv or type counts as 0, as in PMT, and so does an explicitly empty pmt when fv is given. Any other explicitly empty argument, including guess, returns #VALUE!. These are unverified Workbook Forge profiles.",
+        "domain_profile": "After conversion nper must be greater than 0 and type must be 0 or 1; otherwise the result is #NUM!. A fractional nper is evaluated with the equation. Microsoft does not name these errors.",
+        "implementation": "Growth and annuity factors use log1p, exp and expm1, as PMT does in this evaluator; those library functions can differ in the last digit between the Python engine, the native Rust engine, and the WebAssembly build, so results agree within the documented accuracy rather than bit for bit.",
+        "order_profile": "Arguments are read one at a time from left to right, each one completely, and the first problem met is returned: a wrong argument count first, then for each argument in turn its error value or its value that cannot be read. The function's own checks follow in the order this specification lists them. Microsoft does not specify precedence among several problems; this is an unverified Workbook Forge profile.",
+        "numeric_profile": "Inputs and results are finite binary64 numbers. A result that is not finite returns #NUM!, and a zero result carries no sign. Microsoft does not specify a function-specific overflow code; this profile has not been spot-checked in Excel.",
+        "compatibility_limit": "No behaviour of this function has been spot-checked in Excel."
+      },
+      "source_refs": [
+        "ms-rate",
+        "ms-pv",
+        "ms-pmt",
+        "ms-ooxml-formula-evaluation"
+      ]
+    },
+    "MIRR": {
+      "arguments": [
+        {
+          "name": "values",
+          "kind": "number-reference-range-or-array",
+          "required": true
+        },
+        {
+          "name": "finance_rate",
+          "kind": "number",
+          "required": true
+        },
+        {
+          "name": "reinvest_rate",
+          "kind": "number",
+          "required": true
+        }
+      ],
+      "returns": {
+        "kind": "number",
+        "shape": "scalar"
+      },
+      "semantics": {
+        "definition": "Returns the modified internal rate of return of a series of cash flows one period apart, with costs financed at one rate and income reinvested at another.",
+        "documented_behavior": "Microsoft documents that values is an array or a reference to cells that contain numbers and must contain at least one positive and one negative value, otherwise MIRR returns #DIV/0!; text, logical values, and empty cells in an array or reference are ignored while cells with the value zero are included; the order of values is the order of the cash flows. Examples for -120000, 39000, 30000, 21000, 37000, 46000 with a finance rate of 0.1 and a reinvestment rate of 0.12: MIRR(A2:A7,A8,A9) is 13%, MIRR(A2:A5,A8,A9) is -5%, and MIRR(A2:A7,A8,14%) is 13%.",
+        "equation": "With n cash flows, MIRR = (F / -P)^(1/(n-1)) - 1, where F is the sum of each positive flow compounded at reinvest_rate to the time of the last flow and P is the sum of each negative flow discounted at finance_rate to the time of the first flow. Microsoft's page shows the formula as an image; its three examples reproduce under this equation.",
+        "value_profile": "values is read by the aggregate rule. Typed directly, a number, a logical value (TRUE is 1, FALSE is 0), or text holding a plain decimal number counts and other text returns #VALUE!. Inside a cell reference, range, or computed array only numbers count; text, logical values, and empty cells are ignored and do not take a period, while a zero is a cash flow. A single value is a one-entry series. Array constants are not supported by the formula parser.",
+        "error_profile": "An error value anywhere in the arguments, including inside a reference or array, is returned; the first one in reading order wins. This is an unverified Workbook Forge profile.",
+        "rate_profile": "A rate or guess argument is a single value converted with the shared scalar numeric coercer: blank values, logical values, empty text, and ASCII numeric text convert to numbers and other text returns #VALUE!. A range or array there returns #VALUE! as a local scalar boundary. An explicitly empty argument and an argument count outside the documented syntax return #VALUE!. These are unverified Workbook Forge profiles. A finance_rate or reinvest_rate at or below -100 percent returns #NUM!; Microsoft does not document this. The rates are checked before the values are checked for both signs.",
+        "implementation": "F is accumulated by multiplying the running total by 1 + reinvest_rate and adding each positive flow; P divides each negative flow by a discount factor built by repeated multiplication. Fractional powers use the platform's binary64 power function, which can differ in the last digit between the Python engine, the native Rust engine, and the WebAssembly build.",
+        "order_profile": "Arguments are read one at a time from left to right, each one completely, and the first problem met is returned: a wrong argument count first, then for each argument in turn its error value or its value that cannot be read. The function's own checks follow in the order this specification lists them. Microsoft does not specify precedence among several problems; this is an unverified Workbook Forge profile.",
+        "numeric_profile": "Inputs and results are finite binary64 numbers. A result that is not finite returns #NUM!, and a zero result carries no sign. Microsoft does not specify a function-specific overflow code; this profile has not been spot-checked in Excel.",
+        "compatibility_limit": "No behaviour of this function has been spot-checked in Excel."
+      },
+      "source_refs": [
+        "ms-mirr",
         "ms-ooxml-formula-evaluation"
       ]
     }

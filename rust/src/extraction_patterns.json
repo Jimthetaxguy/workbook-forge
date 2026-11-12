@@ -1927,8 +1927,8 @@
       "name": "IRR",
       "known": true,
       "category": "Financial",
-      "python": "catalogued",
-      "rust": "catalogued"
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
     },
     "ISBLANK": {
       "name": "ISBLANK",
@@ -2305,8 +2305,8 @@
       "name": "MIRR",
       "known": true,
       "category": "Financial",
-      "python": "catalogued",
-      "rust": "catalogued"
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
     },
     "MMULT": {
       "name": "MMULT",
@@ -2501,8 +2501,8 @@
       "name": "NPV",
       "known": true,
       "category": "Financial",
-      "python": "catalogued",
-      "rust": "catalogued"
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
     },
     "NUMBERVALUE": {
       "name": "NUMBERVALUE",
@@ -2851,8 +2851,8 @@
       "name": "RATE",
       "known": true,
       "category": "Financial",
-      "python": "catalogued",
-      "rust": "catalogued"
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
     },
     "RECEIVED": {
       "name": "RECEIVED",
@@ -3712,8 +3712,8 @@
       "name": "XIRR",
       "known": true,
       "category": "Financial",
-      "python": "catalogued",
-      "rust": "catalogued"
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
     },
     "XLOOKUP": {
       "name": "XLOOKUP",
@@ -3733,8 +3733,8 @@
       "name": "XNPV",
       "known": true,
       "category": "Financial",
-      "python": "catalogued",
-      "rust": "catalogued"
+      "python": "conformance-tested",
+      "rust": "conformance-tested"
     },
     "XOR": {
       "name": "XOR",

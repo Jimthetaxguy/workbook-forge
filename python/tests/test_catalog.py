@@ -391,3 +391,50 @@ def test_text_and_lookup_glossary_separates_documented_rules_from_profiles():
     for name in ("ROWS", "COLUMNS"):
         semantics = lookup_function(name)["semantic_spec"]["semantics"]
         assert "without reading its cells" in semantics["reference_profile"]
+
+
+def test_cash_flow_glossary_separates_documented_rules_from_profiles():
+    expected_arity = {
+        "NPV": (2, 255), "IRR": (1, 2), "XNPV": (3, 3), "XIRR": (2, 3), "RATE": (3, 6), "MIRR": (3, 3),
+    }
+    for name, (minimum, maximum) in expected_arity.items():
+        entry = lookup_function(name)
+        assert function_status(name, "python") == "conformance-tested"
+        assert function_status(name, "rust") == "conformance-tested"
+        assert entry["implementation"]["category"] == "financial"
+        assert entry["implementation"]["arity"] == {"min": minimum, "max": maximum}
+        assert entry["implementation"]["evidence_grade"] == "dual_engine"
+        assert "ms-" + name.lower() in entry["semantic_spec"]["source_refs"]
+        semantics = entry["semantic_spec"]["semantics"]
+        assert "Microsoft documents" in semantics["documented_behavior"]
+        assert semantics["compatibility_limit"] == "No behaviour of this function has been spot-checked in Excel."
+
+    # Microsoft names an accuracy and a number of tries, not a technique. The
+    # specs say which technique Workbook Forge chose and that it is a profile.
+    limits = {"IRR": ("0.0000001 (0.00001 percent)", "20"), "XIRR": ("0.00000001 (0.000001 percent)", "100"),
+              "RATE": ("0.0000001", "20")}
+    for name, (tolerance, tries) in limits.items():
+        iteration = lookup_function(name)["semantic_spec"]["semantics"]["iteration_profile"]
+        assert "Excel's internal method is not known" in iteration
+        assert "Newton's method on the rate" in iteration
+        assert f"by no more than {tolerance}" in iteration
+        assert f"After {tries} tries" in iteration
+        assert "halfway to -100 percent" in iteration
+
+    # Where the evaluator departs from the page, the spec says so.
+    npv = lookup_function("NPV")["semantic_spec"]["semantics"]
+    assert "Microsoft's page says error values in an array or reference are ignored" in npv["error_profile"]
+    xirr = lookup_function("XIRR")["semantic_spec"]["semantics"]
+    assert "0.373362535" in xirr["documented_behavior"]
+    assert "0.3733625335" in xirr["documentation_note"]
+    xnpv = lookup_function("XNPV")["semantic_spec"]["semantics"]
+    assert "does not enforce it" in xnpv["sign_profile"]
+    assert "has not been checked" in xnpv["rate_profile"]
+    for name in ("XNPV", "XIRR"):
+        schedule = lookup_function(name)["semantic_spec"]["semantics"]["schedule_profile"]
+        assert "neither skipped nor read as zero" in schedule
+    rate = lookup_function("RATE")["semantic_spec"]["semantics"]
+    assert "including guess, returns #VALUE!" in rate["argument_profile"]
+    assert "settles within 0.0000001 of -100 percent therefore returns #NUM!" in rate["iteration_profile"]
+    mirr = lookup_function("MIRR")["semantic_spec"]["semantics"]
+    assert "shows the formula as an image" in mirr["equation"]

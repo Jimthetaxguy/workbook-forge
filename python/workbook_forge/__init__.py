@@ -14,7 +14,7 @@ import decimal
 import math
 import re
 import struct
-from collections.abc import Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from typing import TypeAlias
 
 from .volatile import RANDOM_FUNCTIONS as _RANDOM_FUNCTIONS, CalcContext
@@ -2858,6 +2858,8 @@ def _eval(
             return _dimension_call(name, node.children, cells, sheet_name, budget)
         if name == "HLOOKUP":
             return _hlookup_call(node.children, cells, sheet_name, budget)
+        if name in _CASH_FLOW_ARITY:
+            return _cash_flow_call(name, node.children, cells, sheet_name, budget)
         if name == "IF":
             if len(node.children) not in (2, 3):
                 return _arity(name, "2 or 3", len(node.children))
@@ -4770,6 +4772,322 @@ def _hlookup_call(
     if found is None:
         return ErrorValue("#N/A", "HLOOKUP value not found")
     return table.values[(row - 1) * table.columns + found]
+
+
+def _numeric_series(
+    child: _Node,
+    cells: Mapping[str, Scalar],
+    sheet_name: str,
+    budget: _WildcardBudget,
+) -> list[float] | ErrorValue:
+    """Every entry of an XNPV or XIRR series, which must all be numbers."""
+    numbers: list[float] = []
+    for value in _flatten((_dereference(_eval(child, cells, sheet_name, budget)),)):
+        if isinstance(value, ErrorValue):
+            return value
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            return ErrorValue("#VALUE!", "every value and date must be a number")
+        number = _binary64(value)
+        if isinstance(number, ErrorValue):
+            return number
+        numbers.append(number)
+    return numbers
+
+
+def _cash_flows(
+    child: _Node,
+    cells: Mapping[str, Scalar],
+    sheet_name: str,
+    budget: _WildcardBudget,
+) -> list[float] | ErrorValue:
+    """The numbers a periodic cash-flow function reads from one argument.
+
+    The aggregate rule applies: typed directly, numbers, logical values and
+    plain numeric text count; inside a reference or array only numbers count.
+    """
+    numbers: list[float] = []
+    error = _collect_numbers(child, cells, sheet_name, budget, numbers)
+    return numbers if error is None else error
+
+
+def _has_both_signs(flows: list[float]) -> bool:
+    """Whether the flows hold at least one positive and one negative number."""
+    return any(flow > 0.0 for flow in flows) and any(flow < 0.0 for flow in flows)
+
+
+def _schedule_years(values: list[float], dates: list[float]) -> list[float] | ErrorValue:
+    """The time of each dated flow in 365-day years after the first date.
+
+    Dates are truncated to whole days. A date outside the serial range is
+    #VALUE!; a different number of values and dates, or a date before the
+    first one, is #NUM!.
+    """
+    days: list[float] = []
+    for serial in dates:
+        day = float(math.trunc(serial))
+        if not 0.0 <= day <= _MAX_EXCEL_DATE_SERIAL:
+            return ErrorValue("#VALUE!", "date is outside the supported serial range")
+        days.append(day)
+    if len(values) != len(days):
+        return ErrorValue("#NUM!", "values and dates differ in count")
+    first = days[0]
+    if any(day < first for day in days):
+        return ErrorValue("#NUM!", "a date precedes the first date")
+    return [(day - first) / 365.0 for day in days]
+
+
+_NO_RATE = ErrorValue("#NUM!", "the rate calculation did not find a result")
+
+
+def _newton_step(rate: float, value: float, slope: float) -> float | ErrorValue:
+    """The next Newton estimate of a rate from the equation's value and slope."""
+    if not math.isfinite(value) or not math.isfinite(slope) or slope == 0.0:
+        return _NO_RATE
+    following = rate - value / slope
+    return following if math.isfinite(following) else _NO_RATE
+
+
+def _real_power(base: float, exponent: float) -> float:
+    """A positive base raised to a power; a result too large is infinite."""
+    try:
+        return math.pow(base, exponent)
+    except OverflowError:
+        return math.inf
+
+
+def _periodic_rate_step(rate: float, flows: list[float]) -> float | ErrorValue:
+    """Newton step for IRR: the flows are one period apart and the first is now."""
+    base = 1.0 + rate
+    discount = 1.0
+    value = 0.0
+    slope = 0.0
+    for index, flow in enumerate(flows):
+        if discount == 0.0:
+            return _NO_RATE
+        term = flow / discount
+        value += term
+        slope -= index * term / base
+        discount *= base
+    return _newton_step(rate, value, slope)
+
+
+def _dated_rate_step(rate: float, flows: list[float], years: list[float]) -> float | ErrorValue:
+    """Newton step for XIRR: each flow is discounted over its 365-day years."""
+    base = 1.0 + rate
+    value = 0.0
+    slope = 0.0
+    for flow, year in zip(flows, years, strict=True):
+        discount = _real_power(base, year)
+        if discount == 0.0:
+            return _NO_RATE
+        term = flow / discount
+        value += term
+        slope -= year * term / base
+    return _newton_step(rate, value, slope)
+
+
+def _annuity_rate_step(rate: float, terms: tuple[float, ...]) -> float | ErrorValue:
+    """Newton step for RATE on pv*(1+r)^n + pmt*(1+r*type)*((1+r)^n-1)/r + fv = 0."""
+    nper, payment, present, future, due = terms
+    if rate == 0.0:
+        value = present + payment * nper + future
+        slope = present * nper + payment * (due * nper + nper * (nper - 1.0) / 2.0)
+        return _newton_step(rate, value, slope)
+    exponent = nper * math.log1p(rate)
+    try:
+        growth = math.exp(exponent)
+        growth_less_one = math.expm1(exponent)
+    except OverflowError:
+        return _NO_RATE
+    growth_slope = nper * growth / (1.0 + rate)
+    annuity = growth_less_one / rate
+    annuity_slope = (growth_slope - annuity) / rate
+    timing = 1.0 + rate * due
+    value = present * growth + payment * timing * annuity + future
+    slope = present * growth_slope + payment * (due * annuity + timing * annuity_slope)
+    return _newton_step(rate, value, slope)
+
+
+def _solve_rate(
+    guess: float,
+    tolerance: float,
+    tries: int,
+    step: Callable[[float], float | ErrorValue],
+) -> float | ErrorValue:
+    """Newton's method on the rate, starting from `guess`.
+
+    The rate is returned when a Newton step moves it by no more than
+    `tolerance`. A step that would put the rate at or below -100 percent moves
+    it halfway to -100 percent instead, and counts as a try. `tries` tries
+    without a result is #NUM!, as is a guess at or below -100 percent.
+    """
+    rate = guess
+    for _ in range(tries):
+        if rate <= -1.0:
+            return _NO_RATE
+        following = step(rate)
+        if isinstance(following, ErrorValue):
+            return following
+        if following <= -1.0:
+            rate = (rate - 1.0) / 2.0
+        elif abs(following - rate) <= tolerance:
+            return _finite_number(following)
+        else:
+            rate = following
+    return _NO_RATE
+
+
+def _rate_terms(
+    children: tuple[_Node, ...],
+    cells: Mapping[str, Scalar],
+    sheet_name: str,
+    budget: _WildcardBudget,
+) -> list[float] | ErrorValue:
+    """The six RATE arguments as numbers: nper, pmt, pv, fv, type and guess."""
+    future_given = len(children) > 3 and children[3].kind != "missing"
+    values: list[object] = []
+    for index, child in enumerate(children):
+        # An empty fv or type counts as zero, and so does an empty pmt when fv
+        # is given. Any other empty argument is #VALUE!.
+        may_be_empty = index in (3, 4) or (index == 1 and future_given)
+        if may_be_empty and child.kind == "missing":
+            values.append(0.0)
+        else:
+            values.append(_dereference(_eval(child, cells, sheet_name, budget)))
+    if any(isinstance(value, (_Range, ArrayValue)) for value in values):
+        return ErrorValue("#VALUE!", "argument must be a single value")
+    for value in values:
+        if isinstance(value, ErrorValue):
+            return value
+    terms = [0.0, 0.0, 0.0, 0.0, 0.0, 0.1]
+    for index, value in enumerate(values):
+        number = _binary64(value)
+        if isinstance(number, ErrorValue):
+            return number
+        terms[index] = number
+    return terms
+
+
+_CASH_FLOW_ARITY = {
+    "NPV": (2, 255),
+    "IRR": (1, 2),
+    "XNPV": (3, 3),
+    "XIRR": (2, 3),
+    "RATE": (3, 6),
+    "MIRR": (3, 3),
+}
+
+
+def _cash_flow_call(
+    name: str,
+    children: tuple[_Node, ...],
+    cells: Mapping[str, Scalar],
+    sheet_name: str,
+    budget: _WildcardBudget,
+) -> object:
+    """NPV, IRR, XNPV, XIRR, RATE and MIRR."""
+    low, high = _CASH_FLOW_ARITY[name]
+    arity_error = _arity_range(name, low, high, len(children))
+    if arity_error is not None:
+        return arity_error
+    if name == "RATE":
+        terms = _rate_terms(children, cells, sheet_name, budget)
+        if isinstance(terms, ErrorValue):
+            return terms
+        nper, due, guess = terms[0], terms[4], terms[5]
+        if nper <= 0.0:
+            return ErrorValue("#NUM!", "RATE needs a positive number of periods")
+        if due not in (0.0, 1.0):
+            return ErrorValue("#NUM!", "type must be 0 or 1 in this evaluator")
+        annuity = tuple(terms[:5])
+        found = _solve_rate(guess, 1e-7, 20, lambda rate: _annuity_rate_step(rate, annuity))
+        # The annuity equation can hold at -100 percent itself, which is not a
+        # rate RATE returns. A search that settles within the accuracy of that
+        # boundary has found it, not a rate above it.
+        if not isinstance(found, ErrorValue) and found + 1.0 <= 1e-7:
+            return _NO_RATE
+        return found
+
+    arguments: list[list[float] | float] = []
+    for index, child in enumerate(children):
+        series = (name in {"IRR", "MIRR"} and index == 0) or (name == "NPV" and index > 0)
+        dated = (name == "XNPV" and index in (1, 2)) or (name == "XIRR" and index in (0, 1))
+        if series:
+            argument: list[float] | float | ErrorValue = _cash_flows(
+                child, cells, sheet_name, budget
+            )
+        elif dated:
+            argument = _numeric_series(child, cells, sheet_name, budget)
+        else:
+            argument = _number_argument(child, cells, sheet_name, budget)
+        if isinstance(argument, ErrorValue):
+            return argument
+        arguments.append(argument)
+
+    if name == "NPV":
+        base = 1.0 + arguments[0]
+        if base == 0.0:
+            return ErrorValue("#DIV/0!", "NPV rate of -100% divides by zero")
+        discount = 1.0
+        total = 0.0
+        for flows in arguments[1:]:
+            for flow in flows:
+                discount *= base
+                if discount == 0.0:
+                    return ErrorValue("#NUM!", "discount factor is outside the supported range")
+                total += flow / discount
+        return _finite_number(total)
+    if name == "IRR":
+        flows = arguments[0]
+        guess = arguments[1] if len(arguments) == 2 else 0.1
+        if not _has_both_signs(flows):
+            return ErrorValue("#NUM!", "IRR needs a positive and a negative value")
+        return _solve_rate(guess, 1e-7, 20, lambda rate: _periodic_rate_step(rate, flows))
+    if name == "XNPV":
+        rate, flows, dates = arguments
+        years = _schedule_years(flows, dates)
+        if isinstance(years, ErrorValue):
+            return years
+        if rate <= -1.0:
+            return ErrorValue("#NUM!", "XNPV rate must be above -100%")
+        base = 1.0 + rate
+        total = 0.0
+        for flow, year in zip(flows, years, strict=True):
+            discount = _real_power(base, year)
+            if discount == 0.0:
+                return ErrorValue("#NUM!", "discount factor is outside the supported range")
+            total += flow / discount
+        return _finite_number(total)
+    if name == "XIRR":
+        flows, dates = arguments[0], arguments[1]
+        guess = arguments[2] if len(arguments) == 3 else 0.1
+        years = _schedule_years(flows, dates)
+        if isinstance(years, ErrorValue):
+            return years
+        if not _has_both_signs(flows):
+            return ErrorValue("#NUM!", "XIRR needs a positive and a negative value")
+        return _solve_rate(guess, 1e-8, 100, lambda rate: _dated_rate_step(rate, flows, years))
+
+    flows, finance, reinvest = arguments
+    if finance <= -1.0 or reinvest <= -1.0:
+        return ErrorValue("#NUM!", "MIRR rates must be above -100%")
+    if not _has_both_signs(flows):
+        return ErrorValue("#DIV/0!", "MIRR needs a positive and a negative value")
+    finance_base = 1.0 + finance
+    reinvest_base = 1.0 + reinvest
+    discount = 1.0
+    cost = 0.0
+    income = 0.0
+    for flow in flows:
+        income = income * reinvest_base + max(flow, 0.0)
+        if flow < 0.0:
+            if discount == 0.0:
+                return ErrorValue("#NUM!", "discount factor is outside the supported range")
+            cost += flow / discount
+        discount *= finance_base
+    if cost == 0.0 or not math.isfinite(cost) or not math.isfinite(income):
+        return ErrorValue("#NUM!", "MIRR is outside the supported numeric range")
+    return _finite_number(_real_power(-income / cost, 1.0 / (len(flows) - 1)) - 1.0)
 
 
 def _function(

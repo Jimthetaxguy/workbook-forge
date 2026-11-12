@@ -3780,6 +3780,9 @@ fn eval_call(name: &str, args: &[Expr], env: &Environment<'_>) -> Result<Value, 
         }
         "ROWS" | "COLUMNS" => return worksheet_functions::dimension_call(name, args, env),
         "HLOOKUP" => return worksheet_functions::hlookup_call(args, env),
+        "NPV" | "IRR" | "XNPV" | "XIRR" | "RATE" | "MIRR" => {
+            return worksheet_functions::cash_flow_call(name, args, env);
+        }
         "HOUR" | "MINUTE" | "SECOND" => {
             arity(name, args, 1, 1)?;
             let serial = to_number(&eval_scalar(&args[0], env)?)?;
