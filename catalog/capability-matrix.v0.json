@@ -8,7 +8,7 @@
     },
     {
       "path": "catalog/formulas.json",
-      "sha256": "afa3f439dd4f03b76afa90e70fda770b7d7d0f3e538b64435b01538f1b7a932b"
+      "sha256": "bcf583a559b49aa6b4ecb33a572dd9c7448e8a0d60fc97f94a6e8b5c37ea333b"
     },
     {
       "path": "catalog/workbook-capabilities.json",
@@ -16,7 +16,7 @@
     },
     {
       "path": "docs/corpus-report.md",
-      "sha256": "6af63653d74c24d644115f818194d65ea8387795ba04e9e5c5ffa05a36d90e05"
+      "sha256": "c6880b01bf874efc8805b35781998fa7c79873a682f8780875c607af1ac77ede"
     },
     {
       "path": "python/workbook_forge/source_graph.py",
