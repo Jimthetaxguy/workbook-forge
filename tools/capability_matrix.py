@@ -150,11 +150,13 @@ SOURCE_PROFILE = 6
 AGENT_EFFECTS = {"read": "inspect", "preview": "edit", "edit": "edit", "write_file": "export"}
 # Browser command -> matrix operation. None marks session lifecycle commands
 # (open a workbook, create one, subscribe to events, replay a log) that are
-# not one of the seven operations. `calculate` is evaluate; no catalog grades it.
+# not one of the seven operations, and `copyFormulas`, which rewrites formula
+# text for a move and neither reads nor changes a workbook. `calculate` is
+# evaluate; no catalog grades it.
 BROWSER_COMMANDS = {
     "open": None, "newWorkbook": None, "snapshot": "inspect", "applyEdits": "edit",
     "calculate": "evaluate", "export": "export", "applyAndCalculate": "edit", "log": "inspect",
-    "subscribe": None, "replay": None,
+    "subscribe": None, "replay": None, "copyFormulas": None,
 }
 # Primitive boolean -> matrix operation; `construct` has no counterpart.
 PRIMITIVE_FLAGS = {"read": "inspect", "calculate": "evaluate", "transform": "edit", "export": "export"}
