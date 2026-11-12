@@ -311,6 +311,17 @@ def test_scalar_math_glossary_separates_documented_rules_from_profiles():
     assert "unverified Workbook Forge profile" in mround["rounding_profile"]
     power = lookup_function("POWER")["semantic_spec"]["semantics"]
     assert "have not been checked and may differ" in power["domain_profile"]
+    # POWER follows the ^ operator; reports of other Excel results are recorded as unobserved.
+    assert "follows the ^ operator" in power["domain_profile"]
+    assert "Third-party reports say that Excel returns #NUM! for POWER(0,0) and #DIV/0! for POWER(0,-1)" in power["domain_profile"]
+    assert "has not observed Excel" in power["domain_profile"]
+    floor_math = lookup_function("FLOOR.MATH")["semantic_spec"]["semantics"]
+    assert "By using 0 or a negative number as the Mode argument" in floor_math["documentation_conflict"]
+    assert "using a non-zero Mode, which reverses rounding direction" in floor_math["documentation_conflict"]
+    assert "follows the example" in floor_math["documentation_conflict"]
+    ceiling_math = lookup_function("CEILING.MATH")["semantic_spec"]["semantics"]
+    assert "(must be between -2.229E-308.and 9.99E+307.)" in ceiling_math["number_range_profile"]
+    assert "does not apply that range" in ceiling_math["number_range_profile"]
     xor = lookup_function("XOR")["semantic_spec"]["semantics"]
     assert "odd number" in xor["definition"]
     assert "unverified Workbook Forge profiles" in xor["coercion_profile"]
@@ -352,6 +363,13 @@ def test_range_statistics_glossary_separates_documented_rules_from_profiles():
     sumproduct = lookup_function("SUMPRODUCT")["semantic_spec"]["semantics"]
     assert "not used as fixture values" in sumproduct["documented_behavior"]
     assert lookup_function("RANK")["implementation"]["category"] == "compatibility"
+    for name in ("RANK.EQ", "RANK"):
+        ref_profile = lookup_function(name)["semantic_spec"]["semantics"]["ref_profile"]
+        assert "An error value given as ref itself, such as NA() or #N/A, is also returned" in ref_profile
+        assert "unverified Workbook Forge profile" in ref_profile
+    rank_ref = lookup_function("RANK")["semantic_spec"]["semantics"]["ref_profile"]
+    assert '"A reference to a list of numbers."' in rank_ref
+    assert "departs from that sentence" in rank_ref
 
 
 def test_text_and_lookup_glossary_separates_documented_rules_from_profiles():
@@ -388,6 +406,7 @@ def test_text_and_lookup_glossary_separates_documented_rules_from_profiles():
     choose = lookup_function("CHOOSE")["semantic_spec"]["semantics"]
     assert "evaluates only the selected value" in choose["evaluation_profile"]
     assert "not supported by the formula parser" in choose["reference_profile"]
+    assert "SUM(A2:CHOOSE(2,A3,A4,A5))=80, is refused and has no fixture" in choose["reference_profile"]
     for name in ("ROWS", "COLUMNS"):
         semantics = lookup_function(name)["semantic_spec"]["semantics"]
         assert "without reading its cells" in semantics["reference_profile"]
@@ -424,11 +443,17 @@ def test_cash_flow_glossary_separates_documented_rules_from_profiles():
     # Where the evaluator departs from the page, the spec says so.
     npv = lookup_function("NPV")["semantic_spec"]["semantics"]
     assert "Microsoft's page says error values in an array or reference are ignored" in npv["error_profile"]
+    assert "text that cannot be translated into numbers are ignored." in npv["value_profile"]
+    assert "departs from it as written" in npv["value_profile"]
+    irr = lookup_function("IRR")["semantic_spec"]["semantics"]
+    assert "without naming the error, so #NUM! is an unverified Workbook Forge profile" in irr["sign_profile"]
     xirr = lookup_function("XIRR")["semantic_spec"]["semantics"]
     assert "0.373362535" in xirr["documented_behavior"]
     assert "0.3733625335" in xirr["documentation_note"]
     xnpv = lookup_function("XNPV")["semantic_spec"]["semantics"]
     assert "does not enforce it" in xnpv["sign_profile"]
+    assert "All other dates must be later than this date" in xnpv["same_day_profile"]
+    assert "departs from the sentence as written" in xnpv["same_day_profile"]
     assert "has not been checked" in xnpv["rate_profile"]
     for name in ("XNPV", "XIRR"):
         schedule = lookup_function(name)["semantic_spec"]["semantics"]["schedule_profile"]

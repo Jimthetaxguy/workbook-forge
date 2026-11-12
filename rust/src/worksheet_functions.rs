@@ -448,6 +448,11 @@ pub(super) fn rank_call(
     let number = number_argument(&args[0], env)?;
     let evaluated = eval(&args[1], env)?;
     if !keeps_reference(&args[1], &evaluated) {
+        // A value typed directly is not a list. An error value is returned
+        // before that check, as HLOOKUP does for its table.
+        if let CalcValue::Scalar(value) = &evaluated {
+            propagate_value_error(value)?;
+        }
         return Err(FormulaError::Value);
     }
     let mut numbers = Vec::new();
