@@ -456,8 +456,7 @@ test('snapshot carries cell presentation and column widths', () => {
 // dfec08cd-ae65-4f56-839e-5f0d8d0baca9): copied two cells down and two cells
 // to the right, $A$1 stays $A$1, A$1 becomes C$1, $A1 becomes $A3 and A1
 // becomes C3; and =B4*C4 copied from D4 to D5 becomes =B5*C5 while
-// =$B$4*$C$4 stays the same. The outer brackets are the toolkit's own fully
-// bracketed spelling, not Excel's.
+// =$B$4*$C$4 stays the same.
 test('copyFormulas moves relative references, keeps absolute ones, and reads no workbook', () => {
   const engine = new ForgeEngine({ openXlsx, createBlankWorkbook, copyFormulasJson });
   // No workbook is open: the command is stateless.
@@ -477,18 +476,67 @@ test('copyFormulas moves relative references, keeps absolute ones, and reads no 
   assert.equal(copied.ok, true, JSON.stringify(copied.error));
   const formulas = copied.value.formulas;
   assert.deepEqual(formulas.slice(0, 6), [
-    { formula: '$A$1' },
-    { formula: 'C$1' },
-    { formula: '$A3' },
-    { formula: 'C3' },
-    { formula: '(B5*C5)' },
-    { formula: '($B$4*$C$4)' },
+    { formula: '$A$1', spelling: 'kept' },
+    { formula: 'C$1', spelling: 'kept' },
+    { formula: '$A3', spelling: 'kept' },
+    { formula: 'C3', spelling: 'kept' },
+    { formula: 'B5*C5', spelling: 'kept' },
+    { formula: '$B$4*$C$4', spelling: 'kept' },
   ]);
   // Row 0 and the column left of A do not exist: each is refused on its own.
   assert.equal(formulas[6].error.code, 'invalid_reference');
   assert.equal(formulas[7].error.code, 'invalid_reference');
   assert.equal(formulas[8].error.code, 'parse_error');
   assert.equal(call(engine, 'snapshot').error.code, 'no_workbook');
+});
+
+// The copy keeps the formula as it was typed whenever the toolkit reads the
+// moved text back as the same formula as its own copy. These spellings are
+// what Excel shows for a copied formula: it moves the references and leaves
+// the rest alone (same Microsoft article: =B4*C4 becomes =B5*C5).
+test('copyFormulas keeps the typed spelling when the toolkit confirms it', () => {
+  const engine = new ForgeEngine({ openXlsx, createBlankWorkbook, copyFormulasJson });
+  const copy = (formula, rowDelta, columnDelta) => call(engine, 'copyFormulas', { items: [{ formula, rowDelta, columnDelta }] }).value.formulas[0];
+  const kept = (formula) => ({ formula, spelling: 'kept' });
+  assert.deepEqual(copy('A1+B1', 1, 0), kept('A2+B2'));
+  assert.deepEqual(copy('SUM(A1:A3)*10%', 0, 1), kept('SUM(B1:B3)*10%'));
+  assert.deepEqual(copy('sum(a1:a3)', 1, 0), kept('sum(A2:A4)'));
+  // Text that looks like a cell stays text; a sheet prefix stays as typed.
+  assert.deepEqual(copy('IF(A1>0,"A1 ok",Sheet2!B2)', 1, 1), kept('IF(B2>0,"A1 ok",Sheet2!C3)'));
+  assert.deepEqual(copy("'My Sheet'!A1&\"x\"", 2, 0), kept("'My Sheet'!A3&\"x\""));
+  // A function whose name ends like a cell is not a reference.
+  assert.deepEqual(copy('LOG10(A1)', 1, 0), kept('LOG10(A2)'));
+  assert.deepEqual(copy('$A1+A$1', 2, 2), kept('$A3+C$1'));
+  // Not moved at all: returned exactly as given.
+  assert.deepEqual(copy('A1 + B1', 0, 0), kept('A1 + B1'));
+  // A number in scientific notation is not column E.
+  assert.deepEqual(copy('1E5+A1', 1, 0), kept('1E5+A2'));
+});
+
+test('copyFormulas falls back to the toolkit spelling when the typed one is not confirmed', async () => {
+  const { shiftReferences } = await import('../src/reference-shift.ts');
+  // The text pass on its own.
+  assert.equal(shiftReferences('A1+$B$2', 1, 1), 'B2+$B$2');
+  assert.equal(shiftReferences('"A1"&A1', 1, 0), '"A1"&A2');
+  assert.equal(shiftReferences('Q1!A1+LOG10(A1)', 0, 1), 'Q1!B1+LOG10(B1)');
+  assert.equal(shiftReferences('A1', -1, 0), null);
+  assert.equal(shiftReferences('XFD1', 0, 1), null);
+  assert.equal(shiftReferences('A1048576', 1, 0), null);
+  // A stand-in toolkit whose copy disagrees with the text pass: its spelling wins.
+  const fake = {
+    openXlsx,
+    createBlankWorkbook,
+    copyFormulasJson: (json) => {
+      const items = JSON.parse(json);
+      return JSON.stringify({ ok: true, formulas: items.map((item) => ({ formula: item.row_delta === 0 ? `read(${item.formula})` : '(TOOLKIT)' })) });
+    },
+  };
+  const engine = new ForgeEngine(fake);
+  const out = call(engine, 'copyFormulas', { items: [{ formula: 'A1+B1', rowDelta: 1, columnDelta: 0 }] });
+  assert.deepEqual(out.value.formulas, [{ formula: '(TOOLKIT)', spelling: 'bracketed' }]);
+  // The real toolkit cannot move a reference off the grid; the text pass gives up too.
+  const real = new ForgeEngine({ openXlsx, createBlankWorkbook, copyFormulasJson });
+  assert.equal(call(real, 'copyFormulas', { items: [{ formula: 'XFD1', rowDelta: 0, columnDelta: 1 }] }).value.formulas[0].error.code, 'invalid_reference');
 });
 
 test('copyFormulas results calculate as Excel\'s relative copy does, and nothing is logged', () => {
@@ -508,7 +556,7 @@ test('copyFormulas results calculate as Excel\'s relative copy does, and nothing
       { formula: 'A1*10', rowDelta: 2, columnDelta: 0 },
     ],
   }).value.formulas;
-  assert.deepEqual(copied, [{ formula: '(A2*10)' }, { formula: '(A3*10)' }]);
+  assert.deepEqual(copied, [{ formula: 'A2*10', spelling: 'kept' }, { formula: 'A3*10', spelling: 'kept' }]);
   assert.equal(call(engine, 'log', { fromSeq: 0 }).value.total, before);
   assert.equal(call(engine, 'snapshot').value.revision, '1');
   const filled = [

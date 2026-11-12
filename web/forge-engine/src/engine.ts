@@ -35,6 +35,7 @@ import type {
   SnapshotCell,
   SnapshotSheet,
 } from './protocol';
+import { shiftReferences } from './reference-shift.ts';
 
 /** The subset of the wasm-bindgen module (rust/src/wasm.rs) the engine uses. */
 export interface ForgeWasm {
@@ -350,15 +351,44 @@ export class ForgeEngine {
     }
   }
 
-  /** Stateless: needs no open workbook and leaves the log alone. */
+  /**
+   * Stateless: needs no open workbook and leaves the log alone.
+   *
+   * The toolkit's copy is the authority and comes back fully bracketed
+   * (`A1+B1` one row down is `(A2+B2)`). To keep the formula as it was typed,
+   * each item is also moved as text (`shiftReferences`) and the toolkit is
+   * asked to read that text back: when it prints the same formula as its own
+   * copy, the typed spelling is returned (`spelling: 'kept'`); when it does
+   * not, or the text pass gives up, the toolkit's spelling is returned
+   * (`spelling: 'bracketed'`). An item the toolkit cannot copy is an error
+   * either way.
+   */
   private copyFormulas(items: FormulaCopy[]): Result<{ formulas: CopiedFormula[] }> {
     if (!this.wasm.copyFormulasJson) return fail('unsupported', 'this WASM build has no copyFormulasJson');
     if (!Array.isArray(items)) return fail('invalid_request', 'items must be an array');
-    const request = items.map((item) => ({ formula: item.formula, row_delta: item.rowDelta, column_delta: item.columnDelta }));
-    const out = JSON.parse(this.wasm.copyFormulasJson(JSON.stringify(request))) as
-      | { ok: true; formulas: CopiedFormula[] }
-      | { ok: false; error: EngineError };
-    return out.ok ? { ok: true, value: { formulas: out.formulas } } : { ok: false, error: out.error };
+    type Wire = { formula: string } | { error: EngineError };
+    const run = (request: { formula: unknown; row_delta: unknown; column_delta: unknown }[]) =>
+      JSON.parse(this.wasm.copyFormulasJson!(JSON.stringify(request))) as { ok: true; formulas: Wire[] } | { ok: false; error: EngineError };
+    const copied = run(items.map((item) => ({ formula: item.formula, row_delta: item.rowDelta, column_delta: item.columnDelta })));
+    if (!copied.ok) return { ok: false, error: copied.error };
+    const typed = items.map((item) => {
+      const text = item.formula.replace(/^=/, '');
+      return item.rowDelta === 0 && item.columnDelta === 0 ? text : shiftReferences(text, item.rowDelta, item.columnDelta);
+    });
+    const asked = typed.flatMap((text, index) => (text !== null && 'formula' in copied.formulas[index] ? [index] : []));
+    const read = asked.length > 0 ? run(asked.map((index) => ({ formula: typed[index], row_delta: 0, column_delta: 0 }))) : null;
+    const kept = new Set<number>();
+    if (read?.ok) {
+      asked.forEach((index, at) => {
+        const [mine, theirs] = [read.formulas[at], copied.formulas[index]];
+        if ('formula' in mine && 'formula' in theirs && mine.formula === theirs.formula) kept.add(index);
+      });
+    }
+    const formulas = copied.formulas.map((result, index): CopiedFormula => {
+      if ('error' in result) return result;
+      return kept.has(index) ? { formula: typed[index]!, spelling: 'kept' } : { formula: result.formula, spelling: 'bracketed' };
+    });
+    return { ok: true, value: { formulas } };
   }
 
   private withWorkbook(fn: (wb: ForgeWorkbook) => Result<unknown>): Result<unknown> {

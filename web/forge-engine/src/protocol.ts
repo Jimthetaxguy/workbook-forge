@@ -380,12 +380,17 @@ export interface FormulaCopy {
 }
 
 /**
- * A copied formula without the leading "=", in the engine's fully bracketed
- * form (`A1+B1` one row down is `(A2+B2)`), or why it cannot be copied:
+ * A copied formula without the leading "=", or why it cannot be copied:
  * `invalid_reference` when a reference would leave the grid, otherwise the
- * engine's parse or support error.
+ * toolkit's parse or support error.
+ *
+ * `spelling` says how the formula is written. `kept`: as the source was
+ * typed, with only its relative references moved (`A1+B1` one row down is
+ * `A2+B2`); the toolkit read this text back as the same formula as its own
+ * copy. `bracketed`: the toolkit's own fully bracketed spelling
+ * (`(A2+B2)`), used when the typed spelling could not be confirmed.
  */
-export type CopiedFormula = { formula: string } | { error: EngineError };
+export type CopiedFormula = { formula: string; spelling: 'kept' | 'bracketed' } | { error: EngineError };
 
 /** Requests, keyed by command name. */
 export interface Commands {
