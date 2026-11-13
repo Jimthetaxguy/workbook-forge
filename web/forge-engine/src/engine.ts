@@ -28,7 +28,9 @@ import type {
   RequestMessage,
   ResponseMessage,
   Result,
+  CellStyle,
   Snapshot,
+  SnapshotCell,
   SnapshotSheet,
 } from './protocol';
 
@@ -112,11 +114,38 @@ const typedFailure = (code: string, error: unknown): Result<never> => {
   return typed ? fail(code, typed[2], { refusal: typed[1] }) : fail(code, text);
 };
 
+type RawStyle = {
+  number_format?: string | null;
+  bold?: boolean | null;
+  font_color?: string | null;
+  fill_color?: string | null;
+  horizontal?: string | null;
+};
+
+/**
+ * Forge model style -> protocol style; undefined when it carries nothing.
+ * `General` is every cell's default number format, so it is left out.
+ */
+function toStyle(raw: RawStyle | null | undefined): CellStyle | undefined {
+  if (!raw) return undefined;
+  const style: CellStyle = {};
+  if (typeof raw.number_format === 'string' && raw.number_format !== '' && raw.number_format !== 'General') {
+    style.numberFormat = raw.number_format;
+  }
+  if (raw.bold === true) style.bold = true;
+  if (typeof raw.font_color === 'string') style.fontColor = raw.font_color;
+  if (typeof raw.fill_color === 'string') style.fillColor = raw.fill_color;
+  if (raw.horizontal === 'left' || raw.horizontal === 'center' || raw.horizontal === 'right') style.horizontal = raw.horizontal;
+  return Object.keys(style).length > 0 ? style : undefined;
+}
+
 /** Forge model JSON cell -> protocol cell. */
-function toCell(raw: { value?: unknown; formula?: string | null; style?: { number_format?: string } | null }) {
-  const cell: { value: Scalar; formula?: string; text?: true } = { value: (raw.value ?? null) as Scalar };
+function toCell(raw: { value?: unknown; formula?: string | null; style?: RawStyle | null }) {
+  const cell: SnapshotCell = { value: (raw.value ?? null) as Scalar };
   if (typeof raw.formula === 'string') cell.formula = raw.formula.replace(/^=/, '');
   if (raw.style?.number_format === '@') cell.text = true;
+  const style = toStyle(raw.style);
+  if (style) cell.style = style;
   return cell;
 }
 
@@ -191,7 +220,7 @@ function stringifyJson(value: unknown): string {
 type RawLayout = { text_columns: [number, number][]; text_rows: number[]; general_rows: number[] };
 
 function toSheets(
-  raw: { sheets: { name: string; cells?: Record<string, never> }[] },
+  raw: { sheets: { name: string; cells?: Record<string, never>; column_widths?: Record<string, number> }[] },
   layouts: Record<string, RawLayout> = {},
 ): SnapshotSheet[] {
   return raw.sheets.map((sheet) => {
@@ -201,6 +230,7 @@ function toSheets(
     };
     const layout = layouts[sheet.name];
     if (layout) out.textFormat = { columns: layout.text_columns, rows: layout.text_rows, generalRows: layout.general_rows };
+    if (sheet.column_widths && Object.keys(sheet.column_widths).length > 0) out.columnWidths = { ...sheet.column_widths };
     return out;
   });
 }

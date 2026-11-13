@@ -7,6 +7,10 @@
 // open() still pulls a full snapshot + calculation; each edit after that is one
 // envelope round-trip that answers with only the cells that changed.
 //
+// Presentation (number formats, bold, colors, alignment, column widths) is
+// projected once, from the snapshot, and is display only: Forge holds it and
+// writes it back on export; nothing here can change it.
+//
 // Undo/redo never replays Univer mutations and keeps no history here: Ctrl+Z
 // sends an `undo` intent to the worker, which reverts this actor's latest
 // applied, not-undone intent from its event log (or refuses with
@@ -17,17 +21,21 @@ import {
   CellValueType,
   CommandType,
   CustomCommandExecutionError,
+  HorizontalAlign,
   ICommandService,
   IUniverInstanceService,
   UniverInstanceType,
   type DocumentDataModel,
   type ICellData,
+  type IColumnData,
   type ICommandInfo,
+  type IStyleData,
   type IWorkbookData,
   type Workbook,
 } from '@univerjs/core';
 import type {
   CalculatedValue,
+  CellStyle,
   ChangedCell,
   CommandEnvelope,
   CommandMeta,
@@ -109,6 +117,90 @@ function isSingleCellArray(value: CalculatedValue): boolean {
   return rows.length === 1 && Array.isArray(rows[0]) && rows[0].length === 1;
 }
 
+/** The smallest grid a sheet is shown with, so there is room to work. */
+export const MIN_ROWS = 200;
+export const MIN_COLUMNS = 26;
+/** Blank rows and columns kept past the last cell the workbook holds. */
+const ROW_MARGIN = 100;
+const COLUMN_MARGIN = 10;
+
+/**
+ * An Excel column width in character units as screen pixels. Excel measures a
+ * column in widths of the default font's widest digit; for the default
+ * Calibri 11 that digit is 7 pixels at 100% (ECMA-376 18.3.1.13). A workbook
+ * with another default font is drawn slightly narrower or wider than Excel.
+ */
+export function columnWidthPixels(width: number): number {
+  return Math.max(0, Math.round(width * 7));
+}
+
+/** `RRGGBB` or `AARRGGBB` workbook hex -> `#RRGGBB`. Alpha is not drawn. */
+function cssColor(hex: string): string | null {
+  if (!/^([0-9a-f]{6}|[0-9a-f]{8})$/i.test(hex)) return null;
+  return `#${hex.slice(-6).toUpperCase()}`;
+}
+
+const ALIGN = { left: HorizontalAlign.LEFT, center: HorizontalAlign.CENTER, right: HorizontalAlign.RIGHT } as const;
+
+/**
+ * Protocol presentation -> Univer style, or undefined when nothing is drawn.
+ * Text (`@`) is left to the adapter's own typed-input rule (`parseInput`) and
+ * is not handed to Univer as a pattern.
+ */
+export function toUniverStyle(style: CellStyle | undefined): IStyleData | undefined {
+  if (!style) return undefined;
+  const out: IStyleData = {};
+  if (style.numberFormat && style.numberFormat !== '@') out.n = { pattern: style.numberFormat };
+  if (style.bold) out.bl = 1;
+  const font = style.fontColor ? cssColor(style.fontColor) : null;
+  if (font) out.cl = { rgb: font };
+  const fill = style.fillColor ? cssColor(style.fillColor) : null;
+  if (fill) out.bg = { rgb: fill };
+  if (style.horizontal) out.ht = ALIGN[style.horizontal];
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
+/** Numbers and counts for the cells in a selection, as a status bar shows. */
+export interface SelectionSummary {
+  /** Cells holding anything (a value or an error). */
+  count: number;
+  /** Cells holding a number. */
+  numbers: number;
+  sum: number;
+  min: number | null;
+  max: number | null;
+}
+
+/** A formula result that is more than one cell, kept for the preview panel. */
+export interface ArrayResult {
+  key: string;
+  rows: Scalar[][];
+}
+
+export type NoticeKind = 'info' | 'error';
+
+/** How every notice about a change Forge refused begins. */
+export const REJECTED = 'Change not applied.';
+
+/** Plain words for a refused Univer command, most specific pattern first. */
+const REFUSALS: [RegExp, string][] = [
+  [/paste/, 'Paste is not available yet. Type the values in instead.'],
+  [/auto-fill|refill|fill-/, 'Fill is not available yet.'],
+  [/clear-selection|delete-range|clear-/, 'Clearing cells with Delete is not available yet. Type over the cell, or use Undo.'],
+  [/insert-sheet|remove-sheet|copy-sheet|set-worksheet-(name|order|hide|show)|set-tab-color/, 'Adding, removing and renaming sheets is not available yet.'],
+  [/insert-(row|col|range|multi)/, 'Inserting rows and columns is not available yet.'],
+  [/remove-(row|col)|delete-/, 'Deleting rows and columns is not available yet.'],
+  [/merge/, 'Merging cells is not available yet.'],
+  [/move-(range|rows|cols)|reorder|sort|filter/, 'Moving and sorting cells is not available yet.'],
+  [/set-(row|col|worksheet-row|worksheet-col)|delta-(row|column)|hide|freeze/, 'Resizing, hiding and freezing rows and columns is not available yet.'],
+  [/style|bold|italic|underline|strike|font|color|border|align|wrap|rotation|numfmt|currency|percent|decimal|format/, 'Formatting changes are not available yet.'],
+];
+
+/** The sentence shown when a command is refused. */
+export function refusalText(id: string): string {
+  return REFUSALS.find(([pattern]) => pattern.test(id))?.[1] ?? 'That action is not available yet.';
+}
+
 /**
  * Project a calculated value onto one cell. A `{ rows }` array is written only
  * when it is 1×1. Any other shape is left blank: this view does not spill and
@@ -178,6 +270,10 @@ export class ForgeUniverAdapter {
   /** performance.now() when the last Forge response was written into Univer. */
   lastPaintAt = 0;
   private projected = new Map<string, Projected>();
+  /** `Sheet!A1` keys of cells drawn with a number format: Univer shows text there. */
+  private readonly formatted = new Set<string>();
+  /** `Sheet!A1` -> the rows of a formula result that is more than one cell. */
+  private readonly arrays = new Map<string, Scalar[][]>();
   /** `Sheet!A1` keys of Text-formatted (`@`) cells: typed input stays text. */
   private readonly textCells = new Set<string>();
   /**
@@ -192,7 +288,7 @@ export class ForgeUniverAdapter {
   private queue: Promise<unknown> = Promise.resolve();
   private readonly commands: ICommandService;
   private readonly instances: IUniverInstanceService;
-  private onNotice: (text: string) => void = () => {};
+  private onNotice: (text: string, kind: NoticeKind) => void = () => {};
 
   constructor(
     readonly host: UniverHost,
@@ -206,8 +302,51 @@ export class ForgeUniverAdapter {
     this.spyOnFacade();
   }
 
-  setNoticeSink(sink: (text: string) => void) {
+  setNoticeSink(sink: (text: string, kind: NoticeKind) => void) {
     this.onNotice = sink;
+  }
+
+  /** Formula results that are more than one cell, by `Sheet!A1`. */
+  arrayResults(): ArrayResult[] {
+    return [...this.arrays].map(([key, rows]) => ({ key, rows }));
+  }
+
+  /** The array result of one cell, when its formula returns more than one cell. */
+  arrayResult(sheetName: string, address: string): Scalar[][] | null {
+    return this.arrays.get(`${sheetName}!${address}`) ?? null;
+  }
+
+  /** The active sheet's name, as Forge knows it. */
+  activeSheetName(): string | undefined {
+    return this.sheetName(undefined);
+  }
+
+  /**
+   * Count and total the cells Forge holds inside zero-based, inclusive ranges
+   * of one sheet. The values are Forge's; only the adding up happens here,
+   * left to right in row order, which is not a Forge calculation.
+   */
+  summarize(sheetName: string, ranges: { startRow: number; endRow: number; startColumn: number; endColumn: number }[]): SelectionSummary {
+    const summary: SelectionSummary = { count: 0, numbers: 0, sum: 0, min: null, max: null };
+    const prefix = `${sheetName}!`;
+    const seen: { row: number; col: number; value: Scalar }[] = [];
+    for (const [key, cell] of this.projected) {
+      if (!key.startsWith(prefix) || key.lastIndexOf('!') !== prefix.length - 1) continue;
+      const { row, col } = fromA1(key.slice(prefix.length));
+      if (!ranges.some((r) => row >= r.startRow && row <= r.endRow && col >= r.startColumn && col <= r.endColumn)) continue;
+      seen.push({ row, col, value: cell.value });
+    }
+    seen.sort((a, b) => a.row - b.row || a.col - b.col);
+    for (const { value } of seen) {
+      if (value === null || value === '') continue;
+      summary.count += 1;
+      if (typeof value !== 'number') continue;
+      summary.numbers += 1;
+      summary.sum += value;
+      summary.min = summary.min === null ? value : Math.min(summary.min, value);
+      summary.max = summary.max === null ? value : Math.max(summary.max, value);
+    }
+    return summary;
   }
 
   /** Open .xlsx bytes in Forge and project them into a fresh Univer workbook. */
@@ -229,6 +368,8 @@ export class ForgeUniverAdapter {
     if (!snapshot.ok) throw new Error(`${snapshot.error.code}: ${snapshot.error.message}`);
     this.revision = snapshot.value.revision;
     this.projected.clear();
+    this.formatted.clear();
+    this.arrays.clear();
     this.sheetIds.clear();
     this.textCells.clear();
     // Dedupe keeps a notice that matches the previous line. A new workbook
@@ -253,20 +394,32 @@ export class ForgeUniverAdapter {
       this.sheetIds.set(sheet.name, id);
       data.sheetOrder.push(id);
       if (sheet.textFormat) this.textLayouts.set(sheet.name, { layout: sheet.textFormat, opened: new Set(Object.keys(sheet.cells)) });
-      let rows = 20;
-      let cols = 10;
+      let rows = MIN_ROWS;
+      let cols = MIN_COLUMNS;
       const cellData: Record<number, Record<number, ICellData>> = {};
       for (const [address, cell] of Object.entries(sheet.cells)) {
         const { row, col } = fromA1(address);
-        rows = Math.max(rows, row + 5);
-        cols = Math.max(cols, col + 5);
+        rows = Math.max(rows, row + 1 + ROW_MARGIN);
+        cols = Math.max(cols, col + 1 + COLUMN_MARGIN);
         const at = `${sheet.name}!${address}`;
         if (cell.text) this.textCells.add(at);
         const value = cell.formula !== undefined ? this.projectScalar(calc[at], at) : cell.value;
-        (cellData[row] ??= {})[col] = toCellData(value, cell.formula);
+        const data = toCellData(value, cell.formula);
+        const style = toUniverStyle(cell.style);
+        if (style) {
+          data.s = style;
+          if (style.n) this.formatted.add(at);
+        }
+        (cellData[row] ??= {})[col] = data;
         this.projected.set(at, { value, f: cell.formula });
       }
-      data.sheets[id] = { id, name: sheet.name, rowCount: rows, columnCount: cols, cellData };
+      const columnData: Record<number, IColumnData> = {};
+      for (const [letters, width] of Object.entries(sheet.columnWidths ?? {})) {
+        const { col } = fromA1(`${letters}1`);
+        cols = Math.max(cols, col + 1);
+        columnData[col] = { w: columnWidthPixels(width) };
+      }
+      data.sheets[id] = { id, name: sheet.name, rowCount: rows, columnCount: cols, cellData, columnData };
     });
     this.projecting = true;
     try {
@@ -323,6 +476,9 @@ export class ForgeUniverAdapter {
       const f = raw?.f ? String(raw.f).replace(/^=/, '') : undefined;
       if (f !== expected.f) out.push({ key, message: `${key} formula ${f} != ${expected.f}` });
       for (const [label, cell] of [['raw', raw], ['displayed', shown]] as const) {
+        // A number format makes Univer show text ("12.75%") for the number
+        // Forge holds, so only the stored value is compared there.
+        if (label === 'displayed' && this.formatted.has(key)) continue;
         const value = scalarFromCellData(cell);
         if (value !== displayValue(expected.value)) {
           out.push({ key, message: `${key} ${label} ${String(value)} != ${String(displayValue(expected.value))}` });
@@ -366,7 +522,7 @@ export class ForgeUniverAdapter {
     this.pending += 1;
     const next = this.queue
       .then(task)
-      .catch((error) => this.notice(`Adapter error: ${String(error)}`))
+      .catch((error) => this.notice(`Something went wrong: ${error instanceof Error ? error.message : String(error)}`))
       .finally(() => {
         this.pending -= 1;
       });
@@ -374,16 +530,20 @@ export class ForgeUniverAdapter {
     return next;
   }
 
-  private notice(text: string) {
+  private notice(text: string, kind: NoticeKind = 'error') {
     this.notices.push(text);
-    this.onNotice(text);
+    this.onNotice(text, kind);
   }
 
   /** One-cell projection of a calculated value, with a notice when the array is not 1×1. */
   private projectScalar(value: CalculatedValue | undefined, where: string): Scalar {
     if (value && typeof value === 'object' && 'rows' in value && !isSingleCellArray(value)) {
-      const text = `${where}: multi-cell array result is not shown.`;
-      if (this.notices.at(-1) !== text) this.notice(text);
+      this.arrays.set(where, value.rows);
+      const columns = Math.max(0, ...value.rows.map((row) => row.length));
+      const text = `${where} returns ${value.rows.length} by ${columns} values. The grid shows one value per cell, so the cell stays blank. Select it to preview the result.`;
+      if (this.notices.at(-1) !== text) this.notice(text, 'info');
+    } else {
+      this.arrays.delete(where);
     }
     return scalar(value);
   }
@@ -412,10 +572,10 @@ export class ForgeUniverAdapter {
     const result = await this.client.applyAndCalculate(this.envelope(op), command);
     if (!result.ok) {
       const e = result.error;
-      if (e.code === 'nothing_to_undo') return (this.notice('Nothing to undo.'), false);
-      if (e.code === 'nothing_to_redo') return (this.notice('Nothing to redo.'), false);
-      const revisions = e.current_revision ? ` (expected r${e.expected_revision}, Forge at r${e.current_revision})` : '';
-      this.notice(`Forge rejected ${label}: ${e.code}: ${e.message}${revisions}`);
+      if (e.code === 'nothing_to_undo') return (this.notice('Nothing to undo.', 'info'), false);
+      if (e.code === 'nothing_to_redo') return (this.notice('Nothing to redo.', 'info'), false);
+      const revisions = e.current_revision ? ` (expected version ${e.expected_revision}, workbook is at version ${e.current_revision})` : '';
+      this.notice(`${REJECTED} The ${label} was refused: ${e.message} [${e.code}]${revisions}`);
       this.reprojectAll(op.type === 'set_cells' ? op.edits.map((edit) => `${edit.sheet}!${edit.address}`) : []);
       return false;
     }
@@ -511,6 +671,7 @@ export class ForgeUniverAdapter {
     for (const key of [...this.projected.keys()]) {
       if (present.has(key)) continue;
       this.projected.delete(key);
+      this.arrays.delete(key);
       const { sheetName, address } = splitCellKey(key);
       const { row, col } = fromA1(address);
       const matrix = bySheet.get(sheetName) ?? {};
@@ -600,19 +761,20 @@ export class ForgeUniverAdapter {
       throw new CustomCommandExecutionError(`${id} routed to Forge`);
     }
     if (VIEW_COMMANDS.has(id)) return;
-    if (GUARDED_PREFIXES.some((prefix) => id.startsWith(prefix))) this.block(id, 'outside the Forge spike scope (value/formula edits, undo/redo only)');
+    if (GUARDED_PREFIXES.some((prefix) => id.startsWith(prefix))) this.block(id, refusalText(id));
   }
 
+  /** Refuse a command: record its id for the audit and say why in plain words. */
   private block(id: string, reason: string): never {
     this.audit.blocked.push(id);
-    this.notice(`Blocked ${id}: ${reason}.`);
+    this.notice(reason, 'info');
     throw new CustomCommandExecutionError(`${id} blocked`);
   }
 
   /** SetRangeValuesCommand params -> Forge edits, or a reason to refuse. */
   private translateSetRangeValues(params: Record<string, unknown>): Edit[] | string {
     const sheet = this.sheetName(params.subUnitId as string | undefined);
-    if (!sheet) return 'unknown sheet';
+    if (!sheet) return 'That sheet is not part of this workbook.';
     const value = params.value as unknown;
     const range = params.range as { startRow: number; startColumn: number; endRow: number; endColumn: number } | undefined;
     const cells: { row: number; col: number; cell: ICellData }[] = [];
@@ -628,11 +790,11 @@ export class ForgeUniverAdapter {
         for (const [c, cell] of Object.entries(cols)) cells.push({ row: Number(r), col: Number(c), cell });
       }
     }
-    if (cells.length === 0) return 'no cells';
+    if (cells.length === 0) return 'There was nothing to change.';
     const edits: Edit[] = [];
     for (const { row, col, cell } of cells) {
       const input = parseInput(cell ?? {}, this.isTextFormat(sheet, row, col));
-      if (!input) return 'style-only change is outside the spike scope';
+      if (!input) return refusalText('style');
       edits.push({ sheet, address: toA1(row, col), ...input });
     }
     return edits;

@@ -3,49 +3,56 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light dark" />
     <title>Workbook Forge</title>
-    <style>
-      html, body { margin: 0; height: 100%; font: 13px system-ui, sans-serif; color: #1f2933; }
-      body { display: flex; flex-direction: column; }
-      [hidden] { display: none !important; }
-      #bar { display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; padding: 6px 10px; border-bottom: 1px solid #ddd; }
-      #bar strong { font-size: 14px; margin-right: 6px; white-space: nowrap; }
-      #bar button, #bar .file { white-space: nowrap; }
-      #bar .file input { display: none; }
-      #bar .file { display: inline-block; padding: 1px 6px; border: 1px solid #767676; border-radius: 3px; background: #efefef; cursor: pointer; }
-      #bar .sep { width: 1px; align-self: stretch; background: #e3e5e8; margin: 0 2px; }
-      #status { margin-left: auto; color: #4b5563; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-      #privacy { padding: 4px 10px; color: #365a44; background: #f2faf4; border-bottom: 1px solid #d8eadc; }
-      #notices { padding: 4px 10px; color: #8a1c1c; background: #fff4f4; border-bottom: 1px solid #f1caca; }
-      #notices:empty { display: none; }
-      #formula-issues { padding: 4px 10px; background: #fffbea; border-bottom: 1px solid #f0e2a8; }
-      #formula-issues summary { cursor: pointer; }
-      #formula-issues ul { margin: 4px 0 2px; padding-left: 20px; }
-      .badge { display: inline-block; min-width: 16px; padding: 0 5px; margin-left: 4px; border-radius: 8px; background: #8a1c1c; color: #fff; font-size: 11px; line-height: 16px; text-align: center; }
-      #developer { padding: 4px 10px; background: #f7f8fa; border-bottom: 1px solid #e3e5e8; color: #4b5563; }
-      #developer summary { cursor: pointer; }
-      #developer dl { display: grid; grid-template-columns: max-content 1fr; gap: 2px 12px; margin: 6px 0 2px; }
-      #developer dt { font-weight: 600; }
-      #developer dd { margin: 0; }
-      #app { flex: 1; min-height: 0; }
-    </style>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23C4501A'/%3E%3Cpath d='M8 9h16v14H8zM8 14h16M14 9v14' fill='none' stroke='%23fff' stroke-width='2'/%3E%3C/svg%3E" />
   </head>
   <body>
-    <div id="bar">
-      <strong id="title">Workbook Forge</strong>
-      <button id="new">New workbook</button>
-      <label class="file" title="Open an .xlsx file from this device">Open .xlsx…<input id="file" type="file" accept=".xlsx" /></label>
-      <button id="export">Download .xlsx</button>
-      <span class="sep"></span>
-      <button id="undo">Undo</button>
-      <button id="redo">Redo</button>
-      <span id="status" role="status"></span>
-    </div>
-    <div id="privacy">Your workbook stays on this device. Use Download to save a copy.</div>
-    <details id="formula-issues" data-testid="formula-issues" hidden>
-      <summary>Formula issues<span class="badge" id="formula-issue-count" data-testid="formula-issue-count">0</span></summary>
-      <ul id="formula-issue-list"></ul>
-    </details>
+    <header id="bar" class="appbar">
+      <div class="brand">
+        <svg class="mark" viewBox="0 0 32 32" width="24" height="24" aria-hidden="true">
+          <rect width="32" height="32" rx="7" fill="var(--accent)" />
+          <path d="M8 9h16v14H8zM8 14h16M14 9v14" fill="none" stroke="var(--accent-ink)" stroke-width="2" />
+        </svg>
+        <strong id="title">Workbook Forge</strong>
+      </div>
+      <div id="status" class="doc" role="status"><span id="doc-name" class="doc-name"></span><span class="dot"> · </span><span id="calc-state" class="calc-state" data-state="ready"></span><span class="dot"> · </span><span id="version" class="version"></span></div>
+      <div class="actions">
+        <div class="group" role="group" aria-label="History">
+          <button id="undo" class="btn compact" type="button" title="Undo (Ctrl+Z)">
+            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3.5 2.5 7 6 10.5M3 7h6.5a3.5 3.5 0 0 1 0 7H7" /></svg><span class="label">Undo</span>
+          </button>
+          <button id="redo" class="btn compact" type="button" title="Redo (Ctrl+Y)">
+            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M10 3.5 13.5 7 10 10.5M13 7H6.5a3.5 3.5 0 0 0 0 7H9" /></svg><span class="label">Redo</span>
+          </button>
+        </div>
+        <span class="sep" aria-hidden="true"></span>
+        <div class="group" role="group" aria-label="File">
+          <button id="new" class="btn" type="button" title="Start a blank workbook">
+            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M9 2H4.5A1.5 1.5 0 0 0 3 3.5v9A1.5 1.5 0 0 0 4.5 14h7a1.5 1.5 0 0 0 1.5-1.5V6L9 2Zm0 0v4h4M8 8.5v3M6.5 10h3" /></svg><span class="label">New workbook</span>
+          </button>
+          <label class="btn file" title="Open an .xlsx file from this device">
+            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 12.5v-8A1.5 1.5 0 0 1 3.5 3h2.6l1.5 1.8h4.9A1.5 1.5 0 0 1 14 6.3v6.2a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 2 12.5Z" /></svg><span class="label">Open .xlsx…</span><input id="file" type="file" accept=".xlsx" aria-label="Open an .xlsx file from this device" />
+          </label>
+          <button id="export" class="btn primary" type="button" title="Save a copy to this device">
+            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2.5v8m0 0L4.8 7.3M8 10.5l3.2-3.2M3 13.5h10" /></svg><span class="label">Download .xlsx</span>
+          </button>
+        </div>
+        <span class="sep" aria-hidden="true"></span>
+        <div class="group" role="group" aria-label="Panels">
+          <button id="issues-toggle" class="btn warn" type="button" aria-controls="panel" aria-expanded="false" data-testid="formula-issues-toggle" hidden>
+            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2.3 14.2 13H1.8L8 2.3Zm0 4.2v3.2m0 1.8v.100" /></svg><span class="label">Issues</span><span class="badge" id="formula-issue-count" data-testid="formula-issue-count">0</span>
+          </button>
+          <button id="functions-toggle" class="btn" type="button" aria-controls="panel" aria-expanded="false" title="Functions this workbook can calculate">
+            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M9.5 2.5H8.3A1.8 1.8 0 0 0 6.5 4.3v7.4a1.8 1.8 0 0 1-1.8 1.8H3.5M4 7h5m1.5 2 3.5 4.5m0-4.5-3.5 4.5" /></svg><span class="label">Functions</span>
+          </button>
+          <button id="theme-toggle" class="btn icon" type="button" aria-label="Switch to dark theme" title="Switch theme">
+            <svg class="sun" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="2.8" /><path d="M8 1.5v1.5m0 10v1.5M1.5 8H3m10 0h1.5M3.4 3.4l1.1 1.1m7 7 1.1 1.1m0-9.2-1.1 1.1m-7 7-1.1 1.1" /></svg>
+            <svg class="moon" viewBox="0 0 16 16" aria-hidden="true"><path d="M13.5 9.3A5.8 5.8 0 0 1 6.7 2.5a5.8 5.8 0 1 0 6.8 6.8Z" /></svg>
+          </button>
+        </div>
+      </div>
+    </header>
     <details id="developer" data-testid="developer" hidden>
       <summary>Developer</summary>
       <dl>
@@ -58,11 +65,52 @@
         <dt>Calculator</dt>
         <dd id="dev-calculator">Forge WASM in a Web Worker calculates the workbook in every mode. univer-default also calculates in Univer; the other modes use Univer as the view.</dd>
         <dt>Formula Lab</dt>
-        <dd id="formula-support">XLOOKUP subset: blank or scalar lookup values, one-dimensional ranges, exact matches, forward/reverse search, and optional if_not_found. Approximate, wildcard, and binary modes are refused and listed under Formula issues. A two-dimensional return range is a #VALUE! error in the cell. Any other formula whose result is a multi-cell array is left blank in the grid, with a notice.</dd>
+        <dd id="formula-support">XLOOKUP subset: blank or scalar lookup values, one-dimensional ranges, exact matches, forward/reverse search, and optional if_not_found. Approximate, wildcard, and binary modes are refused and listed under Formula issues. A two-dimensional return range is a #VALUE! error in the cell. Any other formula whose result is a multi-cell array is left blank in the grid, with a notice and a preview panel.</dd>
+        <dt>Last refused command</dt>
+        <dd id="dev-blocked" data-testid="dev-blocked">none</dd>
       </dl>
     </details>
-    <div id="notices" role="status" aria-live="polite"></div>
-    <div id="app"></div>
+    <main class="workspace">
+      <div id="app"></div>
+      <aside id="panel" class="panel" aria-labelledby="panel-title" hidden>
+        <div class="panel-head">
+          <h2 id="panel-title">Functions</h2>
+          <button id="panel-close" class="btn icon" type="button" aria-label="Close panel">
+            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 4 8 8m0-8-8 8" /></svg>
+          </button>
+        </div>
+        <section id="functions" class="panel-body" data-testid="functions" hidden>
+          <p id="function-coverage" class="panel-note"></p>
+          <label class="search">
+            <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="4.3" /><path d="m10.2 10.2 3.3 3.3" /></svg>
+            <input id="function-search" type="search" placeholder="Search functions" aria-label="Search functions" autocomplete="off" spellcheck="false" />
+          </label>
+          <p id="function-count" class="panel-count" role="status"></p>
+          <div id="function-list"></div>
+        </section>
+        <section id="formula-issues" class="panel-body" data-testid="formula-issues" hidden>
+          <p class="panel-note">Formulas Workbook Forge could not calculate. Their cells show an error or stay blank until the formula changes.</p>
+          <ul id="formula-issue-list" class="issue-list"></ul>
+        </section>
+        <section id="array-result" class="panel-body" data-testid="array-result" hidden>
+          <p id="array-note" class="panel-note"></p>
+          <div class="array-scroll"><table id="array-table" class="array-table"></table></div>
+        </section>
+      </aside>
+    </main>
+    <footer id="statusbar" class="statusbar">
+      <span id="privacy" class="privacy">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="3.5" y="7" width="9" height="6.5" rx="1.2" /><path d="M5.5 7V5.2a2.5 2.5 0 0 1 5 0V7" /></svg><span>Your workbook stays on this device. Use Download to save a copy.</span>
+      </span>
+      <button id="array-chip" class="chip" type="button" data-testid="array-chip" hidden></button>
+      <span id="selection-stats" class="stats" data-testid="selection-stats" role="status" aria-live="off"></span>
+    </footer>
+    <div id="notice" class="notice" data-kind="info" hidden>
+      <div id="notices" class="notice-text" role="status" aria-live="polite"></div>
+      <button id="notice-close" class="btn icon" type="button" aria-label="Dismiss message">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 4 8 8m0-8-8 8" /></svg>
+      </button>
+    </div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

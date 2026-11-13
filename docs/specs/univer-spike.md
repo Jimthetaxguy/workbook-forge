@@ -28,8 +28,14 @@ web/univer-spike/   Univer adapter and demo, using only the command API
   src/adapter.ts    command interception, projection, undo/redo sent to the
                     worker as intents, and an audit of Univer calculation
                     and writes
-  src/univer-host.ts / formula-plugins.ts   the configurations compared below
+  src/univer-host.ts / formula-plugins.ts   the configurations compared below,
+                    the grid theme and Forge's function help
+  src/main.ts, index.html, src/shell.css    the page around the grid (app bar,
+                    side panel, status bar, notices)
+  src/function-notes.ts                     argument lists and one-line
+                    descriptions for the Functions panel and suggestions
   tests/acceptance.spec.ts                  Playwright acceptance suite
+  FLOWS.md                                  the user flows the suite covers
 fixtures/univer-spike-chain.xlsx            A1 = 10 and five dependent formulas
 fixtures/realtime-chain.xlsx                event-log fixture: as above, but B1 = 0 literal
 rust/examples/univer_spike_fixture.rs       writes both fixtures (--realtime for the second)
@@ -134,7 +140,12 @@ Formula issues. It does not project dynamic array results into neighboring
 worksheet cells. A two-dimensional XLOOKUP return is `#VALUE!` in the cell.
 Any other formula whose result is a multi-cell array is left blank in the
 grid, with a notice. A 1×1 array result is shown as its single value. This
-split matches the Developer panel after `68fe35e`.
+split matches the Developer panel after `68fe35e`. The blank cell is not the
+whole answer: the notice names the cell and its shape, the status bar shows an
+**Array result** chip while such a cell is selected, and the side panel lists
+the values Forge calculated. This is a preview only. Nothing is written to
+neighboring cells, and no spill placement, blocker or spill-reference
+behavior is implemented or claimed.
 
 Microsoft documents those broader XLOOKUP behaviors, including a return array
 that can produce multiple columns; this prototype must not imply that full
@@ -193,7 +204,20 @@ Findings:
     of view commands (selection, scroll, zoom, sheet activation, copy). This is
     fail-closed: insert/delete rows and columns, sheet add/remove, paste, the
     fill handle (`auto-fill`), clear content, merge, styling and so on are
-    refused, never translated into cell edits.
+    refused, never translated into cell edits. The notice is a plain sentence
+    chosen by `refusalText(id)` (for example "Paste is not available yet. Type
+    the values in instead."); the command id is kept in `audit.blocked` and
+    shown in the Developer panel.
+- **Presentation.** `snapshot` carries each cell's presentation when the
+  model has one (`style`: number format, bold, italic, font color, fill,
+  horizontal alignment, wrap) and each sheet's `columnWidths`. Both fields are
+  additive and optional; `schema_version` and `model_version` are unchanged.
+  The adapter turns them into Univer styles when it builds the workbook, and
+  `@univerjs/sheets-numfmt` draws the number format. Presentation is read
+  only: the value Univer holds stays the number Forge calculated, and
+  `divergence()` still compares raw values. Column widths are drawn at 7 px
+  per Excel character unit, which is an approximation of Excel's
+  font-dependent width, not a measurement.
 - **Projection.** After every accepted edit the adapter applies the `changed`
   delta from `applyAndCalculate`, then writes those cells as `{v, f}` with one
   `sheet.mutation.set-range-values` per sheet. Reading `snapshot` and
@@ -265,8 +289,9 @@ placeholder cells, and the UI has no special path for it.
 `web/univer-spike/tests/acceptance.spec.ts`, headless Chromium (Playwright
 1.64.1 driving system Chromium 156), production build served statically:
 **15 passed** on 2026-10-27. That figure is the snapshot from that day's run.
-The suite in this file now defines 19 tests, including the toolbar test and
-the formula-issues test.
+The suite in this file now defines 25 tests. The six added with the product
+shell are listed after item 12; a run of all 25 is recorded in
+`docs/run-history.md` (Run 28) as branch-local evidence.
 
 For `not-execute` and `load-only`:
 
@@ -285,7 +310,8 @@ For `not-execute` and `load-only`:
 7. Univer made no calculation requests, produced no outputs and fired no facade
    events. There were no foreign writes and no divergence.
 8. Insert row/column, remove row, insert sheet, auto-fill, paste and clear
-   content are all blocked with a visible notice. Sheet shape and revision are
+   content are all blocked with a visible notice in plain words, and the
+   command id is recorded in `audit.blocked`. Sheet shape and revision are
    unchanged.
 9. A blank workbook can be created in the browser, edited through the cell
    editor, and recalculated by Forge. The test uses mouse range selection for
@@ -308,6 +334,31 @@ For `not-execute` and `load-only`:
 11. Selecting malformed XLSX bytes displays an `open_failed` notice and keeps
     the previous workbook, values, and revision visible. These two recovery
     cases run in both `not-execute` and `load-only` modes.
+
+Added with the product shell (default `not-execute` view):
+
+13. Display. Opening `fixtures/corpus/op_styles_number_formats.xlsx` shows
+    `2024-02-29`, `12.75%`, `$1,234.50`, `-42.75`, `3/8`, `9,877` and `42:00`
+    for the stored numbers, bold blue labels, the yellow fill and right
+    alignment, and column widths of 126 and 154 px. Expected strings are read
+    from the fixture's XML (stored value plus format code), not from an
+    engine. Forge still holds 45351, 0.1275 and -42.75, and there is no
+    divergence.
+14. Status bar. Selecting A1:A3 of 10, 20.5 and a text cell shows Average
+    15.25, Count 3, Sum 30.5 (independent arithmetic); the totals follow an
+    edit and clear on a new workbook.
+15. Functions. The panel lists exactly the catalog's implemented functions,
+    search narrows it, and the in-cell suggestion list offers XLOOKUP in
+    Forge's words and offers nothing for `=bessel` (functions Univer knows and
+    Forge does not implement).
+16. Array result. `=SEQUENCE(3,2)` leaves the cell blank, raises the notice,
+    and selecting the cell previews 1 to 6 in three rows of two (Microsoft's
+    SEQUENCE definition).
+17. Theme. The toggle switches the page and the grid together. Afterwards
+    `localStorage`, `sessionStorage` and cookies are empty, and every
+    IndexedDB store holds zero entries.
+18. Narrow screen. At 375 px every app bar control is on screen and the side
+    panel covers the grid at full width.
 
 **Repaint latency gate.** A typed commit into A1 of the event-log fixture
 must repaint its dependent B1 in under 100 ms, measured from the adapter's
@@ -334,20 +385,27 @@ generator and the tests, never from either engine.
 
 | Part | Raw | Gzip |
 |---|---|---|
-| Main JS (Univer core, sheets, sheets-ui, docs, UI, React, adapter; engine-formula is pulled in by `@univerjs/sheets`) | 6040 KiB | 1635 KiB |
-| Main CSS | 113 KiB | 17 KiB |
-| Lazy sheets-formula + sheets-formula-ui (JS+CSS) | 220 KiB | 63 KiB |
-| Forge worker JS | 8 KiB | 3 KiB |
-| Forge WASM | 1566 KiB | 486 KiB |
-| **Loaded at startup** | **7947 KiB** | **2203 KiB** |
+| Main JS (Univer core, sheets, sheets-ui, docs, UI, React, adapter; engine-formula is pulled in by `@univerjs/sheets`) | 6074 KiB | 1646 KiB |
+| Main CSS | 123 KiB | 19 KiB |
+| Lazy sheets-formula + sheets-formula-ui + sheets-numfmt (JS+CSS) | 232 KiB | 67 KiB |
+| Forge worker JS | 16 KiB | 6 KiB |
+| Forge WASM | 2302 KiB | 684 KiB |
+| **Loaded at startup** | **8747 KiB** | **2421 KiB** |
 | Lazy hyphenation dictionaries (docs; not loaded for en-US) | 4472 KiB | 990 KiB |
+
+Measured on 2026-11-12 with the product shell. Against the previous table the
+shell, theme and number-format renderer add about 34 KiB of JS, 10 KiB of CSS
+and 12 KiB to the lazy formula chunk; the worker and WASM figures had grown on
+main before this change and are restated here, not caused by it.
 
 Run `npm run build && npm run size` in `web/univer-spike`.
 
 ## Licenses
 
 All runtime and dev npm packages are permissive (MIT, Apache-2.0,
-BSD-3-Clause, ISC, 0BSD). `npm run check:licenses` checks `package-lock.json`
+BSD-3-Clause, ISC, 0BSD), including `@univerjs/sheets-numfmt` and
+`@univerjs/themes` (both Apache-2.0, 1.2.0). The page uses system font stacks
+only: no font files are bundled or fetched. `npm run check:licenses` checks `package-lock.json`
 against the README's accepted SPDX list. The repository's Python policy test
 covers Cargo and Python only, so `catalog/dependency-licenses.json` is
 unchanged, and no crates were added. **Vite 8 was rejected**: it hard-depends
@@ -363,8 +421,20 @@ tools. Vite 7.3.7 (esbuild/rollup) is used instead.
 - XLOOKUP has a bounded subset: exact mode, one-dimensional ranges, scalar
   results, forward/reverse linear search, and optional `if_not_found`. Other
   match/search modes and array spills remain unsupported.
-- Clearing content (Delete) is blocked rather than translated into blank-value
-  edits. It is a small extension if wanted.
+- Clearing content (Delete), paste and the fill handle are blocked rather than
+  translated into Forge edits. The notices say so in plain words.
+- Presentation is read only. Number formats, bold, italic, font color, fill,
+  horizontal alignment, wrap and column widths are shown; borders, row
+  heights, merged-cell drawing, conditional formats and theme colors are not.
+  Formatting commands are refused.
+- A formula that uses a function outside the catalog leaves its cell blank and
+  is listed under Formula issues. Excel would show `#NAME?` for a name it does
+  not know; this view does not imitate that.
+- Univer's suggestion list stays open for 300 ms after the last keystroke, and
+  Enter picks the highlighted suggestion while it is open. Typing a whole
+  formula and pressing Enter within that window after a function-name prefix
+  completes the name instead of committing. This is Univer 1.2.0 behavior and
+  is the same on the previous build.
 - Projection writes the whole sheet each refresh, which is fine for a spike.
   Large sheets need `changed_cells` from Forge (PR #19 already models this) and
   paged reads.
@@ -382,23 +452,52 @@ bash web/bootstrap-sandbox.sh            # optional: toolchain on a fresh Linux 
 bash web/forge-engine/build-wasm.sh      # needs wasm-bindgen-cli 0.2.129
 cd web/forge-engine && npm test          # in-process engine tests (Node)
 cd web/univer-spike && npm ci
-npm run typecheck && npm run check:licenses
+npm run typecheck && npm run check:licenses && npm run check:functions
 CHROMIUM_PATH=/usr/bin/chromium npm run test:e2e   # builds, serves dist/, runs Playwright
 npm run dev                              # interactive demo; always not-execute (?dev=1 for the Developer panel)
 ```
 
 ### Page chrome
 
-The default URL is the user view and always runs `not-execute`. Its toolbar
-has New workbook, Open .xlsx, Download .xlsx, Undo and Redo, and a status line
-such as `univer-spike-chain.xlsx · All changes calculated · Version 0` (the
-version is the Forge revision). A one-line note says the workbook stays on the
-device. **Formula issues** lists Forge's calculation diagnostics (for example
-an XLOOKUP match mode outside the subset above, or an unsupported function),
-with a count badge; it is hidden when there are none.
+The default URL is the user view and always runs `not-execute`.
+
+- **App bar.** The name, a status line such as `univer-spike-chain.xlsx · All
+  changes calculated · Version 0` (the version is the Forge revision), Undo,
+  Redo, New workbook, Open .xlsx, Download .xlsx, Functions and the theme
+  toggle. **Issues** appears with a count only while Forge reports
+  calculation diagnostics.
+- **Grid.** Univer's formula bar and canvas, themed to match the page.
+  Univer's own toolbar and context menu are off: every action they offer is
+  one Forge would refuse.
+- **Side panel.** One of three views. **Functions** lists the functions Forge
+  calculates, by category, with argument lists and one-line descriptions from
+  `src/function-notes.ts`, searchable by name or description, and states how
+  many of Microsoft's listed functions that is. `npm run check:functions`
+  fails when a note disagrees with the catalog's argument counts. **Formula
+  issues** lists each diagnostic; clicking one selects its cell. **Array
+  result** previews a multi-cell result (see the XLOOKUP section).
+- **Status bar.** The on-device note, the Array result chip, and Average,
+  Count and Sum for a selection with more than one filled cell. The totals are
+  computed in the page from the values Forge projected, for display only.
+- **Notices.** A toast. Information fades after nine seconds; an error stays
+  until dismissed.
+- **Theme.** Light or dark from the system setting, with a toggle. The choice
+  is kept in memory for the visit. No workbook data or preference is written
+  to browser storage. Univer 1.2.0's interface package does create an
+  IndexedDB database named `UniverLocalStorage` when the page loads; it stays
+  empty here, because the Univer features that write to browser storage (the
+  emoji picker and the mobile function panel) are not mounted on this page.
+  Acceptance item 17 checks that it holds no entries.
+- **Suggestions.** In every mode where Forge calculates, the in-cell
+  suggestion list and argument help are replaced with Forge's own function
+  list and wording, so the editor does not suggest a function Forge would
+  refuse. `univer-default` keeps Univer's list.
+
+Below 720 px the side panel covers the grid; below 480 px it is full width and
+the button labels collapse to icons.
 
 `?dev=1`, or any `?mode=` other than `not-execute`, adds a collapsed
 **Developer** panel: the mode selector, the raw revision (`Forge r0 · mode
-…`), the source state (built-in sample, opened file or new workbook), and the
-XLOOKUP subset note. The Playwright suite boots the comparison modes with
-`?mode=<mode>`.
+…`), the source state (built-in sample, opened file or new workbook), the id
+of the last refused command, and the XLOOKUP subset note. The Playwright suite
+boots the comparison modes with `?mode=<mode>`.

@@ -56,6 +56,20 @@ export interface EngineError {
 
 export type Result<T> = { ok: true; value: T } | { ok: false; error: EngineError };
 
+/**
+ * How a cell looks. Read-only presentation the engine already holds for
+ * imported and authored workbooks; a host may ignore it. Colors are the
+ * workbook's own hex digits: six (`RRGGBB`) or eight (`AARRGGBB`).
+ */
+export interface CellStyle {
+  /** Excel number format code, e.g. `#,##0.00` or `0.0%`. Absent for `General`. */
+  numberFormat?: string;
+  bold?: true;
+  fontColor?: string;
+  fillColor?: string;
+  horizontal?: 'left' | 'center' | 'right';
+}
+
 export interface SnapshotCell {
   value: Scalar;
   /** Formula without the leading "=", when the cell holds one. */
@@ -65,6 +79,8 @@ export interface SnapshotCell {
    * there: `00123` keeps its leading zeros and is never read as a number.
    */
   text?: true;
+  /** Present when the cell carries any presentation. */
+  style?: CellStyle;
 }
 
 /**
@@ -85,6 +101,11 @@ export interface SnapshotSheet {
   cells: Record<string, SnapshotCell>;
   /** Present when the imported sheet's row or column styles are Text (`@`). */
   textFormat?: TextFormatLayout;
+  /**
+   * Column letters to widths in Excel's character units (8.43 is Excel's
+   * default), for the columns the workbook sets. Absent when it sets none.
+   */
+  columnWidths?: Record<string, number>;
 }
 
 export interface Snapshot {
