@@ -3383,7 +3383,13 @@ def _with_reference(node: _Node, value: object) -> object:
 
 
 def _as_reference_argument(child: _Node, value: object, *, primitive: bool) -> object:
-    """Present one SUM, AVERAGE, COUNT, AND or OR argument with Excel's reference rules."""
+    """Present one SUM, AVERAGE, COUNT, AND or OR argument with Excel's reference rules.
+
+    XOR and the range statistics read the same provenance through
+    :func:`_keeps_reference` in their own argument readers. INDEX counts as a
+    reference here because this evaluator's INDEX accepts only a cell range and
+    returns ``#VALUE!`` for a typed value or one cell.
+    """
     if isinstance(value, _Referenced):
         return _Range((value.value,), 1, 1)
     if isinstance(value, (_Range, ArrayValue)):
@@ -5101,7 +5107,9 @@ def _function(
     budget: _WildcardBudget,
 ) -> object:
     # SUM, AVERAGE, COUNT, AND and OR have already turned reference provenance
-    # into ranges. Every other function reads the underlying value.
+    # into ranges. XOR and the range statistics read it in their own argument
+    # readers before this point. Every other function reads the underlying
+    # value.
     args = tuple(_dereference(arg) for arg in args)
     fixed = {
         "ABS": (1, 1),

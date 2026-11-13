@@ -3591,6 +3591,42 @@ fn index_call(name: &str, args: &[Expr], env: &Environment<'_>) -> Result<CalcVa
     index_fn(args, &values, name)
 }
 
+/// Evaluates one SUM or AVERAGE argument and reports whether it is read as a
+/// reference.
+///
+/// A cell, a range, an array and a reference selected by IF, IFERROR, IFNA,
+/// IFS, SWITCH, CHOOSE or XLOOKUP are references. INDEX is a reference only
+/// when its first argument evaluated to a range, or when INDEX itself returns
+/// a range for row or column 0. INDEX here also accepts a typed value or one
+/// cell as its first argument, and that result stays what it was before INDEX:
+/// SUM(INDEX(TRUE,1)) is 1, like SUM(TRUE). COUNT, AND, OR and the other
+/// marker readers use `keeps_reference` and treat every INDEX as a reference.
+#[inline(never)]
+fn eval_sum_argument(
+    argument: &Expr,
+    env: &Environment<'_>,
+) -> Result<(CalcValue, bool), FormulaError> {
+    if let Expr::Call(source_name, index_args) = argument
+        && canonical_function_name(source_name) == "INDEX"
+    {
+        let values: Vec<CalcValue> = index_args
+            .iter()
+            .map(|a| eval(a, env))
+            .collect::<Result<_, _>>()?;
+        let from_range = matches!(values.first(), Some(CalcValue::Range(_)));
+        let evaluated = index_fn(index_args, &values, source_name)?;
+        let referenced = from_range
+            || matches!(
+                evaluated,
+                CalcValue::Referenced(_) | CalcValue::Range(_) | CalcValue::Array(_)
+            );
+        return Ok((evaluated, referenced));
+    }
+    let evaluated = eval(argument, env)?;
+    let referenced = keeps_reference(argument, &evaluated);
+    Ok((evaluated, referenced))
+}
+
 #[inline(never)]
 fn and_or_call(name: &str, args: &[Expr], env: &Environment<'_>) -> Result<Value, FormulaError> {
     arity(name, args, 1, 255)?;
@@ -3689,14 +3725,13 @@ fn eval_call(name: &str, args: &[Expr], env: &Environment<'_>) -> Result<Value, 
             arity(name, args, 1, 255)?;
             let mut numbers = Vec::new();
             for argument in args {
-                let evaluated = eval(argument, env)?;
                 // Microsoft: text and logical values typed directly are
                 // converted; in a cell reference they are ignored. A cell,
-                // INDEX and a one-cell reference selected by IF, IFERROR,
-                // IFNA, IFS, SWITCH, CHOOSE or XLOOKUP are references here,
-                // as they are for COUNT.
-                let referenced =
-                    env.primitive_value_profile || keeps_reference(argument, &evaluated);
+                // INDEX over a range and a one-cell reference selected by IF,
+                // IFERROR, IFNA, IFS, SWITCH, CHOOSE or XLOOKUP are
+                // references here. INDEX over a typed value stays typed.
+                let (evaluated, selected) = eval_sum_argument(argument, env)?;
+                let referenced = env.primitive_value_profile || selected;
                 for value in flatten(evaluated) {
                     if let Value::Error(error) = value {
                         return Err(error);
@@ -3716,11 +3751,11 @@ fn eval_call(name: &str, args: &[Expr], env: &Environment<'_>) -> Result<Value, 
             let mut total = 0.0;
             let mut count = 0usize;
             for argument in args {
-                let evaluated = eval(argument, env)?;
                 // The same reference rule as SUM, including a one-cell
-                // reference selected by IF, CHOOSE or XLOOKUP.
-                let referenced =
-                    env.primitive_value_profile || keeps_reference(argument, &evaluated);
+                // reference selected by IF, CHOOSE or XLOOKUP and INDEX over
+                // a range.
+                let (evaluated, selected) = eval_sum_argument(argument, env)?;
+                let referenced = env.primitive_value_profile || selected;
                 for value in flatten(evaluated) {
                     if let Value::Error(error) = value {
                         return Err(error);
@@ -8458,6 +8493,43 @@ mod tests {
             evaluate("=MAX(A1:A3)", &c, "Sheet1"),
             Ok(Value::Number(4.0))
         );
+    }
+    #[test]
+    fn index_in_sum_and_average_is_a_reference_only_over_a_range() {
+        // Microsoft, "Use the SUM function to sum numbers in a range":
+        // =SUM("5", 15, TRUE) is 21, because typed text "5" counts as 5 and a
+        // typed TRUE as 1, while =SUM(A5,A6, 2) is 2, because text and
+        // logical values in references are ignored. This evaluator's INDEX
+        // also accepts a typed value as its array, and that value stays typed.
+        let none = HashMap::new();
+        for (formula, expected) in [
+            ("=SUM(INDEX(TRUE,1))", 1.0),
+            ("=SUM(INDEX(\"5\",1))", 5.0),
+            ("=AVERAGE(INDEX(TRUE,1),10)", 5.5),
+            ("=AVERAGE(INDEX(\"5\",1),10)", 7.5),
+            ("=SUM(INDEX(IF(TRUE,TRUE),1))", 1.0),
+        ] {
+            assert_eq!(
+                evaluate(formula, &none, "Sheet1"),
+                Ok(Value::Number(expected)),
+                "{formula}"
+            );
+        }
+        // INDEX over a range returns a reference, so a logical value or text
+        // in the cell it returns is ignored and only the typed 2 is summed.
+        let c = cells(&[("A1", Value::Bool(true)), ("B1", Value::Text("5".into()))]);
+        for formula in [
+            "=SUM(INDEX(A1:A2,1),2)",
+            "=SUM(INDEX(IF(TRUE,A1:A2),1),2)",
+            "=SUM(INDEX(CHOOSE(1,A1:A2,B1:B2),1),2)",
+            "=SUM(INDEX(A1:B2,1,0),2)",
+        ] {
+            assert_eq!(
+                evaluate(formula, &c, "Sheet1"),
+                Ok(Value::Number(2.0)),
+                "{formula}"
+            );
+        }
     }
     #[test]
     fn lazy_conditionals_and_errors() {
