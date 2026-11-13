@@ -7,6 +7,7 @@
 #   - the Rust examples that the Python tests launch are built first, so a
 #     cold build cannot hit a test's 180 second limit
 #   - the headless browser engine is built for wasm32 and its Node tests run
+#   - the Formula Lab Node unit tests and function-note check run
 #   - a skipped test fails the gate unless tools/gate-allowed-skips.txt names it
 #   - whitespace is checked against HEAD, which covers staged changes too
 #   - the whole run has a time limit
@@ -180,8 +181,10 @@ if [ "$have" != "$pinned" ]; then
 fi
 bash web/forge-engine/build-wasm.sh
 (cd web/forge-engine && npm test)
-# The view's paste and fill rules: plain Node, no packages to install.
+# The view's paste and fill rules, then the catalog function notes. Plain
+# Node, no packages to install. A missing note fails this step.
 (cd web/univer-spike && npm run test:unit)
+(cd web/univer-spike && npm run check:functions)
 
 echo "gate: checking whitespace against HEAD"
 git diff --check HEAD
