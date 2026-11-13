@@ -59,7 +59,7 @@ function plain({ digits, exponent }: Digits): string {
   return decimals ? `${whole}.${decimals}` : whole;
 }
 
-/** Scientific notation as Excel writes it: 1.23457E+11, 8.7E-02, 1E+100. */
+/** Scientific notation: 1.23457E+11, 8.7E-02, 1E+100. */
 function scientific({ digits, exponent }: Digits): string {
   const mantissa = digits.length > 1 ? `${digits[0]}.${digits.slice(1)}` : digits;
   return `${mantissa}E${exponent < 0 ? '-' : '+'}${String(Math.abs(exponent)).padStart(2, '0')}`;
