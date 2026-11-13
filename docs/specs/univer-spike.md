@@ -71,13 +71,28 @@ served JavaScript remains part of the trust boundary.
 `open(bytes)`, `newWorkbook(sheetName)`, `snapshot()`,
 `applyEdits(edits, expectedRevision)`, `calculate()`,
 `export` with optional `includeLog`, `applyAndCalculate(envelope)`,
-`log {fromSeq}`, `subscribe {events}`, and `replay(baseline, events)`. Each
+`log {fromSeq}`, `subscribe {events}`, `replay(baseline, events)` and
+`copyFormulas(items)`. Each
 returns `{ok: true, value}` or
 `{ok: false, error: {code, message, expected_revision?, current_revision?}}`.
 Revisions are decimal strings. Requests and responses are structured-clone
 plain data, so a Tauri/wry bridge or in-page MCP tools can carry the same
 messages. The worker handles requests in the order they arrive. One worker
 holds one workbook, which is one stateless session.
+
+`copyFormulas(items)` answers what each formula becomes when its cell is
+copied `rowDelta` rows down and `columnDelta` columns right: relative
+references move and absolute (`$`) parts stay, as in Microsoft's
+[reference table](https://support.microsoft.com/en-us/office/switch-between-relative-absolute-and-mixed-references-dfec08cd-ae65-4f56-839e-5f0d8d0baca9).
+It reads no workbook, changes nothing and is not logged; the caller sends the
+results as ordinary edits. Each answer is `{formula, spelling}` or `{error}`.
+The toolkit's own copy (`toolkit::copy_formula`) decides the result and writes
+it fully bracketed (`(A2+B2)`). The engine also moves the references in the
+text as typed (`A2+B2`, `src/reference-shift.ts`) and returns that with
+`spelling: "kept"` only when the toolkit reads it back as the same formula as
+its own copy; otherwise it returns the toolkit's text with
+`spelling: "bracketed"`. A reference that would leave the grid is an
+`invalid_reference` error for that item.
 
 ### Alignment with the agent-workbook TypeScript contract
 
@@ -113,6 +128,12 @@ These are additive. The existing methods are unchanged.
   `invalid_request`, `invalid_revision`, `edit_rejected`, plus any toolkit
   `code: message` pass-through such as `parse_error`. (`absent_cell` is
   retired: see "Absent-cell authoring on imported workbooks" below.)
+
+- `copyFormulasJson(itemsJson): string` (a free function, no workbook) takes
+  `[{"formula","row_delta","column_delta"}]` and returns
+  `{"ok":true,"formulas":[{"formula"} | {"error":{"code","message"}}]}` in the
+  same order, from `toolkit::copy_formula`. Malformed input is
+  `{"ok":false,"error"}`; it never throws.
 
 The logic lives in `rust/src/browser_contract.rs`, which is compiled for every
 target. It is covered natively by `rust/tests/browser_contract.rs` (5 tests)
@@ -199,15 +220,19 @@ Findings:
     changed since. Undoing an intent whose `before` is absent removes the
     cell; undoing one whose `before` is `{"value": null}` leaves a blank cell.
     Redo re-applies the `after`. Revisions only move forward: 2 → 3 on undo.
+  - Delete (`clear-selection-content`), Ctrl+V (`paste-by-short-key`) and the
+    fill handle, Ctrl+D and Ctrl+R (`auto-fill`) are each translated into one
+    Forge `set_cells` intent and never executed by Univer. See "Clear, paste
+    and fill" below.
   - Every other `sheet.command.*`, `univer.command.*` and `formula*` command is
     blocked with a notice in the page (`#notices`), except a short allow-list
     of view commands (selection, scroll, zoom, sheet activation, copy). This is
-    fail-closed: insert/delete rows and columns, sheet add/remove, paste, the
-    fill handle (`auto-fill`), clear content, merge, styling and so on are
-    refused, never translated into cell edits. The notice is a plain sentence
-    chosen by `refusalText(id)` (for example "Paste is not available yet. Type
-    the values in instead."); the command id is kept in `audit.blocked` and
-    shown in the Developer panel.
+    fail-closed: insert/delete rows and columns, sheet add/remove, cut, menu
+    paste, clearing formats, merge, styling and so on are refused, never
+    translated into cell edits. The notice is a plain sentence chosen by
+    `refusalText(id)` (for example "Inserting rows and columns is not
+    available yet."); the command id is kept in `audit.blocked` and shown in
+    the Developer panel.
 - **Presentation.** `snapshot` carries each cell's presentation when the
   model has one (`style`: number format, bold, italic, font color, fill,
   horizontal alignment, wrap) and each sheet's `columnWidths`. Both fields are
@@ -232,6 +257,67 @@ Findings:
   cell past the session's grid, the notice names the code and both revisions,
   and Univer is re-projected from Forge. A rejected cell the projection never
   held is blanked, so editor text does not linger there.
+
+## Clear, paste and fill
+
+Each of these is one Forge intent, so it is one version step and one undo
+step, and a refusal changes nothing. They write values and formulas only,
+never formats. The pure rules (shapes, tiling, series detection, clipboard
+text) are in `src/range-edits.ts` with unit tests in
+`test/range-edits.node.test.mjs` (`npm run test:unit`).
+
+- **Delete** clears the contents of every selected cell that holds something.
+  Cells that are already empty are not touched.
+- **Copy** (Ctrl+C) stays Univer's own command, so the browser clipboard gets
+  the text and HTML Univer writes. The adapter also keeps what Forge held in
+  the copied range at that moment, keyed by the id Univer puts in the
+  clipboard HTML. A copy is a snapshot: editing the source afterwards does
+  not change what is pasted.
+- **Paste** (Ctrl+V, Cmd+V). When the clipboard still holds this page's own
+  copy, values are copied as they are and each formula is what `copyFormulas`
+  returns for its new place. Anything else on the clipboard is pasted as
+  text: tab-separated columns, one row per line, quoted cells as spreadsheet
+  programs write them, and each cell is read exactly as if it had been typed
+  there. The page never calls the browser's clipboard read functions (the
+  content arrives in the paste event), so the browser does not ask for
+  clipboard permission.
+- **Paste shape.** One copy at the top-left cell of the selection. When the
+  selection is a whole multiple of the copy in both directions, the copy is
+  repeated to fill it. This is Workbook Forge's rule; it has not been checked
+  against Excel.
+- **Fill.** The fill handle, Ctrl+D and Ctrl+R repeat the source over the
+  rest of the dragged range in all four directions; formulas move their
+  relative references ([Microsoft: fill a formula into adjacent
+  cells](https://support.microsoft.com/en-us/office/fill-a-formula-down-into-adjacent-cells-041edfe2-05bc-40e6-b933-ef48c3f308c6)).
+  Dragging the handle back over the selection clears the cells it gives up.
+  A double click on the handle fills down as far as the column to the left
+  (or, if that is empty, the right) has entries. That range is Univer's rule;
+  the only Microsoft support for it found was a
+  [Q&A answer](https://learn.microsoft.com/en-us/answers/questions/5907196/how-to-propogate-a-formula-through-an-entire-colum),
+  not product documentation.
+- **Series are refused, not copied.** Excel continues a series where the fill
+  handle is dragged from two or more numbers, a date, or text ending in a
+  number or naming a day or month ([fill data
+  automatically](https://support.microsoft.com/en-us/office/fill-data-automatically-in-worksheet-cells-74e31bdd-d993-45da-aa82-35a236c5b5db),
+  [enter a series](https://support.microsoft.com/en-us/office/enter-a-series-of-numbers-dates-or-other-items-41e0bbf2-7198-4d78-8545-fdd4709976b4),
+  [project values in a series](https://support.microsoft.com/en-us/office/project-values-in-a-series-5311f5cf-149e-4d06-81dd-5aaad87e5400)).
+  A copy there would not match Excel, so the drag is refused with a notice. A
+  single number copies, as it does in Excel ("For the series 2, 2, 2, 2...,
+  type 2 in first cell only"). Ctrl+D and Ctrl+R always copy.
+- **All or nothing.** If any formula in a paste or fill cannot be copied, or
+  would point outside the sheet, nothing is written and the notice names the
+  cell. Excel would write `#REF!` in that cell instead.
+- **Limits.** 20,000 cells per paste or fill. The view's grid grows to hold a
+  paste or fill that runs past it (to the last row + 100 and last column + 10,
+  capped at Excel's 1,048,576 by 16,384).
+- **Two repairs to Univer 1.2.0's selection drawing**, both in the adapter and
+  each pinned by an acceptance test that fails without it. The fill handle
+  remembers the range of a drag that changed nothing and sends it again when
+  the handle is next clicked; the adapter forgets it on every pointer press
+  (this reaches two private Univer fields). Leaving an open cell editor by
+  clicking a formula cell makes Univer erase that cell's outline after the
+  editor has closed, so the cell shows no outline or fill handle; the adapter
+  ignores an erase that arrives while no editor is open.
 
 ## Absent-cell authoring on imported workbooks
 
@@ -289,9 +375,10 @@ placeholder cells, and the UI has no special path for it.
 `web/univer-spike/tests/acceptance.spec.ts`, headless Chromium (Playwright
 1.64.1 driving system Chromium 156), production build served statically:
 **15 passed** on 2026-10-27. That figure is the snapshot from that day's run.
-The suite in this file now defines 25 tests. The six added with the product
-shell are listed after item 12; a run of all 25 is recorded in
-`docs/run-history.md` (Run 28) as branch-local evidence.
+The suite in this file now defines 35 tests. The six added with the product
+shell are listed after item 12 and the ten added with clear, paste and fill
+after item 18; a run of all 35 is recorded in `docs/run-history.md` (Run 29) as
+branch-local evidence.
 
 For `not-execute` and `load-only`:
 
@@ -309,10 +396,10 @@ For `not-execute` and `load-only`:
    formula including `B1+100`, and values 20, 40, 140, 420, 380, 1000.
 7. Univer made no calculation requests, produced no outputs and fired no facade
    events. There were no foreign writes and no divergence.
-8. Insert row/column, remove row, insert sheet, auto-fill, paste and clear
-   content are all blocked with a visible notice in plain words, and the
-   command id is recorded in `audit.blocked`. Sheet shape and revision are
-   unchanged.
+8. Insert row/column, remove row, insert sheet, cut, menu paste, fill
+   options, clearing formats and a formatting change are all blocked with a
+   visible notice in plain words, and the command id is recorded in
+   `audit.blocked`. Sheet shape and revision are unchanged.
 9. A blank workbook can be created in the browser, edited through the cell
    editor, and recalculated by Forge. The test uses mouse range selection for
    `SUM`, then arithmetic, `IF`, `INDEX`/`MATCH`, and XLOOKUP with a custom
@@ -360,6 +447,42 @@ Added with the product shell (default `not-execute` view):
 18. Narrow screen. At 375 px every app bar control is on screen and the side
     panel covers the grid at full width.
 
+Added with clear, paste and fill (default `not-execute` view). After every one
+of these tests the suite also checks: no divergence, no cell write that did
+not come from the projection, no call to the browser's clipboard read
+functions, and no calculation by Univer.
+
+19. Delete. Clearing a selected range is one version step; dependents
+    recalculate; Ctrl+Z restores every cell in one step.
+20. Text paste. Tab-separated text, including a quoted cell that contains a
+    line break, lands as if typed (numbers as numbers, `=` entries as
+    formulas) in one version step.
+21. Formula paste. `=$A$1+A$1+$A1+A1` copied from D3 to F5 becomes
+    `=$A$1+C$1+$A3+C3`, `=B4*C4` copied one row down becomes `=B5*C5` and
+    `=$B$4*$C$4` is unchanged: the three cases in Microsoft's reference
+    article. Editing the source after the copy does not change the paste.
+22. Ctrl+R and Ctrl+D copy across and down, and both key presses are
+    `defaultPrevented`, so the browser's own Ctrl+D and Ctrl+R do not fire.
+23. Fill handle. Dragging copies formulas down, right, up and left. A drag
+    left whose formula would point before column A is refused and changes
+    nothing, and the next drag works.
+24. Fill handle gestures. A double click fills down beside the neighboring
+    column as one step; dragging back clears; after a drag that changed
+    nothing, a click on another cell's handle does nothing.
+25. Leaving an editor. After a double click opens an editor, or a value is
+    typed, clicking a formula cell and dragging its handle fills on the first
+    drag; a formula that is still being typed can still pick a cell by click.
+26. Series. Dragging from 1, 3 or from `Item 1` is refused with the series
+    notice; a single 2 copies; Ctrl+D copies 1, 3 as they are.
+27. Refusals. Cut is refused; a paste whose formula would point outside the
+    sheet changes nothing and names the cell.
+28. Shape. A 1 by 2 copy fills a 2 by 4 selection; a selection that is not a
+    whole multiple gets one copy; a 300-row paste ending at row 309 grows
+    the grid to 409 rows.
+
+Expected values in items 19 to 28 are Microsoft's published examples or
+arithmetic done by hand in the test, never an engine's output.
+
 **Repaint latency gate.** A typed commit into A1 of the event-log fixture
 must repaint its dependent B1 in under 100 ms, measured from the adapter's
 commit timestamp to the first animation frame that shows the new value. The
@@ -385,18 +508,17 @@ generator and the tests, never from either engine.
 
 | Part | Raw | Gzip |
 |---|---|---|
-| Main JS (Univer core, sheets, sheets-ui, docs, UI, React, adapter; engine-formula is pulled in by `@univerjs/sheets`) | 6074 KiB | 1646 KiB |
+| Main JS (Univer core, sheets, sheets-ui, docs, UI, React, adapter; engine-formula is pulled in by `@univerjs/sheets`) | 6085 KiB | 1651 KiB |
 | Main CSS | 123 KiB | 19 KiB |
 | Lazy sheets-formula + sheets-formula-ui + sheets-numfmt (JS+CSS) | 232 KiB | 67 KiB |
-| Forge worker JS | 16 KiB | 6 KiB |
-| Forge WASM | 2302 KiB | 684 KiB |
-| **Loaded at startup** | **8747 KiB** | **2421 KiB** |
+| Forge worker JS | 18 KiB | 6 KiB |
+| Forge WASM | 2327 KiB | 689 KiB |
+| **Loaded at startup** | **8785 KiB** | **2432 KiB** |
 | Lazy hyphenation dictionaries (docs; not loaded for en-US) | 4472 KiB | 990 KiB |
 
-Measured on 2026-11-12 with the product shell. Against the previous table the
-shell, theme and number-format renderer add about 34 KiB of JS, 10 KiB of CSS
-and 12 KiB to the lazy formula chunk; the worker and WASM figures had grown on
-main before this change and are restated here, not caused by it.
+Measured on 2026-11-12 with clear, paste and fill. Against the product-shell
+build (8747 KiB raw, 2421 KiB gzip at startup) they add 11 KiB to the main
+script, 2 KiB to the worker and 25 KiB to the WASM (`copyFormulasJson`).
 
 Run `npm run build && npm run size` in `web/univer-spike`.
 
@@ -421,8 +543,22 @@ tools. Vite 7.3.7 (esbuild/rollup) is used instead.
 - XLOOKUP has a bounded subset: exact mode, one-dimensional ranges, scalar
   results, forward/reverse linear search, and optional `if_not_found`. Other
   match/search modes and array spills remain unsupported.
-- Clearing content (Delete), paste and the fill handle are blocked rather than
-  translated into Forge edits. The notices say so in plain words.
+- Paste and fill write values and formulas, never formats. Cut, pasting from
+  a menu, Paste Special, clearing formats and continuing a series are refused
+  with a notice.
+- Pasted text is read as if typed, so text such as `1,234`, `12%` or a date
+  stays text, exactly as typing it does today.
+- A formula that would point outside the sheet refuses the whole paste or
+  fill; Excel writes `#REF!` in that cell. Formulas the toolkit's copy does
+  not cover (array constants, whole-column or whole-row references, defined
+  names, table references, `A1#`) cannot be copied and refuse the action the
+  same way.
+- Copied formulas keep the function-name case as typed. When the typed
+  spelling cannot be confirmed the copy is written fully bracketed.
+- Repeating a copy over a larger selection and the tiling order when filling
+  up or left are Workbook Forge's rules and have not been observed in Excel.
+- The two selection repairs depend on Univer 1.2.0 internals. Their tests fail
+  if a Univer upgrade moves them.
 - Presentation is read only. Number formats, bold, italic, font color, fill,
   horizontal alignment, wrap and column widths are shown; borders, row
   heights, merged-cell drawing, conditional formats and theme colors are not.
@@ -452,6 +588,7 @@ bash web/bootstrap-sandbox.sh            # optional: toolchain on a fresh Linux 
 bash web/forge-engine/build-wasm.sh      # needs wasm-bindgen-cli 0.2.129
 cd web/forge-engine && npm test          # in-process engine tests (Node)
 cd web/univer-spike && npm ci
+npm run test:unit                        # paste and fill rules (Node, no browser)
 npm run typecheck && npm run check:licenses && npm run check:functions
 CHROMIUM_PATH=/usr/bin/chromium npm run test:e2e   # builds, serves dist/, runs Playwright
 npm run dev                              # interactive demo; always not-execute (?dev=1 for the Developer panel)
@@ -467,8 +604,9 @@ The default URL is the user view and always runs `not-execute`.
   toggle. **Issues** appears with a count only while Forge reports
   calculation diagnostics.
 - **Grid.** Univer's formula bar and canvas, themed to match the page.
-  Univer's own toolbar and context menu are off: every action they offer is
-  one Forge would refuse.
+  Delete, Ctrl+C, Ctrl+V, Ctrl+D, Ctrl+R and the fill handle work on values
+  and formulas. Univer's own toolbar and context menu are off: nearly every
+  action they offer is one Forge would refuse.
 - **Side panel.** One of three views. **Functions** lists the functions Forge
   calculates, by category, with argument lists and one-line descriptions from
   `src/function-notes.ts`, searchable by name or description, and states how

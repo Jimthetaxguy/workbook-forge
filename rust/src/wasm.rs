@@ -263,6 +263,59 @@ pub fn replay_json(bytes: &[u8], events: &str) -> String {
     crate::event_log::replay_json(bytes, events)
 }
 
+/// `copyFormulasJson(items)`: what each formula becomes when its cell is
+/// copied `row_delta` rows down and `column_delta` columns right. Relative
+/// references move, absolute (`$`) parts stay, and the result is written in
+/// the toolkit's fully bracketed form (`toolkit::copy_formula`). It reads no
+/// workbook and changes nothing.
+///
+/// `items` is a JSON array of `{"formula","row_delta","column_delta"}`,
+/// formulas with or without the leading `=`. Returns
+/// `{"ok":true,"formulas":[{"formula":"..."} | {"error":{"code","message"}}]}`
+/// in the same order, formulas without the leading `=`; a formula whose
+/// reference would leave the grid is an `invalid_reference` error for that
+/// item. Malformed `items` is `{"ok":false,"error":{...}}`; never throws.
+#[wasm_bindgen(js_name = copyFormulasJson)]
+pub fn copy_formulas_json(items: &str) -> String {
+    #[derive(serde::Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct Item {
+        formula: String,
+        row_delta: i32,
+        column_delta: i32,
+    }
+    let items: Vec<Item> = match serde_json::from_str(items) {
+        Ok(items) => items,
+        Err(error) => {
+            return serde_json::json!({
+                "ok": false,
+                "error": {"code": "invalid_request", "message": error.to_string()},
+            })
+            .to_string();
+        }
+    };
+    let formulas: Vec<serde_json::Value> = items
+        .iter()
+        .map(|item| {
+            let source = item.formula.strip_prefix('=').unwrap_or(&item.formula);
+            match crate::toolkit::copy_formula(
+                &format!("={source}"),
+                item.row_delta,
+                item.column_delta,
+            ) {
+                Ok(copied) => {
+                    let copied = copied.strip_prefix('=').unwrap_or(&copied).to_string();
+                    serde_json::json!({"formula": copied})
+                }
+                Err(error) => {
+                    serde_json::json!({"error": {"code": error.code, "message": error.message}})
+                }
+            }
+        })
+        .collect();
+    serde_json::json!({"ok": true, "formulas": formulas}).to_string()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
