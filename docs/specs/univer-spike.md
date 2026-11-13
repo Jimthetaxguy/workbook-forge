@@ -529,6 +529,436 @@ characters at any width, and the primary source outranks the brief, so the cap
 now applies everywhere. The same commit moved the rounding from Univer's shown
 number to the stored number.
 
+## Touch and phone use
+
+The owner's request, spoken on a phone: a tap on a cell should not open the
+text keyboard at once and cover the screen, the page should not jump in size
+when a cell is tapped, and the sizes should suit a phone.
+
+**Not verified on a phone.** Everything in this section was built and tested
+in headless Chromium with an emulated touch screen. That browser has no
+on-screen keyboard and it is not Safari. The tests prove which element has
+the focus, its `inputmode` and font size after each gesture, that typing
+starts and ends by each route, the layout under a shortened visible area,
+finger scrolling and control sizes. They do not prove that a real iPhone or
+Android keyboard stays closed or opens, or that Safari does not zoom. The
+list under "Not verified on real devices" says what is open, and
+`web/univer-spike/FLOWS.md` has a numbered check list to run on a phone.
+
+### What a finger does
+
+| Gesture | Result |
+|---|---|
+| Tap a cell | Selects it and shows its content in the formula bar. The focused editor carries `inputmode="none"`, which asks the browser to keep its keyboard closed. |
+| Tap the same cell again within 350 ms | Starts typing in the cell. |
+| Tap **Edit** in the formula bar row | Starts typing in the cell. The button is shown only on touch devices. |
+| Tap the formula bar | Starts typing in the formula bar. |
+| Enter, or the check mark | Commits to Forge (one version step) and returns to `inputmode="none"`. |
+| The X | Leaves the cell as it was and returns to `inputmode="none"`. |
+| Swipe on the grid | Scrolls it, both ways, with a short glide. The page does not move. |
+| Hold a finger still for 450 ms, then move | Selects a range. Started on the fill handle, it fills. |
+| Two fingers on the grid | Zooms the grid from 50 to 300 percent in steps of 5. The page's own pinch zoom still works everywhere else. |
+
+### The plan, as built
+
+1. One file, `src/touch.ts`, holds everything a finger changes, and one
+   section of `src/shell.css` under `@media (pointer: coarse)` holds the
+   sizes. `src/main.ts` installs it once after Univer starts.
+2. Keep Univer's desktop plugins (see "What Univer 1.2.0 offers" below) and
+   put a thin layer in front of the grid canvas that decides what a finger
+   means before Univer sees it.
+3. Keep the keyboard closed with `inputmode="none"` on Univer's two hidden
+   editors rather than by taking the focus away, so a hardware keyboard,
+   arrow keys and paste keep working.
+4. Open the keyboard only from a focus call made inside the tap's own event
+   handler, because iOS requires that.
+5. Size the shell to the visual viewport so a keyboard cannot cover the
+   formula bar or the cell being edited.
+6. Nothing in `node_modules` is patched and no package was added.
+
+### When touch behaviour applies
+
+Two tests, for two different things:
+
+- **Sizes and the Edit button** follow the CSS media query
+  `(pointer: coarse)`: the device's main pointer is a finger. A laptop with a
+  touch screen and a trackpad reports `fine`, so it keeps the desktop sizes
+  and shows no Edit button.
+- **The keyboard state** (`inputmode`) follows the last pointer used. It
+  starts as `(pointer: coarse)`. A `pointerdown` with `pointerType` `touch`
+  turns it on, one with `mouse` turns it off, and a pen leaves it as it was.
+  `html[data-touch-input]` is `on` or `off` accordingly. So on a laptop with
+  both, a tap gets `inputmode="none"`, a double tap or a tap in the formula
+  bar starts typing, and the next mouse click removes the attribute again.
+
+A finger's gestures on the grid (swipe, double tap, long press, pinch) apply
+to any `touch` pointer on any device. Mouse and pen events are never held
+back or changed.
+
+### A. Tap to select, keyboard closed
+
+Univer keeps a hidden `contenteditable` element focused at all times (id
+`__editor___INTERNAL_EDITOR__DOCS_NORMAL`; a second one,
+`__editor___INTERNAL_EDITOR__DOCS_FORMULA_BAR`, serves the formula bar) and
+gives it the focus back after every tap. That is why a phone opened its
+keyboard on every tap. While nothing is being typed and the last pointer was
+a finger, both carry `inputmode="none"`. While typing they carry
+`inputmode="text"`. After a mouse pointer the attribute is removed.
+
+The other way, not focusing the editor at all, was rejected: Univer reads
+every key (arrows, Delete, Ctrl+C, a hardware keyboard's letters) from that
+element, and refocuses it itself.
+
+### B. Three ways to start typing
+
+- **Double tap**: two taps that select the same cell within 350 ms. The two
+  taps are compared by the cell Univer selected, not by distance, so it works
+  at any zoom.
+- **Edit**: a button with a pencil icon and the word Edit, placed first in
+  Univer's formula bar actions (`#touch-edit`, `aria-label` "Edit this
+  cell"). It is shown only under `(pointer: coarse)` and only while nothing
+  is being typed. While typing, Univer's X and check mark take its place;
+  when not typing on a touch device they are hidden, since they do nothing
+  then. Univer 1.2.0 swaps their colors in its dark theme (a green X, a red
+  check mark); on touch devices the X is red and the check mark green in
+  both themes. The mouse layout keeps Univer's colors, as before.
+- **The formula bar**: Univer starts the edit itself on pointer down on the
+  canvas that draws the formula text. A tap in the row's padding beside that
+  canvas (up to 14 px above or below it, and anywhere to its left in the
+  row) is passed on to it as a pointer down and up at the nearest point of
+  the text. Chromium already gives a tap a few pixels off the text to the
+  text; the passing on covers the rest of the row and browsers that do not.
+
+In each case the code that starts the edit sets `inputmode="text"` and then
+calls `blur()` and `focus()` on the editor inside the same event handler
+(`pointerup` for the double tap and the formula bar, `click` for the
+button). The blur and focus are there because a browser decides about its
+keyboard when an element takes the focus, and the editor already had it.
+
+The edit ends when Univer reports `sheet.operation.set-cell-edit-visible`
+with `visible: false` (Enter, Tab, the check mark, the X, Escape). The
+editors go back to `inputmode="none"` and the focused one is blurred and
+focused again so that a keyboard closes.
+
+**Keyboard type.** `inputmode="text"`, not `decimal` or `numeric`. A cell
+takes numbers, text and formulas, and a formula needs letters, `=`, `(`, `,`
+and `:`, which a numeric keypad does not have. The HTML standard describes
+`decimal` as "Numeric keys and the format separator for the locale should be
+shown."
+
+### C. No zoom jump
+
+On touch, both hidden editors, the name box, the function search and the zoom
+percent are 16 px (`#app [contenteditable='true']` and the inputs, under
+`@media (pointer: coarse)`). Safari on iOS zooms the page when an editable
+element with a smaller font takes the focus; Univer's editor was 13 px.
+The viewport meta has no `user-scalable=no` and no `maximum-scale`, so pinch
+zoom of the page stays available.
+
+The hidden editor's font size is not what the reader sees. The text in the
+cell editor and the formula bar is drawn on a canvas by Univer. The 16 px is
+there only for Safari's rule.
+
+### D. A layout that follows the keyboard
+
+- `index.html` adds `interactive-widget=resizes-content` to the viewport
+  meta. Chrome on Android then shrinks the page itself when its keyboard
+  opens, and the shell's height (`100dvh`) follows with no script.
+- Safari on iOS does not resize the page; it shrinks the visual viewport and
+  may scroll it. `fit()` in `src/touch.ts` listens to `visualViewport`
+  `resize` and `scroll` and to the window's `resize`. When the visual
+  viewport is shorter than the page and the page is not pinch zoomed (scale
+  1), it sets `--visible-height`, `--visible-top` and `--keyboard-inset` on
+  `<html>`; the body takes that height and is moved to that top, and the page
+  is scrolled back to 0, 0 so no offset is left behind. When the two heights
+  agree again the properties are removed and the layout returns.
+- While typing on touch with less than 520 px visible, the app bar, the
+  Developer row and the status bar are hidden (`html[data-typing="compact"]`)
+  so the formula bar and the grid get the room.
+- The cell being edited is kept in view. After the visible area changes,
+  `reveal()` runs after two frames and again after 150 and 450 ms (Univer
+  resizes its canvas a few frames late). If the whole cell is not inside the
+  grid's box it runs `sheet.command.scroll-to-cell`. Whether the cell is in
+  view is worked out from the scroll position and the cell's coordinates,
+  not from Univer's visible range, which lags by a few frames.
+- Univer's desktop cell editor does not follow the grid when it scrolls. So
+  after a scroll made by this layer, `placeEditor()` asks Univer to work out
+  the cell's place again (`IEditorBridgeService.refreshEditCellPosition` and
+  `SheetCellEditorResizeService.fitTextSize`, the two calls Univer's mobile
+  code makes after it scrolls to a cell). This runs only while the whole
+  cell is in view.
+- No layout thrash: `fit()` writes only when the placement changed, scroll
+  requests are gathered into one per animation frame, and nothing is done
+  while the page is pinch zoomed.
+
+### E. Scrolling and selection
+
+Before this change a swipe on the grid dragged out a selection and never
+scrolled: Univer's desktop plugins treat a finger as a mouse. The canvas
+already had `touch-action: none`, so the page did not scroll either. (The
+first probe's scroll gesture did nothing for that reason; it was not the
+probe.)
+
+Listeners on the app container, in the capture phase, hold back `touch`
+pointer events on the grid canvas (`canvas[id^="univer-sheet-main-canvas"]`)
+until the finger's intent is clear:
+
+- lifted within 10 px of where it landed: a tap. Univer gets a `pointerdown`
+  and `pointerup` at that point and selects with its own hit test.
+- moved more than 10 px: a scroll. `sheet.command.set-scroll-relative` moves
+  the grid by the finger's travel divided by the grid zoom, once per frame,
+  and glides on after the lift unless `prefers-reduced-motion` is set.
+- held still 450 ms: Univer gets the pointer down and every move after it,
+  which is its own range selection and fill handle.
+- a second finger: a pinch. `sheet.zoom()` is set in steps of 5 percent.
+
+The browser's context menu is prevented on the grid for touch, so a long
+press selects instead. The page itself does not scroll or bounce: `body` has
+`overflow: hidden`, under `(pointer: coarse)` `html` has
+`overscroll-behavior: none` and `body` has `touch-action: manipulation` (no
+double tap zoom on the controls; pinch zoom stays), and the canvas keeps
+Univer's `touch-action: none`.
+
+### F. Sizes on touch
+
+Under `@media (pointer: coarse)`: app bar buttons, formula bar buttons, the
+name box, sheet tabs, the zoom controls and the panel close button are at
+least 44 by 44 CSS px with 8 px between them. The formula bar is 52 px high,
+and the name box, zoom percent and search field are 16 px text. Up to 600 px
+wide the formula bar is two rows (name box and buttons, then the formula) and
+the zoom control is minus, percent, plus without the slider; up to 720 px the
+app bar is two rows.
+
+The workbook's row heights and column widths are not changed. They belong to
+the file and are drawn as saved.
+
+The text drawn in the formula bar is about 14.7 CSS px (11 pt), drawn by
+Univer on a canvas. It is not raised to 16 px: see "Limits" below.
+
+**Default zoom: 100 percent stays.** Screenshots at 390 by 844 were compared
+at 100 and 125 percent. At 125 percent the rows are 30 px and easier to hit
+and read, but the screen shows about 2.6 columns and 11 rows where 100
+percent shows 3.6 and 14, and a formula's inputs are more often off screen.
+That is not clearly better, so the default is unchanged; pinch and the minus
+and plus buttons are the levers. The one constant is `TOUCH_DEFAULT_ZOOM` in
+`src/touch.ts` (applied to each sheet when a workbook loads on a
+`(pointer: coarse)` device).
+
+### G. Mouse and keyboard
+
+Nothing changes: no `inputmode` attribute, the editors stay 13 px, the Edit
+button is not displayed, the bars keep their sizes, and mouse events are not
+held back. The 39 tests that existed before this change pass unchanged, and
+one new test asserts the first four points in a mouse context.
+
+One fault that a double tap exposed is older than this change and also
+happened with a mouse; it is fixed separately. See "Editing a cell in place"
+under "How the adapter keeps Univer non-authoritative".
+
+### What Univer 1.2.0 offers
+
+- A separate mobile set exists: `UniverMobileUIPlugin` in `@univerjs/ui` and
+  `UniverSheetsMobileUIPlugin` in `@univerjs/sheets-ui`, with its own scroll
+  controller (`MobileSheetsScrollRenderController`) and its own "keep the
+  active cell visible" step. It is not used, for three reasons. It replaces
+  the whole interface and must be chosen when Univer is created, so it cannot
+  serve a laptop that has a touch screen and a mouse, and one page would have
+  to pick by user agent. It brings its own menus and actions, which Forge
+  would have to refuse one by one. And every repair and test in this view is
+  written against the desktop plugins.
+- With the desktop plugins: the grid canvas has `touch-action: none`; a
+  swipe drags a selection; a touch double tap does not open the editor; the
+  hidden editors carry no `inputmode`; the cell editor stays where it was
+  when the grid scrolls.
+
+### Decided against
+
+- **`user-scalable=no` or `maximum-scale=1`** to stop the zoom jump. It would
+  work and it takes zoom away from people who need it. MDN: "Disabling
+  zooming capabilities by setting `user-scalable` to a value of `no` prevents
+  people experiencing low vision conditions from being able to read and
+  understand page content."
+- **A numeric keypad.** See "Keyboard type" above.
+- **Not focusing the editor.** See A.
+- **Changing row heights or column widths** for touch. They are the file's.
+- **A 125 percent default zoom.** See F.
+- **Raising the formula bar's drawn text to 16 px.** See "Limits".
+- **`env(keyboard-inset-height)` and the VirtualKeyboard API.** Chromium
+  only, and `visualViewport` covers both browsers.
+
+### Sources
+
+Each sentence is quoted from the page named, read on 2026-11-12.
+
+- HTML standard, `inputmode`
+  (https://html.spec.whatwg.org/multipage/interaction.html#attr-inputmode):
+  "The `inputmode` content attribute is an enumerated attribute that
+  specifies what kind of input mechanism would be most helpful for users
+  entering content." For `none`: "The user agent should not display a virtual
+  keyboard. This keyword is useful for content that renders its own keyboard
+  control." For `text`: "The user agent should display a virtual keyboard
+  capable of text input in the user's locale." For `decimal`: "The user
+  agent should display a virtual keyboard capable of fractional numeric
+  input. Numeric keys and the format separator for the locale should be
+  shown."
+- MDN, `inputmode`
+  (https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Global_attributes/inputmode):
+  "It is used primarily on `<input>` elements, but is usable on any element
+  in `contenteditable` mode." For `none`: "No virtual keyboard. For when the
+  page implements its own keyboard input control."
+- HTML standard, user activation
+  (https://html.spec.whatwg.org/multipage/interaction.html#tracking-user-activation-processing-model):
+  "An activation triggering input event is any event whose `isTrusted`
+  attribute is true and whose `type` is one of:", and the list includes
+  "\"`pointerup`\", provided the event's `pointerType` is not \"`mouse`\"" and
+  "\"`touchend`\"".
+- Apple, `keyboardDisplayRequiresUserAction`
+  (https://developer.apple.com/documentation/uikit/uiwebview/keyboarddisplayrequiresuseraction):
+  "When this property is set to `true`, the user must explicitly tap the
+  elements in the web view to display the keyboard (or other relevant input
+  view) for that element." and "The default value for this property is
+  `true`." This page documents the older `UIWebView`; no Apple page was found
+  that states the same rule for Safari itself, so that Safari behaves this
+  way is taken from this page and from common report, not from a statement
+  about Safari.
+- WebKit source, the zoom on focus
+  (https://raw.githubusercontent.com/WebKit/WebKit/main/Source/WebKit/UIProcess/API/ios/WKWebViewIOS.mm):
+  `const double webViewStandardFontSize = 16;` and
+  `scale = clampTo<double>(webViewStandardFontSize / fontSize, minimumScale, maximumScale);`.
+  No WebKit blog post or Apple document was found that states the 16 px
+  rule in words; the source code is the primary source. A secondary one,
+  CSS-Tricks (https://css-tricks.com/16px-or-larger-text-prevents-ios-form-zoom/):
+  "If the `font-size` of an `<input>` is 16px or larger, Safari on iOS will
+  focus into the input normally. But as soon as the `font-size` is 15px or
+  less, the viewport will zoom into that input."
+- MDN, viewport meta
+  (https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/meta/name/viewport):
+  "`resizes-content`: The viewport gets resized by the interactive widget."
+  and "`resizes-visual`: The visual viewport gets resized by the interactive
+  widget. This is the default." Also: "Additionally, WCAG requires a minimum
+  of 2× scaling; however, the best practice is to enable a 5× zoom."
+- Chrome for Developers, viewport resize behavior
+  (https://developer.chrome.com/blog/viewport-resize-behavior): "As of Chrome
+  108, Chrome on Android will adjust its viewport resize behavior to no
+  longer resize the Layout Viewport when the on-screen keyboard is shown."
+  and "`resizes-content`: Resize both the Visual Viewport and Layout
+  Viewport." The same page lists Safari on iOS among "Browsers that resize
+  the Visual Viewport, leaving Layout Viewport untouched."
+- MDN, `VisualViewport`
+  (https://developer.mozilla.org/en-US/docs/Web/API/VisualViewport):
+  "User-interface features like the on-screen keyboard (OSK) can shrink the
+  visual viewport without affecting the layout viewport." `height`: "Returns
+  the height of the visual viewport in CSS pixels." `resize`: "Fired when the
+  visual viewport is resized."
+
+### Which rules are Workbook Forge's own
+
+Not taken from a standard or from Excel: 44 px controls with 8 px gaps (the
+brief's numbers); 10 px of travel separates a tap from a swipe; 350 ms and
+"the same cell" make a double tap; 450 ms makes a long press; the glide's
+slowing rate; pinch from 50 to 300 percent in 5 percent steps; hiding the
+app bar and status bar under 520 px while typing; the last pointer deciding
+between touch and mouse behaviour; and 100 percent as the touch default zoom.
+
+### Univer internals this depends on
+
+Public: the facade (`startEditing`, `isCellEditing`, `zoom`,
+`getScrollState`, `getSkeleton`), the commands
+`sheet.command.set-scroll-relative` and `sheet.command.scroll-to-cell`, the
+`CommandExecuted` event, and `IEditorBridgeService` and
+`SheetCellEditorResizeService`, both exported by `@univerjs/sheets-ui`.
+
+Private: the ids of the two hidden editors, the id prefix of the grid
+canvas, the `data-u-comp` names in the formula bar (`formula-bar`,
+`formula-bar-actions`, `formula-editor`, `defined-name`), the operation id
+`sheet.operation.set-cell-edit-visible`, and the fact that the grid and the
+formula bar read pointer events from their canvases. `touch.state()` reports
+whether the editors, the canvas and the Edit button's place were found, and
+the first touch test asserts all three, so an upgrade that renames them fails
+the suite. The other touch tests fail if the behaviour behind them moves.
+
+Checked by taking each repair out of the build and running the touch tests
+(the counts are in `docs/run-history.md`, Run 32).
+
+### What was emulated
+
+Playwright context with `hasTouch: true`, `isMobile: true`, viewport 390 by
+664 (375 by 667 for the size test), headless Chromium. Taps are
+`page.touchscreen.tap`; swipes, long presses and pinches are CDP
+`Input.dispatchTouchEvent`. A keyboard is imitated in two ways, because the
+two browsers report one differently:
+
+- as iOS reports it: `visualViewport.height` is replaced with half the page
+  height (`Object.defineProperty`) and a `resize` event is dispatched on
+  `visualViewport`; the page's own size does not change.
+- as Chrome on Android reports it with `resizes-content`: the window is made
+  half as tall (`page.setViewportSize`).
+
+Typing in the tests comes from Playwright's keyboard, which is a hardware
+keyboard as far as the page can tell.
+
+### Not verified on real devices
+
+1. That `inputmode="none"` on a focused `contenteditable` keeps the iOS and
+   Android keyboards closed after a tap, and on first load.
+2. That the keyboard opens from each of the three routes on iOS. The focus
+   call is inside the tap's handler, but it follows a `blur()` on an element
+   that was already focused; iOS may treat that differently from a first
+   focus.
+3. That the keyboard closes after Enter, the check mark and the X.
+4. That Safari does not zoom on focus now that the editors are 16 px.
+5. What Enter does on an Android keyboard. Gboard sends composition events
+   and may report key code 229 for Enter; Univer's handling of that was not
+   tested. The check mark is the fallback.
+6. That predictive text, autocorrect and dictation produce the right entry
+   in Univer's editor.
+7. That iOS's visual viewport reports (height, `offsetTop`, the order of
+   `resize` and `scroll`) match the emulation, and that the shell stays
+   still while the keyboard animates.
+8. That Chrome on Android honours `interactive-widget=resizes-content` as
+   emulated by a window resize. Firefox on Android and Samsung Internet were
+   not considered.
+9. Scroll feel: the glide's speed and stop were tuned by numbers, not by
+   hand.
+10. Double tap timing with a real finger, and whether iOS's own double tap
+    zoom gets in before it (the canvas has `touch-action: none`, which should
+    prevent that).
+11. Tablets with a hardware keyboard, and a pen.
+
+### Limits
+
+- The formula bar's drawn text stays about 14.7 CSS px on touch, where the
+  brief asked for 16 px. It is drawn on a canvas by Univer from the cell's
+  own font size, so it cannot cause the Safari zoom, and CSS does not reach
+  it. Options: zoom the formula bar's document through the private
+  `EditorDataSyncController` and scene (a private dependency of the kind
+  "General numbers" already has, with the caret and selection drawing to
+  re-check); or replace the formula bar's display with a DOM element of the
+  shell's own (a second editor to keep in step with Univer's). Neither was
+  done.
+- While typing, a swipe scrolls the grid, and the cell editor follows only
+  while its whole cell is in view. Scrolled out of view, the editor stays
+  where it last was, as on the desktop.
+- Chromium gives a tap that lands a few pixels off the formula text to the
+  text itself. When such a tap lands just left of the text in the one-row
+  formula bar (over 600 px wide), Univer starts the edit but leaves the focus
+  in the cell editor. Typing still goes into the cell.
+- A phone held sideways shows about five rows when nothing is being typed:
+  the app bar, formula bar, sheet bar and status bar take the rest of 390
+  px. The bars are hidden only while typing.
+- Column and row resizing, the sheet tab menu and Univer's right-click menu
+  have no touch gesture. The view could not resize a column before this
+  change either.
+- Tapping a cell while a formula is being typed inserts its reference, as a
+  click does. A second quick tap on the same cell is then read as a double
+  tap and does nothing more, since typing has already started.
+- Two faults found on the way are Univer 1.2.0's own, happen with a mouse on
+  the build before this change, and were left alone: pressing Escape after
+  the `fx` button in the formula bar throws
+  `n.getActiveSheet is not a function` inside Univer (the edit still
+  closes), and the X and check mark colors are swapped in the dark theme on
+  the mouse layout.
+
 ## Absent-cell authoring on imported workbooks
 
 An imported XLSX only materializes the cells its `<sheetData>` holds. Typing
@@ -585,12 +1015,12 @@ placeholder cells, and the UI has no special path for it.
 `web/univer-spike/tests/acceptance.spec.ts`, headless Chromium (Playwright
 1.64.1 driving system Chromium 156), production build served statically:
 **15 passed** on 2026-10-27. That figure is the snapshot from that day's run.
-The suite in this file now defines 40 tests. The six added with the product
+The suite in this file now defines 51 tests. The six added with the product
 shell are listed after item 12, the ten added with clear, paste and fill and
 the one added with series fill after item 18, the three added with General
-numbers after item 28, and the one added with editing in place after item
-31; a run of the first 39 is recorded in `docs/run-history.md` (Run 31) as
-branch-local evidence.
+numbers after item 28, the one added with editing in place after item 31,
+and the eleven added with touch and phone use after item 32; a run of all 51
+is recorded in `docs/run-history.md` (Run 32) as branch-local evidence.
 
 For `not-execute` and `load-only`:
 
@@ -744,6 +1174,71 @@ Editing in place (see "How the adapter keeps Univer non-authoritative").
     adapter change taken out the test fails at its first step (checked by
     doing it).
 
+Touch and phone use (see "Touch and phone use" above). These run in a touch
+context (`hasTouch`, `isMobile`, 390 by 664) in headless Chromium, which has
+no on-screen keyboard: they prove the focused element, its `inputmode` and
+font size, the edit state, the layout and the scrolling, and they do not
+prove what a real phone keyboard does.
+
+33. Tap. A tap on B1 selects it and the formula bar reads `=A1*2`; a tap on
+    D1 selects that and reads `=C1*3`. Each time the focused element is
+    Univer's cell editor with `inputmode="none"`, nothing is being edited,
+    the version stays 0 and the page is not scrolled. Every element that can
+    take the focus is 16 px or more. The viewport meta carries
+    `interactive-widget=resizes-content` and neither `user-scalable` nor
+    `maximum-scale`. `touch.state()` reports that both editors, the grid
+    canvas and the Edit button's place were found.
+34. Double tap. Two taps on A1 switch the cell editor to `inputmode="text"`
+    with the edit open; a typed 5 and Enter make A1 105 in one version step
+    (210, 215, 645, 435, 1610 follow), and the editor is back on
+    `inputmode="none"`.
+35. Edit button. A tap on C1 shows the Edit button and hides the X and the
+    check mark. A tap on Edit opens the edit on C1 with `inputmode="text"`
+    and the X and check mark take its place. `=B1+100` and the check mark
+    give 120 in one version step (360, 340 and 850 follow), and the editor
+    is back on `inputmode="none"`.
+36. Formula bar. With B1 selected, a tap on the formula text opens the edit
+    there with `inputmode="text"` at 16 px or more; `+7` and the X leave B1
+    as `=A1*2` at version 0. With A2 selected, a tap at the left edge of the
+    row, which Chromium gives to the row and not to the text, is passed on
+    and opens the edit; 7 and Enter put 7 in A2 in one version step.
+37. Keyboard as iOS reports it. With `visualViewport.height` replaced by
+    half the page height while `=SUM(A1:E1)` is being typed into B13, the
+    shell is that height, the formula bar and the whole cell are inside it,
+    the editor sits on its cell, the page is not scrolled, and the app bar
+    and status bar are hidden. Restoring the height restores the layout, and
+    Enter then commits 185.
+38. Keyboard as Chrome on Android reports it. With the window made half as
+    tall while 12 is being typed into B13, the same holds, with no keyboard
+    inset reported because the page itself got shorter. The window restored,
+    Enter commits 12.
+39. Swipe. A swipe 200 px up moves the grid 180 px (the first 20 px step
+    only decides that it is a swipe), a swipe 150 px sideways moves it 135
+    px, and a swipe back returns it to the top left corner, where it stops.
+    The page does not scroll, the selection stays B2 and nothing is edited.
+    The tap after the first two swipes selects D12, the cell under the
+    finger by arithmetic on the scroll position.
+40. Long press and pinch. A finger held 650 ms on A6 and moved to C9 selects
+    A6:C9. Two fingers moved apart set the grid zoom to 150 percent while the
+    page scale stays 1.
+41. Sizes. At 375 px wide every listed control is at least 44 by 44 CSS px
+    with 8 px between neighbors, when idle, while typing and with the panel
+    open; nothing overflows sideways; the formula bar is two rows (104 px)
+    and the name box text is 16 px. The X is red and the check mark green in
+    the light and the dark theme.
+42. Last pointer. On a touch device a mouse click removes `inputmode` from
+    both editors and a tap puts `none` back.
+43. Mouse unchanged. In the default mouse context there is no `inputmode`
+    attribute, the editor is 13 px, the Edit button is not displayed and the
+    bars keep their heights.
+
+Items 33 to 43 were checked against the repairs they cover by taking the
+repairs out of the build: without the `inputmode` painting items 33 to 36,
+39 and 42 fail; without `fit()` items 37 and 38 fail; without the finger
+layer on the grid items 34, 37, 39 and 40 fail; without the 16 px rule
+items 33 and 36 fail; without `placeEditor()` item 38 fails on "editor sits
+on its cell".
+
 **Repaint latency gate.** A typed commit into A1 of the event-log fixture
 must repaint its dependent B1 in under 100 ms, measured from the adapter's
 commit timestamp to the first animation frame that shows the new value. The
@@ -783,6 +1278,11 @@ script, 2 KiB to the worker and 25 KiB to the WASM (`copyFormulasJson`).
 
 General number drawing adds 3 KiB raw (2 KiB gzip) to the main script,
 measured on 2026-11-12 by building with and without it.
+
+Touch and phone use adds about 11 KiB raw (3 KiB gzip) to the main script and
+4 KiB raw (1 KiB gzip) to the main CSS: 6099 KiB and 127 KiB on 2026-11-12,
+against the 6088 KiB and 123 KiB recorded above. Nothing is loaded lazily for
+it and nothing is added on a device without touch beyond those bytes.
 
 Run `npm run build && npm run size` in `web/univer-spike`.
 
@@ -857,6 +1357,13 @@ tools. Vite 7.3.7 (esbuild/rollup) is used instead.
   the spike's arm64 sandbox, although chromedriver itself works. The same
   contract is exercised natively and by the real WASM build in Node and in
   Chromium.
+- Touch and phone use was built and tested with an emulated touch screen in
+  headless Chromium only. What a real iPhone or Android keyboard does is not
+  verified; "Touch and phone use" lists the open points, and
+  `web/univer-spike/FLOWS.md` has the check list to run on a phone. The touch
+  layer depends on Univer 1.2.0's editor ids, canvas id and formula bar
+  markup; its tests fail if an upgrade moves them. The formula bar's drawn
+  text stays about 14.7 px on touch.
 
 ## Running it
 

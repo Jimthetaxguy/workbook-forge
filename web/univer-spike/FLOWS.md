@@ -27,7 +27,74 @@ when a flow changes. Run the suite with `npm run test:e2e`.
 | An action Forge does not take yet (cut, menu paste, clearing formats, insert or remove rows, columns and sheets, formatting) | Nothing changes; a notice says the action is not available yet. | `structural and out-of-scope mutations are blocked with a visible notice`, `cut is refused, and a paste whose formula would leave the sheet changes nothing` |
 | Light and dark theme | Follows the system setting; the toggle switches the page and the grid together. No workbook data or preference is stored; the empty IndexedDB database Univer creates at load holds no entries. | `theme: the toggle switches the frame and the grid together and stores nothing` |
 | Phone width (375 px) | Every app bar control is reachable; the side panel covers the grid. | `narrow screen: controls stay reachable at 375px and the panel overlays the grid` |
+| Tap a cell on a phone or tablet | Selects it and shows its content in the formula bar. The focused editor carries `inputmode="none"`, which asks the browser to keep its keyboard closed. Emulated touch only; see "Phone check list" below. | `a tap selects a cell and leaves the focused editor on inputmode="none" at 16px; whether a real keyboard stays closed is not tested` |
+| Start typing on touch: double tap, the Edit button, or a tap in the formula bar | The editor switches to `inputmode="text"` and takes the focus inside the tap. Enter or the check mark commits as one version step; the X leaves the cell as it was; either way the editor returns to `inputmode="none"`. | `a double tap switches the editor to inputmode="text", and Enter commits a value in one version step and switches back`, `the Edit button starts typing in the cell, and the check mark commits a formula in one version step`, `a tap in the formula bar starts typing there; the X leaves the cell unchanged, and Enter commits` |
+| Type with an on-screen keyboard open | The shell is sized to the visible area: the formula bar and the cell being edited stay above the keyboard, the app bar and status bar step aside when less than 520 px is visible, and everything returns when the keyboard closes. Tested with a shortened visual viewport and with a shortened window, not with a keyboard. | `visible area cut to half by replacing visualViewport.height (as iOS reports a keyboard): the formula bar and the cell being edited stay inside it, and the layout returns`, `window made half as tall (as Chrome on Android resizes the page for a keyboard): the formula bar and the cell being edited stay inside it` |
+| Swipe the grid | Scrolls it both ways with a short glide; the page does not move and the selection does not change. | `a swipe scrolls the grid up, down and sideways without moving the page or selecting, and the next tap selects the cell under the finger` |
+| Hold a finger on a cell, then drag; two fingers on the grid | Selects a range (from the fill handle, fills); two fingers zoom the grid from 50 to 300 percent. | `a finger held still and then moved selects a range, and two fingers zoom the grid while the page scale stays 1` |
+| Touch sizes | On a device whose main pointer is a finger, controls are at least 44 by 44 px with 8 px between them and text that takes the focus is 16 px. The workbook's row heights and column widths are not changed. | `controls are at least 44 by 44 CSS px with 8px between them at 375px, also while typing and with the panel open` |
+| A touch screen and a mouse on one device | The last pointer decides: a tap gets `inputmode="none"`, a mouse click removes it. With a mouse nothing differs from before. | `the last pointer decides: a mouse click takes inputmode off the editors and a tap puts it back`, `mouse and keyboard are unchanged: no inputmode, no Edit button, and the bars keep their sizes` |
 | Developer panel (`?dev=1`) | Mode selector, raw revision, source state, last refused command id, XLOOKUP subset note. | `toolbar: the default view hides developer controls and ?dev=1 shows them` |
 
 Every flow runs without a request to another origin. The blank-workbook test
 asserts that for its whole session.
+
+## Phone check list
+
+The touch flows above were tested with an emulated touch screen in headless
+Chromium, which has no on-screen keyboard and is not Safari. Nothing below
+has been run on a phone. Run it on an iPhone in Safari and on an Android
+phone in Chrome, in portrait, and note the step number of anything that
+differs. `docs/specs/univer-spike.md` ("Touch and phone use") has the
+reasons.
+
+1. Open the page. Expected: the sample workbook shows, no keyboard opens,
+   and the page is not zoomed in.
+2. Tap cell B1 once. Expected: B1 is outlined, the formula bar shows
+   `=A1*2`, the keyboard stays closed, and the page does not zoom or jump.
+3. Tap C1, then D1. Expected: the outline follows each tap, the formula bar
+   changes, and the keyboard stays closed.
+4. Swipe up, down and sideways on the grid. Expected: the grid scrolls with
+   the finger and glides a little after it; the bars above and below stay
+   still; the page does not bounce; no range gets selected.
+5. Tap A1 twice quickly. Expected: the keyboard opens with letters (not a
+   number pad), the cell shows a text cursor after `10`, the X and check
+   mark replace the Edit button, and the page does not zoom.
+6. With the keyboard open, look at the screen. Expected: the formula bar is
+   at the top, A1 is visible above the keyboard, and nothing is hidden
+   behind the keyboard. The app bar and the status line may be hidden.
+7. Type `5` and press Enter (or Go, or the return key). Expected: the
+   keyboard closes, A1 shows 105, B1 shows 210, the status line says
+   Version 1. If Enter does nothing on Android, tap the check mark and note
+   it.
+8. Tap the empty cell A3, then tap **Edit**. Expected: the keyboard opens
+   and A3 is being edited.
+9. Type `=A1*3` and tap the check mark. Expected: the keyboard closes, A3
+   shows 315 and the status line says Version 2.
+10. Tap B1, then tap the formula text in the formula bar. Expected: the
+    keyboard opens and the cursor is in the formula bar.
+11. Type `+7`, then tap the X. Expected: the keyboard closes and B1 still
+    shows 210 with `=A1*2`.
+12. Scroll down, double tap a cell near the bottom of the screen (row 12 or
+    lower) and wait for the keyboard. Expected: the grid moves so that the
+    cell is visible above the keyboard, with the editing box on the cell.
+13. Type `12`, tap the check mark. Expected: the keyboard closes, the full
+    layout returns (app bar and status line back), and no blank band is
+    left at the bottom or top.
+14. Hold a finger still on a cell for about half a second, then drag.
+    Expected: a range is selected; the browser's own menu or magnifier does
+    not get in the way.
+15. Put two fingers on the grid and move them apart. Expected: the grid's
+    zoom percent rises and the cells grow; the bars keep their size.
+16. Put two fingers on the app bar and move them apart. Expected: the whole
+    page zooms, as on any web page (pinch zoom is not switched off). Pinch
+    back.
+17. Turn the phone sideways and repeat steps 2 and 5. Expected: the same,
+    with fewer rows visible.
+18. iPhone only: in steps 5, 8 and 10, watch for the page zooming in when
+    the keyboard opens. Expected: no zoom.
+19. Android only: in step 6, the page should be resized by the keyboard, not
+    covered by it. Expected: the sheet tabs and zoom control sit just above
+    the keyboard.
+20. With a hardware keyboard attached (tablet), tap a cell and type.
+    Expected: typing starts in the cell without an on-screen keyboard.
