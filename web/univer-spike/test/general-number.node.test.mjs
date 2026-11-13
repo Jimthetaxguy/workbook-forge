@@ -134,7 +134,7 @@ test('an 88px column in 11pt Arial draws the two numbers as rounded decimals', (
 });
 
 test('rounding goes half away from zero on the decimal digits', () => {
-  // 2.675 is stored a hair below 2.675 and toFixed(2) gives 2.67; Excel shows 2.68.
+  // 2.675 is stored a hair below 2.675 and toFixed(2) gives 2.67.
   assert.equal(drawn(2.675, 4), '2.68');
   assert.equal(drawn(-2.675, 5), '-2.68');
   assert.equal(drawn(0.125, 4), '0.13');
