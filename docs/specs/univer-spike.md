@@ -292,6 +292,20 @@ text) are in `src/range-edits.ts` with unit tests in
   the copied range at that moment, keyed by the id Univer puts in the
   clipboard HTML. A copy is a snapshot: editing the source afterwards does
   not change what is pasted.
+
+  A copy pressed while an earlier change is still on its way to Forge and
+  back is refused with the notice "The last change is still being applied,
+  so nothing was copied. Copy again." Until that change returns, the
+  adapter's cells and Univer's cells are both the old ones, so a copy taken
+  then would hold them: Delete followed at once by Ctrl+C and a paste would
+  bring the deleted cells back. The refused copy writes nothing, so the
+  clipboard and the last copy stay as they were. The other way to close the
+  gap, taking the adapter's snapshot later in the edit queue, was not
+  chosen: it would correct a paste on this page, but Univer would already
+  have written the old cells to the clipboard for any other program, and a
+  clipboard write cannot be put off until the change returns because
+  browsers allow it only during the key press. The wait is one worker round
+  trip, normally a few milliseconds.
 - **Paste** (Ctrl+V, Cmd+V). When the clipboard still holds this page's own
   copy, values are copied as they are and each formula is what `copyFormulas`
   returns for its new place. Anything else on the clipboard is pasted as

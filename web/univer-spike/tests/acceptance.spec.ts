@@ -1644,6 +1644,74 @@ test.describe('everyday editing: clear, paste and fill', () => {
     expect(errors).toEqual([]);
   });
 
+  test('a copy pressed while Delete is still being applied is refused and writes nothing to the clipboard, so a paste cannot bring the deleted cells back', async ({ page }) => {
+    const errors = await boot(page, 'not-execute');
+    // B3 and C3 hold 1 and 2. The clipboard now holds that text, which is not a copy made on this page.
+    await pasteText(page, 'B3', '1\t2');
+    expect(await cellsOf(page, ['B3', 'C3'])).toEqual({ B3: [null, 1], C3: [null, 2] });
+    expect((await editState(page)).revision).toBe(1);
+
+    // Hold every reply from Forge until released, and count what the page writes to the clipboard.
+    await page.evaluate(() =>
+      (window as any).__spike.then((s: any) => {
+        const w = window as any;
+        w.__clipboardWrites = 0;
+        for (const name of ['write', 'writeText'] as const) {
+          const original = (Clipboard.prototype as any)[name];
+          (Clipboard.prototype as any)[name] = function (...args: unknown[]) {
+            w.__clipboardWrites += 1;
+            return original.apply(this, args);
+          };
+        }
+        w.__held = new Promise<void>((resolve) => (w.__release = resolve));
+        const send = s.client.applyAndCalculate.bind(s.client);
+        s.client.applyAndCalculate = async (...args: unknown[]) => {
+          const reply = await send(...args);
+          await w.__held;
+          return reply;
+        };
+      }),
+    );
+    const writes = () => page.evaluate(() => (window as any).__clipboardWrites as number);
+
+    await selectCells(page, 'B1', 'C1');
+    await page.keyboard.press('Delete');
+    await page.keyboard.press('Control+C');
+    await page.waitForTimeout(250);
+    // Forge has cleared B1 and C1, but its reply is held, so the view still shows them.
+    expect(await cellsOf(page, ['B1', 'C1'])).toEqual({ B1: ['=A1*2', 20], C1: ['=B1+5', 25] });
+    let state = await editState(page);
+    expect.soft(state.notice).toBe('The last change is still being applied, so nothing was copied. Copy again.');
+    expect.soft(state.blocked.at(-1)).toBe('univer.command.copy');
+    expect.soft(await writes(), 'clipboard writes by the refused copy').toBe(0);
+
+    await page.evaluate(() => (window as any).__release());
+    await settle(page);
+    // B1 and C1 are empty, so D1 = 0*3 = 0, E1 = 0-0 = 0, F1 = 10+0+0+0+0 = 10.
+    expect(await cellsOf(page, ['B1', 'C1', 'D1', 'F1'])).toEqual({ B1: BLANK, C1: BLANK, D1: ['=C1*3', 0], F1: ['=SUM(A1:E1)', 10] });
+    expect((await editState(page)).revision).toBe(2);
+
+    // The clipboard is as it was before the refused copy: the text 1 and 2,
+    // not the formulas Delete removed (which would arrive as =A5*2 and =B5+5).
+    await selectCells(page, 'B5');
+    await page.keyboard.press('Control+V');
+    await settle(page);
+    expect(await cellsOf(page, ['B5', 'C5'])).toEqual({ B5: [null, 1], C5: [null, 2] });
+    expect((await editState(page)).revision).toBe(3);
+
+    // Copied again now that the clear is applied, B1:C1 is two empty cells, and pasting them over B3:C3 empties those.
+    await copyCells(page, 'B1', 'C1');
+    expect(await writes()).toBeGreaterThan(0);
+    await selectCells(page, 'B3');
+    await page.keyboard.press('Control+V');
+    await settle(page);
+    expect(await cellsOf(page, ['B3', 'C3'])).toEqual({ B3: BLANK, C3: BLANK });
+    state = await editState(page);
+    expect(state.revision).toBe(4);
+    expect(state.selection).toBe('B3:C3');
+    expect(errors).toEqual([]);
+  });
+
   test('cut is refused, and a paste whose formula would leave the sheet changes nothing', async ({ page }) => {
     const errors = await boot(page, 'not-execute');
     await selectCells(page, 'B1');
