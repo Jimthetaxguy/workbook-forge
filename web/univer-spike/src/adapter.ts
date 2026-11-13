@@ -55,6 +55,7 @@ import { fromA1, toA1 } from './a1';
 import {
   MAX_RANGE_CELLS,
   cellCount,
+  clipboardColumns,
   columns,
   contains,
   copyIdOf,
@@ -1097,15 +1098,17 @@ export class ForgeUniverAdapter {
         }
         if (!(await this.writeCopies(id, sheet, steps, 'paste'))) return false;
       } else {
+        // Rows are as written, not padded: the size is checked before any cell of the rectangle is built.
         const table = parseClipboardText(text);
-        if (table.length === 0 || table[0].length === 0) return this.refuse(id, 'There was no text to paste.');
-        shape = pasteShape(table.length, table[0].length, selection);
+        const width = clipboardColumns(table);
+        if (table.length === 0 || width === 0) return this.refuse(id, 'There was no text to paste.');
+        shape = pasteShape(table.length, width, selection);
         if (!this.fits(id, selection, shape)) return false;
         const edits: Edit[] = [];
         for (let r = 0; r < shape.rows; r += 1) {
           for (let c = 0; c < shape.columns; c += 1) {
             const [row, col] = [selection.startRow + r, selection.startColumn + c];
-            const typed = table[r % table.length][c % table[0].length];
+            const typed = table[r % table.length][c % width] ?? '';
             // Each cell is read exactly as if it had been typed there.
             const input = parseInput({ v: typed }, this.isTextFormat(sheet, row, col)) ?? { value: null };
             if ('value' in input && input.value === null && isBlank(this.held(sheet, row, col))) continue;

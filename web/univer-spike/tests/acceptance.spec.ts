@@ -1264,6 +1264,34 @@ test.describe('everyday editing: clear, paste and fill', () => {
     expect(errors).toEqual([]);
   });
 
+  test('uneven text pastes its short rows as empty cells, and uneven text over the limit is refused with the usual message', async ({ page }) => {
+    const errors = await boot(page, 'not-execute');
+    // B3 and C3 hold values first, so the cells the short row does not reach are seen to be written as empty.
+    await pasteText(page, 'B3', '1\t2');
+    expect(await cellsOf(page, ['B3', 'C3'])).toEqual({ B3: [null, 1], C3: [null, 2] });
+    // Three cells, then one: 2 rows by 3 columns.
+    await pasteText(page, 'A2', 'a\tb\tc\nd');
+    expect(await cellsOf(page, ['A2', 'B2', 'C2', 'A3', 'B3', 'C3'])).toEqual({
+      A2: [null, 'a'], B2: [null, 'b'], C2: [null, 'c'], A3: [null, 'd'], B3: BLANK, C3: BLANK,
+    });
+    let state = await editState(page);
+    expect(state.revision).toBe(2);
+    expect(state.selection).toBe('A2:C3');
+
+    // One row of 16,000 cells, which fits the sheet's 16,384 columns from
+    // column A, then 20,000 rows of one cell. The text holds 36,000 cells in
+    // 56,000 characters; its rectangle is 20,001 by 16,000 = 320,016,000.
+    const text = `${'\t'.repeat(15_999)}\n${'x\n'.repeat(20_000)}`;
+    expect(text.length).toBe(56_000);
+    await pasteText(page, 'A5', text);
+    state = await editState(page);
+    expect(state.notice).toBe('Change not applied. That is more than 20,000 cells at once.');
+    expect(state.blocked.at(-1)).toBe('sheet.command.paste-by-short-key');
+    expect(state.revision).toBe(2);
+    expect(await cellsOf(page, ['A5', 'A6'])).toEqual({ A5: BLANK, A6: BLANK });
+    expect(errors).toEqual([]);
+  });
+
   test('a copied formula moves its relative references and keeps its absolute ones', async ({ page }) => {
     const errors = await boot(page, 'not-execute');
     // Microsoft's table: copied two cells down and two cells to the right,

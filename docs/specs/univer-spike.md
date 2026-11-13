@@ -359,7 +359,11 @@ text) are in `src/range-edits.ts` with unit tests in
   cell. Excel would write `#REF!` in that cell instead.
 - **Limits.** 20,000 cells per paste or fill. The view's grid grows to hold a
   paste or fill that runs past it (to the last row + 100 and last column + 10,
-  capped at Excel's 1,048,576 by 16,384).
+  capped at Excel's 1,048,576 by 16,384). Pasted text is measured as its
+  number of rows by its longest row, and that size is checked before any
+  cell is built: the rows are kept as written, and a cell a short row does
+  not reach is written as empty. So one long row followed by many short ones
+  is refused with the same notice as any other paste over the limit.
 - **Two repairs to Univer 1.2.0's selection drawing**, both in the adapter and
   each pinned by an acceptance test that fails without it. The fill handle
   remembers the range of a drag that changed nothing and sends it again when
