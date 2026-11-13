@@ -562,7 +562,9 @@ export function installTouch(host: UniverHost, container: HTMLElement): TouchSup
       root.style.removeProperty('--keyboard-inset');
     }
     root.dataset.typing = compact ? 'compact' : 'off';
-    if (changed && editing) revealSoon();
+    // Only for a finger or a covered page. With a mouse, a window resized
+    // while a cell is being edited is left to Univer, as before.
+    if (changed && editing && (touch || covered)) revealSoon();
   }
 
   /** Scroll the cell being edited back into view if the smaller grid has hidden it. */
