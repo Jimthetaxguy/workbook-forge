@@ -21,6 +21,7 @@ import {
   CellValueType,
   CommandType,
   CustomCommandExecutionError,
+  DateSystem,
   HorizontalAlign,
   ICommandService,
   IUniverInstanceService,
@@ -520,6 +521,10 @@ export class ForgeUniverAdapter {
       sheetOrder: [],
       sheets: {},
     };
+    // Forge keeps date serials as the file stores them. In a 1904 workbook a
+    // serial counts days from January 1, 1904, so the view must read date
+    // formats that way or every date is drawn 1,462 days early.
+    if (snapshot.value.date1904) data.dateSystem = DateSystem.Date1904;
     snapshot.value.sheets.forEach((sheet, index) => {
       const id = `sheet-${index}`;
       this.sheetIds.set(sheet.name, id);

@@ -246,6 +246,28 @@ Findings:
   per Excel character unit, which is an approximation of Excel's
   font-dependent width, not a measurement. A cell with no number format is
   drawn by the rule in "General numbers" below.
+- **Date system.** `snapshot` carries `date1904: true` when the workbook
+  uses the 1904 date system (`<workbookPr date1904="1">`), and the adapter
+  then creates the Univer workbook with `dateSystem: 'date1904'`, so a date
+  format is drawn from January 1, 1904. Microsoft,
+  [Date systems in Excel](https://support.microsoft.com/en-us/office/date-systems-in-excel-e7fe7167-48a9-4b96-bb53-5612a800b487):
+  "In the 1904 date system, dates are calculated by using January 1, 1904,
+  as a starting point. When you enter a date, it is converted into a serial
+  number that represents the number of days elapsed since January 1, 1904."
+  and "The difference between the two date systems is 1,462 days." Before
+  this, every date in such a workbook was drawn 1,462 days early:
+  `fixtures/corpus/op_1904_dates.xlsx` holds 42886 formatted `yyyy-mm-dd`,
+  which is 2021-06-01 and was drawn as 2017-05-31. Nothing is converted: the
+  value Forge holds and writes to a saved file is the stored serial, and
+  only the date drawn for it, in the grid and the formula bar, changes. The
+  field is optional and outside the workbook model; the WASM build answers
+  it through a separate export (`usesDate1904`), as it does for the Text
+  layouts, so `schema_version` and `model_version` are unchanged. An engine
+  build without the export reports nothing and the view draws with the 1900
+  system as before. Two limits are older than this and unchanged: Forge
+  does not calculate formulas in a 1904 workbook (the cell is empty and
+  Formula issues lists it), and a typed date is kept as text in either date
+  system.
 - **Projection.** After every accepted edit the adapter applies the `changed`
   delta from `applyAndCalculate`, then writes those cells as `{v, f}` with one
   `sheet.mutation.set-range-values` per sheet. Reading `snapshot` and

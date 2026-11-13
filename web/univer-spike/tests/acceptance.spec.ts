@@ -938,6 +938,73 @@ test('display: an opened workbook keeps its number formats, cell styles and colu
   expect(errors).toEqual([]);
 });
 
+// Dates in a workbook that uses the 1904 date system. Microsoft, "Date systems
+// in Excel" (support.microsoft.com, article
+// e7fe7167-48a9-4b96-bb53-5612a800b487): "In the 1904 date system, dates are
+// calculated by using January 1, 1904, as a starting point. When you enter a
+// date, it is converted into a serial number that represents the number of
+// days elapsed since January 1, 1904. For example, if you enter July 5, 2011,
+// Excel converts the date to the serial number 39267." and "The difference
+// between the two date systems is 1,462 days."
+//
+// Both fixtures carry <workbookPr date1904="1"> and format A1 as yyyy-mm-dd.
+// Worked by hand: 1904 to 2020 is 117 years holding 30 leap days (1904, 1908,
+// ... 2020), 117 * 365 + 30 = 42,735 days, so serial 42735 is 2021-01-01.
+//   op_1904_dates.xlsx Log!A1 = 42886: 42886 - 42735 = 151 = 31 + 28 + 31 +
+//     30 + 31 (January to May 2021), so 2021-06-01. Read with the 1900 system
+//     it is 1,462 days (four years and a day) earlier: 2017-05-31.
+//   xw_1904_dates.xlsx Calendar!A1 = 43236: 2021 has 365 days, so serial
+//     43100 is 2022-01-01; 43236 - 43100 = 136 = 31 + 28 + 31 + 30 + 16, so
+//     2022-05-17.
+//   39267 is Microsoft's own example above: 2011-07-05.
+// The fixtures' formula (C1 = A1+B1) is not calculated: Forge does not
+// calculate formulas in a 1904 workbook, so the cell stays empty and Formula
+// issues lists it.
+test('display: a workbook that uses the 1904 date system shows its dates counted from January 1, 1904, and a 1900 workbook opened after it is unchanged', async ({ page }) => {
+  const errors = await boot(page, 'not-execute');
+  const dates = (sheetName: string) =>
+    page.evaluate((sheetName) =>
+      (window as any).__spike.then((s: any) => {
+        const sheet = s.host.univerAPI.getActiveWorkbook().getActiveSheet();
+        return {
+          sheet: sheet.getSheetName(),
+          shown: ['A1', 'B1', 'C1'].map((address) => sheet.getRange(address).getDisplayValue()),
+          forge: ['A1', 'B1', 'C1'].map((address) => s.adapter.cell(sheetName, address).raw),
+          divergence: s.adapter.divergence(),
+        };
+      }), sheetName);
+
+  await page.locator('#file').setInputFiles('../../fixtures/corpus/op_1904_dates.xlsx');
+  await expect(page.locator('#status')).toHaveText('op_1904_dates.xlsx · All changes calculated · Version 0');
+  // The date is drawn from the same stored number: nothing is converted.
+  expect(await dates('Log')).toEqual({ sheet: 'Log', shown: ['2021-06-01', '3', ''], forge: [42886, 3, null], divergence: [] });
+  await expect(page.locator('#formula-issue-count')).toHaveText('1');
+  await expect(page.locator('#formula-issue-list')).toHaveText('Log!C11904 date-system formula calculation is unsupported');
+
+  // A new number in the date cell is read the same way.
+  await page.evaluate(() => (window as any).__spike.then((s: any) => s.adapter.edit([{ sheet: 'Log', address: 'A1', value: 39267 }], '1904 serial')));
+  await expect(page.locator('#status')).toHaveText('op_1904_dates.xlsx · All changes calculated · Version 1');
+  expect(await dates('Log')).toEqual({ sheet: 'Log', shown: ['2011-07-05', '3', ''], forge: [39267, 3, null], divergence: [] });
+
+  await page.locator('#file').setInputFiles('../../fixtures/corpus/xw_1904_dates.xlsx');
+  await expect(page.locator('#status')).toHaveText('xw_1904_dates.xlsx · All changes calculated · Version 0');
+  expect(await dates('Calendar')).toEqual({ sheet: 'Calendar', shown: ['2022-05-17', '10', ''], forge: [43236, 10, null], divergence: [] });
+
+  // The date system belongs to the workbook, not the page: a 1900 workbook
+  // opened next reads 45351 as 2024-02-29 (see the display test above).
+  await page.locator('#file').setInputFiles('../../fixtures/corpus/op_styles_number_formats.xlsx');
+  await expect(page.locator('#status')).toHaveText('op_styles_number_formats.xlsx · All changes calculated · Version 0');
+  const after = await page.evaluate(() =>
+    (window as any).__spike.then((s: any) => {
+      const sheet = s.host.univerAPI.getActiveWorkbook().getActiveSheet();
+      return { shown: sheet.getRange('B1').getDisplayValue(), forge: s.adapter.cell('Formats', 'B1').raw };
+    }),
+  );
+  expect(after).toEqual({ shown: '2024-02-29', forge: 45351 });
+  expectUniverNeverCalculated(await view(page));
+  expect(errors).toEqual([]);
+});
+
 // The status bar totals the selection from Forge's values. Fixture row 1 is
 // 10, 20, 25, 75, 55, 185: A1:C1 sums to 55 over 3 cells (average 55/3 =
 // 18.3333333333 at twelve significant digits); one cell shows no totals.

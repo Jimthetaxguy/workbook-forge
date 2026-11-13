@@ -1741,6 +1741,11 @@ impl ImportedWorkbook {
     pub fn capabilities(&self) -> &Json {
         &self.capabilities
     }
+    /// True when the workbook counts date serials from January 1, 1904
+    /// (`<workbookPr date1904="1">`). Serials are kept as stored either way.
+    pub fn uses_date1904(&self) -> bool {
+        self.date1904
+    }
     pub fn calculate(&self, workers: usize) -> CalculationReport {
         self.session.calculate(workers)
     }
@@ -3397,6 +3402,33 @@ mod tests {
         );
         imported.export(temp.path("preserved1904.xlsx")).unwrap();
         assert_eq!(imported.snapshot().revision, 0);
+    }
+    /// The date system comes from `<workbookPr date1904>` alone, and the
+    /// stored serials are the same whichever system the workbook names.
+    #[test]
+    fn date_system_is_reported_from_workbook_xml_and_serials_stay_as_stored() {
+        let temp = Temp::new();
+        let package = scenario_package();
+        let source1900 = temp.path("date1900.xlsx");
+        publish(&package, &source1900).unwrap();
+        let mut package1904 = scenario_package();
+        modify(
+            &mut package1904,
+            "xl/workbook.xml",
+            "date1904=\"0\"",
+            "date1904=\"1\"",
+        );
+        let source1904 = temp.path("date1904.xlsx");
+        publish(&package1904, &source1904).unwrap();
+        let import = |path: PathBuf| import_xlsx(path, BTreeMap::new(), BTreeMap::new()).unwrap();
+        let (plain, dated) = (import(source1900), import(source1904));
+        assert!(!plain.uses_date1904());
+        assert!(dated.uses_date1904());
+        assert_eq!(plain.capabilities()["date_system"], "1900");
+        assert_eq!(dated.capabilities()["date_system"], "1904");
+        let value =
+            |workbook: &ImportedWorkbook| workbook.snapshot().sheets[0].cells["B1"].value.clone();
+        assert_eq!(value(&plain), value(&dated));
     }
     #[test]
     fn imported_validation_changes_are_not_silently_accepted() {
