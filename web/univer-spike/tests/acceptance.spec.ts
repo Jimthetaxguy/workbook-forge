@@ -1779,6 +1779,104 @@ test.describe('everyday editing: clear, paste and fill', () => {
     expect(errors).toEqual([]);
   });
 
+  test('copying text inside the cell editor or the formula bar is a text copy: it is not refused while a change is pending, and pasting it writes the copied text, not the whole cell', async ({ page }) => {
+    const errors = await boot(page, 'not-execute');
+    await typeInto(page, 'A3', 'hello');
+    expect((await editState(page)).revision).toBe(1);
+    await page.evaluate(() => navigator.clipboard.writeText('EARLIER'));
+
+    // The last two letters, selected inside the editor and copied.
+    const a3 = await cellCentre(page, 'A3');
+    await page.waitForTimeout(550);
+    await page.mouse.dblclick(a3.x, a3.y);
+    await page.waitForTimeout(300);
+    await page.keyboard.press('End');
+    await page.keyboard.press('Shift+ArrowLeft');
+    await page.keyboard.press('Shift+ArrowLeft');
+    await page.keyboard.press('Control+C');
+    await page.waitForTimeout(250);
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(250);
+    // The paste is the two letters. A copy of the cell would have written
+    // hello, and a copy that did not happen would have written EARLIER.
+    await selectCells(page, 'A5');
+    await page.keyboard.press('Control+V');
+    await settle(page);
+    expect(await cellsOf(page, ['A3', 'A5'])).toEqual({ A3: [null, 'hello'], A5: [null, 'lo'] });
+    expect((await editState(page)).revision).toBe(2);
+
+    // The same copy while a change is still being applied: hold every reply from Forge until released.
+    await page.evaluate(() => navigator.clipboard.writeText('EARLIER'));
+    await page.evaluate(() =>
+      (window as any).__spike.then((s: any) => {
+        const w = window as any;
+        w.__held = new Promise<void>((resolve) => (w.__release = resolve));
+        const send = s.client.applyAndCalculate.bind(s.client);
+        s.client.applyAndCalculate = async (...args: unknown[]) => {
+          const reply = await send(...args);
+          await w.__held;
+          return reply;
+        };
+      }),
+    );
+    await selectCells(page, 'B3');
+    await page.keyboard.type('7', { delay: 15 });
+    await page.keyboard.press('Enter');
+    await page.waitForTimeout(250);
+    await page.waitForTimeout(550);
+    await page.mouse.dblclick(a3.x, a3.y);
+    await page.waitForTimeout(300);
+    await page.keyboard.press('Control+A');
+    await page.keyboard.press('Control+C');
+    await page.waitForTimeout(250);
+    let state = await editState(page);
+    expect(state.notice).not.toContain('nothing was copied');
+    expect(state.blocked).not.toContain('univer.command.copy');
+    await page.keyboard.press('Escape');
+    await page.evaluate(() => (window as any).__release());
+    await settle(page);
+    expect(await cellsOf(page, ['A3', 'B3'])).toEqual({ A3: [null, 'hello'], B3: [null, 7] });
+    expect((await editState(page)).revision).toBe(3);
+    // The clipboard holds the editor's text, not the EARLIER a refused copy would have left.
+    await selectCells(page, 'A6');
+    await page.keyboard.press('Control+V');
+    await settle(page);
+    expect(await cellsOf(page, ['A6'])).toEqual({ A6: [null, 'hello'] });
+    state = await editState(page);
+    expect(state.revision).toBe(4);
+
+    // The formula bar is the same editor reached another way: its text is copied while a change is pending too.
+    await page.evaluate(() => navigator.clipboard.writeText('EARLIER'));
+    await page.evaluate(() => {
+      const w = window as any;
+      w.__held = new Promise<void>((resolve) => (w.__release = resolve));
+    });
+    await selectCells(page, 'B3');
+    await page.keyboard.type('8', { delay: 15 });
+    await page.keyboard.press('Enter');
+    await page.waitForTimeout(250);
+    await selectCells(page, 'A3');
+    await page.locator('[data-u-comp="formula-bar"] [contenteditable="true"], [data-u-comp="formula-bar"] canvas').last().click();
+    await page.waitForTimeout(300);
+    await page.keyboard.press('Control+A');
+    await page.keyboard.press('Control+C');
+    await page.waitForTimeout(250);
+    state = await editState(page);
+    expect(state.notice).not.toContain('nothing was copied');
+    expect(state.blocked).not.toContain('univer.command.copy');
+    await page.keyboard.press('Escape');
+    await page.evaluate(() => (window as any).__release());
+    await settle(page);
+    expect(await cellsOf(page, ['A3', 'B3'])).toEqual({ A3: [null, 'hello'], B3: [null, 8] });
+    await selectCells(page, 'A7');
+    await page.keyboard.press('Control+V');
+    await settle(page);
+    expect(await cellsOf(page, ['A7'])).toEqual({ A7: [null, 'hello'] });
+    state = await editState(page);
+    expect(state.revision).toBe(6);
+    expect(errors).toEqual([]);
+  });
+
   test('cut is refused, and a paste whose formula would leave the sheet changes nothing', async ({ page }) => {
     const errors = await boot(page, 'not-execute');
     await selectCells(page, 'B1');

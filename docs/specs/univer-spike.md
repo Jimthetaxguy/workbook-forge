@@ -334,6 +334,15 @@ text) are in `src/range-edits.ts` with unit tests in
   clipboard write cannot be put off until the change returns because
   browsers allow it only during the key press. The wait is one worker round
   trip, normally a few milliseconds.
+
+  Copying text while a cell is being edited, in the cell or in the formula
+  bar, is a different thing: it is Univer's text copy of the characters
+  selected in the editor and takes no cells. The adapter neither refuses it
+  nor records it as a copy of the cell, so it works while a change is
+  pending and a later paste writes the copied characters as text. The
+  adapter tells the two apart by whether the editor is open
+  (`IEditorBridgeService.isVisible()`), because the focused unit stays the
+  workbook while a cell is being edited.
 - **Paste** (Ctrl+V, Cmd+V). When the clipboard still holds this page's own
   copy, values are copied as they are and each formula is what `copyFormulas`
   returns for its new place. Anything else on the clipboard is pasted as
@@ -729,8 +738,10 @@ there only for Safari's rule.
   Android), or the compact mode switched. The size has to be watched on its
   own: a tablet whose page goes from 1000 px to 600 px for its keyboard has
   nothing covered and stays above 520 px, so neither of the other two signs
-  moves. If the whole cell is not inside the
-  grid's box it runs `sheet.command.scroll-to-cell`. Whether the cell is in
+  moves. The cell is brought back only when the last pointer was a finger
+  or part of the page is covered; with a mouse, a window resized while a
+  cell is being edited is left to Univer, as it was before. If the whole
+  cell is not inside the grid's box it runs `sheet.command.scroll-to-cell`. Whether the cell is in
   view is worked out from the scroll position and the cell's coordinates,
   not from Univer's visible range, which lags by a few frames.
 - Univer's desktop cell editor does not follow the grid when it scrolls. So

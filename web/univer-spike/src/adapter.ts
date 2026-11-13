@@ -1016,6 +1016,11 @@ export class ForgeUniverAdapter {
     throw new CustomCommandExecutionError(`${id} routed to Forge`);
   }
 
+  /** True while the cell editor is open, in the cell or through the formula bar. */
+  private editorOpen(): boolean {
+    return this.host.univer.__getInjector().get(IEditorBridgeService).isVisible().visible;
+  }
+
   /**
    * Record what a copy is about to take. Univer copies the last selection;
    * the snapshot is Forge's cells there now, so a later paste writes what was
@@ -1032,8 +1037,11 @@ export class ForgeUniverAdapter {
   private noteCopy(id: string) {
     this.watchClipboard();
     this.copying = null;
-    const focused = this.instances.getFocusedUnit();
-    if (focused && focused.type === UniverInstanceType.UNIVER_DOC) return; // copying text inside the cell editor
+    // Copying text inside the cell editor or the formula bar is Univer's own
+    // text copy: it takes no cells, so it is neither refused nor recorded as
+    // a copy of the cell. The focused unit stays the workbook while a cell is
+    // being edited, so the open editor is what tells the two apart.
+    if (this.editorOpen()) return;
     if (this.pending > 0) this.block(id, COPY_TOO_SOON);
     const sheet = this.sheetName(undefined);
     const range = this.selection().at(-1);
