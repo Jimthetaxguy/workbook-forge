@@ -12,7 +12,8 @@ summary: Make source generation one capability of Workbook Forge rather than the
 The source compiler turns a toolkit workbook into a Python or Rust program inside a
 versioned scaffold whose runtime is embedded text (`source_graph.py:399-404`,
 `:407-427`; templates `source_runtime_v2..v6.{py,rs}`). Profile 6 covers five
-functions (`source_graph.py:31-38`) against 123 catalogued (`catalog/formulas.json`).
+functions (`source_graph.py:31-38`) against 123 catalogued at this spec's base
+commit `41f28d3` (`catalog/formulas.json`; the current count is in `CONTEXT.md`).
 An edited program is accepted only if it regenerates byte-identically (`:537-538`);
 the recognised edits are expression constructors and default literals (`:523-533`).
 The forward lowering starts from the evaluator's own parse tree (`expressions.py:95-114`;
@@ -101,7 +102,7 @@ rows and only the Python session refuses them:
 | --- | --- | --- | --- | --- |
 | (i) Generated programs import the installed `workbook_forge` engine | Breaks the stated contract "generated code has no Forge runtime dependency" (`source_cli.py:3`). Rust needs the crate linked: `rustc` is invoked with no `--extern` or `-L` (`source_process.py:54`); the crate builds an `rlib` (`rust/Cargo.toml:16`), so linking without cargo is possible but unimplemented. A frozen artifact's meaning changes whenever the installed engine changes | **Not measured.** No column of the matrix runs a generated program that imports an engine. If generated Python bound the Python engine, the four rows would move inside mode B; if it bound the Rust engine through the installed bridge (`WorkbookModel(backend="rust")`, `toolkit.py:65`), all 79 would agree. Either way the rows are the already tracked engine-parity gap, not a new one | Lost: an artifact needs a compatible install, and the four cross-language routes need both toolchains | Old scaffolds keep importing only while v2–v6 templates stay shipped. Cross-version translation does not exist under any option (`translate` preserves the program's version, `:542-543`) |
 | (ii) Self-contained embedded runtimes, held in lockstep by the equivalence matrix (status quo plus a maintained relationship) | Four bodies per function (two engines, two runtimes); `test_source_equivalence.py` is the only connection, so it must become the growth gate (section 6). Templates stay frozen (`docs/compiler-review-brief.md:20`, which lists v2 to v5 and is itself stale by one profile); growth adds v7, never edits v6 | Unchanged and pinned: every disagreement stands exactly as recorded in `DIVERGENCES` (`tools/source_equivalence_probe.py:360-414`, used by `test_source_equivalence.py:44-58`); whether the Python side is corrected is a separate decision (open question 1) | Kept: generated Python imports only the standard library today (`source_runtime_v6.py:2-4`) and is run with `-I` (`source_process.py:71`), which isolates the environment and user site but not site-packages; the property that exists is "template-frozen" (`test_source_graph.py:114` rejects `import os`), and the proposed stdlib-only test would be the first explicit check. Rust compiles with bare `rustc` | Kept unchanged: `import_source` sniffs the version by template prefix (`source_graph.py:500`) |
-| (iii) A generated shared semantic definition from which runtimes (and engine conformance) derive | A new artifact and generator; the engines are hand-written across 123 functions, so only tests or the small runtimes can realistically be generated; a third place where spreadsheet semantics are written | Forces a ruling on each row inside the definition, then one engine is out of conformance; the same work as fixing the engine, with a generator in front of it | Same as (ii) if the generated modules stay embedded | Must reproduce v2–v6 byte-identically or ship them frozen beside the generator, which is (ii) with extra machinery |
+| (iii) A generated shared semantic definition from which runtimes (and engine conformance) derive | A new artifact and generator; the engines are hand-written across 123 functions at this spec's base commit `41f28d3` (the current count is in `CONTEXT.md`), so only tests or the small runtimes can realistically be generated; a third place where spreadsheet semantics are written | Forces a ruling on each row inside the definition, then one engine is out of conformance; the same work as fixing the engine, with a generator in front of it | Same as (ii) if the generated modules stay embedded | Must reproduce v2–v6 byte-identically or ship them frozen beside the generator, which is (ii) with extra machinery |
 
 **Recommendation: (ii), resting on portability.** The measured facts are the 79/79
 agreement between the generated runtimes and with the Rust engine, the stated
@@ -222,8 +223,9 @@ question under the permissive-licence rule.
 Adding function F to the source profile is one pull request containing all of:
 
 1. Precondition: F is `conformance-tested` for both languages in
-   `catalog/formulas.json` (the only status value the catalog uses today for all 123
-   functions) and present in Rust `SUPPORTED_FUNCTIONS` (`toolkit.rs:26-150`).
+   `catalog/formulas.json` (the only status value the catalog uses for its
+   functions; 123 at this spec's base commit `41f28d3`, and the current count
+   is in `CONTEXT.md`) and present in Rust `SUPPORTED_FUNCTIONS` (`toolkit.rs:26-150`).
    `tools/compiler_coverage.py:56` accepts a looser set (`implemented`, `evaluated`,
    `conformance-tested`); the rule uses the catalog's actual status. Source coverage
    never leads engine coverage.
