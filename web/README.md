@@ -13,7 +13,8 @@
 - `univer-spike/` is a Univer 1.2 adapter that uses only that API, inside a
   small product shell: app bar, function reference, formula issues, array
   preview, selection totals, light and dark themes. Delete, copy and paste,
-  and fill (the handle, Ctrl+D, Ctrl+R) work on values and formulas.
+  and fill (the handle, Ctrl+D, Ctrl+R) work on values and formulas, and the
+  handle continues number, text-and-number and day and month name series.
   [`univer-spike/FLOWS.md`](univer-spike/FLOWS.md) lists the user flows.
 
 Findings, configuration matrix, contract and results:

@@ -61,12 +61,13 @@ import {
   fillSource,
   isBlank,
   isDateFormat,
-  isSeriesLine,
   parseClipboardText,
   pasteShape,
+  planLine,
   rows,
   union,
   type Held,
+  type LinePlan,
   type Rect,
 } from './range-edits';
 import type { UniverHost } from './univer-host';
@@ -231,6 +232,9 @@ export type NoticeKind = 'info' | 'error';
 
 /** How every notice about a change Forge refused begins. */
 export const REJECTED = 'Change not applied.';
+/** Shown when the fill handle meets a series Excel would continue and this page does not build. */
+export const SERIES_REFUSED =
+  'Fill continues numbers (1, 2, 3), text ending in a number (Item 1) and day and month names. Dates, times and other patterns are not available yet. Ctrl+D and Ctrl+R copy as they are.';
 
 /** Plain words for a refused Univer command, most specific pattern first. */
 const REFUSALS: [RegExp, string][] = [
@@ -1124,8 +1128,10 @@ export class ForgeUniverAdapter {
   /**
    * The fill handle, Ctrl+D and Ctrl+R: repeat the source over the rest of
    * the target. Ctrl+D and Ctrl+R always copy (`applyType: 'COPY'`). The fill
-   * handle copies only where Excel would copy too; where Excel would continue
-   * a series it is refused, because a copy there would not match Excel.
+   * handle copies where Excel would copy and continues the series `planLine`
+   * builds (numbers, text ending in a number, day and month names). Any other
+   * series Excel would continue is refused, because a copy there would not
+   * match Excel.
    * Univer sends the range the handle was dragged to as `targetRange`.
    */
   private routeFill(id: string, params: Record<string, unknown>): never {
@@ -1145,23 +1151,31 @@ export class ForgeUniverAdapter {
     this.audit.routed.push(id);
     void this.enqueue(async () => {
       if (cellCount(target) > MAX_RANGE_CELLS) return this.refuse(id, `${REJECTED} That is more than ${MAX_RANGE_CELLS.toLocaleString('en-US')} cells at once.`);
+      // One line per column when filling down or up, per row when filling across.
+      const length = down ? rows(source) : columns(source);
+      const plans: LinePlan[] = [];
       if (!alwaysCopy) {
-        // One line per column when filling down or up, per row when filling across.
         const lines = down ? columns(source) : rows(source);
-        const length = down ? rows(source) : columns(source);
         for (let line = 0; line < lines; line += 1) {
           const at = (i: number) => (down ? { row: source.startRow + i, col: source.startColumn + line } : { row: source.startRow + line, col: source.startColumn + i });
           const cells = Array.from({ length }, (_, i) => this.held(sheet, at(i).row, at(i).col));
           const dates = Array.from({ length }, (_, i) => this.dateCells.has(`${sheet}!${toA1(at(i).row, at(i).col)}`));
-          if (isSeriesLine(cells, dates)) {
-            return this.refuse(id, 'Fill copies formulas and repeated values. Continuing a series (1, 2, 3, dates, Item 1, Monday) is not available yet. Ctrl+D and Ctrl+R copy as they are.');
-          }
+          const plan = planLine(cells, dates);
+          if (plan.kind === 'refuse') return this.refuse(id, SERIES_REFUSED);
+          plans.push(plan);
         }
       }
       const steps: CopyStep[] = [];
       for (let row = target.startRow; row <= target.endRow; row += 1) {
         for (let col = target.startColumn; col <= target.endColumn; col += 1) {
           if (contains(source, row, col)) continue;
+          const plan = plans[down ? col - source.startColumn : row - source.startRow];
+          if (plan?.kind === 'series') {
+            const value = plan.at(down ? row - source.startRow : col - source.startColumn);
+            if (value === undefined) return this.refuse(id, `${REJECTED} The series cannot be continued as far as ${toA1(row, col)}.`);
+            steps.push({ row, col, from: { row, col, cell: { value } } });
+            continue;
+          }
           const from = fillSource(source, row, col);
           steps.push({ row, col, from: { ...from, cell: this.held(sheet, from.row, from.col) } });
         }
