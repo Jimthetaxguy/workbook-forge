@@ -8,6 +8,7 @@ when a flow changes. Run the suite with `npm run test:e2e`.
 |---|---|---|
 | Open the page | The sample workbook loads; the status line reads `univer-spike-chain.xlsx · All changes calculated · Version 0`. | `toolbar: the default view hides developer controls and ?dev=1 shows them` |
 | Type a value or formula | The edit goes to Forge; dependents repaint; the version goes up by one. | `value edit, formula edit, undo/redo, export round trip` |
+| Edit a cell in place (double click or F2, then type) | The characters are added to what the cell holds: 10 and a typed 5 is 105, as one version step. Text entered with a leading apostrophe stays text (`007` and an 8 is `0078`). Two lines typed with Alt+Enter are kept. | `editing a cell in place keeps the entry: double click or F2, then add characters` |
 | Undo, Redo (buttons or Ctrl+Z, Ctrl+Y) | Sent to Forge as intents; the version still moves forward. | same |
 | New workbook | A blank sheet, 200 rows by 26 columns; formulas are authored and calculated on the device. | `blank workbook authors new cells, evaluates formulas and exports locally` |
 | Open .xlsx | The file is read in the browser. Number formats, bold, italic, font color, fill, alignment, wrap and column widths are shown as saved. A file that cannot be read leaves the current workbook in place. | `display: an opened workbook keeps its number formats, cell styles and column widths, and exports the same values`, `an invalid replacement file leaves the current workbook visible` |

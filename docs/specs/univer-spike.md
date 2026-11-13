@@ -260,6 +260,22 @@ Findings:
   cell past the session's grid, the notice names the code and both revisions,
   and Univer is re-projected from Forge. A rejected cell the projection never
   held is blanked, so editor text does not linger there.
+- **Editing a cell in place.** When an edit starts from what the cell
+  already holds (a double click, F2, or a double tap on a phone) and
+  characters are added, Univer 1.2.0 sends the entry as rich text: `v` is
+  null and the text is in `p.body.dataStream`, because the characters added
+  carry a text color the old ones do not. An entry of two lines (Alt+Enter)
+  arrives the same way. The adapter used to read only `v` there, so Forge was
+  sent a null value and the cell was emptied: double clicking a cell that
+  held 10, typing 5 and pressing Enter cleared it. The adapter now reads the
+  text of such an entry as if it had been typed, with a line feed between
+  lines; formats in the rich text are not written, as everywhere else. One
+  rule is added for a cell holding text that would not be text if typed
+  afresh, `007` or `=A1` entered with a leading apostrophe. Univer's editor
+  shows such a cell without the apostrophe, so the edited entry arrives
+  without it and stays text: `007` and an 8 is the text `0078`, not the
+  number 78. That rule is Workbook Forge's own and was not observed in
+  Excel, which shows the apostrophe in its editor.
 
 ## Clear, paste and fill
 
@@ -569,11 +585,12 @@ placeholder cells, and the UI has no special path for it.
 `web/univer-spike/tests/acceptance.spec.ts`, headless Chromium (Playwright
 1.64.1 driving system Chromium 156), production build served statically:
 **15 passed** on 2026-10-27. That figure is the snapshot from that day's run.
-The suite in this file now defines 39 tests. The six added with the product
+The suite in this file now defines 40 tests. The six added with the product
 shell are listed after item 12, the ten added with clear, paste and fill and
-the one added with series fill after item 18, and the three added with
-General numbers after item 28; a run of all 39 is recorded in
-`docs/run-history.md` (Run 31) as branch-local evidence.
+the one added with series fill after item 18, the three added with General
+numbers after item 28, and the one added with editing in place after item
+31; a run of the first 39 is recorded in `docs/run-history.md` (Run 31) as
+branch-local evidence.
 
 For `not-execute` and `load-only`:
 
@@ -714,6 +731,18 @@ texts of item 30 are the numbers cut to 11 characters by hand. None is taken
 from Univer's output or from either engine. With the drawing rule taken out,
 all three fail, and with the rounding put back on Univer's shown number item
 30 fails on 1.23456789049999 (both checked by doing it).
+
+Editing in place (see "How the adapter keeps Univer non-authoritative").
+
+32. Editing in place. A double click on A1 (10), a typed 5 and Enter make
+    A1 105 in one version step, and the chain follows (210, 215, 645, 435,
+    1610). F2 on the text `north` and ` east` gives `north east`; F2 on
+    `=A1*2` and `+1` gives `=A1*2+1`, 211. Removing everything in place
+    empties the cell. `007` entered with a leading apostrophe, then F2 and
+    an 8, is the text `0078`. Two lines typed with Alt+Enter are kept with a
+    line feed between them. Expected values are hand arithmetic. With the
+    adapter change taken out the test fails at its first step (checked by
+    doing it).
 
 **Repaint latency gate.** A typed commit into A1 of the event-log fixture
 must repaint its dependent B1 in under 100 ms, measured from the adapter's

@@ -2022,6 +2022,82 @@ test.describe('general numbers', () => {
   });
 });
 
+// An edit that starts from what the cell already holds (a double click or
+// F2) and adds characters. Univer hands that entry over as rich text with no
+// value: the characters added carry a text color the old ones do not. The
+// entry is its text; reading only the value used to empty the cell.
+test('editing a cell in place keeps the entry: double click or F2, then add characters', async ({ page }) => {
+  const errors = await boot(page, 'not-execute');
+  const a1 = await cellCentre(page, 'A1');
+  await page.waitForTimeout(550);
+  await page.mouse.dblclick(a1.x, a1.y);
+  await page.waitForTimeout(300);
+  await page.keyboard.type('5', { delay: 15 });
+  await page.keyboard.press('Enter');
+  await settle(page);
+  // A1 "10" then "5" is 105: B1=210, C1=215, D1=645, E1=435, F1=105+210+215+645+435=1610.
+  let v = await view(page);
+  expect(v.revision).toBe('1');
+  expectDisplayed(v, [105, 210, 215, 645, 435, 1610]);
+
+  // Text, with F2.
+  await typeInto(page, 'A3', 'north');
+  await selectCells(page, 'A3');
+  await page.keyboard.press('F2');
+  await page.waitForTimeout(200);
+  await page.keyboard.type(' east', { delay: 15 });
+  await page.keyboard.press('Enter');
+  await settle(page);
+  expect(await cellsOf(page, ['A3'])).toEqual({ A3: [null, 'north east'] });
+  expect((await view(page)).revision).toBe('3');
+
+  // A formula, with F2: B1 "=A1*2" then "+1" is 105*2+1=211.
+  await selectCells(page, 'B1');
+  await page.keyboard.press('F2');
+  await page.waitForTimeout(200);
+  await page.keyboard.type('+1', { delay: 15 });
+  await page.keyboard.press('Enter');
+  await settle(page);
+  expect(await cellsOf(page, ['B1'])).toEqual({ B1: ['=A1*2+1', 211] });
+
+  // Removing everything in place still empties the cell.
+  await selectCells(page, 'A3');
+  await page.keyboard.press('F2');
+  await page.waitForTimeout(200);
+  await page.keyboard.press('Control+a');
+  await page.keyboard.press('Backspace');
+  await page.keyboard.press('Enter');
+  await settle(page);
+  expect(await cellsOf(page, ['A3'])).toEqual({ A3: [null, null] });
+
+  // Text entered with a leading apostrophe stays text when it is edited in
+  // place: 007 and an 8 is the text 0078, not the number 78.
+  await typeInto(page, 'A4', "'007");
+  expect(await cellsOf(page, ['A4'])).toEqual({ A4: [null, '007'] });
+  await selectCells(page, 'A4');
+  await page.keyboard.press('F2');
+  await page.waitForTimeout(200);
+  await page.keyboard.type('8', { delay: 15 });
+  await page.keyboard.press('Enter');
+  await settle(page);
+  expect(await cellsOf(page, ['A4'])).toEqual({ A4: [null, '0078'] });
+
+  // Two lines typed with Alt+Enter arrive the same way and are kept, with a
+  // line feed between them.
+  await selectCells(page, 'A5');
+  await page.keyboard.type('a', { delay: 15 });
+  await page.keyboard.press('Alt+Enter');
+  await page.keyboard.type('b', { delay: 15 });
+  await page.keyboard.press('Enter');
+  await settle(page);
+  expect(await cellsOf(page, ['A5'])).toEqual({ A5: [null, 'a\nb'] });
+  v = await view(page);
+  expect(v.revision).toBe('8');
+  expect(v.divergence).toEqual([]);
+  expectUniverNeverCalculated(v);
+  expect(errors).toEqual([]);
+});
+
 // A phone-width screen: every control stays reachable, nothing scrolls
 // sideways, and the side panel covers the grid instead of squeezing it.
 test('narrow screen: controls stay reachable at 375px and the panel overlays the grid', async ({ page }) => {

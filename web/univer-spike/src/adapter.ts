@@ -291,8 +291,14 @@ export function parseInput(cell: ICellData, textFormat = false): { value: Scalar
   let raw: unknown = cell.v;
   // Univer's editor leaves v null for a formula-shaped entry unless the cell
   // style pattern is @. A text cell still stores that entry as text.
-  if (cell.p?.body?.dataStream && (raw === undefined || (textFormat && raw === null))) {
-    raw = cell.p.body.dataStream.replace(/\r\n$/, '');
+  // It also leaves v null, with the text in p, when an edit starts from what
+  // the cell already holds (a double click, F2, a double tap) and characters
+  // are added: the new characters carry a text color the old ones do not, so
+  // Univer hands the entry over as rich text. What was typed is its text.
+  // Univer ends each line of that text but the last with \r; a line break
+  // inside a cell is \n.
+  if (cell.p?.body?.dataStream && (raw === undefined || raw === null)) {
+    raw = cell.p.body.dataStream.replace(/\r\n$/, '').replace(/\r/g, '\n');
   }
   const forced = cell.t === CellValueType.FORCE_STRING || (typeof raw === 'string' && raw.startsWith("'"));
   if (textFormat || forced) {
@@ -1256,11 +1262,27 @@ export class ForgeUniverAdapter {
     if (cells.length === 0) return 'There was nothing to change.';
     const edits: Edit[] = [];
     for (const { row, col, cell } of cells) {
-      const input = parseInput(cell ?? {}, this.isTextFormat(sheet, row, col));
+      const input = parseInput(cell ?? {}, this.isTextFormat(sheet, row, col) || this.editsForcedText(sheet, row, col, cell));
       if (!input) return refusalText('style');
       edits.push({ sheet, address: toA1(row, col), ...input });
     }
     return edits;
+  }
+
+  /**
+   * An edit made in place (Univer sends it as rich text with no value) to a
+   * cell holding text that would not be text if typed afresh: `007` or `=A1`
+   * entered with a leading apostrophe. Univer's editor shows such a cell
+   * without the apostrophe, so the edited entry arrives without it too. The
+   * entry stays text, as the cell was; reading `0078` as a number would drop
+   * the zeros the apostrophe was typed to keep.
+   */
+  private editsForcedText(sheet: string, row: number, col: number, cell: ICellData | null | undefined): boolean {
+    if (!cell || (cell.v !== null && cell.v !== undefined) || !cell.p?.body?.dataStream) return false;
+    const held = this.held(sheet, row, col);
+    if (!held || held.f || typeof held.value !== 'string') return false;
+    const afresh = parseInput({ v: held.value });
+    return !(afresh && 'value' in afresh && afresh.value === held.value);
   }
 
   /** Typed input here stays text: the cell is Text (`@`), or inherits it. */
