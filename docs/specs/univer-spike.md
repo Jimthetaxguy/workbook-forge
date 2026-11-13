@@ -30,6 +30,8 @@ web/univer-spike/   Univer adapter and demo, using only the command API
                     and writes
   src/univer-host.ts / formula-plugins.ts   the configurations compared below,
                     the grid theme and Forge's function help
+  src/general-number.ts / general-display.ts   how a number with no number
+                    format is drawn when it is too long for its cell
   src/main.ts, index.html, src/shell.css    the page around the grid (app bar,
                     side panel, status bar, notices)
   src/function-notes.ts                     argument lists and one-line
@@ -242,7 +244,8 @@ Findings:
   only: the value Univer holds stays the number Forge calculated, and
   `divergence()` still compares raw values. Column widths are drawn at 7 px
   per Excel character unit, which is an approximation of Excel's
-  font-dependent width, not a measurement.
+  font-dependent width, not a measurement. A cell with no number format is
+  drawn by the rule in "General numbers" below.
 - **Projection.** After every accepted edit the adapter applies the `changed`
   delta from `applyAndCalculate`, then writes those cells as `{v, f}` with one
   `sheet.mutation.set-range-values` per sheet. Reading `snapshot` and
@@ -350,6 +353,166 @@ text) are in `src/range-edits.ts` with unit tests in
   editor has closed, so the cell shows no outline or fill handle; the adapter
   ignores an erase that arrives while no editor is open.
 
+## General numbers
+
+A cell with no number format has Excel's General format. When its number is
+too long for the column, the view draws it with the decimals rounded to what
+fits. It used to draw scientific notation: in a default 88 px column,
+0.08663094803653162 was drawn as 8.6631E-02 and -2683.3114976001525 as
+-2.68E+03. They are now drawn as 0.0866309 and -2683.3115 (the default font,
+11 pt Arial). A number is never drawn in more than 11 characters, not counting
+a minus sign, however wide the column: with room to spare the same two numbers
+are drawn as 0.086630948 and -2683.311498, and the formula bar is where the
+rest is read.
+
+Only the drawn text changes. The number Forge holds, the number in Univer's
+model, the formula bar, a copy and the exported file are untouched, and a cell
+with a number format of its own is drawn as before.
+
+**Microsoft's rule.** "Available number formats in Excel"
+(https://support.microsoft.com/en-us/office/available-number-formats-in-excel-0afe8f52-97db-41f1-b972-4b46e9f1e8d2)
+says of General, for Excel on the desktop: "The default number format that
+Excel applies when you type a number. For the most part, numbers that are
+formatted with the General format are displayed just the way you type them.
+However, if the cell is not wide enough to show the entire number, the General
+format rounds the numbers with decimals. The General number format also uses
+scientific (exponential) notation for large numbers (12 or more digits)." For
+Excel for the web the same page says: "Default number format. If the cell
+isn't wide enough to show the entire number, this format rounds the number.
+For example, 25.76 shows as 26. Also, if the number is 12 or more digits,
+General format displays the value with scientific (exponential) notation." It
+also says: "Applying a number format only changes how the number is displayed
+and doesn't affect cell values that's used to perform calculations. You can
+see the actual value in the formula bar." (The quotations in this section are
+Microsoft's words with plain apostrophes and without its bold type. The pages
+were read on 2026-11-12.)
+
+The limit of 11 characters and the details of the switch to scientific
+notation are from the Office Open XML standard's notes on the General format
+(ISO/IEC 29500-1), as Microsoft prints them on Microsoft Learn under
+"NumberingFormat Class"
+(https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.spreadsheet.numberingformat?view=openxml-3.0.1):
+"The application shall attempt to display the full number up to 11 digits
+(inc. decimal point). If the number is too large, the application shall
+attempt to show exponential format. If the number has too many significant
+digits, the display shall be truncated. The optimal method of display is based
+on the available cell width. If the number cannot be displayed using any of
+these formats in the available width, the application shall show "#" across
+the width of the cell." On when to switch: "The cell value shall have at least
+five digits for xE-xx. If the exponent is bigger than the size allowed, a
+floating point number cannot fit, so try exponential notation. Similarly, for
+negative exponents, check if there is space for even one (non-zero) digit in
+floating point format. Finally, if there isn't room for all of the significant
+digits in floating point format (for a negative exponent), exponential format
+shall display more digits if the exponent is less than -3. (The 3 is because
+E-xx takes 4 characters, and the leading 0 in floating point takes only 1
+character. Thus, for an exponent less than -3, there is more than 3 additional
+leading 0's, more than enough to compensate for the size of the E-xx.)" And,
+headed "Floating point rule": "For general formatting in cells, max overall
+length for cell display is 11, not including negative sign, but includes
+leading zeros and decimal separator." Microsoft's troubleshooting article "Long numbers are
+displayed incorrectly in Excel"
+(https://learn.microsoft.com/en-us/troubleshoot/microsoft-365-apps/excel/long-numbers-incorrectly-in-excel)
+gives the same figure: "Default number format in Excel is General therefore
+you can display up to 11 digits in a cell."
+
+**The rule the view draws by** (`generalNumberText` in
+`src/general-number.ts`, a pure function with unit tests in
+`test/general-number.node.test.mjs`):
+
+1. A number whose whole-number part has 12 or more digits is drawn in
+   scientific notation, whatever the column width: 123456789012 is
+   1.23457E+11.
+2. Any other number is drawn as typed when that is at most 11 characters,
+   not counting a minus sign, and fits: 12345678901 and 1234567.891.
+3. Otherwise the decimals are rounded to the longest text of at most 11
+   characters that fits. In a narrow column 25.76 becomes 25.8 and then 26. In
+   a column of any width 2683.3114976001525 is 2683.311498,
+   0.08663094803653162 is 0.086630948 and pi is 3.141592654. Closing zeros
+   are not drawn.
+4. Scientific notation is used instead, with the longest mantissa that fits in
+   the same 11 characters, when the whole-number part does not fit (12345678901
+   in a default column is 1.235E+10), when the rounded decimals would be all
+   zeros, or when the number is below 0.001 and scientific notation has room
+   for more of its digits (0.0000123456789 in 11 characters is 1.23457E-05,
+   not 0.000012346).
+5. A number that rounds to zero and has room for neither form is drawn as 0.
+6. Anything else is drawn as number signs across the cell.
+
+**Which parts are Workbook Forge's own.** These are not stated by Microsoft
+and none was observed in Excel:
+
+- "12 or more digits" is read as the digits of the whole-number part.
+- The 11 characters are applied to scientific notation as well
+  (1.23457E+11). The standard states them under its floating point rule and
+  gives no length for the exponential form.
+- "Fits" means the text and one more digit of clearance fit in the column
+  less 2 px of padding on each side. This is Univer's own test for a General
+  number that is too long, kept so the view has one notion of fitting. Excel
+  measures in its own font and padding, so the number of decimals shown in a
+  column of the same nominal width can differ by one or two.
+- Rounding is half away from zero, done on the number's shortest decimal
+  digits (2.675 in room for four characters is 2.68). The standard says "the
+  display shall be truncated"; Microsoft's Support page says "rounds" and
+  gives 25.76 as 26, which is what is followed.
+- Whether scientific notation "shows more digits" is decided by counting how
+  many of the number's digits each form has room for; a tie stays decimal.
+  The standard does not say how its "exponent" is counted. Counted as in
+  1.23E-04, 0.000123456789 has an exponent below -3, yet both forms have room
+  for six of its digits (0.000123457 and 1.23457E-04), so the decimal form
+  stays; the standard's own sum (four characters for E-xx against "more than
+  3 additional leading 0's") starts the switch at four zeros after the
+  decimal point, which is the same answer. 0.0000123456789 is 1.23457E-05 on
+  either reading.
+- The standard's "at least five digits for xE-xx" is read as the five
+  characters the shortest scientific text takes (1E-05); a text that does not
+  fit is not drawn, and no separate test is made.
+- 0, with no minus sign, for a number below one half that fits in no other
+  form. Before this change the view drew 0 there for any number below one; a
+  number from one half up now rounds to 1 or shows number signs.
+- The number of number signs: as many as fit in the padded width, at least
+  one. The view already drew them this way.
+- A very small number that fits is written out (0.000000123), not drawn as
+  the 1.23E-7 Univer hands the renderer.
+
+**Where the scientific notation came from, and the hook.** It was Univer's own
+drawing, not the adapter. In `@univerjs/engine-render` 1.2.0,
+`SpreadsheetSkeleton._applyNumberDisplay` calls `getGeneralNumberDisplayText`,
+which, for a General number whose text is too wide, tries only the patterns
+`0E+00`, `0.#E+00`, `0.##E+00` and so on, then 0 for a number below one, then
+number signs. Univer has no setting for this and no public hook at that step.
+Its one public hook nearby, the `CELL_CONTENT` interceptor that
+`@univerjs/sheets-numfmt` uses, changes what every reader of the cell gets,
+including a copy and `divergence()`, so it cannot be used to change the
+drawing alone. `src/general-display.ts` therefore wraps the private method on
+the prototype: Univer's step runs first, then the text for a General number
+cell is replaced by the rule above, measured with Univer's own text
+measurement. `installGeneralNumberDisplay()` returns false when the method is
+missing, the host exposes that as `generalNumberDisplay`, and the first
+General-number acceptance test asserts it is true and that the drawn text is
+the rounded decimal, so an upgrade that moves the method fails the suite.
+Nothing in `node_modules` is patched.
+
+The number that is rounded is the one the cell holds, not the one Univer
+shows. Univer trims floating-point noise from a General number before showing
+it (to 12 significant digits when that is within 1e-10 of the number,
+otherwise to 15). Rounding the trimmed number again can go wrong:
+1.23456789049999 is trimmed to 1.2345678905 and would then round up to
+1.234567891, where the number itself rounds to 1.23456789. So the drawing
+reads the cell's stored number (`worksheet.getCellRaw`, public in Univer)
+whenever it is the shown number to within the trim, and the shown number
+otherwise. Univer's formula bar and the text it puts on the clipboard still
+show the trimmed number: 0.0866309480365 for 0.08663094803653162. That was so
+before this change and is not changed by it. Forge's number, Univer's raw cell
+value, a paste on the same page and the export keep every digit.
+
+**Correction of 2026-11-12.** As first committed, rule 2 drew a number as
+typed whenever it fitted, even beyond 11 characters (2683.3114976 in a wide
+column), following the owner's brief. The standard's notes cap General at 11
+characters at any width, and the primary source outranks the brief, so the cap
+now applies everywhere. The same commit moved the rounding from Univer's shown
+number to the stored number.
+
 ## Absent-cell authoring on imported workbooks
 
 An imported XLSX only materializes the cells its `<sheetData>` holds. Typing
@@ -406,10 +569,11 @@ placeholder cells, and the UI has no special path for it.
 `web/univer-spike/tests/acceptance.spec.ts`, headless Chromium (Playwright
 1.64.1 driving system Chromium 156), production build served statically:
 **15 passed** on 2026-10-27. That figure is the snapshot from that day's run.
-The suite in this file now defines 36 tests. The six added with the product
-shell are listed after item 12, and the ten added with clear, paste and fill
-and the one added with series fill after item 18; a run of all 36 is recorded
-in `docs/run-history.md` (Run 30) as branch-local evidence.
+The suite in this file now defines 39 tests. The six added with the product
+shell are listed after item 12, the ten added with clear, paste and fill and
+the one added with series fill after item 18, and the three added with
+General numbers after item 28; a run of all 39 is recorded in
+`docs/run-history.md` (Run 31) as branch-local evidence.
 
 For `not-execute` and `load-only`:
 
@@ -517,6 +681,40 @@ functions, and no calculation by Univer.
 Expected values in items 19 to 28 are Microsoft's published examples or
 arithmetic done by hand in the test, never an engine's output.
 
+General numbers (see "General numbers" above). These tests record every text
+the grid canvas is asked to draw during a full repaint.
+
+29. Default column. In a new workbook, 0.08663094803653162,
+    -2683.3114976001525 and 2683.3114976 typed into 88 px cells are each
+    drawn as a shorter decimal and never in scientific notation; 25.76 is
+    drawn as typed; 123456789012 and `=A3*10` (13 digits) are drawn in
+    scientific notation and nothing else is. Univer's raw values, Forge's
+    snapshot, a paste of a copy and the reopened export hold every digit; the
+    formula bar shows 2683.3114976 in full and at least 12 significant digits
+    of the two long numbers. The host reports that the drawing rule is
+    installed.
+30. Wide column. In `op_styles_number_formats.xlsx`, 2683.3114976 is drawn as
+    2683.311498 in the 154 px column and shorter in the 88 px column beside
+    it. In the same wide column 0.08663094803653162 is drawn as 0.086630948,
+    -2683.3114976001525 as -2683.311498, 0.0000123456789 as 1.23457E-05,
+    `=PI()` as 3.141592654, 12345678901 and 1234567.891 as typed,
+    123456789012 as 1.23457E+11 and 1.23456789049999 as 1.23456789. No number
+    is drawn in more than 11 characters besides a minus sign, and the cells
+    with number formats draw the same text as before (2024-02-29, 12.75%,
+    $1,234.50, 6.02E+23 and the rest).
+31. Narrow column. In a 34 px column, 25.76 is drawn as 26 (Microsoft's
+    example), 123456 as number signs and 0.0866 as the longest rounding that
+    fits. The view cannot resize a column, so the test narrows one with
+    Univer's own column-width change, which writes no cell.
+
+In items 29 to 31 each expected text is the longest entry, of a list rounded
+by hand in the test, that the stated fitting rule lets into the column,
+measured in the test with the font the text was drawn in; the wide-column
+texts of item 30 are the numbers cut to 11 characters by hand. None is taken
+from Univer's output or from either engine. With the drawing rule taken out,
+all three fail, and with the rounding put back on Univer's shown number item
+30 fails on 1.23456789049999 (both checked by doing it).
+
 **Repaint latency gate.** A typed commit into A1 of the event-log fixture
 must repaint its dependent B1 in under 100 ms, measured from the adapter's
 commit timestamp to the first animation frame that shows the new value. The
@@ -553,6 +751,9 @@ generator and the tests, never from either engine.
 Measured on 2026-11-12 with clear, paste and fill. Against the product-shell
 build (8747 KiB raw, 2421 KiB gzip at startup) they add 11 KiB to the main
 script, 2 KiB to the worker and 25 KiB to the WASM (`copyFormulasJson`).
+
+General number drawing adds 3 KiB raw (2 KiB gzip) to the main script,
+measured on 2026-11-12 by building with and without it.
 
 Run `npm run build && npm run size` in `web/univer-spike`.
 
@@ -594,6 +795,18 @@ tools. Vite 7.3.7 (esbuild/rollup) is used instead.
   up or left are Workbook Forge's rules and have not been observed in Excel.
 - The two selection repairs depend on Univer 1.2.0 internals. Their tests fail
   if a Univer upgrade moves them.
+- General number drawing wraps a private method of Univer 1.2.0's renderer
+  (`SpreadsheetSkeleton._applyNumberDisplay`). Its acceptance test fails if an
+  upgrade moves it, and the view then falls back to Univer's own drawing. The
+  rule was not observed in Excel; the parts that are Workbook Forge's own are
+  listed under "General numbers". Text copied to another program and the
+  formula bar show Univer's trimmed number (12 to 15 significant digits), not
+  all 17 digits a double can carry.
+- `divergence()` reports a "displayed" difference for every General number
+  with more than 12 significant digits (0.08663094803653162, `=1/3`,
+  `=PI()`), because Univer trims the number it shows. The raw value still
+  matches Forge. This is older than General number drawing and is not changed
+  by it; the comparison should allow for the trim.
 - Presentation is read only. Number formats, bold, italic, font color, fill,
   horizontal alignment, wrap and column widths are shown; borders, row
   heights, merged-cell drawing, conditional formats and theme colors are not.
@@ -623,7 +836,7 @@ bash web/bootstrap-sandbox.sh            # optional: toolchain on a fresh Linux 
 bash web/forge-engine/build-wasm.sh      # needs wasm-bindgen-cli 0.2.129
 cd web/forge-engine && npm test          # in-process engine tests (Node)
 cd web/univer-spike && npm ci
-npm run test:unit                        # paste and fill rules (Node, no browser)
+npm run test:unit                        # paste, fill and General number rules (Node, no browser)
 npm run typecheck && npm run check:licenses && npm run check:functions
 CHROMIUM_PATH=/usr/bin/chromium npm run test:e2e   # builds, serves dist/, runs Playwright
 npm run dev                              # interactive demo; always not-execute (?dev=1 for the Developer panel)
