@@ -17,8 +17,12 @@
   handle continues number, text-and-number and day and month name series.
   A number with no number format that is too long for its column is drawn
   with its decimals rounded, and never in more than 11 characters, as Excel's
-  General format describes.
-  [`univer-spike/FLOWS.md`](univer-spike/FLOWS.md) lists the user flows.
+  General format describes. On a touch device a tap selects without asking
+  for the keyboard, a double tap, the Edit button or the formula bar starts
+  typing, and a swipe scrolls the grid; this is tested with emulated touch
+  only.
+  [`univer-spike/FLOWS.md`](univer-spike/FLOWS.md) lists the user flows and
+  a check list to run on a phone.
 
 Findings, configuration matrix, contract and results:
 [`docs/specs/univer-spike.md`](../docs/specs/univer-spike.md).
