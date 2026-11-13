@@ -137,6 +137,12 @@ These are additive. The existing methods are unchanged.
   same order, from `toolkit::copy_formula`. Malformed input is
   `{"ok":false,"error"}`; it never throws.
 
+- `BrowserWorkbook.usesDate1904(): boolean` is true when an imported workbook
+  uses the 1904 date system. A workbook made in the browser answers false.
+  It reads `ImportedWorkbook::uses_date1904` in `rust/src/xlsx.rs`, which
+  has a native test; the engine test in `web/forge-engine` reads it through
+  the built WASM.
+
 The logic lives in `rust/src/browser_contract.rs`, which is compiled for every
 target. It is covered natively by `rust/tests/browser_contract.rs` (5 tests)
 and by a `wasm_bindgen_test` in `wasm.rs`. No Cargo dependencies were added.
@@ -1278,6 +1284,34 @@ prove what a real phone keyboard does.
 43. Mouse unchanged. In the default mouse context there is no `inputmode`
     attribute, the editor is 13 px, the Edit button is not displayed and the
     bars keep their heights.
+
+Added with the review follow-ups (default `not-execute` view; 47 is at
+tablet size in a touch context):
+
+44. Uneven text paste. A row of `a`, `b`, `c` and a row of `d`, pasted at
+    A2, is 2 rows by 3 columns in one version step, and B3 and C3, which
+    the short row does not reach and which held 1 and 2, are empty
+    afterwards. Text of one row of 16,000 cells followed by 20,000 rows of
+    one cell (56,000 characters; 20,001 by 16,000 is 320,016,000 cells) is
+    refused with the usual notice and changes nothing.
+45. Copy while a change is pending. With the worker's reply to Delete held
+    back, Ctrl+C on the same cells is refused with its notice, nothing is
+    written to the clipboard, and the paste that follows writes none of the
+    deleted cells.
+46. 1904 dates. `op_1904_dates.xlsx` shows 2021-06-01 for 42886 and, after
+    the cell is set to 39267, 2011-07-05 (Microsoft's own example);
+    `xw_1904_dates.xlsx` shows 2022-05-17 for 43236. The dates are worked by
+    hand in the test from January 1, 1904. Forge holds the same numbers,
+    Formula issues lists the one formula, and a 1900 workbook opened
+    afterwards still shows 2024-02-29 for 45351.
+47. Tablet keyboard. At 800 by 1000 with B30 being edited, the window made
+    600 tall keeps the app bar and status bar and brings the cell and its
+    editor back inside the visible area.
+
+Each of items 44 to 47 fails without its repair: 44 crashes the tab when
+the rectangle is built before it is measured, 45 pastes the deleted
+formulas back, 46 shows 2017-05-31, and 47 leaves the cell with its bottom
+edge at 852 px in a 600 px window.
 
 Items 33 to 43 were checked against the repairs they cover by taking the
 repairs out of the build: without the `inputmode` painting items 33 to 36,
