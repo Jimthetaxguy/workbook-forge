@@ -137,6 +137,12 @@ These are additive. The existing methods are unchanged.
   same order, from `toolkit::copy_formula`. Malformed input is
   `{"ok":false,"error"}`; it never throws.
 
+- `BrowserWorkbook.usesDate1904(): boolean` is true when an imported workbook
+  uses the 1904 date system. A workbook made in the browser answers false.
+  It reads `ImportedWorkbook::uses_date1904` in `rust/src/xlsx.rs`, which
+  has a native test; the engine test in `web/forge-engine` reads it through
+  the built WASM.
+
 The logic lives in `rust/src/browser_contract.rs`, which is compiled for every
 target. It is covered natively by `rust/tests/browser_contract.rs` (5 tests)
 and by a `wasm_bindgen_test` in `wasm.rs`. No Cargo dependencies were added.
@@ -246,6 +252,28 @@ Findings:
   per Excel character unit, which is an approximation of Excel's
   font-dependent width, not a measurement. A cell with no number format is
   drawn by the rule in "General numbers" below.
+- **Date system.** `snapshot` carries `date1904: true` when the workbook
+  uses the 1904 date system (`<workbookPr date1904="1">`), and the adapter
+  then creates the Univer workbook with `dateSystem: 'date1904'`, so a date
+  format is drawn from January 1, 1904. Microsoft,
+  [Date systems in Excel](https://support.microsoft.com/en-us/office/date-systems-in-excel-e7fe7167-48a9-4b96-bb53-5612a800b487):
+  "In the 1904 date system, dates are calculated by using January 1, 1904,
+  as a starting point. When you enter a date, it is converted into a serial
+  number that represents the number of days elapsed since January 1, 1904."
+  and "The difference between the two date systems is 1,462 days." Before
+  this, every date in such a workbook was drawn 1,462 days early:
+  `fixtures/corpus/op_1904_dates.xlsx` holds 42886 formatted `yyyy-mm-dd`,
+  which is 2021-06-01 and was drawn as 2017-05-31. Nothing is converted: the
+  value Forge holds and writes to a saved file is the stored serial, and
+  only the date drawn for it, in the grid and the formula bar, changes. The
+  field is optional and outside the workbook model; the WASM build answers
+  it through a separate export (`usesDate1904`), as it does for the Text
+  layouts, so `schema_version` and `model_version` are unchanged. An engine
+  build without the export reports nothing and the view draws with the 1900
+  system as before. Two limits are older than this and unchanged: Forge
+  does not calculate formulas in a 1904 workbook (the cell is empty and
+  Formula issues lists it), and a typed date is kept as text in either date
+  system.
 - **Projection.** After every accepted edit the adapter applies the `changed`
   delta from `applyAndCalculate`, then writes those cells as `{v, f}` with one
   `sheet.mutation.set-range-values` per sheet. Reading `snapshot` and
@@ -292,6 +320,29 @@ text) are in `src/range-edits.ts` with unit tests in
   the copied range at that moment, keyed by the id Univer puts in the
   clipboard HTML. A copy is a snapshot: editing the source afterwards does
   not change what is pasted.
+
+  A copy pressed while an earlier change is still on its way to Forge and
+  back is refused with the notice "The last change is still being applied,
+  so nothing was copied. Copy again." Until that change returns, the
+  adapter's cells and Univer's cells are both the old ones, so a copy taken
+  then would hold them: Delete followed at once by Ctrl+C and a paste would
+  bring the deleted cells back. The refused copy writes nothing, so the
+  clipboard and the last copy stay as they were. The other way to close the
+  gap, taking the adapter's snapshot later in the edit queue, was not
+  chosen: it would correct a paste on this page, but Univer would already
+  have written the old cells to the clipboard for any other program, and a
+  clipboard write cannot be put off until the change returns because
+  browsers allow it only during the key press. The wait is one worker round
+  trip, normally a few milliseconds.
+
+  Copying text while a cell is being edited, in the cell or in the formula
+  bar, is a different thing: it is Univer's text copy of the characters
+  selected in the editor and takes no cells. The adapter neither refuses it
+  nor records it as a copy of the cell, so it works while a change is
+  pending and a later paste writes the copied characters as text. The
+  adapter tells the two apart by whether the editor is open
+  (`IEditorBridgeService.isVisible()`), because the focused unit stays the
+  workbook while a cell is being edited.
 - **Paste** (Ctrl+V, Cmd+V). When the clipboard still holds this page's own
   copy, values are copied as they are and each formula is what `copyFormulas`
   returns for its new place. Anything else on the clipboard is pasted as
@@ -359,7 +410,11 @@ text) are in `src/range-edits.ts` with unit tests in
   cell. Excel would write `#REF!` in that cell instead.
 - **Limits.** 20,000 cells per paste or fill. The view's grid grows to hold a
   paste or fill that runs past it (to the last row + 100 and last column + 10,
-  capped at Excel's 1,048,576 by 16,384).
+  capped at Excel's 1,048,576 by 16,384). Pasted text is measured as its
+  number of rows by its longest row, and that size is checked before any
+  cell is built: the rows are kept as written, and a cell a short row does
+  not reach is written as empty. So one long row followed by many short ones
+  is refused with the same notice as any other paste over the limit.
 - **Two repairs to Univer 1.2.0's selection drawing**, both in the adapter and
   each pinned by an acceptance test that fails without it. The fill handle
   remembers the range of a drag that changed nothing and sends it again when
@@ -677,8 +732,16 @@ there only for Safari's rule.
   so the formula bar and the grid get the room.
 - The cell being edited is kept in view. After the visible area changes,
   `reveal()` runs after two frames and again after 150 and 450 ms (Univer
-  resizes its canvas a few frames late). If the whole cell is not inside the
-  grid's box it runs `sheet.command.scroll-to-cell`. Whether the cell is in
+  resizes its canvas a few frames late). "Changes" means any of three
+  things: the visible box has a new size or starts at a new place, whether
+  it came from the visual viewport (iOS) or from the page itself (Chrome on
+  Android), or the compact mode switched. The size has to be watched on its
+  own: a tablet whose page goes from 1000 px to 600 px for its keyboard has
+  nothing covered and stays above 520 px, so neither of the other two signs
+  moves. The cell is brought back only when the last pointer was a finger
+  or part of the page is covered; with a mouse, a window resized while a
+  cell is being edited is left to Univer, as it was before. If the whole
+  cell is not inside the grid's box it runs `sheet.command.scroll-to-cell`. Whether the cell is in
   view is worked out from the scroll position and the cell's coordinates,
   not from Univer's visible range, which lags by a few frames.
 - Univer's desktop cell editor does not follow the grid when it scrolls. So
@@ -892,7 +955,8 @@ two browsers report one differently:
   height (`Object.defineProperty`) and a `resize` event is dispatched on
   `visualViewport`; the page's own size does not change.
 - as Chrome on Android reports it with `resizes-content`: the window is made
-  half as tall (`page.setViewportSize`).
+  half as tall (`page.setViewportSize`). One more test does the same at
+  tablet size, 800 by 1000 made 600 tall, where the bars stay.
 
 Typing in the tests comes from Playwright's keyboard, which is a hardware
 keyboard as far as the page can tell.
@@ -1231,6 +1295,34 @@ prove what a real phone keyboard does.
 43. Mouse unchanged. In the default mouse context there is no `inputmode`
     attribute, the editor is 13 px, the Edit button is not displayed and the
     bars keep their heights.
+
+Added with the review follow-ups (default `not-execute` view; 47 is at
+tablet size in a touch context):
+
+44. Uneven text paste. A row of `a`, `b`, `c` and a row of `d`, pasted at
+    A2, is 2 rows by 3 columns in one version step, and B3 and C3, which
+    the short row does not reach and which held 1 and 2, are empty
+    afterwards. Text of one row of 16,000 cells followed by 20,000 rows of
+    one cell (56,000 characters; 20,001 by 16,000 is 320,016,000 cells) is
+    refused with the usual notice and changes nothing.
+45. Copy while a change is pending. With the worker's reply to Delete held
+    back, Ctrl+C on the same cells is refused with its notice, nothing is
+    written to the clipboard, and the paste that follows writes none of the
+    deleted cells.
+46. 1904 dates. `op_1904_dates.xlsx` shows 2021-06-01 for 42886 and, after
+    the cell is set to 39267, 2011-07-05 (Microsoft's own example);
+    `xw_1904_dates.xlsx` shows 2022-05-17 for 43236. The dates are worked by
+    hand in the test from January 1, 1904. Forge holds the same numbers,
+    Formula issues lists the one formula, and a 1900 workbook opened
+    afterwards still shows 2024-02-29 for 45351.
+47. Tablet keyboard. At 800 by 1000 with B30 being edited, the window made
+    600 tall keeps the app bar and status bar and brings the cell and its
+    editor back inside the visible area.
+
+Each of items 44 to 47 fails without its repair: 44 crashes the tab when
+the rectangle is built before it is measured, 45 pastes the deleted
+formulas back, 46 shows 2017-05-31, and 47 leaves the cell with its bottom
+edge at 852 px in a 600 px window.
 
 Items 33 to 43 were checked against the repairs they cover by taking the
 repairs out of the build: without the `inputmode` painting items 33 to 36,

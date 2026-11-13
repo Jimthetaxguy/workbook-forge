@@ -450,6 +450,36 @@ test('snapshot carries cell presentation and column widths', () => {
   assert.deepEqual(plain.cells.A1, { value: 10 });
 });
 
+// The date system is read from the workbook's own XML, not from the engine:
+// fixtures/corpus/op_1904_dates.xlsx and xw_1904_dates.xlsx carry
+// <workbookPr date1904="1">, op_styles_number_formats.xlsx carries
+// <workbookPr /> (ECMA-376 18.2.28: date1904 defaults to false), and a blank
+// workbook is written with date1904="0". The stored serial is not changed.
+test('snapshot says when a workbook uses the 1904 date system, and only then', () => {
+  const engine = new ForgeEngine({ openXlsx, createBlankWorkbook });
+  for (const [name, sheet, serial] of [['op_1904_dates.xlsx', 'Log', 42886], ['xw_1904_dates.xlsx', 'Calendar', 43236]]) {
+    assert.equal(call(engine, 'open', { bytes: new Uint8Array(corpusFile(name)) }).ok, true);
+    const snap = call(engine, 'snapshot').value;
+    assert.equal(snap.date1904, true, name);
+    assert.equal(snap.sheets[0].name, sheet);
+    assert.deepEqual(snap.sheets[0].cells.A1, { value: serial, style: { numberFormat: 'yyyy-mm-dd' } });
+  }
+  assert.equal(call(engine, 'open', { bytes: new Uint8Array(corpusFile('op_styles_number_formats.xlsx')) }).ok, true);
+  assert.equal('date1904' in call(engine, 'snapshot').value, false);
+  assert.equal(call(engine, 'newWorkbook', { sheetName: 'Sheet1' }).ok, true);
+  assert.equal('date1904' in call(engine, 'snapshot').value, false);
+  // An engine build without the export (an older build, a mock) reports nothing.
+  const older = new ForgeEngine({
+    openXlsx: (bytes) => {
+      const wb = openXlsx(bytes);
+      return new Proxy(wb, { get: (target, key) => (key === 'usesDate1904' ? undefined : typeof target[key] === 'function' ? target[key].bind(target) : target[key]) });
+    },
+    createBlankWorkbook,
+  });
+  assert.equal(call(older, 'open', { bytes: new Uint8Array(corpusFile('op_1904_dates.xlsx')) }).ok, true);
+  assert.equal('date1904' in call(older, 'snapshot').value, false);
+});
+
 // copyFormulas: what a formula becomes when its cell is copied elsewhere.
 // Expected references are Microsoft's, from "Switch between relative,
 // absolute, and mixed references" (support.microsoft.com, article
