@@ -11,6 +11,7 @@ import fixtureDataUrl from '../../../fixtures/univer-spike-chain.xlsx?inline';
 import { toA1 } from './a1';
 import { ForgeUniverAdapter, type NoticeKind } from './adapter';
 import { CATEGORY_LABELS, FUNCTION_NOTES, arityText, parseArguments } from './function-notes';
+import { installTouch } from './touch';
 import { MODES, createUniverHost, type Mode } from './univer-host';
 import './shell.css';
 
@@ -132,6 +133,7 @@ async function boot() {
   const host = await createUniverHost($('app'), mode, { darkMode: dark });
   const adapter = new ForgeUniverAdapter(host, client);
   adapter.setNoticeSink(showNotice);
+  const touch = installTouch(host, $('app'));
   buildFunctionReference();
 
   themeToggle.onclick = () => {
@@ -171,6 +173,7 @@ async function boot() {
   // What the status line names, and the Developer strip's source state.
   let source = { name: 'univer-spike-chain.xlsx', kind: 'built-in sample (.xlsx)' };
   await adapter.open(fixture, 'univer-spike-chain');
+  touch.workbookLoaded();
   // Where Forge is the calculator, the in-cell suggestions and argument help
   // list what Forge calculates, in the same words as the Functions panel. The
   // control mode keeps Univer's own list: there Univer calculates too.
@@ -352,6 +355,7 @@ async function boot() {
       // after success would erase them.
       showNotice('');
       await load();
+      touch.workbookLoaded();
       source = next;
       issuesFor = null;
       if (panelView !== 'functions') showPanel(null);
@@ -381,7 +385,7 @@ async function boot() {
       showNotice(`Could not download: ${String(error)}`);
     }
   };
-  return { adapter, host, client, fixture, mode, startForgeWorker };
+  return { adapter, host, client, fixture, mode, startForgeWorker, touch };
 }
 
 declare global {

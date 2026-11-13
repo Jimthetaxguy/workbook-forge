@@ -2022,6 +2022,82 @@ test.describe('general numbers', () => {
   });
 });
 
+// An edit that starts from what the cell already holds (a double click or
+// F2) and adds characters. Univer hands that entry over as rich text with no
+// value: the characters added carry a text color the old ones do not. The
+// entry is its text; reading only the value used to empty the cell.
+test('editing a cell in place keeps the entry: double click or F2, then add characters', async ({ page }) => {
+  const errors = await boot(page, 'not-execute');
+  const a1 = await cellCentre(page, 'A1');
+  await page.waitForTimeout(550);
+  await page.mouse.dblclick(a1.x, a1.y);
+  await page.waitForTimeout(300);
+  await page.keyboard.type('5', { delay: 15 });
+  await page.keyboard.press('Enter');
+  await settle(page);
+  // A1 "10" then "5" is 105: B1=210, C1=215, D1=645, E1=435, F1=105+210+215+645+435=1610.
+  let v = await view(page);
+  expect(v.revision).toBe('1');
+  expectDisplayed(v, [105, 210, 215, 645, 435, 1610]);
+
+  // Text, with F2.
+  await typeInto(page, 'A3', 'north');
+  await selectCells(page, 'A3');
+  await page.keyboard.press('F2');
+  await page.waitForTimeout(200);
+  await page.keyboard.type(' east', { delay: 15 });
+  await page.keyboard.press('Enter');
+  await settle(page);
+  expect(await cellsOf(page, ['A3'])).toEqual({ A3: [null, 'north east'] });
+  expect((await view(page)).revision).toBe('3');
+
+  // A formula, with F2: B1 "=A1*2" then "+1" is 105*2+1=211.
+  await selectCells(page, 'B1');
+  await page.keyboard.press('F2');
+  await page.waitForTimeout(200);
+  await page.keyboard.type('+1', { delay: 15 });
+  await page.keyboard.press('Enter');
+  await settle(page);
+  expect(await cellsOf(page, ['B1'])).toEqual({ B1: ['=A1*2+1', 211] });
+
+  // Removing everything in place still empties the cell.
+  await selectCells(page, 'A3');
+  await page.keyboard.press('F2');
+  await page.waitForTimeout(200);
+  await page.keyboard.press('Control+a');
+  await page.keyboard.press('Backspace');
+  await page.keyboard.press('Enter');
+  await settle(page);
+  expect(await cellsOf(page, ['A3'])).toEqual({ A3: [null, null] });
+
+  // Text entered with a leading apostrophe stays text when it is edited in
+  // place: 007 and an 8 is the text 0078, not the number 78.
+  await typeInto(page, 'A4', "'007");
+  expect(await cellsOf(page, ['A4'])).toEqual({ A4: [null, '007'] });
+  await selectCells(page, 'A4');
+  await page.keyboard.press('F2');
+  await page.waitForTimeout(200);
+  await page.keyboard.type('8', { delay: 15 });
+  await page.keyboard.press('Enter');
+  await settle(page);
+  expect(await cellsOf(page, ['A4'])).toEqual({ A4: [null, '0078'] });
+
+  // Two lines typed with Alt+Enter arrive the same way and are kept, with a
+  // line feed between them.
+  await selectCells(page, 'A5');
+  await page.keyboard.type('a', { delay: 15 });
+  await page.keyboard.press('Alt+Enter');
+  await page.keyboard.type('b', { delay: 15 });
+  await page.keyboard.press('Enter');
+  await settle(page);
+  expect(await cellsOf(page, ['A5'])).toEqual({ A5: [null, 'a\nb'] });
+  v = await view(page);
+  expect(v.revision).toBe('8');
+  expect(v.divergence).toEqual([]);
+  expectUniverNeverCalculated(v);
+  expect(errors).toEqual([]);
+});
+
 // A phone-width screen: every control stays reachable, nothing scrolls
 // sideways, and the side panel covers the grid instead of squeezing it.
 test('narrow screen: controls stay reachable at 375px and the panel overlays the grid', async ({ page }) => {
@@ -2045,4 +2121,686 @@ test('narrow screen: controls stay reachable at 375px and the panel overlays the
   expect((await page.locator('#panel').boundingBox())!.width).toBe(375);
   await page.locator('#panel-close').click();
   await expect(page.locator('#panel')).toBeHidden();
+});
+
+// ---------- Touch and phone use ----------
+//
+// What these tests can and cannot show. Headless Chromium has no on-screen
+// keyboard and is not Safari. The tests prove which element has the focus,
+// its `inputmode` and font size, that typing starts and commits by each
+// route, where things are laid out when the visible area is made shorter,
+// and that a finger scrolls the grid. They do not prove that a real iPhone
+// or Android keyboard stays closed or opens; FLOWS.md has the manual check
+// list for that. Touch is Playwright's emulation (`hasTouch`, `isMobile`),
+// under which `(pointer: coarse)` matches.
+
+const CELL_EDITOR = '__editor___INTERNAL_EDITOR__DOCS_NORMAL';
+const BAR_EDITOR = '__editor___INTERNAL_EDITOR__DOCS_FORMULA_BAR';
+const PHONE = { width: 390, height: 664 };
+
+async function touchState(page: Page) {
+  return page.evaluate(() =>
+    (window as any).__spike.then((s: any) => {
+      const active = document.activeElement as HTMLElement | null;
+      const book = s.host.univerAPI.getActiveWorkbook();
+      const sheet = book.getActiveSheet();
+      const scroll = sheet.getScrollState();
+      return {
+        focused: active?.id ?? '',
+        inputmode: active?.getAttribute('inputmode') ?? null,
+        fontSize: active ? Number.parseFloat(getComputedStyle(active).fontSize) : 0,
+        editorModes: ['__editor___INTERNAL_EDITOR__DOCS_NORMAL', '__editor___INTERNAL_EDITOR__DOCS_FORMULA_BAR'].map(
+          (id) => document.getElementById(id)?.getAttribute('inputmode') ?? null,
+        ),
+        editing: book.isCellEditing() as boolean,
+        selection: sheet.getSelection().getActiveRange().getA1Notation() as string,
+        revision: Number(s.adapter.revision),
+        formulaBar: s.adapter.formulaBarText() as string,
+        row: scroll.sheetViewStartRow as number,
+        column: scroll.sheetViewStartColumn as number,
+        offsetX: scroll.offsetX as number,
+        offsetY: scroll.offsetY as number,
+        zoom: sheet.getZoom() as number,
+        pageScroll: [window.scrollX, window.scrollY, document.documentElement.scrollTop, document.body.scrollTop],
+        pageScale: window.visualViewport!.scale,
+        mode: document.documentElement.dataset.touchInput,
+        support: s.touch.state() as {
+          touch: boolean;
+          editing: boolean;
+          editors: boolean;
+          canvas: boolean;
+          editButton: boolean;
+          keyboardInset: number;
+          compact: boolean;
+        },
+      };
+    }),
+  );
+}
+
+async function tapCell(page: Page, address: string) {
+  const centre = await cellCentre(page, address);
+  await page.touchscreen.tap(centre.x, centre.y);
+}
+
+/** Two taps on one cell, closer together than the 350 ms double tap window. */
+async function doubleTapCell(page: Page, address: string) {
+  await tapCell(page, address);
+  await page.waitForTimeout(90);
+  await tapCell(page, address);
+  await page.waitForTimeout(250);
+}
+
+async function bootTouch(page: Page) {
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  await page.goto('/');
+  await page.waitForFunction(() => (window as any).__spike, null, { timeout: 30_000 });
+  await page.evaluate(() => (window as any).__spike.then(() => undefined));
+  await page.waitForFunction(
+    () => (window as any).__spike.then((s: any) => s.adapter.docUnitIds().length === 2),
+    null,
+    { timeout: 15_000 },
+  );
+  // The canvas is drawn a moment after the workbook exists: tap until a
+  // selection lands. The taps are further apart than a double tap.
+  await expect
+    .poll(
+      async () => {
+        await tapCell(page, 'C3');
+        await page.waitForTimeout(450);
+        return (await touchState(page)).selection;
+      },
+      { timeout: 15_000, intervals: [100] },
+    )
+    .toBe('C3');
+  await page.waitForTimeout(450);
+  return errors;
+}
+
+/** One finger down at `from`, moved to `to` in steps, held still so nothing glides, then lifted. */
+async function swipe(page: Page, from: { x: number; y: number }, to: { x: number; y: number }, pressFor = 0) {
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [from] });
+  if (pressFor) await page.waitForTimeout(pressFor);
+  const steps = 10;
+  for (let i = 1; i <= steps; i += 1) {
+    await cdp.send('Input.dispatchTouchEvent', {
+      type: 'touchMove',
+      touchPoints: [{ x: from.x + ((to.x - from.x) * i) / steps, y: from.y + ((to.y - from.y) * i) / steps }],
+    });
+    await page.waitForTimeout(20);
+  }
+  await page.waitForTimeout(250);
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  await cdp.detach();
+  await page.waitForTimeout(350);
+}
+
+/**
+ * Make the visual viewport report `height` while the layout viewport keeps
+ * its size, which is what Safari on iOS does when its keyboard opens.
+ * Chromium has no on-screen keyboard, so the property is replaced and the
+ * resize event is sent by hand. `null` puts the real value back.
+ */
+async function setVisibleHeight(page: Page, height: number | null) {
+  await page.evaluate((h) => {
+    const viewport = window.visualViewport!;
+    if (h === null) delete (viewport as any).height;
+    else Object.defineProperty(viewport, 'height', { configurable: true, get: () => h });
+    viewport.dispatchEvent(new Event('resize'));
+  }, height);
+}
+
+/** Where the shell, the formula bar, the cell editor and the focused element are, in CSS px from the page top. */
+async function typingLayout(page: Page, row: number) {
+  return page.evaluate(
+    ([rowIndex]) =>
+      (window as any).__spike.then((s: any) => {
+        const box = (element: Element | null) => {
+          const rect = element?.getBoundingClientRect();
+          return rect ? { top: rect.top, bottom: rect.bottom, left: rect.left, right: rect.right } : null;
+        };
+        const grid = document.querySelector('canvas[id^="univer-sheet-main-canvas"]')!.parentElement!;
+        const scroll = s.host.univerAPI.getActiveWorkbook().getActiveSheet().getScrollState();
+        const gridTop = grid.getBoundingClientRect().top;
+        // Independent arithmetic: 20px column header, 24px rows.
+        const cellTop = gridTop + 20 + (rowIndex - scroll.sheetViewStartRow) * 24 - scroll.offsetY;
+        const editorCanvas = [...document.querySelectorAll('#app canvas[id^="univer-doc-main-canvas"]')].find(
+          (canvas) => !canvas.closest('[data-u-comp="formula-bar"]') && canvas.getBoundingClientRect().width > 0,
+        );
+        return {
+          body: box(document.body)!,
+          formulaBar: box(document.querySelector('[data-u-comp="formula-bar"]'))!,
+          grid: box(grid)!,
+          cell: { top: cellTop, bottom: cellTop + 24 },
+          editor: box(editorCanvas ?? null),
+          focused: box(document.activeElement),
+          appBarShown: getComputedStyle(document.querySelector('.appbar')!).display !== 'none',
+          statusBarShown: getComputedStyle(document.querySelector('.statusbar')!).display !== 'none',
+          visibleHeightSet: document.documentElement.style.getPropertyValue('--visible-height'),
+          pageScroll: [window.scrollX, window.scrollY, document.documentElement.scrollTop],
+        };
+      }),
+    [row],
+  );
+}
+
+function expectTypingFits(layout: Awaited<ReturnType<typeof typingLayout>>, visible: number) {
+  expect(layout.body.top, 'shell top').toBe(0);
+  expect(layout.body.bottom, 'shell bottom').toBeCloseTo(visible, 0);
+  expect(layout.formulaBar.top, 'formula bar top').toBeGreaterThanOrEqual(0);
+  expect(layout.formulaBar.bottom, 'formula bar bottom').toBeLessThanOrEqual(visible);
+  expect(layout.grid.bottom, 'grid bottom').toBeLessThanOrEqual(visible);
+  // The cell: below the column header, above the end of the grid.
+  expect(layout.cell.top, 'cell top').toBeGreaterThanOrEqual(layout.grid.top + 20 - 0.5);
+  expect(layout.cell.bottom, 'cell bottom').toBeLessThanOrEqual(layout.grid.bottom + 0.5);
+  // Univer's editor is drawn on that cell, and the element with the focus is in it.
+  expect(layout.editor, 'cell editor').not.toBeNull();
+  expect(Math.abs(layout.editor!.top - layout.cell.top), 'editor sits on its cell').toBeLessThanOrEqual(2);
+  expect(layout.focused!.top, 'focused element top').toBeGreaterThanOrEqual(layout.cell.top - 2);
+  expect(layout.focused!.bottom, 'focused element bottom').toBeLessThanOrEqual(visible);
+  expect(layout.pageScroll, 'page scroll').toEqual([0, 0, 0]);
+}
+
+/**
+ * Every control of the shell that a finger can reach right now, with its box,
+ * and every pair of them closer than 8 CSS px. A control under the open panel
+ * is not counted. The arrow that opens the list of names sits inside the name
+ * box, so that pair is not a gap.
+ */
+async function touchTargets(page: Page) {
+  return page.evaluate(() => {
+    const selector = [
+      '.appbar button',
+      '.appbar label.btn',
+      '#panel-close',
+      '.search',
+      '[data-u-comp="defined-name"] input',
+      '[data-u-comp="defined-name"] > a',
+      '[data-u-comp="formula-bar-actions"] > *',
+      '#app footer button',
+      '#app footer input',
+      '[data-u-comp="slide-tab-item"]',
+    ].join(', ');
+    const found = [...document.querySelectorAll<HTMLElement>(selector)]
+      .map((element) => ({ element, rect: element.getBoundingClientRect() }))
+      .filter(({ element, rect }) => {
+        if (rect.width === 0 || rect.height === 0) return false;
+        const top = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
+        return !!top && (element.contains(top) || top.contains(element));
+      });
+    const name = (element: HTMLElement) =>
+      element.id ||
+      element.getAttribute('aria-label') ||
+      (element.matches('.search') ? 'search' : '') ||
+      (element.closest('[data-u-comp="defined-name"]') ? `name-box-${element.tagName.toLowerCase()}` : '') ||
+      (element.closest('[data-u-comp="formula-bar-actions"]')
+        ? `formula-action-${[...element.parentElement!.children].indexOf(element)}`
+        : '') ||
+      element.getAttribute('data-u-comp') ||
+      element.textContent!.trim().slice(0, 16);
+    const targets = found.map(({ element, rect }) => ({
+      name: name(element),
+      width: Math.round(rect.width * 10) / 10,
+      height: Math.round(rect.height * 10) / 10,
+      left: rect.left,
+      right: rect.right,
+    }));
+    const close: string[] = [];
+    for (let i = 0; i < found.length; i += 1) {
+      for (let j = i + 1; j < found.length; j += 1) {
+        const a = found[i];
+        const b = found[j];
+        if (a.element.contains(b.element) || b.element.contains(a.element)) continue;
+        if (a.element.closest('[data-u-comp="defined-name"]') && b.element.closest('[data-u-comp="defined-name"]')) continue;
+        const dx = Math.max(a.rect.left, b.rect.left) - Math.min(a.rect.right, b.rect.right);
+        const dy = Math.max(a.rect.top, b.rect.top) - Math.min(a.rect.bottom, b.rect.bottom);
+        const gap = Math.max(dx, dy);
+        if (gap < 8) close.push(`${targets[i].name} / ${targets[j].name}: ${Math.round(gap * 10) / 10}px`);
+      }
+    }
+    return {
+      targets,
+      close,
+      pageWidth: [document.documentElement.scrollWidth, document.body.scrollWidth],
+    };
+  });
+}
+
+function expectTouchTargets(found: Awaited<ReturnType<typeof touchTargets>>, width: number, names: string[]) {
+  const seen = found.targets.map((target) => target.name);
+  for (const name of names) expect(seen, `${name} is reachable`).toContain(name);
+  for (const target of found.targets) {
+    expect(target.width, `${target.name} width`).toBeGreaterThanOrEqual(44);
+    expect(target.height, `${target.name} height`).toBeGreaterThanOrEqual(44);
+    expect(target.left, `${target.name} left edge`).toBeGreaterThanOrEqual(0);
+    expect(target.right, `${target.name} right edge`).toBeLessThanOrEqual(width);
+  }
+  expect(found.close, 'controls closer than 8px').toEqual([]);
+  expect(found.pageWidth, 'no sideways overflow').toEqual([width, width]);
+}
+
+test.describe('touch and phone use (emulated touch in headless Chromium; a real phone keyboard is not tested)', () => {
+  test.use({ hasTouch: true, isMobile: true, viewport: PHONE });
+
+  test('a tap selects a cell and leaves the focused editor on inputmode="none" at 16px; whether a real keyboard stays closed is not tested', async ({ page }) => {
+    const errors = await bootTouch(page);
+    expect(await page.evaluate(() => matchMedia('(pointer: coarse)').matches)).toBe(true);
+
+    await tapCell(page, 'B1');
+    await page.waitForTimeout(450);
+    let state = await touchState(page);
+    expect(state.selection).toBe('B1');
+    expect(state.formulaBar).toBe('=A1*2');
+    expect(state.editing).toBe(false);
+    expect(state.focused).toBe(CELL_EDITOR);
+    expect(state.inputmode).toBe('none');
+    expect(state.editorModes).toEqual(['none', 'none']);
+    expect(state.fontSize).toBeGreaterThanOrEqual(16);
+    expect(state.mode).toBe('on');
+    // Fails when a Univer upgrade renames the editors, the grid canvas or the formula bar.
+    expect(state.support).toMatchObject({ touch: true, editing: false, editors: true, canvas: true, editButton: true });
+
+    await tapCell(page, 'D1');
+    await page.waitForTimeout(450);
+    state = await touchState(page);
+    expect(state.selection).toBe('D1');
+    expect(state.formulaBar).toBe('=C1*3');
+    expect([state.focused, state.inputmode, state.editing]).toEqual([CELL_EDITOR, 'none', false]);
+    expect(state.revision).toBe(0);
+    expect(state.pageScroll).toEqual([0, 0, 0, 0]);
+
+    // Text that can take the focus is 16px or larger, so Safari on iOS has no reason to zoom.
+    const sizes = await page.evaluate(() =>
+      [...document.querySelectorAll<HTMLElement>('[contenteditable="true"], input:not([type="file"]), textarea, select')].map(
+        (element) => [element.id || element.getAttribute('aria-label') || element.tagName, Number.parseFloat(getComputedStyle(element).fontSize)] as const,
+      ),
+    );
+    expect(sizes.length).toBeGreaterThanOrEqual(5);
+    for (const [name, size] of sizes) expect(size, `${name} font size`).toBeGreaterThanOrEqual(16);
+
+    // Pinch zoom of the page is not switched off.
+    const viewport = await page.locator('meta[name="viewport"]').getAttribute('content');
+    expect(viewport).toContain('interactive-widget=resizes-content');
+    expect(viewport).not.toMatch(/user-scalable|maximum-scale/);
+    expect(errors).toEqual([]);
+  });
+
+  test('a double tap switches the editor to inputmode="text", and Enter commits a value in one version step and switches back', async ({ page }) => {
+    const errors = await bootTouch(page);
+    await doubleTapCell(page, 'A1');
+    let state = await touchState(page);
+    expect(state.editing).toBe(true);
+    expect([state.focused, state.inputmode]).toEqual([CELL_EDITOR, 'text']);
+    expect(state.fontSize).toBeGreaterThanOrEqual(16);
+    expect(state.support.editing).toBe(true);
+    // While typing, cancel and confirm replace the Edit button.
+    await expect(page.locator('#touch-edit')).toBeHidden();
+
+    // The editor opens on the 10 already in A1 with the caret after it, as a double click does.
+    await page.keyboard.type('5', { delay: 15 });
+    await page.keyboard.press('Enter');
+    await settle(page);
+    // A1=105: B1=210, C1=215, D1=645, E1=645-210=435, F1=105+210+215+645+435=1610.
+    const v = await view(page);
+    expect(v.revision).toBe('1');
+    expectDisplayed(v, [105, 210, 215, 645, 435, 1610]);
+    expectUniverNeverCalculated(v);
+    state = await touchState(page);
+    expect(state.editing).toBe(false);
+    expect([state.focused, state.inputmode]).toEqual([CELL_EDITOR, 'none']);
+    await expect(page.locator('#touch-edit')).toBeVisible();
+
+    // Two taps on different cells are two selections, not a double tap.
+    await page.waitForTimeout(450);
+    await tapCell(page, 'B2');
+    await page.waitForTimeout(90);
+    await tapCell(page, 'B3');
+    await page.waitForTimeout(300);
+    state = await touchState(page);
+    expect([state.selection, state.editing, state.inputmode]).toEqual(['B3', false, 'none']);
+    expect(errors).toEqual([]);
+  });
+
+  test('the Edit button starts typing in the cell, and the check mark commits a formula in one version step', async ({ page }) => {
+    const errors = await bootTouch(page);
+    await tapCell(page, 'C1');
+    await page.waitForTimeout(450);
+    const actions = page.locator('[data-u-comp="formula-bar-actions"] > span');
+    // Not typing: Edit and fx. Cancel and confirm have nothing to act on and are hidden.
+    await expect(page.locator('#touch-edit')).toBeVisible();
+    await expect(page.locator('#touch-edit')).toHaveText('Edit');
+    await expect(actions.nth(0)).toBeHidden();
+    await expect(actions.nth(1)).toBeHidden();
+
+    await page.locator('#touch-edit').tap();
+    await page.waitForTimeout(250);
+    let state = await touchState(page);
+    expect(state.editing).toBe(true);
+    expect([state.selection, state.focused, state.inputmode]).toEqual(['C1', CELL_EDITOR, 'text']);
+    await expect(actions.nth(0)).toBeVisible();
+    await expect(actions.nth(1)).toBeVisible();
+
+    // The editor opens with the formula already in the cell; replace it.
+    await page.keyboard.press('Control+a');
+    await page.keyboard.type('=B1+100', { delay: 15 });
+    await actions.nth(1).tap();
+    await settle(page);
+    // A1=10: B1=20, C1=20+100=120, D1=360, E1=340, F1=10+20+120+360+340=850.
+    const v = await view(page);
+    expect(v.revision).toBe('1');
+    expectDisplayed(v, [10, 20, 120, 360, 340, 850]);
+    expect(v.cells.C1.formula).toBe('=B1+100');
+    expect((await forge(page)).snapshot.sheets[0].cells.C1.formula).toBe('B1+100');
+    expectUniverNeverCalculated(v);
+    state = await touchState(page);
+    expect(state.editing).toBe(false);
+    expect([state.focused, state.inputmode]).toEqual([CELL_EDITOR, 'none']);
+    expect(errors).toEqual([]);
+  });
+
+  test('a tap in the formula bar starts typing there; the X leaves the cell unchanged, and Enter commits', async ({ page }) => {
+    const errors = await bootTouch(page);
+    await tapCell(page, 'B1');
+    await page.waitForTimeout(450);
+    const text = page.locator('[data-u-comp="formula-bar"] [data-u-comp="formula-editor"] canvas');
+    await text.tap();
+    await page.waitForTimeout(250);
+    let state = await touchState(page);
+    expect(state.editing).toBe(true);
+    expect([state.focused, state.inputmode]).toEqual([BAR_EDITOR, 'text']);
+    expect(state.fontSize).toBeGreaterThanOrEqual(16);
+
+    await page.keyboard.type('+7', { delay: 15 });
+    await page.locator('[data-u-comp="formula-bar-actions"] > span').nth(0).tap();
+    await settle(page);
+    let v = await view(page);
+    expect(v.revision).toBe('0');
+    expectDisplayed(v, INITIAL);
+    expect(v.cells.B1.formula).toBe('=A1*2');
+    state = await touchState(page);
+    expect(state.editing).toBe(false);
+    expect(state.editorModes).toEqual(['none', 'none']);
+    expect(state.inputmode).toBe('none');
+
+    // The padding beside the text takes the tap too. Chromium itself gives a
+    // tap a few px off the text to the text; at the left edge of the row it
+    // does not, and the shell passes the tap on.
+    await tapCell(page, 'A2');
+    await page.waitForTimeout(450);
+    const box = (await text.boundingBox())!;
+    await page.evaluate(() => {
+      (window as any).__taps = [];
+      document.addEventListener(
+        'pointerdown',
+        (event) => (window as any).__taps.push(`${event.isTrusted ? 'finger' : 'passed on'}: ${(event.target as Element).tagName}`),
+        true,
+      );
+    });
+    await page.touchscreen.tap(1, box.y + box.height / 2);
+    await page.waitForTimeout(250);
+    expect(await page.evaluate(() => (window as any).__taps)).toEqual(['finger: DIV', 'passed on: CANVAS']);
+    state = await touchState(page);
+    expect([state.editing, state.focused, state.inputmode]).toEqual([true, BAR_EDITOR, 'text']);
+    await page.keyboard.type('7', { delay: 15 });
+    await page.keyboard.press('Enter');
+    await settle(page);
+    v = await view(page);
+    expect(v.revision).toBe('1');
+    expect(await page.evaluate(() => (window as any).__spike.then((s: any) => s.adapter.cell('Sheet1', 'A2').raw))).toBe(7);
+    expectDisplayed(v, INITIAL);
+    state = await touchState(page);
+    expect([state.editing, state.inputmode]).toEqual([false, 'none']);
+    expect(errors).toEqual([]);
+  });
+
+  test('visible area cut to half by replacing visualViewport.height (as iOS reports a keyboard): the formula bar and the cell being edited stay inside it, and the layout returns', async ({ page }) => {
+    const errors = await bootTouch(page);
+    // B13 is in the lower half of the grid: the keyboard area would cover it.
+    await doubleTapCell(page, 'B13');
+    expect((await touchState(page)).editing).toBe(true);
+    await page.keyboard.type('=SUM(A1:E1)', { delay: 15 });
+    const before = await typingLayout(page, 12);
+    expect(before.body.bottom).toBe(PHONE.height);
+    expect(before.cell.top).toBeGreaterThan(PHONE.height / 2);
+
+    const visible = PHONE.height / 2;
+    await setVisibleHeight(page, visible);
+    await expect.poll(async () => (await typingLayout(page, 12)).cell.bottom, { timeout: 5_000 }).toBeLessThanOrEqual(visible);
+    await page.waitForTimeout(600);
+    const during = await typingLayout(page, 12);
+    expectTypingFits(during, visible);
+    // With so little room the app bar and status bar step aside.
+    expect([during.appBarShown, during.statusBarShown]).toEqual([false, false]);
+    let state = await touchState(page);
+    expect(state.support).toMatchObject({ editing: true, compact: true, keyboardInset: PHONE.height - visible });
+    expect([state.editing, state.inputmode]).toEqual([true, 'text']);
+
+    // Keyboard closed again: everything returns, nothing is left scrolled.
+    await setVisibleHeight(page, null);
+    await expect.poll(async () => (await typingLayout(page, 12)).body.bottom).toBe(PHONE.height);
+    const after = await typingLayout(page, 12);
+    expect([after.appBarShown, after.statusBarShown]).toEqual([true, true]);
+    expect(after.visibleHeightSet).toBe('');
+    expect(after.pageScroll).toEqual([0, 0, 0]);
+    expect((await touchState(page)).support).toMatchObject({ compact: false, keyboardInset: 0 });
+
+    await page.keyboard.press('Enter');
+    await settle(page);
+    const v = await view(page);
+    expect(v.revision).toBe('1');
+    // 10 + 20 + 25 + 75 + 55 = 185
+    expect(await page.evaluate(() => (window as any).__spike.then((s: any) => s.adapter.cell('Sheet1', 'B13')))).toMatchObject({
+      raw: 185,
+      formula: '=SUM(A1:E1)',
+    });
+    expectUniverNeverCalculated(v);
+    state = await touchState(page);
+    expect([state.editing, state.inputmode]).toEqual([false, 'none']);
+    expect(errors).toEqual([]);
+  });
+
+  test('window made half as tall (as Chrome on Android resizes the page for a keyboard): the formula bar and the cell being edited stay inside it', async ({ page }) => {
+    const errors = await bootTouch(page);
+    await doubleTapCell(page, 'B13');
+    await page.keyboard.type('12', { delay: 15 });
+    const visible = PHONE.height / 2;
+    await page.setViewportSize({ width: PHONE.width, height: visible });
+    await expect.poll(async () => (await typingLayout(page, 12)).cell.bottom, { timeout: 5_000 }).toBeLessThanOrEqual(visible);
+    await page.waitForTimeout(600);
+    const during = await typingLayout(page, 12);
+    expectTypingFits(during, visible);
+    expect([during.appBarShown, during.statusBarShown]).toEqual([false, false]);
+    // The page itself got shorter, so nothing is reported as covered.
+    expect((await touchState(page)).support).toMatchObject({ editing: true, compact: true, keyboardInset: 0 });
+
+    await page.setViewportSize(PHONE);
+    await expect.poll(async () => (await typingLayout(page, 12)).appBarShown).toBe(true);
+    await page.keyboard.press('Enter');
+    await settle(page);
+    expect((await view(page)).revision).toBe('1');
+    expect(await page.evaluate(() => (window as any).__spike.then((s: any) => s.adapter.cell('Sheet1', 'B13').raw))).toBe(12);
+    expect(errors).toEqual([]);
+  });
+
+  test('a swipe scrolls the grid up, down and sideways without moving the page or selecting, and the next tap selects the cell under the finger', async ({ page }) => {
+    const errors = await bootTouch(page);
+    await tapCell(page, 'B2');
+    await page.waitForTimeout(450);
+    const origin = await gridOrigin(page);
+    const start = { x: origin.x + 200, y: origin.y + 300 };
+
+    await swipe(page, start, { x: start.x, y: start.y - 200 });
+    let state = await touchState(page);
+    // 200px less the 20px first step that only decides it is a swipe: 180px of 24px rows.
+    expect(state.row * 24 + state.offsetY).toBeCloseTo(180, 0);
+    expect(state.column).toBe(0);
+    expect(state.pageScroll).toEqual([0, 0, 0, 0]);
+    // On the desktop plugins alone a swipe drags out a range; here it leaves the selection alone.
+    expect(state.selection).toBe('B2');
+
+    await swipe(page, start, { x: start.x - 150, y: start.y });
+    state = await touchState(page);
+    // 150px less the 15px first step: 135px of 88px columns.
+    expect(state.column * 88 + state.offsetX).toBeCloseTo(135, 0);
+    expect(state.pageScroll).toEqual([0, 0, 0, 0]);
+    expect(state.selection).toBe('B2');
+
+    // A tap straight after scrolling is a tap. Which cell it hits is arithmetic on the scroll position.
+    const tap = { x: origin.x + 46 + 150, y: origin.y + 20 + 100 };
+    await page.touchscreen.tap(tap.x, tap.y);
+    await page.waitForTimeout(450);
+    const column = Math.floor((150 + 135) / 88); // column D
+    const row = Math.floor((100 + 180) / 24); // row index 11, row 12
+    state = await touchState(page);
+    expect(state.selection).toBe(`${'ABCDEFGH'[column]}${row + 1}`);
+    expect(state.selection).toBe('D12');
+    expect([state.editing, state.inputmode]).toEqual([false, 'none']);
+
+    // Back to the top left corner; the grid stops there and the page still does not move.
+    await swipe(page, { x: start.x, y: origin.y + 60 }, { x: start.x + 180, y: origin.y + 340 });
+    state = await touchState(page);
+    expect([state.row, state.column, state.offsetX, state.offsetY]).toEqual([0, 0, 0, 0]);
+    expect(state.pageScroll).toEqual([0, 0, 0, 0]);
+    expect(state.revision).toBe(0);
+    expect(errors).toEqual([]);
+  });
+
+  test('a finger held still and then moved selects a range, and two fingers zoom the grid while the page scale stays 1', async ({ page }) => {
+    const errors = await bootTouch(page);
+    const from = await cellCentre(page, 'A6');
+    const to = await cellCentre(page, 'C9');
+    await swipe(page, from, to, 650);
+    let state = await touchState(page);
+    expect(state.selection).toBe('A6:C9');
+    expect([state.row, state.column]).toEqual([0, 0]);
+
+    const cdp = await page.context().newCDPSession(page);
+    const y = from.y;
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: 150, y, id: 1 }, { x: 250, y, id: 2 }] });
+    for (let i = 1; i <= 5; i += 1) {
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: 150 - 5 * i, y, id: 1 }, { x: 250 + 5 * i, y, id: 2 }] });
+      await page.waitForTimeout(20);
+    }
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    await page.waitForTimeout(400);
+    state = await touchState(page);
+    // Fingers 100px apart moved to 150px apart: 150 percent.
+    expect(state.zoom).toBeCloseTo(1.5, 2);
+    expect(state.pageScale).toBe(1);
+    expect(state.selection).toBe('A6:C9');
+    expect(state.revision).toBe(0);
+    expect(errors).toEqual([]);
+  });
+
+  test('controls are at least 44 by 44 CSS px with 8px between them at 375px, also while typing and with the panel open', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 667 });
+    const errors = await bootTouch(page);
+    const always = ['undo', 'redo', 'new', 'export', 'functions-toggle', 'theme-toggle', 'name-box-input', 'name-box-a', 'slide-tab-item', 'Zoom out', 'Zoom in', 'Zoom'];
+    const idle = await touchTargets(page);
+    expectTouchTargets(idle, 375, [...always, 'touch-edit', 'formula-action-3']);
+    expect(idle.targets.map((target) => target.name)).not.toContain('formula-action-1');
+
+    // The formula bar: 16px text in the name box, and room for the two rows.
+    const bar = await page.evaluate(() => ({
+      height: document.querySelector('[data-u-comp="formula-bar"]')!.getBoundingClientRect().height,
+      text: document.querySelector('[data-u-comp="formula-bar"] [data-u-comp="formula-editor"] canvas')!.getBoundingClientRect().width,
+      nameBox: Number.parseFloat(getComputedStyle(document.querySelector('[data-u-comp="defined-name"] input')!).fontSize),
+    }));
+    expect(bar.height).toBe(104);
+    expect(bar.text).toBeGreaterThanOrEqual(300);
+    expect(bar.nameBox).toBe(16);
+
+    await page.locator('#touch-edit').tap();
+    await page.waitForTimeout(250);
+    const typing = await touchTargets(page);
+    expectTouchTargets(typing, 375, [...always, 'formula-action-1', 'formula-action-2', 'formula-action-3']);
+    expect(typing.targets.map((target) => target.name)).not.toContain('touch-edit');
+    // The X is red and the check mark green, in both themes (Univer's dark theme swaps them).
+    const actionColors = () =>
+      page.evaluate(() =>
+        [...document.querySelectorAll('[data-u-comp="formula-bar-actions"] > span')].slice(0, 2).map((action) => {
+          const [red, green] = getComputedStyle(action).color.match(/\d+/g)!.map(Number);
+          return red > green ? 'red' : 'green';
+        }),
+      );
+    expect(await actionColors()).toEqual(['red', 'green']);
+    await page.locator('[data-u-comp="formula-bar-actions"] > span').nth(0).tap();
+    await page.waitForTimeout(250);
+    await page.locator('#theme-toggle').tap();
+    expect(await page.evaluate(() => document.documentElement.dataset.theme)).toBe('dark');
+    await page.locator('#touch-edit').tap();
+    await page.waitForTimeout(250);
+    expect(await actionColors()).toEqual(['red', 'green']);
+    await page.locator('[data-u-comp="formula-bar-actions"] > span').nth(0).tap();
+    await page.waitForTimeout(250);
+    await page.locator('#theme-toggle').tap();
+
+    await page.locator('#functions-toggle').tap();
+    await expect(page.locator('#functions')).toBeVisible();
+    const withPanel = await touchTargets(page);
+    expectTouchTargets(withPanel, 375, ['undo', 'redo', 'new', 'export', 'functions-toggle', 'theme-toggle', 'panel-close', 'search']);
+    await page.locator('#panel-close').tap();
+    await expect(page.locator('#panel')).toBeHidden();
+    expect(errors).toEqual([]);
+  });
+
+  test('the last pointer decides: a mouse click takes inputmode off the editors and a tap puts it back', async ({ page }) => {
+    const errors = await bootTouch(page);
+    await tapCell(page, 'B1');
+    await page.waitForTimeout(450);
+    expect((await touchState(page)).editorModes).toEqual(['none', 'none']);
+
+    await clickCell(page, 'C1');
+    await page.waitForTimeout(300);
+    let state = await touchState(page);
+    expect(state.selection).toBe('C1');
+    expect(state.editorModes).toEqual([null, null]);
+    expect([state.mode, state.support.touch]).toEqual(['off', false]);
+    // Typing straight into the selected cell, as with any mouse and keyboard.
+    await page.keyboard.type('31', { delay: 15 });
+    await page.keyboard.press('Enter');
+    await settle(page);
+    expect((await view(page)).revision).toBe('1');
+    expect((await touchState(page)).editorModes).toEqual([null, null]);
+
+    await tapCell(page, 'A1');
+    await page.waitForTimeout(450);
+    state = await touchState(page);
+    expect([state.selection, state.inputmode, state.mode]).toEqual(['A1', 'none', 'on']);
+    expect(errors).toEqual([]);
+  });
+});
+
+test('mouse and keyboard are unchanged: no inputmode, no Edit button, and the bars keep their sizes', async ({ page }) => {
+  const errors = await boot(page, 'not-execute');
+  expect(await page.evaluate(() => matchMedia('(pointer: coarse)').matches)).toBe(false);
+  await clickCell(page, 'B1');
+  await page.waitForTimeout(300);
+  const state = await touchState(page);
+  expect(state.selection).toBe('B1');
+  expect(state.focused).toBe(CELL_EDITOR);
+  expect(state.inputmode).toBeNull();
+  expect(state.editorModes).toEqual([null, null]);
+  expect(state.fontSize).toBe(13);
+  expect([state.mode, state.support.touch, state.support.compact]).toEqual(['off', false, false]);
+  await expect(page.locator('#touch-edit')).toBeHidden();
+  const sizes = await page.evaluate(() => ({
+    formulaBar: document.querySelector('[data-u-comp="formula-bar"]')!.getBoundingClientRect().height,
+    actions: [...document.querySelectorAll('[data-u-comp="formula-bar-actions"] > span')].map((span) => span.getBoundingClientRect().width),
+    undo: document.getElementById('undo')!.getBoundingClientRect().height,
+    body: document.body.getBoundingClientRect().height,
+    visibleHeightSet: document.documentElement.style.getPropertyValue('--visible-height'),
+  }));
+  expect(sizes).toEqual({ formulaBar: 28, actions: [24, 24, 24], undo: 32, body: 800, visibleHeightSet: '' });
+
+  // A double click still opens the editor, with no inputmode on it.
+  const centre = await cellCentre(page, 'A1');
+  await page.mouse.dblclick(centre.x, centre.y);
+  await page.waitForTimeout(300);
+  const typing = await touchState(page);
+  expect([typing.editing, typing.inputmode]).toEqual([true, null]);
+  await page.keyboard.press('Escape');
+  expect(errors).toEqual([]);
 });

@@ -78,7 +78,10 @@ body {
 body {
   display: flex;
   flex-direction: column;
-  height: 100dvh;
+  /* The two custom properties are set only while something covers part of
+     the page (an on-screen keyboard on iOS); see src/touch.ts. */
+  height: var(--visible-height, 100dvh);
+  margin-top: var(--visible-top, 0px);
   overflow: hidden;
   background: var(--bg);
   color: var(--text);
@@ -678,7 +681,7 @@ select:focus-visible {
 .notice {
   position: fixed;
   left: 50%;
-  bottom: calc(var(--status-h) + 44px);
+  bottom: calc(var(--status-h) + 44px + var(--keyboard-inset, 0px));
   z-index: 50;
   display: flex;
   align-items: flex-start;
@@ -812,6 +815,358 @@ select:focus-visible {
     font-size: 13px;
   }
 
+}
+
+/* ---------- Touch ----------
+ *
+ * Sizes for a finger: every control is at least 44 by 44 CSS px with 8 px
+ * between neighbors, and text that can take the focus is 16px so Safari on
+ * iOS does not zoom the page when it does. `(pointer: coarse)` is true when
+ * the device's main pointer is a finger, so a laptop with a touch screen and
+ * a mouse keeps the sizes above. src/touch.ts has the behavior.
+ *
+ * The rules under #app restyle Univer 1.2.0's formula bar and sheet bar by
+ * their data-u-comp names and the univer-h-7 / univer-h-20 height classes.
+ * The "touch sizes" acceptance test fails if an upgrade renames them.
+ */
+
+.touch-edit {
+  display: none;
+}
+
+@media (pointer: coarse) {
+  html {
+    overscroll-behavior: none;
+  }
+
+  /* No double-tap zoom on the controls; pinch zoom of the page stays. */
+  body {
+    touch-action: manipulation;
+  }
+
+  :root {
+    --bar-h: 60px;
+  }
+
+  .btn {
+    height: 44px;
+    min-width: 44px;
+  }
+
+  .btn.icon,
+  .btn.compact {
+    width: 44px;
+  }
+
+  .actions,
+  .group {
+    gap: 8px;
+  }
+
+  .panel-head {
+    height: 60px;
+    padding-right: 8px;
+  }
+
+  .search {
+    height: 44px;
+  }
+
+  .search input,
+  #developer select {
+    font-size: 16px;
+  }
+
+  #developer summary,
+  #developer select {
+    min-height: 44px;
+  }
+
+  #developer summary {
+    align-content: center;
+  }
+
+  .issue {
+    min-height: 44px;
+  }
+
+  /* The chip keeps its size; the area that takes a tap is 44px high. */
+  .chip {
+    position: relative;
+  }
+
+  .chip::after {
+    content: '';
+    position: absolute;
+    inset: -12px -6px;
+  }
+
+  /* While typing with little room (a phone with its keyboard open), the grid
+     and the formula bar get the space. Both bars return when typing ends. */
+  :root[data-typing='compact'] .appbar,
+  :root[data-typing='compact'] #developer,
+  :root[data-typing='compact'] .statusbar {
+    display: none;
+  }
+
+  /* Univer's hidden editors: the elements that take the focus. */
+  #app [data-u-comp='editor'][contenteditable] {
+    font-size: 16px !important;
+  }
+
+  /* Formula bar: name box, Edit (or cancel and confirm while typing), fx, text. */
+  #app [data-u-comp='formula-bar'].univer-h-7 {
+    height: 52px;
+  }
+
+  #app [data-u-comp='formula-bar'].univer-h-20 {
+    height: 104px;
+  }
+
+  #app [data-u-comp='formula-bar'] > div:first-child {
+    flex: none;
+    width: 128px;
+  }
+
+  #app [data-u-comp='defined-name'] {
+    width: 100%;
+    padding: 4px 0;
+  }
+
+  #app [data-u-comp='defined-name'] input {
+    padding-right: 44px;
+    font-size: 16px;
+  }
+
+  #app [data-u-comp='defined-name'] > a {
+    width: 44px;
+    font-size: 18px;
+  }
+
+  #app [data-u-comp='formula-bar'] div:has(> [data-u-comp='formula-bar-actions']) {
+    flex: none;
+    height: 52px;
+    padding: 4px 0;
+  }
+
+  #app [data-u-comp='formula-bar-actions'] {
+    gap: 8px;
+    width: auto;
+    padding: 0 8px;
+  }
+
+  #app [data-u-comp='formula-bar-actions'] > span {
+    flex: none;
+    width: 44px;
+    height: 44px;
+    font-size: 20px;
+  }
+
+  :root[data-editing='false'] #app [data-u-comp='formula-bar-actions'] > span:nth-of-type(-n + 2),
+  :root[data-editing='true'] .touch-edit {
+    display: none;
+  }
+
+  /* Univer 1.2.0 swaps the two colors in its dark theme: a green X and a red
+     check mark. On touch they are the way to cancel and to commit, so here
+     they keep their meaning. The colors are Univer's own two, put back. */
+  :root[data-theme='dark'] #app [data-u-comp='formula-bar-actions'] > span:nth-of-type(1) {
+    color: #f98080 !important;
+  }
+
+  :root[data-theme='dark'] #app [data-u-comp='formula-bar-actions'] > span:nth-of-type(2) {
+    color: #31c48d !important;
+  }
+
+  .touch-edit {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    height: 44px;
+    min-width: 44px;
+    padding: 0 14px;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius);
+    background: var(--surface);
+    color: var(--accent-text);
+    font: 600 14px/1 var(--font);
+    cursor: pointer;
+  }
+
+  .touch-edit:active {
+    background: var(--accent-soft);
+  }
+
+  .touch-edit:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+  }
+
+  /* The formula text keeps its 28px line, centered in a row that takes a tap anywhere. */
+  #app [data-u-comp='formula-bar'] div:has(> div > div > [data-u-comp='formula-editor']) {
+    box-sizing: border-box;
+    min-height: 52px;
+    padding-top: 12px;
+  }
+
+  #app [data-u-comp='formula-bar'] div:has(> div > div > div > [data-u-comp='formula-editor']) > div:last-child {
+    flex: none;
+    width: 44px;
+    font-size: 16px;
+  }
+
+  /* Sheet tabs and the zoom control. */
+  #app footer > section {
+    height: 60px !important;
+    padding: 0 8px;
+  }
+
+  #app footer button,
+  #app footer input {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  /* The zoom box: the percent field and its menu button. The slider needs a
+     finer pointer than a finger; the buttons, the field and a pinch remain. */
+  #app footer div:has(> [data-u-comp='input']) {
+    width: 116px;
+    height: 44px;
+  }
+
+  #app footer [data-u-comp='input'],
+  #app footer [data-u-comp='input'] input {
+    height: 44px !important;
+  }
+
+  #app footer [data-u-comp='input'] input {
+    font-size: 16px !important;
+  }
+
+  #app footer div:has(> div > [role='track']) {
+    display: none !important;
+  }
+
+  #app footer section > div {
+    gap: 8px;
+  }
+
+  #app [data-u-comp='slide-tab-bar'] {
+    gap: 8px;
+  }
+
+  #app [data-u-comp='slide-tab-item'] {
+    min-width: 44px;
+    min-height: 44px;
+    margin: 0;
+    font-size: 14px;
+  }
+}
+
+@media (pointer: coarse) and (max-width: 1100px) {
+  .btn:not(.primary):not(.warn) {
+    width: 44px;
+  }
+
+  .actions {
+    gap: 8px;
+  }
+}
+
+@media (pointer: coarse) and (max-width: 720px) {
+  /* Two rows: what is open and its state, then the buttons. */
+  .appbar {
+    row-gap: 6px;
+    padding: 8px;
+  }
+
+  .brand {
+    flex: none;
+  }
+
+  .doc {
+    order: 0;
+    flex: 1 1 0;
+    align-self: center;
+    padding: 0;
+    font-size: 13px;
+  }
+
+  .actions {
+    order: 3;
+    flex: 1 0 100%;
+    flex-wrap: wrap;
+    row-gap: 8px;
+  }
+
+  .btn.primary,
+  .btn.warn {
+    padding: 0 12px;
+  }
+
+  .statusbar {
+    padding: 6px 8px;
+  }
+}
+
+@media (pointer: coarse) and (max-width: 600px) {
+  .brand strong {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+
+  /* Formula bar in two rows: the name box and buttons, then the text at full width. */
+  #app [data-u-comp='formula-bar'].univer-h-7 {
+    height: 104px;
+  }
+
+  #app [data-u-comp='formula-bar'].univer-h-20 {
+    height: 156px;
+  }
+
+  #app [data-u-comp='formula-bar'] {
+    flex-wrap: wrap;
+    align-content: flex-start;
+  }
+
+  #app [data-u-comp='formula-bar'] > div:first-child {
+    flex: 1 1 0;
+    width: auto;
+    height: 52px;
+  }
+
+  #app [data-u-comp='formula-bar'] > div:nth-child(2) {
+    display: contents;
+  }
+
+  #app [data-u-comp='formula-bar'] div:has(> div > div > div > [data-u-comp='formula-editor']) {
+    flex: 1 0 100%;
+    height: calc(100% - 52px);
+    border-top: 1px solid var(--border);
+  }
+
+  #app [data-u-comp='formula-bar-actions'] {
+    border-right: 0;
+  }
+
+  /* Zoom as "minus, percent, plus"; the preset menu gives way to the sheet tabs. */
+  #app footer div:has(> [data-u-comp='input']) {
+    order: 1;
+    width: 60px;
+  }
+
+  #app footer div:has(> [data-u-comp='input']) > button {
+    display: none;
+  }
+
+  #app footer button[aria-label='Zoom in'] {
+    order: 2;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
