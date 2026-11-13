@@ -5,12 +5,12 @@
 // The .wasm bytes are fetched here (rather than by the glue) so their sha256
 // can be recorded in the event log's session.opened engine info.
 
-import init, { createBlankWorkbook, openXlsx, replayJson, sha256Hex } from '../pkg/workbook_forge.js';
+import init, { copyFormulasJson, createBlankWorkbook, openXlsx, replayJson, sha256Hex } from '../pkg/workbook_forge.js';
 import { ForgeEngine } from './engine';
 import { createWorkerHost } from './worker-host';
 import type { RequestMessage } from './protocol';
 
-const wasm = { openXlsx, createBlankWorkbook, sha256Hex, replayJson };
+const wasm = { openXlsx, createBlankWorkbook, sha256Hex, replayJson, copyFormulasJson };
 // NOW and TODAY follow the user's zone; the engine resolves its offset per command.
 const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 // Two attempts: fetch the bytes ourselves (to hash them), else let the glue

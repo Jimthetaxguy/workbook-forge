@@ -56,6 +56,20 @@ export interface EngineError {
 
 export type Result<T> = { ok: true; value: T } | { ok: false; error: EngineError };
 
+/**
+ * How a cell looks. Read-only presentation the engine already holds for
+ * imported and authored workbooks; a host may ignore it. Colors are the
+ * workbook's own hex digits: six (`RRGGBB`) or eight (`AARRGGBB`).
+ */
+export interface CellStyle {
+  /** Excel number format code, e.g. `#,##0.00` or `0.0%`. Absent for `General`. */
+  numberFormat?: string;
+  bold?: true;
+  fontColor?: string;
+  fillColor?: string;
+  horizontal?: 'left' | 'center' | 'right';
+}
+
 export interface SnapshotCell {
   value: Scalar;
   /** Formula without the leading "=", when the cell holds one. */
@@ -65,6 +79,8 @@ export interface SnapshotCell {
    * there: `00123` keeps its leading zeros and is never read as a number.
    */
   text?: true;
+  /** Present when the cell carries any presentation. */
+  style?: CellStyle;
 }
 
 /**
@@ -85,6 +101,11 @@ export interface SnapshotSheet {
   cells: Record<string, SnapshotCell>;
   /** Present when the imported sheet's row or column styles are Text (`@`). */
   textFormat?: TextFormatLayout;
+  /**
+   * Column letters to widths in Excel's character units (8.43 is Excel's
+   * default), for the columns the workbook sets. Absent when it sets none.
+   */
+  columnWidths?: Record<string, number>;
 }
 
 export interface Snapshot {
@@ -350,6 +371,27 @@ export interface WorkerInitFailedMessage {
   error: EngineError;
 }
 
+/** One formula to copy, and how far its cell moves (down and right are positive). */
+export interface FormulaCopy {
+  /** Formula without the leading "=". */
+  formula: string;
+  rowDelta: number;
+  columnDelta: number;
+}
+
+/**
+ * A copied formula without the leading "=", or why it cannot be copied:
+ * `invalid_reference` when a reference would leave the grid, otherwise the
+ * toolkit's parse or support error.
+ *
+ * `spelling` says how the formula is written. `kept`: as the source was
+ * typed, with only its relative references moved (`A1+B1` one row down is
+ * `A2+B2`); the toolkit read this text back as the same formula as its own
+ * copy. `bracketed`: the toolkit's own fully bracketed spelling
+ * (`(A2+B2)`), used when the typed spelling could not be confirmed.
+ */
+export type CopiedFormula = { formula: string; spelling: 'kept' | 'bracketed' } | { error: EngineError };
+
 /** Requests, keyed by command name. */
 export interface Commands {
   /** `name` is recorded as the log baseline's name. */
@@ -367,6 +409,12 @@ export interface Commands {
   subscribe: { args: { events: boolean }; result: { events: boolean } };
   /** Replay a log onto its baseline bytes; any mismatch is an error. */
   replay: { args: { baseline: Uint8Array; events: string | LogEvent[] }; result: ReplayResult };
+  /**
+   * What each formula becomes when its cell is copied elsewhere: relative
+   * references move, absolute ones stay. Reads no workbook, changes nothing
+   * and is not logged; the caller sends the results as ordinary edits.
+   */
+  copyFormulas: { args: { items: FormulaCopy[] }; result: { formulas: CopiedFormula[] } };
 }
 
 export type CommandName = keyof Commands;

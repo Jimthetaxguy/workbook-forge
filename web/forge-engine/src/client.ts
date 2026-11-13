@@ -6,6 +6,7 @@ import type {
   CommandMeta,
   Edit,
   EventMessage,
+  FormulaCopy,
   LogEvent,
   CommandName,
   Commands,
@@ -240,6 +241,10 @@ export class ForgeClient {
   replay(baseline: Uint8Array, events: string | LogEvent[]) {
     const copy = baseline.slice();
     return this.send('replay', { baseline: copy, events }, [copy.buffer]);
+  }
+  /** What formulas become when their cells are copied elsewhere. Changes nothing. */
+  copyFormulas(items: FormulaCopy[]) {
+    return this.send('copyFormulas', { items });
   }
   /** Log events, after subscribe({events:true}). */
   onEvent(listener: (event: LogEvent) => void): () => void {

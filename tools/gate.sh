@@ -180,6 +180,8 @@ if [ "$have" != "$pinned" ]; then
 fi
 bash web/forge-engine/build-wasm.sh
 (cd web/forge-engine && npm test)
+# The view's paste and fill rules: plain Node, no packages to install.
+(cd web/univer-spike && npm run test:unit)
 
 echo "gate: checking whitespace against HEAD"
 git diff --check HEAD

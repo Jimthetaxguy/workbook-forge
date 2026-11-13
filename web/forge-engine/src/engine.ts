@@ -13,8 +13,10 @@ import type {
   Calculation,
   CalcContext,
   CommandMeta,
+  CopiedFormula,
   Edit,
   EventMessage,
+  FormulaCopy,
   LogEvent,
   LogPage,
   ReplayResult,
@@ -28,9 +30,12 @@ import type {
   RequestMessage,
   ResponseMessage,
   Result,
+  CellStyle,
   Snapshot,
+  SnapshotCell,
   SnapshotSheet,
 } from './protocol';
+import { shiftReferences } from './reference-shift.ts';
 
 /** The subset of the wasm-bindgen module (rust/src/wasm.rs) the engine uses. */
 export interface ForgeWasm {
@@ -38,6 +43,8 @@ export interface ForgeWasm {
   createBlankWorkbook(sheetName: string): ForgeWorkbook;
   sha256Hex?(bytes: Uint8Array): string;
   replayJson?(bytes: Uint8Array, events: string): string;
+  /** Relative-reference copy of formulas (absent on older builds and mocks). */
+  copyFormulasJson?(items: string): string;
 }
 
 export interface ForgeWorkbook {
@@ -112,11 +119,38 @@ const typedFailure = (code: string, error: unknown): Result<never> => {
   return typed ? fail(code, typed[2], { refusal: typed[1] }) : fail(code, text);
 };
 
+type RawStyle = {
+  number_format?: string | null;
+  bold?: boolean | null;
+  font_color?: string | null;
+  fill_color?: string | null;
+  horizontal?: string | null;
+};
+
+/**
+ * Forge model style -> protocol style; undefined when it carries nothing.
+ * `General` is every cell's default number format, so it is left out.
+ */
+function toStyle(raw: RawStyle | null | undefined): CellStyle | undefined {
+  if (!raw) return undefined;
+  const style: CellStyle = {};
+  if (typeof raw.number_format === 'string' && raw.number_format !== '' && raw.number_format !== 'General') {
+    style.numberFormat = raw.number_format;
+  }
+  if (raw.bold === true) style.bold = true;
+  if (typeof raw.font_color === 'string') style.fontColor = raw.font_color;
+  if (typeof raw.fill_color === 'string') style.fillColor = raw.fill_color;
+  if (raw.horizontal === 'left' || raw.horizontal === 'center' || raw.horizontal === 'right') style.horizontal = raw.horizontal;
+  return Object.keys(style).length > 0 ? style : undefined;
+}
+
 /** Forge model JSON cell -> protocol cell. */
-function toCell(raw: { value?: unknown; formula?: string | null; style?: { number_format?: string } | null }) {
-  const cell: { value: Scalar; formula?: string; text?: true } = { value: (raw.value ?? null) as Scalar };
+function toCell(raw: { value?: unknown; formula?: string | null; style?: RawStyle | null }) {
+  const cell: SnapshotCell = { value: (raw.value ?? null) as Scalar };
   if (typeof raw.formula === 'string') cell.formula = raw.formula.replace(/^=/, '');
   if (raw.style?.number_format === '@') cell.text = true;
+  const style = toStyle(raw.style);
+  if (style) cell.style = style;
   return cell;
 }
 
@@ -191,7 +225,7 @@ function stringifyJson(value: unknown): string {
 type RawLayout = { text_columns: [number, number][]; text_rows: number[]; general_rows: number[] };
 
 function toSheets(
-  raw: { sheets: { name: string; cells?: Record<string, never> }[] },
+  raw: { sheets: { name: string; cells?: Record<string, never>; column_widths?: Record<string, number> }[] },
   layouts: Record<string, RawLayout> = {},
 ): SnapshotSheet[] {
   return raw.sheets.map((sheet) => {
@@ -201,6 +235,7 @@ function toSheets(
     };
     const layout = layouts[sheet.name];
     if (layout) out.textFormat = { columns: layout.text_columns, rows: layout.text_rows, generalRows: layout.general_rows };
+    if (sheet.column_widths && Object.keys(sheet.column_widths).length > 0) out.columnWidths = { ...sheet.column_widths };
     return out;
   });
 }
@@ -309,9 +344,51 @@ export class ForgeEngine {
         const { baseline, events } = args as Commands['replay']['args'];
         return this.replay(baseline, events);
       }
+      case 'copyFormulas':
+        return this.copyFormulas((args as Commands['copyFormulas']['args']).items);
       default:
         return fail('unknown_command', `unknown command ${String(command)}`);
     }
+  }
+
+  /**
+   * Stateless: needs no open workbook and leaves the log alone.
+   *
+   * The toolkit's copy is the authority and comes back fully bracketed
+   * (`A1+B1` one row down is `(A2+B2)`). To keep the formula as it was typed,
+   * each item is also moved as text (`shiftReferences`) and the toolkit is
+   * asked to read that text back: when it prints the same formula as its own
+   * copy, the typed spelling is returned (`spelling: 'kept'`); when it does
+   * not, or the text pass gives up, the toolkit's spelling is returned
+   * (`spelling: 'bracketed'`). An item the toolkit cannot copy is an error
+   * either way.
+   */
+  private copyFormulas(items: FormulaCopy[]): Result<{ formulas: CopiedFormula[] }> {
+    if (!this.wasm.copyFormulasJson) return fail('unsupported', 'this WASM build has no copyFormulasJson');
+    if (!Array.isArray(items)) return fail('invalid_request', 'items must be an array');
+    type Wire = { formula: string } | { error: EngineError };
+    const run = (request: { formula: unknown; row_delta: unknown; column_delta: unknown }[]) =>
+      JSON.parse(this.wasm.copyFormulasJson!(JSON.stringify(request))) as { ok: true; formulas: Wire[] } | { ok: false; error: EngineError };
+    const copied = run(items.map((item) => ({ formula: item.formula, row_delta: item.rowDelta, column_delta: item.columnDelta })));
+    if (!copied.ok) return { ok: false, error: copied.error };
+    const typed = items.map((item) => {
+      const text = item.formula.replace(/^=/, '');
+      return item.rowDelta === 0 && item.columnDelta === 0 ? text : shiftReferences(text, item.rowDelta, item.columnDelta);
+    });
+    const asked = typed.flatMap((text, index) => (text !== null && 'formula' in copied.formulas[index] ? [index] : []));
+    const read = asked.length > 0 ? run(asked.map((index) => ({ formula: typed[index], row_delta: 0, column_delta: 0 }))) : null;
+    const kept = new Set<number>();
+    if (read?.ok) {
+      asked.forEach((index, at) => {
+        const [mine, theirs] = [read.formulas[at], copied.formulas[index]];
+        if ('formula' in mine && 'formula' in theirs && mine.formula === theirs.formula) kept.add(index);
+      });
+    }
+    const formulas = copied.formulas.map((result, index): CopiedFormula => {
+      if ('error' in result) return result;
+      return kept.has(index) ? { formula: typed[index]!, spelling: 'kept' } : { formula: result.formula, spelling: 'bracketed' };
+    });
+    return { ok: true, value: { formulas } };
   }
 
   private withWorkbook(fn: (wb: ForgeWorkbook) => Result<unknown>): Result<unknown> {
