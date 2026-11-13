@@ -2720,6 +2720,44 @@ test.describe('touch and phone use (emulated touch in headless Chromium; a real 
     expect(errors).toEqual([]);
   });
 
+  test.describe('at tablet size', () => {
+    // A tablet held upright. With its keyboard open 600px are left, which is
+    // still above the 520px below which the app bar and status bar step aside.
+    const TABLET = { width: 800, height: 1000 };
+    test.use({ viewport: TABLET });
+
+    test('window made shorter but still tall, 1000px to 600px (as Chrome on Android resizes the page for a tablet keyboard): the bars stay and the cell being edited is brought back into view', async ({ page }) => {
+      const errors = await bootTouch(page);
+      // B30: 29 rows of 24px below the 20px column header, so its top is 716px
+      // below the grid's top. That is in view at 1000px and far below a 600px window.
+      await doubleTapCell(page, 'B30');
+      expect((await touchState(page)).editing).toBe(true);
+      await page.keyboard.type('12', { delay: 15 });
+      const before = await typingLayout(page, 29);
+      expect(before.body.bottom).toBe(TABLET.height);
+      expect(before.cell.bottom).toBeLessThanOrEqual(before.grid.bottom);
+      const visible = 600;
+      expect(before.cell.top).toBeGreaterThan(visible);
+
+      await page.setViewportSize({ width: TABLET.width, height: visible });
+      await expect.poll(async () => (await typingLayout(page, 29)).cell.bottom, { timeout: 5_000 }).toBeLessThanOrEqual(visible);
+      await page.waitForTimeout(600);
+      const during = await typingLayout(page, 29);
+      expectTypingFits(during, visible);
+      // There is room for both bars, and the page itself got shorter, so nothing is reported as covered.
+      expect([during.appBarShown, during.statusBarShown]).toEqual([true, true]);
+      expect((await touchState(page)).support).toMatchObject({ editing: true, compact: false, keyboardInset: 0 });
+
+      await page.setViewportSize(TABLET);
+      await expect.poll(async () => (await typingLayout(page, 29)).body.bottom).toBe(TABLET.height);
+      await page.keyboard.press('Enter');
+      await settle(page);
+      expect((await view(page)).revision).toBe('1');
+      expect(await page.evaluate(() => (window as any).__spike.then((s: any) => s.adapter.cell('Sheet1', 'B30').raw))).toBe(12);
+      expect(errors).toEqual([]);
+    });
+  });
+
   test('a swipe scrolls the grid up, down and sideways without moving the page or selecting, and the next tap selects the cell under the finger', async ({ page }) => {
     const errors = await bootTouch(page);
     await tapCell(page, 'B2');

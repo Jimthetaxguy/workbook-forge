@@ -540,7 +540,12 @@ export function installTouch(host: UniverHost, container: HTMLElement): TouchSup
     const visible = covered ? viewport.height : layoutHeight;
     const top = covered ? Math.max(0, viewport.offsetTop) : 0;
     const nextCompact = touch && editing && visible < SHORT_VIEW;
-    const placed = covered ? `${visible}/${top}` : '';
+    // The visible box: its size and where it starts. Chrome on Android
+    // shrinks the page for its keyboard, so nothing is covered and, on a
+    // tablet that stays taller than SHORT_VIEW, compact mode does not change
+    // either. The size is then the only sign that the grid got smaller.
+    const width = covered ? viewport.width : root.clientWidth;
+    const placed = `${width}x${visible}+${top}`;
     const changed = placed !== placement || nextCompact !== compact;
     placement = placed;
     keyboardInset = Math.max(0, Math.round(layoutHeight - visible - top));

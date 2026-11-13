@@ -695,7 +695,13 @@ there only for Safari's rule.
   so the formula bar and the grid get the room.
 - The cell being edited is kept in view. After the visible area changes,
   `reveal()` runs after two frames and again after 150 and 450 ms (Univer
-  resizes its canvas a few frames late). If the whole cell is not inside the
+  resizes its canvas a few frames late). "Changes" means any of three
+  things: the visible box has a new size or starts at a new place, whether
+  it came from the visual viewport (iOS) or from the page itself (Chrome on
+  Android), or the compact mode switched. The size has to be watched on its
+  own: a tablet whose page goes from 1000 px to 600 px for its keyboard has
+  nothing covered and stays above 520 px, so neither of the other two signs
+  moves. If the whole cell is not inside the
   grid's box it runs `sheet.command.scroll-to-cell`. Whether the cell is in
   view is worked out from the scroll position and the cell's coordinates,
   not from Univer's visible range, which lags by a few frames.
@@ -910,7 +916,8 @@ two browsers report one differently:
   height (`Object.defineProperty`) and a `resize` event is dispatched on
   `visualViewport`; the page's own size does not change.
 - as Chrome on Android reports it with `resizes-content`: the window is made
-  half as tall (`page.setViewportSize`).
+  half as tall (`page.setViewportSize`). One more test does the same at
+  tablet size, 800 by 1000 made 600 tall, where the bars stay.
 
 Typing in the tests comes from Playwright's keyboard, which is a hardware
 keyboard as far as the page can tell.
