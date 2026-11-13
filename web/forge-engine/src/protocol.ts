@@ -111,6 +111,13 @@ export interface SnapshotSheet {
 export interface Snapshot {
   revision: Revision;
   sheets: SnapshotSheet[];
+  /**
+   * Present when the workbook uses the 1904 date system: a date serial counts
+   * days from January 1, 1904, so the same number is a date 1,462 days later
+   * than in the 1900 system. Cell values are the stored serials either way; a
+   * host that draws date formats needs this to show the right date.
+   */
+  date1904?: true;
 }
 
 export interface Calculation {

@@ -21,6 +21,7 @@ import {
   CellValueType,
   CommandType,
   CustomCommandExecutionError,
+  DateSystem,
   HorizontalAlign,
   ICommandService,
   IUniverInstanceService,
@@ -55,6 +56,7 @@ import { fromA1, toA1 } from './a1';
 import {
   MAX_RANGE_CELLS,
   cellCount,
+  clipboardColumns,
   columns,
   contains,
   copyIdOf,
@@ -235,6 +237,9 @@ export const REJECTED = 'Change not applied.';
 /** Shown when the fill handle meets a series Excel would continue and this page does not build. */
 export const SERIES_REFUSED =
   'Fill continues numbers (1, 2, 3), text ending in a number (Item 1) and day and month names. Dates, times and other patterns are not available yet. Ctrl+D and Ctrl+R copy as they are.';
+
+/** Shown when a copy is pressed before an earlier change has come back from Forge. */
+export const COPY_TOO_SOON = 'The last change is still being applied, so nothing was copied. Copy again.';
 
 /** Plain words for a refused Univer command, most specific pattern first. */
 const REFUSALS: [RegExp, string][] = [
@@ -516,6 +521,10 @@ export class ForgeUniverAdapter {
       sheetOrder: [],
       sheets: {},
     };
+    // Forge keeps date serials as the file stores them. In a 1904 workbook a
+    // serial counts days from January 1, 1904, so the view must read date
+    // formats that way or every date is drawn 1,462 days early.
+    if (snapshot.value.date1904) data.dateSystem = DateSystem.Date1904;
     snapshot.value.sheets.forEach((sheet, index) => {
       const id = `sheet-${index}`;
       this.sheetIds.set(sheet.name, id);
@@ -929,7 +938,7 @@ export class ForgeUniverAdapter {
     }
     if (id === 'sheet.command.paste-by-short-key') this.routePaste(id, (info.params ?? {}) as Record<string, unknown>);
     if (id === 'sheet.command.auto-fill') this.routeFill(id, (info.params ?? {}) as Record<string, unknown>);
-    if (id === 'univer.command.copy') this.noteCopy();
+    if (id === 'univer.command.copy') this.noteCopy(id);
     if (VIEW_COMMANDS.has(id)) return;
     if (GUARDED_PREFIXES.some((prefix) => id.startsWith(prefix))) this.block(id, refusalText(id));
   }
@@ -1007,16 +1016,33 @@ export class ForgeUniverAdapter {
     throw new CustomCommandExecutionError(`${id} routed to Forge`);
   }
 
+  /** True while the cell editor is open, in the cell or through the formula bar. */
+  private editorOpen(): boolean {
+    return this.host.univer.__getInjector().get(IEditorBridgeService).isVisible().visible;
+  }
+
   /**
    * Record what a copy is about to take. Univer copies the last selection;
    * the snapshot is Forge's cells there now, so a later paste writes what was
    * copied even if the source has changed since.
+   *
+   * A copy pressed while an earlier change is still on its way to Forge and
+   * back is refused. Until that change returns, the cells held here and the
+   * cells Univer shows are both the old ones: after Delete they still hold
+   * what was deleted, and Univer would put exactly that on the clipboard.
+   * Refusing leaves the clipboard and the last copy as they were. Taking the
+   * snapshot later, in the queue, would correct a paste on this page only;
+   * the clipboard would still carry the old cells to any other program.
    */
-  private noteCopy() {
+  private noteCopy(id: string) {
     this.watchClipboard();
     this.copying = null;
-    const focused = this.instances.getFocusedUnit();
-    if (focused && focused.type === UniverInstanceType.UNIVER_DOC) return; // copying text inside the cell editor
+    // Copying text inside the cell editor or the formula bar is Univer's own
+    // text copy: it takes no cells, so it is neither refused nor recorded as
+    // a copy of the cell. The focused unit stays the workbook while a cell is
+    // being edited, so the open editor is what tells the two apart.
+    if (this.editorOpen()) return;
+    if (this.pending > 0) this.block(id, COPY_TOO_SOON);
     const sheet = this.sheetName(undefined);
     const range = this.selection().at(-1);
     if (!sheet || !range) return;
@@ -1097,15 +1123,17 @@ export class ForgeUniverAdapter {
         }
         if (!(await this.writeCopies(id, sheet, steps, 'paste'))) return false;
       } else {
+        // Rows are as written, not padded: the size is checked before any cell of the rectangle is built.
         const table = parseClipboardText(text);
-        if (table.length === 0 || table[0].length === 0) return this.refuse(id, 'There was no text to paste.');
-        shape = pasteShape(table.length, table[0].length, selection);
+        const width = clipboardColumns(table);
+        if (table.length === 0 || width === 0) return this.refuse(id, 'There was no text to paste.');
+        shape = pasteShape(table.length, width, selection);
         if (!this.fits(id, selection, shape)) return false;
         const edits: Edit[] = [];
         for (let r = 0; r < shape.rows; r += 1) {
           for (let c = 0; c < shape.columns; c += 1) {
             const [row, col] = [selection.startRow + r, selection.startColumn + c];
-            const typed = table[r % table.length][c % table[0].length];
+            const typed = table[r % table.length][c % width] ?? '';
             // Each cell is read exactly as if it had been typed there.
             const input = parseInput({ v: typed }, this.isTextFormat(sheet, row, col)) ?? { value: null };
             if ('value' in input && input.value === null && isBlank(this.held(sheet, row, col))) continue;

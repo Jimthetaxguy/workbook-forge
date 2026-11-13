@@ -51,6 +51,8 @@ export interface ForgeWorkbook {
   snapshotJson(): string;
   /** Imported sheets' inherited Text layouts (absent on older builds and mocks). */
   textLayoutJson?(): string;
+  /** True for a 1904 date system workbook (absent on older builds and mocks). */
+  usesDate1904?(): boolean;
   revisionString(): string;
   applyEditsResultJson(editsJson: string, expectedRevision: string): string;
   submitJson(requestJson: string): string;
@@ -428,7 +430,9 @@ export class ForgeEngine {
   private snapshot(wb: ForgeWorkbook): { ok: true; value: Snapshot } {
     const raw = JSON.parse(wb.snapshotJson()) as { sheets: { name: string; cells: Record<string, never> }[] };
     const layouts = wb.textLayoutJson ? (JSON.parse(wb.textLayoutJson()) as Record<string, RawLayout>) : {};
-    return { ok: true, value: { revision: wb.revisionString(), sheets: toSheets(raw, layouts) } };
+    const value: Snapshot = { revision: wb.revisionString(), sheets: toSheets(raw, layouts) };
+    if (wb.usesDate1904?.()) value.date1904 = true;
+    return { ok: true, value };
   }
 
   private exportWorkbook(wb: ForgeWorkbook, includeLog: boolean): Result<Commands['export']['result']> {

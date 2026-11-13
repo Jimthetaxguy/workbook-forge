@@ -107,6 +107,18 @@ impl BrowserWorkbook {
         }
     }
 
+    /// True when the imported workbook uses the 1904 date system: a date
+    /// serial counts days from January 1, 1904. Serials are passed on as
+    /// stored; the page needs this to draw them as the right dates. Authored
+    /// workbooks use the 1900 system (they are written with `date1904="0"`).
+    #[wasm_bindgen(js_name = usesDate1904)]
+    pub fn uses_date1904(&self) -> bool {
+        match &self.session {
+            WorkbookSession::Imported(workbook) => workbook.uses_date1904(),
+            WorkbookSession::Authored(_) => false,
+        }
+    }
+
     /// Apply a bounded JSON edit array at an expected revision. Both imported
     /// and authored workbooks may add cells; imported files refuse insertions
     /// outside Excel's grid (`out_of_bounds`) and merged non-anchor cells.

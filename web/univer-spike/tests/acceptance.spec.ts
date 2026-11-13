@@ -938,6 +938,73 @@ test('display: an opened workbook keeps its number formats, cell styles and colu
   expect(errors).toEqual([]);
 });
 
+// Dates in a workbook that uses the 1904 date system. Microsoft, "Date systems
+// in Excel" (support.microsoft.com, article
+// e7fe7167-48a9-4b96-bb53-5612a800b487): "In the 1904 date system, dates are
+// calculated by using January 1, 1904, as a starting point. When you enter a
+// date, it is converted into a serial number that represents the number of
+// days elapsed since January 1, 1904. For example, if you enter July 5, 2011,
+// Excel converts the date to the serial number 39267." and "The difference
+// between the two date systems is 1,462 days."
+//
+// Both fixtures carry <workbookPr date1904="1"> and format A1 as yyyy-mm-dd.
+// Worked by hand: 1904 to 2020 is 117 years holding 30 leap days (1904, 1908,
+// ... 2020), 117 * 365 + 30 = 42,735 days, so serial 42735 is 2021-01-01.
+//   op_1904_dates.xlsx Log!A1 = 42886: 42886 - 42735 = 151 = 31 + 28 + 31 +
+//     30 + 31 (January to May 2021), so 2021-06-01. Read with the 1900 system
+//     it is 1,462 days (four years and a day) earlier: 2017-05-31.
+//   xw_1904_dates.xlsx Calendar!A1 = 43236: 2021 has 365 days, so serial
+//     43100 is 2022-01-01; 43236 - 43100 = 136 = 31 + 28 + 31 + 30 + 16, so
+//     2022-05-17.
+//   39267 is Microsoft's own example above: 2011-07-05.
+// The fixtures' formula (C1 = A1+B1) is not calculated: Forge does not
+// calculate formulas in a 1904 workbook, so the cell stays empty and Formula
+// issues lists it.
+test('display: a workbook that uses the 1904 date system shows its dates counted from January 1, 1904, and a 1900 workbook opened after it is unchanged', async ({ page }) => {
+  const errors = await boot(page, 'not-execute');
+  const dates = (sheetName: string) =>
+    page.evaluate((sheetName) =>
+      (window as any).__spike.then((s: any) => {
+        const sheet = s.host.univerAPI.getActiveWorkbook().getActiveSheet();
+        return {
+          sheet: sheet.getSheetName(),
+          shown: ['A1', 'B1', 'C1'].map((address) => sheet.getRange(address).getDisplayValue()),
+          forge: ['A1', 'B1', 'C1'].map((address) => s.adapter.cell(sheetName, address).raw),
+          divergence: s.adapter.divergence(),
+        };
+      }), sheetName);
+
+  await page.locator('#file').setInputFiles('../../fixtures/corpus/op_1904_dates.xlsx');
+  await expect(page.locator('#status')).toHaveText('op_1904_dates.xlsx · All changes calculated · Version 0');
+  // The date is drawn from the same stored number: nothing is converted.
+  expect(await dates('Log')).toEqual({ sheet: 'Log', shown: ['2021-06-01', '3', ''], forge: [42886, 3, null], divergence: [] });
+  await expect(page.locator('#formula-issue-count')).toHaveText('1');
+  await expect(page.locator('#formula-issue-list')).toHaveText('Log!C11904 date-system formula calculation is unsupported');
+
+  // A new number in the date cell is read the same way.
+  await page.evaluate(() => (window as any).__spike.then((s: any) => s.adapter.edit([{ sheet: 'Log', address: 'A1', value: 39267 }], '1904 serial')));
+  await expect(page.locator('#status')).toHaveText('op_1904_dates.xlsx · All changes calculated · Version 1');
+  expect(await dates('Log')).toEqual({ sheet: 'Log', shown: ['2011-07-05', '3', ''], forge: [39267, 3, null], divergence: [] });
+
+  await page.locator('#file').setInputFiles('../../fixtures/corpus/xw_1904_dates.xlsx');
+  await expect(page.locator('#status')).toHaveText('xw_1904_dates.xlsx · All changes calculated · Version 0');
+  expect(await dates('Calendar')).toEqual({ sheet: 'Calendar', shown: ['2022-05-17', '10', ''], forge: [43236, 10, null], divergence: [] });
+
+  // The date system belongs to the workbook, not the page: a 1900 workbook
+  // opened next reads 45351 as 2024-02-29 (see the display test above).
+  await page.locator('#file').setInputFiles('../../fixtures/corpus/op_styles_number_formats.xlsx');
+  await expect(page.locator('#status')).toHaveText('op_styles_number_formats.xlsx · All changes calculated · Version 0');
+  const after = await page.evaluate(() =>
+    (window as any).__spike.then((s: any) => {
+      const sheet = s.host.univerAPI.getActiveWorkbook().getActiveSheet();
+      return { shown: sheet.getRange('B1').getDisplayValue(), forge: s.adapter.cell('Formats', 'B1').raw };
+    }),
+  );
+  expect(after).toEqual({ shown: '2024-02-29', forge: 45351 });
+  expectUniverNeverCalculated(await view(page));
+  expect(errors).toEqual([]);
+});
+
 // The status bar totals the selection from Forge's values. Fixture row 1 is
 // 10, 20, 25, 75, 55, 185: A1:C1 sums to 55 over 3 cells (average 55/3 =
 // 18.3333333333 at twelve significant digits); one cell shows no totals.
@@ -1261,6 +1328,34 @@ test.describe('everyday editing: clear, paste and fill', () => {
     state = await editState(page);
     expect(state.revision).toBe(4);
     expect(state.blocked).toEqual([]);
+    expect(errors).toEqual([]);
+  });
+
+  test('uneven text pastes its short rows as empty cells, and uneven text over the limit is refused with the usual message', async ({ page }) => {
+    const errors = await boot(page, 'not-execute');
+    // B3 and C3 hold values first, so the cells the short row does not reach are seen to be written as empty.
+    await pasteText(page, 'B3', '1\t2');
+    expect(await cellsOf(page, ['B3', 'C3'])).toEqual({ B3: [null, 1], C3: [null, 2] });
+    // Three cells, then one: 2 rows by 3 columns.
+    await pasteText(page, 'A2', 'a\tb\tc\nd');
+    expect(await cellsOf(page, ['A2', 'B2', 'C2', 'A3', 'B3', 'C3'])).toEqual({
+      A2: [null, 'a'], B2: [null, 'b'], C2: [null, 'c'], A3: [null, 'd'], B3: BLANK, C3: BLANK,
+    });
+    let state = await editState(page);
+    expect(state.revision).toBe(2);
+    expect(state.selection).toBe('A2:C3');
+
+    // One row of 16,000 cells, which fits the sheet's 16,384 columns from
+    // column A, then 20,000 rows of one cell. The text holds 36,000 cells in
+    // 56,000 characters; its rectangle is 20,001 by 16,000 = 320,016,000.
+    const text = `${'\t'.repeat(15_999)}\n${'x\n'.repeat(20_000)}`;
+    expect(text.length).toBe(56_000);
+    await pasteText(page, 'A5', text);
+    state = await editState(page);
+    expect(state.notice).toBe('Change not applied. That is more than 20,000 cells at once.');
+    expect(state.blocked.at(-1)).toBe('sheet.command.paste-by-short-key');
+    expect(state.revision).toBe(2);
+    expect(await cellsOf(page, ['A5', 'A6'])).toEqual({ A5: BLANK, A6: BLANK });
     expect(errors).toEqual([]);
   });
 
@@ -1613,6 +1708,172 @@ test.describe('everyday editing: clear, paste and fill', () => {
     expect(state.blocked.at(-1)).toBe('sheet.command.auto-fill');
     expect(state.revision).toBe(0);
     expect(await held()).toEqual(before);
+    expect(errors).toEqual([]);
+  });
+
+  test('a copy pressed while Delete is still being applied is refused and writes nothing to the clipboard, so a paste cannot bring the deleted cells back', async ({ page }) => {
+    const errors = await boot(page, 'not-execute');
+    // B3 and C3 hold 1 and 2. The clipboard now holds that text, which is not a copy made on this page.
+    await pasteText(page, 'B3', '1\t2');
+    expect(await cellsOf(page, ['B3', 'C3'])).toEqual({ B3: [null, 1], C3: [null, 2] });
+    expect((await editState(page)).revision).toBe(1);
+
+    // Hold every reply from Forge until released, and count what the page writes to the clipboard.
+    await page.evaluate(() =>
+      (window as any).__spike.then((s: any) => {
+        const w = window as any;
+        w.__clipboardWrites = 0;
+        for (const name of ['write', 'writeText'] as const) {
+          const original = (Clipboard.prototype as any)[name];
+          (Clipboard.prototype as any)[name] = function (...args: unknown[]) {
+            w.__clipboardWrites += 1;
+            return original.apply(this, args);
+          };
+        }
+        w.__held = new Promise<void>((resolve) => (w.__release = resolve));
+        const send = s.client.applyAndCalculate.bind(s.client);
+        s.client.applyAndCalculate = async (...args: unknown[]) => {
+          const reply = await send(...args);
+          await w.__held;
+          return reply;
+        };
+      }),
+    );
+    const writes = () => page.evaluate(() => (window as any).__clipboardWrites as number);
+
+    await selectCells(page, 'B1', 'C1');
+    await page.keyboard.press('Delete');
+    await page.keyboard.press('Control+C');
+    await page.waitForTimeout(250);
+    // Forge has cleared B1 and C1, but its reply is held, so the view still shows them.
+    expect(await cellsOf(page, ['B1', 'C1'])).toEqual({ B1: ['=A1*2', 20], C1: ['=B1+5', 25] });
+    let state = await editState(page);
+    expect.soft(state.notice).toBe('The last change is still being applied, so nothing was copied. Copy again.');
+    expect.soft(state.blocked.at(-1)).toBe('univer.command.copy');
+    expect.soft(await writes(), 'clipboard writes by the refused copy').toBe(0);
+
+    await page.evaluate(() => (window as any).__release());
+    await settle(page);
+    // B1 and C1 are empty, so D1 = 0*3 = 0, E1 = 0-0 = 0, F1 = 10+0+0+0+0 = 10.
+    expect(await cellsOf(page, ['B1', 'C1', 'D1', 'F1'])).toEqual({ B1: BLANK, C1: BLANK, D1: ['=C1*3', 0], F1: ['=SUM(A1:E1)', 10] });
+    expect((await editState(page)).revision).toBe(2);
+
+    // The clipboard is as it was before the refused copy: the text 1 and 2,
+    // not the formulas Delete removed (which would arrive as =A5*2 and =B5+5).
+    await selectCells(page, 'B5');
+    await page.keyboard.press('Control+V');
+    await settle(page);
+    expect(await cellsOf(page, ['B5', 'C5'])).toEqual({ B5: [null, 1], C5: [null, 2] });
+    expect((await editState(page)).revision).toBe(3);
+
+    // Copied again now that the clear is applied, B1:C1 is two empty cells, and pasting them over B3:C3 empties those.
+    await copyCells(page, 'B1', 'C1');
+    expect(await writes()).toBeGreaterThan(0);
+    await selectCells(page, 'B3');
+    await page.keyboard.press('Control+V');
+    await settle(page);
+    expect(await cellsOf(page, ['B3', 'C3'])).toEqual({ B3: BLANK, C3: BLANK });
+    state = await editState(page);
+    expect(state.revision).toBe(4);
+    expect(state.selection).toBe('B3:C3');
+    expect(errors).toEqual([]);
+  });
+
+  test('copying text inside the cell editor or the formula bar is a text copy: it is not refused while a change is pending, and pasting it writes the copied text, not the whole cell', async ({ page }) => {
+    const errors = await boot(page, 'not-execute');
+    await typeInto(page, 'A3', 'hello');
+    expect((await editState(page)).revision).toBe(1);
+    await page.evaluate(() => navigator.clipboard.writeText('EARLIER'));
+
+    // The last two letters, selected inside the editor and copied.
+    const a3 = await cellCentre(page, 'A3');
+    await page.waitForTimeout(550);
+    await page.mouse.dblclick(a3.x, a3.y);
+    await page.waitForTimeout(300);
+    await page.keyboard.press('End');
+    await page.keyboard.press('Shift+ArrowLeft');
+    await page.keyboard.press('Shift+ArrowLeft');
+    await page.keyboard.press('Control+C');
+    await page.waitForTimeout(250);
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(250);
+    // The paste is the two letters. A copy of the cell would have written
+    // hello, and a copy that did not happen would have written EARLIER.
+    await selectCells(page, 'A5');
+    await page.keyboard.press('Control+V');
+    await settle(page);
+    expect(await cellsOf(page, ['A3', 'A5'])).toEqual({ A3: [null, 'hello'], A5: [null, 'lo'] });
+    expect((await editState(page)).revision).toBe(2);
+
+    // The same copy while a change is still being applied: hold every reply from Forge until released.
+    await page.evaluate(() => navigator.clipboard.writeText('EARLIER'));
+    await page.evaluate(() =>
+      (window as any).__spike.then((s: any) => {
+        const w = window as any;
+        w.__held = new Promise<void>((resolve) => (w.__release = resolve));
+        const send = s.client.applyAndCalculate.bind(s.client);
+        s.client.applyAndCalculate = async (...args: unknown[]) => {
+          const reply = await send(...args);
+          await w.__held;
+          return reply;
+        };
+      }),
+    );
+    await selectCells(page, 'B3');
+    await page.keyboard.type('7', { delay: 15 });
+    await page.keyboard.press('Enter');
+    await page.waitForTimeout(250);
+    await page.waitForTimeout(550);
+    await page.mouse.dblclick(a3.x, a3.y);
+    await page.waitForTimeout(300);
+    await page.keyboard.press('Control+A');
+    await page.keyboard.press('Control+C');
+    await page.waitForTimeout(250);
+    let state = await editState(page);
+    expect(state.notice).not.toContain('nothing was copied');
+    expect(state.blocked).not.toContain('univer.command.copy');
+    await page.keyboard.press('Escape');
+    await page.evaluate(() => (window as any).__release());
+    await settle(page);
+    expect(await cellsOf(page, ['A3', 'B3'])).toEqual({ A3: [null, 'hello'], B3: [null, 7] });
+    expect((await editState(page)).revision).toBe(3);
+    // The clipboard holds the editor's text, not the EARLIER a refused copy would have left.
+    await selectCells(page, 'A6');
+    await page.keyboard.press('Control+V');
+    await settle(page);
+    expect(await cellsOf(page, ['A6'])).toEqual({ A6: [null, 'hello'] });
+    state = await editState(page);
+    expect(state.revision).toBe(4);
+
+    // The formula bar is the same editor reached another way: its text is copied while a change is pending too.
+    await page.evaluate(() => navigator.clipboard.writeText('EARLIER'));
+    await page.evaluate(() => {
+      const w = window as any;
+      w.__held = new Promise<void>((resolve) => (w.__release = resolve));
+    });
+    await selectCells(page, 'B3');
+    await page.keyboard.type('8', { delay: 15 });
+    await page.keyboard.press('Enter');
+    await page.waitForTimeout(250);
+    await selectCells(page, 'A3');
+    await page.locator('[data-u-comp="formula-bar"] [contenteditable="true"], [data-u-comp="formula-bar"] canvas').last().click();
+    await page.waitForTimeout(300);
+    await page.keyboard.press('Control+A');
+    await page.keyboard.press('Control+C');
+    await page.waitForTimeout(250);
+    state = await editState(page);
+    expect(state.notice).not.toContain('nothing was copied');
+    expect(state.blocked).not.toContain('univer.command.copy');
+    await page.keyboard.press('Escape');
+    await page.evaluate(() => (window as any).__release());
+    await settle(page);
+    expect(await cellsOf(page, ['A3', 'B3'])).toEqual({ A3: [null, 'hello'], B3: [null, 8] });
+    await selectCells(page, 'A7');
+    await page.keyboard.press('Control+V');
+    await settle(page);
+    expect(await cellsOf(page, ['A7'])).toEqual({ A7: [null, 'hello'] });
+    state = await editState(page);
+    expect(state.revision).toBe(6);
     expect(errors).toEqual([]);
   });
 
@@ -2622,6 +2883,44 @@ test.describe('touch and phone use (emulated touch in headless Chromium; a real 
     expect((await view(page)).revision).toBe('1');
     expect(await page.evaluate(() => (window as any).__spike.then((s: any) => s.adapter.cell('Sheet1', 'B13').raw))).toBe(12);
     expect(errors).toEqual([]);
+  });
+
+  test.describe('at tablet size', () => {
+    // A tablet held upright. With its keyboard open 600px are left, which is
+    // still above the 520px below which the app bar and status bar step aside.
+    const TABLET = { width: 800, height: 1000 };
+    test.use({ viewport: TABLET });
+
+    test('window made shorter but still tall, 1000px to 600px (as Chrome on Android resizes the page for a tablet keyboard): the bars stay and the cell being edited is brought back into view', async ({ page }) => {
+      const errors = await bootTouch(page);
+      // B30: 29 rows of 24px below the 20px column header, so its top is 716px
+      // below the grid's top. That is in view at 1000px and far below a 600px window.
+      await doubleTapCell(page, 'B30');
+      expect((await touchState(page)).editing).toBe(true);
+      await page.keyboard.type('12', { delay: 15 });
+      const before = await typingLayout(page, 29);
+      expect(before.body.bottom).toBe(TABLET.height);
+      expect(before.cell.bottom).toBeLessThanOrEqual(before.grid.bottom);
+      const visible = 600;
+      expect(before.cell.top).toBeGreaterThan(visible);
+
+      await page.setViewportSize({ width: TABLET.width, height: visible });
+      await expect.poll(async () => (await typingLayout(page, 29)).cell.bottom, { timeout: 5_000 }).toBeLessThanOrEqual(visible);
+      await page.waitForTimeout(600);
+      const during = await typingLayout(page, 29);
+      expectTypingFits(during, visible);
+      // There is room for both bars, and the page itself got shorter, so nothing is reported as covered.
+      expect([during.appBarShown, during.statusBarShown]).toEqual([true, true]);
+      expect((await touchState(page)).support).toMatchObject({ editing: true, compact: false, keyboardInset: 0 });
+
+      await page.setViewportSize(TABLET);
+      await expect.poll(async () => (await typingLayout(page, 29)).body.bottom).toBe(TABLET.height);
+      await page.keyboard.press('Enter');
+      await settle(page);
+      expect((await view(page)).revision).toBe('1');
+      expect(await page.evaluate(() => (window as any).__spike.then((s: any) => s.adapter.cell('Sheet1', 'B30').raw))).toBe(12);
+      expect(errors).toEqual([]);
+    });
   });
 
   test('a swipe scrolls the grid up, down and sideways without moving the page or selecting, and the next tap selects the cell under the finger', async ({ page }) => {

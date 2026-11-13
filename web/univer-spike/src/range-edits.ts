@@ -50,8 +50,13 @@ export function isBlank(cell: Held | undefined | null): boolean {
  * rows, and a cell that itself holds a tab, a line break or a quote wrapped in
  * double quotes with inner quotes doubled. A field that opens with a quote
  * but never closes it is taken as typed. One trailing line break is the end
- * of the last row, not an extra empty row. Short rows are padded with empty
- * cells so the result is a rectangle.
+ * of the last row, not an extra empty row.
+ *
+ * Rows come back as written: a short row is not padded. The rectangle a
+ * paste writes is `table.length` rows by `clipboardColumns(table)` columns,
+ * and a cell a row does not reach is empty. Padding here would build that
+ * rectangle before anything had checked it against `MAX_RANGE_CELLS`: one
+ * long row followed by many short ones is a small text and a huge rectangle.
  */
 export function parseClipboardText(text: string): string[][] {
   const out: string[][] = [];
@@ -107,9 +112,14 @@ export function parseClipboardText(text: string): string[][] {
     endRow();
     if (i >= n) break; // the trailing break ended the last row
   }
-  const width = Math.max(0, ...out.map((r) => r.length));
-  for (const r of out) while (r.length < width) r.push('');
   return out;
+}
+
+/** How many columns clipboard rows span: the length of the longest row. */
+export function clipboardColumns(table: string[][]): number {
+  let width = 0;
+  for (const row of table) if (row.length > width) width = row.length;
+  return width;
 }
 
 /**

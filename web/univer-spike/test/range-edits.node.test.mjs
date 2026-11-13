@@ -8,6 +8,7 @@ import { test } from 'node:test';
 import {
   MAX_RANGE_CELLS,
   cellCount,
+  clipboardColumns,
   contains,
   copyIdOf,
   fillSource,
@@ -57,9 +58,36 @@ test('clipboard text: tabs split cells, line breaks split rows, one trailing bre
   assert.deepEqual(parseClipboardText('a\n\n'), [['a'], ['']]);
 });
 
-test('clipboard text: short rows are padded to a rectangle and empty cells are kept', () => {
-  assert.deepEqual(parseClipboardText('a\tb\tc\nd'), [['a', 'b', 'c'], ['d', '', '']]);
+test('clipboard text: rows are kept as written, the widest row sets the columns, and empty cells are kept', () => {
+  // Three cells then one: a rectangle of 2 rows by 3 columns whose second row has one cell written.
+  const uneven = parseClipboardText('a\tb\tc\nd');
+  assert.deepEqual(uneven, [['a', 'b', 'c'], ['d']]);
+  assert.equal(clipboardColumns(uneven), 3);
   assert.deepEqual(parseClipboardText('\tb\n\t'), [['', 'b'], ['', '']]);
+  assert.equal(clipboardColumns([['x']]), 1);
+  assert.equal(clipboardColumns([]), 0);
+});
+
+test('clipboard text: uneven text far over the paste limit is measured without building its rectangle', () => {
+  // One row of 20,000 cells (19,999 tabs) and then 20,000 rows of one cell:
+  // 20,001 rows by 20,000 columns is 400,020,000 cells, and the text itself
+  // holds 20,000 + 20,000 = 40,000 of them in 19,999 + 1 + 40,000 = 60,000
+  // characters.
+  const text = `${'\t'.repeat(19_999)}\n${'x\n'.repeat(20_000)}`;
+  assert.equal(text.length, 60_000);
+  const table = parseClipboardText(text);
+  assert.equal(table.length, 20_001);
+  assert.equal(clipboardColumns(table), 20_000);
+  assert.equal(table.length * clipboardColumns(table) > MAX_RANGE_CELLS, true);
+  let held = 0;
+  for (const row of table) held += row.length;
+  assert.equal(held, 40_000);
+});
+
+test('clipboard text: 200,000 one-cell rows are read, where spreading them into Math.max would throw', () => {
+  const table = parseClipboardText('x\n'.repeat(200_000));
+  assert.equal(table.length, 200_000);
+  assert.equal(clipboardColumns(table), 1);
 });
 
 test('clipboard text: a quoted cell may hold tabs, line breaks and doubled quotes', () => {
