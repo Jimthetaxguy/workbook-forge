@@ -258,9 +258,10 @@ enum CalcValue {
     Scalar(Value),
     /// A scalar kept as a one-cell reference.
     ///
-    /// COUNT counts only numbers inside a reference, so text and logicals are
-    /// ignored. AND and OR ignore text and blanks but still test logicals. Value contexts unwrap it. A scalar
-    /// XLOOKUP `if_not_found` literal is never this variant.
+    /// SUM, AVERAGE and COUNT read only numbers inside a reference, so text
+    /// and logicals are ignored. AND and OR ignore text and blanks but still
+    /// test logicals. Value contexts unwrap it. A scalar XLOOKUP
+    /// `if_not_found` literal is never this variant.
     Referenced(Value),
     Range(Vec<Vec<Value>>),
     Array(ArrayValue),
@@ -3555,10 +3556,15 @@ fn returns_reference(expr: &Expr) -> bool {
     }
 }
 
+/// Marks the value of a selected cell reference as [`CalcValue::Referenced`].
+///
+/// A selected empty cell keeps the marker like any other cell, so AVERAGE
+/// ignores it as it ignores the same cell named directly. An error value
+/// passes through unmarked, as it did before.
 fn retain_reference(expr: &Expr, value: CalcValue) -> CalcValue {
     match value {
         CalcValue::Referenced(_) | CalcValue::Range(_) | CalcValue::Array(_) => value,
-        CalcValue::Scalar(Value::Blank | Value::Error(_)) => value,
+        CalcValue::Scalar(Value::Error(_)) => value,
         CalcValue::Scalar(scalar) if returns_reference(expr) => CalcValue::Referenced(scalar),
         other => other,
     }
@@ -3684,9 +3690,13 @@ fn eval_call(name: &str, args: &[Expr], env: &Environment<'_>) -> Result<Value, 
             let mut numbers = Vec::new();
             for argument in args {
                 let evaluated = eval(argument, env)?;
-                let referenced = env.primitive_value_profile
-                    || matches!(argument, Expr::Ref(_, _))
-                    || matches!(evaluated, CalcValue::Range(_) | CalcValue::Array(_));
+                // Microsoft: text and logical values typed directly are
+                // converted; in a cell reference they are ignored. A cell,
+                // INDEX and a one-cell reference selected by IF, IFERROR,
+                // IFNA, IFS, SWITCH, CHOOSE or XLOOKUP are references here,
+                // as they are for COUNT.
+                let referenced =
+                    env.primitive_value_profile || keeps_reference(argument, &evaluated);
                 for value in flatten(evaluated) {
                     if let Value::Error(error) = value {
                         return Err(error);
@@ -3707,9 +3717,10 @@ fn eval_call(name: &str, args: &[Expr], env: &Environment<'_>) -> Result<Value, 
             let mut count = 0usize;
             for argument in args {
                 let evaluated = eval(argument, env)?;
-                let referenced = env.primitive_value_profile
-                    || matches!(argument, Expr::Ref(_, _))
-                    || matches!(evaluated, CalcValue::Range(_) | CalcValue::Array(_));
+                // The same reference rule as SUM, including a one-cell
+                // reference selected by IF, CHOOSE or XLOOKUP.
+                let referenced =
+                    env.primitive_value_profile || keeps_reference(argument, &evaluated);
                 for value in flatten(evaluated) {
                     if let Value::Error(error) = value {
                         return Err(error);

@@ -103,9 +103,10 @@ class _Referenced:
     """A scalar Excel still treats as a one-cell reference.
 
     Successful XLOOKUP over a referenced return array, and a branch that IF,
-    IFERROR, IFNA, IFS or SWITCH selects from a reference, keep this marker.
-    COUNT, AND and OR honor it. Value contexts unwrap it. A scalar
-    ``if_not_found`` literal never receives the marker.
+    IFERROR, IFNA, IFS, SWITCH or CHOOSE selects from a reference, keep this
+    marker. SUM, AVERAGE, COUNT, AND, OR, XOR and the range statistics honor
+    it. Value contexts unwrap it. A scalar ``if_not_found`` literal never
+    receives the marker.
     """
 
     value: Scalar
@@ -2739,8 +2740,10 @@ def _eval_value(
 ) -> object:
     """Evaluate an argument whose reader inspects the value, not its provenance.
 
-    Only COUNT, AND, OR and the IF-family/XLOOKUP pass-through read the
-    :class:`_Referenced` marker. Every specialized argument reader (UNIQUE,
+    Only the aggregates that tell a typed value from a reference (SUM,
+    AVERAGE, COUNT, AND, OR, XOR and the range statistics) and the
+    IF-family/CHOOSE/XLOOKUP pass-through read the :class:`_Referenced`
+    marker. Every specialized argument reader (UNIQUE,
     WORKDAY.INTL masks, XLOOKUP modes and so on) gets the plain value.
     """
     return _dereference(_eval(node, cells, sheet_name, budget))
@@ -3010,15 +3013,15 @@ def _eval(
             for index, child in enumerate(node.children)
         )
         if name in {"SUM", "AVERAGE"}:
-            # A cell reference retains reference coercion even though the
-            # expression evaluator normally returns its scalar value.
-            # The separate native primitive API retains its documented legacy
-            # aggregate profile. Its cells=None sentinel never enters formula APIs.
+            # Microsoft: text and logical values typed directly are converted,
+            # while those held in a cell reference are ignored. A cell, INDEX,
+            # and a one-cell reference selected by IF, IFERROR, IFNA, IFS,
+            # SWITCH, CHOOSE or XLOOKUP are all references here, as they are
+            # for COUNT. The separate native primitive API retains its
+            # documented legacy aggregate profile. Its cells=None sentinel
+            # never enters formula APIs.
             args = tuple(
-                _Range((value,), 1, 1)
-                if (child.kind == "cell" or cells is None)
-                and not isinstance(value, (_Range, ArrayValue))
-                else value
+                _as_reference_argument(child, value, primitive=cells is None)
                 for child, value in zip(node.children, args)
             )
         elif name == "COUNT":
@@ -3366,11 +3369,13 @@ def _returns_reference(node: _Node) -> bool:
 def _with_reference(node: _Node, value: object) -> object:
     """Attach reference provenance when `node` returns a reference.
 
-    Ranges, arrays, errors, blanks and values that already carry the marker
-    pass through. A blank stays blank so IFERROR can keep its empty-string
-    replacement, which is a direct value rather than a reference.
+    Ranges, arrays, errors and values that already carry the marker pass
+    through. A selected empty cell keeps the marker like any other cell, so
+    AVERAGE ignores it as it ignores the same cell named directly. IFERROR
+    replaces a blank result with an empty string after this step, and that
+    replacement is a direct value rather than a reference.
     """
-    if isinstance(value, (_Referenced, _Range, ArrayValue, ErrorValue)) or value is None:
+    if isinstance(value, (_Referenced, _Range, ArrayValue, ErrorValue)):
         return value
     if _returns_reference(node):
         return _Referenced(value)
@@ -3378,7 +3383,7 @@ def _with_reference(node: _Node, value: object) -> object:
 
 
 def _as_reference_argument(child: _Node, value: object, *, primitive: bool) -> object:
-    """Present one COUNT, AND or OR argument with Excel's reference rules."""
+    """Present one SUM, AVERAGE, COUNT, AND or OR argument with Excel's reference rules."""
     if isinstance(value, _Referenced):
         return _Range((value.value,), 1, 1)
     if isinstance(value, (_Range, ArrayValue)):
@@ -5095,8 +5100,8 @@ def _function(
     args: tuple[object, ...],
     budget: _WildcardBudget,
 ) -> object:
-    # COUNT, AND and OR have already turned reference provenance into ranges.
-    # Every other function reads the underlying value.
+    # SUM, AVERAGE, COUNT, AND and OR have already turned reference provenance
+    # into ranges. Every other function reads the underlying value.
     args = tuple(_dereference(arg) for arg in args)
     fixed = {
         "ABS": (1, 1),

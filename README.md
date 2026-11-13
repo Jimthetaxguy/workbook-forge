@@ -353,7 +353,7 @@ archives are ignored; they are not part of the distributed source.
 |---|---|
 | Functions implemented and conformance-tested in both engines | 171 |
 | Inventory functions that are still catalog-only | 350 of 521 |
-| Shared fixture cases | 2,565 |
+| Shared fixture cases | 2,628 |
 | Native primitive interface | 9 functions and 10 binary operators in each language |
 | Agent workbook operations | 9 |
 | XML extraction patterns | 10 |
