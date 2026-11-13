@@ -283,3 +283,183 @@ def test_day_count_glossary_separates_documented_rules_from_profiles():
     assert "does not specify this multi-year algorithm" in year_semantics["actual_actual_profile"]
     assert "does not specify the sign behavior" in year_semantics["signed_reverse_profile"]
     assert "may return an incorrect result" in year_semantics["february_warning"]
+
+
+def test_scalar_math_glossary_separates_documented_rules_from_profiles():
+    expected_arity = {
+        "SQRT": (1, 1), "POWER": (2, 2), "EXP": (1, 1), "LN": (1, 1), "LOG": (1, 2),
+        "LOG10": (1, 1), "PI": (0, 0), "SIGN": (1, 1), "CEILING": (2, 2), "FLOOR": (2, 2),
+        "CEILING.MATH": (1, 3), "FLOOR.MATH": (1, 3), "MROUND": (2, 2), "TRUE": (0, 0),
+        "FALSE": (0, 0), "XOR": (1, 254),
+    }
+    for name, (minimum, maximum) in expected_arity.items():
+        entry = lookup_function(name)
+        assert function_status(name, "python") == "conformance-tested"
+        assert function_status(name, "rust") == "conformance-tested"
+        assert entry["implementation"]["arity"] == {"min": minimum, "max": maximum}
+        assert entry["implementation"]["evidence_grade"] == "dual_engine"
+        source_id = "ms-" + name.lower().replace(".", "-")
+        assert source_id in entry["semantic_spec"]["source_refs"]
+        assert "Microsoft documents" in entry["semantic_spec"]["semantics"]["documented_behavior"]
+
+    for name in ("CEILING", "FLOOR", "CEILING.MATH", "FLOOR.MATH"):
+        semantics = lookup_function(name)["semantic_spec"]["semantics"]
+        assert "unverified Workbook Forge profile" in semantics["sign_profile"]
+        assert "unverified Workbook Forge profile" in semantics["rounding_profile"]
+    mround = lookup_function("MROUND")["semantic_spec"]["semantics"]
+    assert "MROUND(6.05,0.1)=6.0 and MROUND(7.05,0.1)=7.1" in mround["documented_behavior"]
+    assert "unverified Workbook Forge profile" in mround["rounding_profile"]
+    power = lookup_function("POWER")["semantic_spec"]["semantics"]
+    assert "have not been checked and may differ" in power["domain_profile"]
+    # POWER follows the ^ operator; reports of other Excel results are recorded as unobserved.
+    assert "follows the ^ operator" in power["domain_profile"]
+    assert "Third-party reports say that Excel returns #NUM! for POWER(0,0) and #DIV/0! for POWER(0,-1)" in power["domain_profile"]
+    assert "has not observed Excel" in power["domain_profile"]
+    floor_math = lookup_function("FLOOR.MATH")["semantic_spec"]["semantics"]
+    assert "By using 0 or a negative number as the Mode argument" in floor_math["documentation_conflict"]
+    assert "using a non-zero Mode, which reverses rounding direction" in floor_math["documentation_conflict"]
+    assert "follows the example" in floor_math["documentation_conflict"]
+    ceiling_math = lookup_function("CEILING.MATH")["semantic_spec"]["semantics"]
+    assert "(must be between -2.229E-308.and 9.99E+307.)" in ceiling_math["number_range_profile"]
+    assert "does not apply that range" in ceiling_math["number_range_profile"]
+    xor = lookup_function("XOR")["semantic_spec"]["semantics"]
+    assert "odd number" in xor["definition"]
+    assert "unverified Workbook Forge profiles" in xor["coercion_profile"]
+
+
+def test_range_statistics_glossary_separates_documented_rules_from_profiles():
+    expected_arity = {
+        "PRODUCT": (1, 255), "SUMSQ": (1, 255), "SUMPRODUCT": (1, 255), "MEDIAN": (1, 255),
+        "LARGE": (2, 2), "SMALL": (2, 2), "RANK.EQ": (2, 3), "RANK": (2, 3),
+        "STDEV.S": (1, 254), "STDEV.P": (1, 254), "VAR.S": (1, 254), "VAR.P": (1, 254),
+        "AVERAGEA": (1, 255), "MODE.SNGL": (1, 254),
+    }
+    for name, (minimum, maximum) in expected_arity.items():
+        entry = lookup_function(name)
+        assert function_status(name, "python") == "conformance-tested"
+        assert function_status(name, "rust") == "conformance-tested"
+        assert entry["implementation"]["arity"] == {"min": minimum, "max": maximum}
+        assert entry["implementation"]["evidence_grade"] == "dual_engine"
+        source_id = "ms-" + name.lower().replace(".", "-")
+        assert source_id in entry["semantic_spec"]["source_refs"]
+        semantics = entry["semantic_spec"]["semantics"]
+        assert "Microsoft documents" in semantics["documented_behavior"]
+        assert semantics["compatibility_limit"] == "No behaviour of this function has been spot-checked in Excel."
+
+    # Microsoft says error values in a reference are ignored; this evaluator
+    # returns them, and the spec must say so instead of claiming Excel parity.
+    for name in ("SUMSQ", "STDEV.S", "STDEV.P", "VAR.S", "VAR.P"):
+        semantics = lookup_function(name)["semantic_spec"]["semantics"]
+        assert "error values are ignored" in semantics["documented_behavior"]
+        assert "Workbook Forge propagates them" in semantics["error_profile"]
+        assert "unverified Workbook Forge profile" in semantics["error_profile"]
+    for name in ("LARGE", "SMALL"):
+        semantics = lookup_function(name)["semantic_spec"]["semantics"]
+        assert "not a whole number returns #NUM!" in semantics["position_profile"]
+    assert "appears first" in lookup_function("MODE.SNGL")["semantic_spec"]["semantics"]["tie_profile"]
+    averagea = lookup_function("AVERAGEA")["semantic_spec"]["semantics"]
+    assert "would be 7" in averagea["documentation_conflict"]
+    assert "follows the example" in averagea["documentation_conflict"]
+    sumproduct = lookup_function("SUMPRODUCT")["semantic_spec"]["semantics"]
+    assert "not used as fixture values" in sumproduct["documented_behavior"]
+    assert lookup_function("RANK")["implementation"]["category"] == "compatibility"
+    for name in ("RANK.EQ", "RANK"):
+        ref_profile = lookup_function(name)["semantic_spec"]["semantics"]["ref_profile"]
+        assert "An error value given as ref itself, such as NA() or #N/A, is also returned" in ref_profile
+        assert "unverified Workbook Forge profile" in ref_profile
+    rank_ref = lookup_function("RANK")["semantic_spec"]["semantics"]["ref_profile"]
+    assert '"A reference to a list of numbers."' in rank_ref
+    assert "departs from that sentence" in rank_ref
+
+
+def test_text_and_lookup_glossary_separates_documented_rules_from_profiles():
+    expected_arity = {
+        "CONCATENATE": (1, 255), "EXACT": (2, 2), "PROPER": (1, 1), "REPT": (2, 2),
+        "REPLACE": (4, 4), "VALUE": (1, 1), "CHAR": (1, 1), "CODE": (1, 1),
+        "CHOOSE": (2, 255), "HLOOKUP": (3, 4), "ROWS": (1, 1), "COLUMNS": (1, 1),
+    }
+    for name, (minimum, maximum) in expected_arity.items():
+        entry = lookup_function(name)
+        assert function_status(name, "python") == "conformance-tested"
+        assert function_status(name, "rust") == "conformance-tested"
+        assert entry["implementation"]["arity"] == {"min": minimum, "max": maximum}
+        assert entry["implementation"]["evidence_grade"] == "dual_engine"
+        assert "ms-" + name.lower() in entry["semantic_spec"]["source_refs"]
+        semantics = entry["semantic_spec"]["semantics"]
+        assert "Microsoft documents" in semantics["documented_behavior"]
+        assert semantics["compatibility_limit"] == "No behaviour of this function has been spot-checked in Excel."
+
+    # Where the evaluator refuses or departs from the page, the spec says so.
+    concatenate = lookup_function("CONCATENATE")["semantic_spec"]["semantics"]
+    assert "Hauser, Andreas" in concatenate["documentation_conflict"]
+    for name in ("CHAR", "CODE"):
+        semantics = lookup_function(name)["semantic_spec"]["semantics"]
+        assert "refuses" in semantics["code_profile"]
+        assert "Excel returns a" in semantics["code_profile"]
+    value = lookup_function("VALUE")["semantic_spec"]["semantics"]
+    assert "regional settings" in value["number_text_profile"]
+    assert "refused with #VALUE! rather than guessed" in value["number_text_profile"]
+    assert "DATEVALUE and TIMEVALUE" in value["date_time_text_profile"]
+    hlookup = lookup_function("HLOOKUP")["semantic_spec"]["semantics"]
+    assert "not asserted as Excel results" in hlookup["approximate_profile"]
+    assert "unverified Workbook Forge profiles" in hlookup["comparison_profile"]
+    choose = lookup_function("CHOOSE")["semantic_spec"]["semantics"]
+    assert "evaluates only the selected value" in choose["evaluation_profile"]
+    assert "not supported by the formula parser" in choose["reference_profile"]
+    assert "SUM(A2:CHOOSE(2,A3,A4,A5))=80, is refused and has no fixture" in choose["reference_profile"]
+    for name in ("ROWS", "COLUMNS"):
+        semantics = lookup_function(name)["semantic_spec"]["semantics"]
+        assert "without reading its cells" in semantics["reference_profile"]
+
+
+def test_cash_flow_glossary_separates_documented_rules_from_profiles():
+    expected_arity = {
+        "NPV": (2, 255), "IRR": (1, 2), "XNPV": (3, 3), "XIRR": (2, 3), "RATE": (3, 6), "MIRR": (3, 3),
+    }
+    for name, (minimum, maximum) in expected_arity.items():
+        entry = lookup_function(name)
+        assert function_status(name, "python") == "conformance-tested"
+        assert function_status(name, "rust") == "conformance-tested"
+        assert entry["implementation"]["category"] == "financial"
+        assert entry["implementation"]["arity"] == {"min": minimum, "max": maximum}
+        assert entry["implementation"]["evidence_grade"] == "dual_engine"
+        assert "ms-" + name.lower() in entry["semantic_spec"]["source_refs"]
+        semantics = entry["semantic_spec"]["semantics"]
+        assert "Microsoft documents" in semantics["documented_behavior"]
+        assert semantics["compatibility_limit"] == "No behaviour of this function has been spot-checked in Excel."
+
+    # Microsoft names an accuracy and a number of tries, not a technique. The
+    # specs say which technique Workbook Forge chose and that it is a profile.
+    limits = {"IRR": ("0.0000001 (0.00001 percent)", "20"), "XIRR": ("0.00000001 (0.000001 percent)", "100"),
+              "RATE": ("0.0000001", "20")}
+    for name, (tolerance, tries) in limits.items():
+        iteration = lookup_function(name)["semantic_spec"]["semantics"]["iteration_profile"]
+        assert "Excel's internal method is not known" in iteration
+        assert "Newton's method on the rate" in iteration
+        assert f"by no more than {tolerance}" in iteration
+        assert f"After {tries} tries" in iteration
+        assert "halfway to -100 percent" in iteration
+
+    # Where the evaluator departs from the page, the spec says so.
+    npv = lookup_function("NPV")["semantic_spec"]["semantics"]
+    assert "Microsoft's page says error values in an array or reference are ignored" in npv["error_profile"]
+    assert "text that cannot be translated into numbers are ignored." in npv["value_profile"]
+    assert "departs from it as written" in npv["value_profile"]
+    irr = lookup_function("IRR")["semantic_spec"]["semantics"]
+    assert "without naming the error, so #NUM! is an unverified Workbook Forge profile" in irr["sign_profile"]
+    xirr = lookup_function("XIRR")["semantic_spec"]["semantics"]
+    assert "0.373362535" in xirr["documented_behavior"]
+    assert "0.3733625335" in xirr["documentation_note"]
+    xnpv = lookup_function("XNPV")["semantic_spec"]["semantics"]
+    assert "does not enforce it" in xnpv["sign_profile"]
+    assert "All other dates must be later than this date" in xnpv["same_day_profile"]
+    assert "departs from the sentence as written" in xnpv["same_day_profile"]
+    assert "has not been checked" in xnpv["rate_profile"]
+    for name in ("XNPV", "XIRR"):
+        schedule = lookup_function(name)["semantic_spec"]["semantics"]["schedule_profile"]
+        assert "neither skipped nor read as zero" in schedule
+    rate = lookup_function("RATE")["semantic_spec"]["semantics"]
+    assert "including guess, returns #VALUE!" in rate["argument_profile"]
+    assert "settles within 0.0000001 of -100 percent therefore returns #NUM!" in rate["iteration_profile"]
+    mirr = lookup_function("MIRR")["semantic_spec"]["semantics"]
+    assert "shows the formula as an image" in mirr["equation"]

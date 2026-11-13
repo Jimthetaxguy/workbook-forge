@@ -14,7 +14,7 @@ import decimal
 import math
 import re
 import struct
-from collections.abc import Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from typing import TypeAlias
 
 from .volatile import RANDOM_FUNCTIONS as _RANDOM_FUNCTIONS, CalcContext
@@ -2836,6 +2836,30 @@ def _eval(
             return _text_extract(name, node.children, cells, sheet_name, budget)
         if name == "TRUNC":
             return _trunc_call(node.children, cells, sheet_name, budget)
+        if name in _SCALAR_MATH_ARITY:
+            return _scalar_math_call(name, node.children, cells, sheet_name, budget)
+        if name == "XOR":
+            return _xor_call(node.children, cells, sheet_name, budget)
+        if name in _AGGREGATE_FUNCTIONS:
+            return _aggregate_call(name, node.children, cells, sheet_name, budget)
+        if name in {"LARGE", "SMALL"}:
+            return _order_statistic_call(name, node.children, cells, sheet_name, budget)
+        if name in {"RANK.EQ", "RANK"}:
+            return _rank_call(name, node.children, cells, sheet_name, budget)
+        if name == "AVERAGEA":
+            return _averagea_call(node.children, cells, sheet_name, budget)
+        if name == "SUMPRODUCT":
+            return _sumproduct_call(node.children, cells, sheet_name, budget)
+        if name in _TEXT_FUNCTION_ARITY:
+            return _text_call(name, node.children, cells, sheet_name, budget)
+        if name == "CHOOSE":
+            return _choose_call(node.children, cells, sheet_name, budget)
+        if name in {"ROWS", "COLUMNS"}:
+            return _dimension_call(name, node.children, cells, sheet_name, budget)
+        if name == "HLOOKUP":
+            return _hlookup_call(node.children, cells, sheet_name, budget)
+        if name in _CASH_FLOW_ARITY:
+            return _cash_flow_call(name, node.children, cells, sheet_name, budget)
         if name == "IF":
             if len(node.children) not in (2, 3):
                 return _arity(name, "2 or 3", len(node.children))
@@ -3846,6 +3870,1224 @@ def _integer_formula_call(name: str, args: tuple[object, ...]) -> object:
     if number == 0:
         return 1.0
     return _binomial_float(number + chosen - 1, chosen)
+
+
+# Everyday worksheet functions: scalar math, aggregates, text, lookup and
+# cash-flow finance. Each states its Workbook Forge profile in the catalog's
+# semantic spec. The Rust evaluator implements the same rules by hand.
+
+_SCALAR_MATH_ARITY = {
+    "PI": (0, 0),
+    "TRUE": (0, 0),
+    "FALSE": (0, 0),
+    "SQRT": (1, 1),
+    "EXP": (1, 1),
+    "LN": (1, 1),
+    "LOG10": (1, 1),
+    "SIGN": (1, 1),
+    "LOG": (1, 2),
+    "POWER": (2, 2),
+    "CEILING": (2, 2),
+    "FLOOR": (2, 2),
+    "MROUND": (2, 2),
+    "CEILING.MATH": (1, 3),
+    "FLOOR.MATH": (1, 3),
+}
+
+
+def _arity_range(name: str, low: int, high: int, actual: int) -> ErrorValue | None:
+    if low <= actual <= high:
+        return None
+    return _arity(name, str(low) if low == high else f"{low} through {high}", actual)
+
+
+def _binary64(value: object) -> float | ErrorValue:
+    """Coerce one scalar to a finite binary64 number with the shared coercer."""
+    number = _number(value)
+    if isinstance(number, ErrorValue):
+        return number
+    try:
+        result = float(number)
+    except OverflowError:
+        return ErrorValue("#NUM!", "number is outside the supported numeric range")
+    if not math.isfinite(result):
+        return ErrorValue("#NUM!", "number is outside the supported numeric range")
+    return result
+
+
+def _scalar_arguments(
+    children: tuple[_Node, ...],
+    cells: Mapping[str, Scalar],
+    sheet_name: str,
+    budget: _WildcardBudget,
+) -> list[object] | ErrorValue:
+    """Scalar arguments in order.
+
+    A range or array argument is #VALUE!; after that the first error value in
+    argument order is returned.
+    """
+    values = [_dereference(_eval(child, cells, sheet_name, budget)) for child in children]
+    if any(isinstance(value, (_Range, ArrayValue)) for value in values):
+        return ErrorValue("#VALUE!", "argument must be a single value")
+    for value in values:
+        if isinstance(value, ErrorValue):
+            return value
+    return values
+
+
+def _number_arguments(
+    children: tuple[_Node, ...],
+    cells: Mapping[str, Scalar],
+    sheet_name: str,
+    budget: _WildcardBudget,
+) -> list[float] | ErrorValue:
+    """Scalar arguments coerced to numbers left to right."""
+    values = _scalar_arguments(children, cells, sheet_name, budget)
+    if isinstance(values, ErrorValue):
+        return values
+    numbers: list[float] = []
+    for value in values:
+        number = _binary64(value)
+        if isinstance(number, ErrorValue):
+            return number
+        numbers.append(number)
+    return numbers
+
+
+def _finite_number(result: float) -> float | ErrorValue:
+    """A finite result; a zero result carries no sign."""
+    if not math.isfinite(result):
+        return ErrorValue("#NUM!", "result is outside the supported numeric range")
+    return result if result else 0.0
+
+
+def _multiple_count(number: float, significance: float, upward: bool) -> float | ErrorValue:
+    """How many whole multiples of `significance` the rounded number holds.
+
+    The quotient is rounded to a whole number by the evaluator's directed
+    rounding rule, so a quotient within `_BOUNDARY_STEPS` binary64 values of a
+    whole number is that whole number: 0.3/0.1 is three multiples, not 2.99.
+    """
+    quotient = number / significance
+    if not math.isfinite(quotient):
+        return ErrorValue("#NUM!", "quotient is outside the supported numeric range")
+    mode = "away-from-zero" if (quotient > 0) == upward else "toward-zero"
+    return _round_to_precision(quotient, 0, mode)
+
+
+def _multiple_product(count: float | ErrorValue, significance: float) -> float | ErrorValue:
+    """`count` multiples of `significance` as one binary64 product.
+
+    A product that is not a whole number and lies within `_BOUNDARY_STEPS`
+    binary64 values of its own 15-significant-digit decimal is returned as
+    that decimal, so 15 multiples of 0.1 are 1.5 and not 1.5000000000000002.
+    """
+    if isinstance(count, ErrorValue):
+        return count
+    product = count * significance
+    if not math.isfinite(product):
+        return ErrorValue("#NUM!", "result is outside the supported numeric range")
+    if product == 0 or product == math.floor(product):
+        return _finite_number(product)
+    magnitude = abs(product)
+    written = decimal.Decimal(f"{magnitude:.14e}")
+    if _steps_to(magnitude, written) <= _BOUNDARY_STEPS:
+        return _finite_number(math.copysign(float(written), product))
+    return _finite_number(product)
+
+
+def _rounded_multiple(name: str, numbers: list[float]) -> float | ErrorValue:
+    number = numbers[0]
+    if name in {"CEILING", "FLOOR"}:
+        significance = numbers[1]
+        if significance == 0:
+            if name == "CEILING":
+                return 0.0
+            return ErrorValue("#DIV/0!", "FLOOR significance is zero")
+        if number > 0 and significance < 0:
+            return ErrorValue("#NUM!", f"{name} of a positive number needs positive significance")
+        count = _multiple_count(number, significance, name == "CEILING")
+        return _multiple_product(count, significance)
+    if name in {"CEILING.MATH", "FLOOR.MATH"}:
+        significance = abs(numbers[1]) if len(numbers) > 1 else 1.0
+        mode = numbers[2] if len(numbers) > 2 else 0.0
+        if significance == 0:
+            return 0.0
+        # A nonzero mode reverses the direction for negative numbers only.
+        reverse = number < 0 and mode != 0
+        upward = (name == "CEILING.MATH") != reverse
+        return _multiple_product(_multiple_count(number, significance, upward), significance)
+    # MROUND rounds the computed binary64 quotient half away from zero.
+    multiple = numbers[1]
+    if (number > 0 and multiple < 0) or (number < 0 and multiple > 0):
+        return ErrorValue("#NUM!", "MROUND number and multiple must have the same sign")
+    if number == 0 or multiple == 0:
+        return 0.0
+    quotient = number / multiple
+    if not math.isfinite(quotient):
+        return ErrorValue("#NUM!", "quotient is outside the supported numeric range")
+    lower = float(math.floor(quotient))
+    count = lower + 1.0 if quotient - lower >= 0.5 else lower
+    return _multiple_product(count, multiple)
+
+
+def _scalar_math_call(
+    name: str,
+    children: tuple[_Node, ...],
+    cells: Mapping[str, Scalar],
+    sheet_name: str,
+    budget: _WildcardBudget,
+) -> object:
+    low, high = _SCALAR_MATH_ARITY[name]
+    arity_error = _arity_range(name, low, high, len(children))
+    if arity_error is not None:
+        return arity_error
+    numbers = _number_arguments(children, cells, sheet_name, budget)
+    if isinstance(numbers, ErrorValue):
+        return numbers
+    if name == "PI":
+        return math.pi
+    if name in {"TRUE", "FALSE"}:
+        return name == "TRUE"
+    if name == "SIGN":
+        return 1.0 if numbers[0] > 0 else (-1.0 if numbers[0] < 0 else 0.0)
+    if name in {"CEILING", "FLOOR", "CEILING.MATH", "FLOOR.MATH", "MROUND"}:
+        return _rounded_multiple(name, numbers)
+    try:
+        if name == "SQRT":
+            if numbers[0] < 0:
+                return ErrorValue("#NUM!", "SQRT of a negative number")
+            return _finite_number(math.sqrt(numbers[0]))
+        if name == "POWER":
+            return _finite_number(math.pow(numbers[0], numbers[1]))
+        if name == "EXP":
+            return _finite_number(math.exp(numbers[0]))
+        if name in {"LN", "LOG10"}:
+            if numbers[0] <= 0:
+                return ErrorValue("#NUM!", f"{name} needs a positive number")
+            return _finite_number(math.log(numbers[0]) if name == "LN" else math.log10(numbers[0]))
+        number = numbers[0]
+        base = numbers[1] if len(numbers) > 1 else 10.0
+        if number <= 0 or base <= 0:
+            return ErrorValue("#NUM!", "LOG needs a positive number and a positive base")
+        if base == 1:
+            return ErrorValue("#DIV/0!", "LOG base 1 has no logarithm")
+        if base == 10:
+            return _finite_number(math.log10(number))
+        if base == 2:
+            return _finite_number(math.log2(number))
+        return _finite_number(math.log(number) / math.log(base))
+    except (OverflowError, ValueError):
+        # math raises where binary64 arithmetic gives an infinity or a NaN.
+        return ErrorValue("#NUM!", f"{name} result is outside the numeric domain")
+
+
+def _keeps_reference(child: _Node, value: object) -> bool:
+    """Whether an argument reads as a reference or array rather than a typed value."""
+    return _returns_reference(child) or isinstance(value, (_Referenced, _Range, ArrayValue))
+
+
+def _xor_call(
+    children: tuple[_Node, ...],
+    cells: Mapping[str, Scalar],
+    sheet_name: str,
+    budget: _WildcardBudget,
+) -> object:
+    """XOR: TRUE when an odd number of logical values are TRUE.
+
+    Text and empty cells inside an array or reference are ignored, as for AND
+    and OR. Every argument is evaluated, in order.
+    """
+    arity_error = _arity_range("XOR", 1, 254, len(children))
+    if arity_error is not None:
+        return arity_error
+    tested = False
+    result = False
+    for child in children:
+        evaluated = _eval(child, cells, sheet_name, budget)
+        referenced = _keeps_reference(child, evaluated)
+        for value in _flatten((_dereference(evaluated),)):
+            if referenced and (value is None or isinstance(value, str)):
+                continue
+            tested = True
+            truth = _truth(value)
+            if isinstance(truth, ErrorValue):
+                return truth
+            result = result != truth
+    if not tested:
+        return ErrorValue("#VALUE!", "XOR has no logical values to test")
+    return result
+
+
+_PLAIN_NUMBER_TEXT = re.compile(r"[+-]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:[eE][+-]?[0-9]+)?")
+_AGGREGATE_FUNCTIONS = {
+    "PRODUCT": 255,
+    "SUMSQ": 255,
+    "MEDIAN": 255,
+    "MODE.SNGL": 254,
+    "STDEV.S": 254,
+    "STDEV.P": 254,
+    "VAR.S": 254,
+    "VAR.P": 254,
+}
+
+
+def _scalar_argument(
+    child: _Node,
+    cells: Mapping[str, Scalar],
+    sheet_name: str,
+    budget: _WildcardBudget,
+) -> object:
+    """One scalar argument. A range or array is #VALUE!; an error is returned."""
+    value = _dereference(_eval(child, cells, sheet_name, budget))
+    if isinstance(value, (_Range, ArrayValue)):
+        return ErrorValue("#VALUE!", "argument must be a single value")
+    return value
+
+
+def _number_argument(
+    child: _Node,
+    cells: Mapping[str, Scalar],
+    sheet_name: str,
+    budget: _WildcardBudget,
+) -> float | ErrorValue:
+    """One scalar argument coerced to a number with the shared coercer."""
+    value = _scalar_argument(child, cells, sheet_name, budget)
+    if isinstance(value, ErrorValue):
+        return value
+    return _binary64(value)
+
+
+def _plain_number_text(text: str) -> float | None:
+    """Text that an aggregate reads as a number when typed directly.
+
+    An optional sign, digits with an optional decimal point, and an optional
+    exponent. Surrounding spaces, tabs and line breaks are ignored.
+    """
+    text = text.strip(" \t\r\n")
+    if _PLAIN_NUMBER_TEXT.fullmatch(text) is None:
+        return None
+    number = float(text)
+    return number if math.isfinite(number) else None
+
+
+def _collect_numbers(
+    child: _Node,
+    cells: Mapping[str, Scalar],
+    sheet_name: str,
+    budget: _WildcardBudget,
+    numbers: list[float],
+) -> ErrorValue | None:
+    """Append the numbers an aggregate reads from one argument.
+
+    Typed directly, numbers, logical values and plain numeric text count and
+    other text is #VALUE!. Inside a reference or array only numbers count. An
+    error value anywhere is returned, the first one in reading order.
+    """
+    evaluated = _eval(child, cells, sheet_name, budget)
+    referenced = _keeps_reference(child, evaluated)
+    for value in _flatten((_dereference(evaluated),)):
+        if isinstance(value, ErrorValue):
+            return value
+        if isinstance(value, bool):
+            if not referenced:
+                numbers.append(1.0 if value else 0.0)
+        elif isinstance(value, (int, float)):
+            number = _binary64(value)
+            if isinstance(number, ErrorValue):
+                return number
+            numbers.append(number)
+        elif isinstance(value, str) and not referenced:
+            number = _plain_number_text(value)
+            if number is None:
+                return ErrorValue("#VALUE!", f"{value!r} is not numeric")
+            numbers.append(number)
+    return None
+
+
+def _sorted_median(ordered: list[float]) -> float:
+    """The median of numbers already sorted in ascending order."""
+    middle = len(ordered) // 2
+    if len(ordered) % 2 == 1:
+        return ordered[middle]
+    low, high = ordered[middle - 1], ordered[middle]
+    total = low + high
+    return total / 2 if math.isfinite(total) else low / 2 + high / 2
+
+
+def _first_mode(numbers: list[float]) -> float | None:
+    """The most frequent number; among equals, the one that appears first."""
+    seen: dict[float, list[int]] = {}
+    for index, number in enumerate(numbers):
+        entry = seen.setdefault(number, [0, index])
+        entry[0] += 1
+    best: list[int] | None = None
+    for entry in seen.values():
+        if entry[0] > 1 and (best is None or entry[0] > best[0]):
+            best = entry
+    return None if best is None else numbers[best[1]]
+
+
+def _aggregate_call(
+    name: str,
+    children: tuple[_Node, ...],
+    cells: Mapping[str, Scalar],
+    sheet_name: str,
+    budget: _WildcardBudget,
+) -> object:
+    """PRODUCT, SUMSQ, MEDIAN, MODE.SNGL, STDEV.S, STDEV.P, VAR.S and VAR.P."""
+    arity_error = _arity_range(name, 1, _AGGREGATE_FUNCTIONS[name], len(children))
+    if arity_error is not None:
+        return arity_error
+    numbers: list[float] = []
+    for child in children:
+        error = _collect_numbers(child, cells, sheet_name, budget, numbers)
+        if error is not None:
+            return error
+    if name == "PRODUCT":
+        if not numbers:
+            return 0.0
+        product = 1.0
+        for number in numbers:
+            product *= number
+        return _finite_number(product)
+    if name == "SUMSQ":
+        total = 0.0
+        for number in numbers:
+            total += number * number
+        return _finite_number(total)
+    if name == "MEDIAN":
+        if not numbers:
+            return ErrorValue("#NUM!", "MEDIAN has no numbers")
+        return _finite_number(_sorted_median(sorted(numbers)))
+    if name == "MODE.SNGL":
+        mode = _first_mode(numbers)
+        if mode is None:
+            return ErrorValue("#N/A", "MODE.SNGL found no repeated number")
+        return _finite_number(mode)
+    sample = name in {"STDEV.S", "VAR.S"}
+    count = len(numbers)
+    if count < (2 if sample else 1):
+        return ErrorValue("#DIV/0!", f"{name} needs more numbers")
+    total = 0.0
+    for number in numbers:
+        total += number
+    mean = total / count
+    squares = 0.0
+    for number in numbers:
+        deviation = number - mean
+        squares += deviation * deviation
+    variance = squares / (count - 1 if sample else count)
+    if not math.isfinite(variance):
+        return ErrorValue("#NUM!", "result is outside the supported numeric range")
+    return _finite_number(math.sqrt(variance) if name.startswith("STDEV") else variance)
+
+
+def _order_statistic_call(
+    name: str,
+    children: tuple[_Node, ...],
+    cells: Mapping[str, Scalar],
+    sheet_name: str,
+    budget: _WildcardBudget,
+) -> object:
+    """LARGE and SMALL: the k-th largest or smallest number."""
+    arity_error = _arity_range(name, 2, 2, len(children))
+    if arity_error is not None:
+        return arity_error
+    numbers: list[float] = []
+    error = _collect_numbers(children[0], cells, sheet_name, budget, numbers)
+    if error is not None:
+        return error
+    position = _number_argument(children[1], cells, sheet_name, budget)
+    if isinstance(position, ErrorValue):
+        return position
+    if position != math.floor(position) or position < 1 or position > len(numbers):
+        return ErrorValue("#NUM!", f"{name} position is outside the data")
+    numbers.sort()
+    index = int(position)
+    return _finite_number(numbers[len(numbers) - index] if name == "LARGE" else numbers[index - 1])
+
+
+def _rank_call(
+    name: str,
+    children: tuple[_Node, ...],
+    cells: Mapping[str, Scalar],
+    sheet_name: str,
+    budget: _WildcardBudget,
+) -> object:
+    """RANK.EQ and RANK: one more than the count of numbers ahead of `number`."""
+    arity_error = _arity_range(name, 2, 3, len(children))
+    if arity_error is not None:
+        return arity_error
+    number = _number_argument(children[0], cells, sheet_name, budget)
+    if isinstance(number, ErrorValue):
+        return number
+    evaluated = _eval(children[1], cells, sheet_name, budget)
+    if isinstance(evaluated, ErrorValue):
+        return evaluated
+    if not _keeps_reference(children[1], evaluated):
+        return ErrorValue("#VALUE!", f"{name} needs a reference or array of numbers")
+    numbers: list[float] = []
+    for value in _flatten((_dereference(evaluated),)):
+        if isinstance(value, ErrorValue):
+            return value
+        if isinstance(value, (int, float)) and not isinstance(value, bool):
+            listed = _binary64(value)
+            if isinstance(listed, ErrorValue):
+                return listed
+            numbers.append(listed)
+    ascending = False
+    if len(children) == 3:
+        order = _number_argument(children[2], cells, sheet_name, budget)
+        if isinstance(order, ErrorValue):
+            return order
+        ascending = order != 0
+    if number not in numbers:
+        return ErrorValue("#N/A", f"{name} number is not in the list")
+    ahead = 0
+    for listed in numbers:
+        if (listed < number) if ascending else (listed > number):
+            ahead += 1
+    return float(ahead + 1)
+
+
+def _averagea_call(
+    children: tuple[_Node, ...],
+    cells: Mapping[str, Scalar],
+    sheet_name: str,
+    budget: _WildcardBudget,
+) -> object:
+    """AVERAGEA: like AVERAGE, but logical values and text in a reference count."""
+    arity_error = _arity_range("AVERAGEA", 1, 255, len(children))
+    if arity_error is not None:
+        return arity_error
+    total = 0.0
+    count = 0
+    for child in children:
+        evaluated = _eval(child, cells, sheet_name, budget)
+        referenced = _keeps_reference(child, evaluated)
+        for value in _flatten((_dereference(evaluated),)):
+            if isinstance(value, ErrorValue):
+                return value
+            if value is None:
+                continue
+            if isinstance(value, bool):
+                number = 1.0 if value else 0.0
+            elif isinstance(value, str):
+                if referenced:
+                    number = 0.0
+                else:
+                    parsed = _plain_number_text(value)
+                    if parsed is None:
+                        return ErrorValue("#VALUE!", f"{value!r} is not numeric")
+                    number = parsed
+            else:
+                converted = _binary64(value)
+                if isinstance(converted, ErrorValue):
+                    return converted
+                number = converted
+            total += number
+            count += 1
+    if count == 0:
+        return ErrorValue("#DIV/0!", "AVERAGEA has no values")
+    return _finite_number(total / count)
+
+
+def _value_matrix(value: object) -> list[list[object]]:
+    """The rows of a range, an array, or a single value as one cell."""
+    value = _dereference(value)
+    if isinstance(value, _Range):
+        return [
+            list(value.values[row * value.columns:(row + 1) * value.columns])
+            for row in range(value.rows)
+        ]
+    if isinstance(value, ArrayValue):
+        return [list(row) for row in value.rows]
+    return [[value]]
+
+
+def _sumproduct_call(
+    children: tuple[_Node, ...],
+    cells: Mapping[str, Scalar],
+    sheet_name: str,
+    budget: _WildcardBudget,
+) -> object:
+    """SUMPRODUCT: the sum of the products of corresponding entries."""
+    arity_error = _arity_range("SUMPRODUCT", 1, 255, len(children))
+    if arity_error is not None:
+        return arity_error
+    arrays = [_value_matrix(_eval(child, cells, sheet_name, budget)) for child in children]
+    rows = len(arrays[0])
+    columns = len(arrays[0][0]) if rows else 0
+    for array in arrays:
+        if len(array) != rows or any(len(row) != columns for row in array):
+            return ErrorValue("#VALUE!", "SUMPRODUCT arrays must have the same dimensions")
+    for array in arrays:
+        for row in array:
+            for value in row:
+                if isinstance(value, ErrorValue):
+                    return value
+    total = 0.0
+    for row in range(rows):
+        for column in range(columns):
+            product = 1.0
+            for array in arrays:
+                value = array[row][column]
+                # An entry that is not a number counts as zero.
+                if isinstance(value, (int, float)) and not isinstance(value, bool):
+                    number = _binary64(value)
+                    if isinstance(number, ErrorValue):
+                        return number
+                    product *= number
+                else:
+                    product *= 0.0
+            total += product
+    return _finite_number(total)
+
+
+_FORMATTED_NUMBER_TEXT = re.compile(
+    r"[+-]?\$?(?:(?:[0-9]{1,3}(?:,[0-9]{3})+|[0-9]+)(?:\.[0-9]*)?|\.[0-9]+)(?:[eE][+-]?[0-9]+)?%?"
+)
+_TEXT_FUNCTION_ARITY = {
+    "CONCATENATE": (1, 255),
+    "EXACT": (2, 2),
+    "PROPER": (1, 1),
+    "REPT": (2, 2),
+    "REPLACE": (4, 4),
+    "VALUE": (1, 1),
+    "CHAR": (1, 1),
+    "CODE": (1, 1),
+}
+
+
+def _bounded_text(text: str, name: str) -> str | ErrorValue:
+    """A text result within the 32,767-unit cell text limit."""
+    if _excel_text_length_units(text) > MAX_TEXT_LENGTH_UNITS:
+        return _text_length_error(name)
+    return text
+
+
+def _proper_case(text: str) -> str:
+    """PROPER: lowercase a cased letter after a cased letter, uppercase the rest.
+
+    Each character is mapped alone, so the result does not depend on context.
+    """
+    output: list[str] = []
+    after_letter = False
+    for character in text:
+        letter = character.islower() or character.isupper()
+        if not letter:
+            output.append(character)
+        elif after_letter:
+            output.append(character.lower())
+        else:
+            output.append(character.upper())
+        after_letter = letter
+    return "".join(output)
+
+
+def _formatted_number_text(text: str) -> float | None:
+    """Text VALUE reads as a number.
+
+    An optional sign, an optional dollar sign, digits that may be grouped in
+    threes by commas, an optional decimal part, an optional exponent and an
+    optional trailing percent sign.
+    """
+    text = text.strip(" \t\r\n")
+    if _FORMATTED_NUMBER_TEXT.fullmatch(text) is None:
+        return None
+    percent = text.endswith("%")
+    number = float(text.replace("$", "").replace(",", "").replace("%", ""))
+    if percent:
+        number /= 100.0
+    return number if math.isfinite(number) else None
+
+
+def _value_of(value: object) -> object:
+    """VALUE: numbers pass, an empty cell is 0, text is a number, date or time."""
+    if value is None:
+        return 0.0
+    if isinstance(value, bool):
+        return ErrorValue("#VALUE!", "VALUE does not convert a logical value")
+    if isinstance(value, (int, float)):
+        number = _binary64(value)
+        return number if isinstance(number, ErrorValue) else _finite_number(number)
+    if not isinstance(value, str):
+        return ErrorValue("#VALUE!", "VALUE requires text or a number")
+    number = _formatted_number_text(value)
+    if number is not None:
+        return _finite_number(number)
+    time = _date_time_text_call("TIMEVALUE", value)
+    if isinstance(time, ErrorValue):
+        return ErrorValue("#VALUE!", "VALUE text is not a recognized number, date or time")
+    # Text with a time and no date has no date serial to add.
+    serial = _date_time_text_call("DATEVALUE", value)
+    if isinstance(serial, ErrorValue):
+        serial = 0.0
+    return _finite_number(float(serial) + float(time))  # type: ignore[arg-type]
+
+
+def _replace_text(old: str, start: float, count: float, new: str) -> str | ErrorValue:
+    """REPLACE: `count` characters of `old` from one-based `start` become `new`."""
+    if start < 1 or count < 0:
+        return ErrorValue("#VALUE!", "REPLACE position and length must not be negative")
+    length = len(old)
+    begin = length if start - 1 >= length else int(start - 1)
+    end = length if count >= length - begin else begin + int(count)
+    return _bounded_text(old[:begin] + new + old[end:], "REPLACE")
+
+
+def _text_call(
+    name: str,
+    children: tuple[_Node, ...],
+    cells: Mapping[str, Scalar],
+    sheet_name: str,
+    budget: _WildcardBudget,
+) -> object:
+    """CONCATENATE, EXACT, PROPER, REPT, REPLACE, VALUE, CHAR and CODE."""
+    low, high = _TEXT_FUNCTION_ARITY[name]
+    arity_error = _arity_range(name, low, high, len(children))
+    if arity_error is not None:
+        return arity_error
+    values = _scalar_arguments(children, cells, sheet_name, budget)
+    if isinstance(values, ErrorValue):
+        return values
+    if name == "VALUE":
+        return _value_of(values[0])
+    if name in {"CHAR", "REPT", "REPLACE"}:
+        # Text first, then numbers, in argument order.
+        converted: list[object] = []
+        numeric = {"CHAR": {0}, "REPT": {1}, "REPLACE": {1, 2}}[name]
+        for index, value in enumerate(values):
+            item = _binary64(value) if index in numeric else _text(value)
+            if isinstance(item, ErrorValue):
+                return item
+            converted.append(math.trunc(item) if index in numeric else item)
+        if name == "CHAR":
+            code = converted[0]
+            # Codes 128 to 255 depend on the computer's character set.
+            if not 1 <= code <= 127:  # type: ignore[operator]
+                return ErrorValue("#VALUE!", "CHAR supports codes 1 through 127")
+            return chr(code)  # type: ignore[arg-type]
+        if name == "REPT":
+            text, times = converted
+            assert isinstance(text, str) and isinstance(times, int)
+            if times < 0:
+                return ErrorValue("#VALUE!", "REPT count must not be negative")
+            if not text:
+                return ""
+            if _excel_text_length_units(text) * times > MAX_TEXT_LENGTH_UNITS:
+                return _text_length_error("REPT")
+            return text * times
+        old, start, count, new = converted
+        return _replace_text(old, start, count, new)  # type: ignore[arg-type]
+    texts: list[str] = []
+    for value in values:
+        text = _text(value)
+        if isinstance(text, ErrorValue):
+            return text
+        texts.append(text)
+    if name == "CONCATENATE":
+        return _join_text_bounded(texts, "", "CONCATENATE")
+    if name == "EXACT":
+        return texts[0] == texts[1]
+    if name == "PROPER":
+        return _bounded_text(_proper_case(texts[0]), "PROPER")
+    first = texts[0][:1]
+    if not first or not first.isascii() or first == "\0":
+        return ErrorValue("#VALUE!", "CODE supports ASCII first characters only")
+    return float(ord(first))
+
+
+def _choose_call(
+    children: tuple[_Node, ...],
+    cells: Mapping[str, Scalar],
+    sheet_name: str,
+    budget: _WildcardBudget,
+) -> object:
+    """CHOOSE: evaluate only the selected value and keep it a reference."""
+    arity_error = _arity_range("CHOOSE", 2, 255, len(children))
+    if arity_error is not None:
+        return arity_error
+    index = _number_argument(children[0], cells, sheet_name, budget)
+    if isinstance(index, ErrorValue):
+        return index
+    index = math.trunc(index)
+    if index < 1 or index > len(children) - 1:
+        return ErrorValue("#VALUE!", "CHOOSE index is outside the list of values")
+    chosen = children[index]
+    return _with_reference(chosen, _eval(chosen, cells, sheet_name, budget))
+
+
+def _dimension_call(
+    name: str,
+    children: tuple[_Node, ...],
+    cells: Mapping[str, Scalar],
+    sheet_name: str,
+    budget: _WildcardBudget,
+) -> object:
+    """ROWS and COLUMNS. A reference is measured from its addresses.
+
+    Its cells are not read; the limit on the size of a range still applies.
+    """
+    arity_error = _arity_range(name, 1, 1, len(children))
+    if arity_error is not None:
+        return arity_error
+    child = children[0]
+    if child.kind == "cell":
+        rows = columns = 1
+    elif child.kind == "range":
+        start, end, _sheet = child.value  # type: ignore[misc]
+        try:
+            first_row, first_column = _coordinate(start)
+            last_row, last_column = _coordinate(end)
+        except ValueError as error:
+            return ErrorValue("#REF!", str(error))
+        rows = abs(first_row - last_row) + 1
+        columns = abs(first_column - last_column) + 1
+        if rows * columns > 100_000:
+            return ErrorValue("#NUM!", "range exceeds the 100000-cell evaluation limit")
+    else:
+        value = _dereference(_eval(child, cells, sheet_name, budget))
+        if isinstance(value, ErrorValue):
+            return value
+        if isinstance(value, _Range):
+            rows, columns = value.rows, value.columns
+        elif isinstance(value, ArrayValue):
+            rows = len(value.rows)
+            columns = len(value.rows[0]) if value.rows else 0
+        else:
+            rows = columns = 1
+    return float(rows if name == "ROWS" else columns)
+
+
+def _lookup_key(value: object) -> tuple[int, object] | None:
+    """What a lookup compares: a number, text without case, or a logical value.
+
+    The first item is the type; keys of different types never compare. An
+    empty cell and an error value have no key and never match.
+    """
+    value = _dereference(value)
+    if isinstance(value, bool):
+        return (2, value)
+    if isinstance(value, (int, float)):
+        number = _binary64(value)
+        return None if isinstance(number, ErrorValue) else (0, number)
+    if isinstance(value, str):
+        return (1, "".join(character.lower() for character in value))
+    return None
+
+
+def _approximate_position(keys: list[object], lookup: object) -> int | None:
+    """The largest key of the lookup's type not above it; the last of equals."""
+    wanted = _lookup_key(lookup)
+    if wanted is None:
+        return None
+    best: tuple[int, tuple[int, object]] | None = None
+    for index, value in enumerate(keys):
+        key = _lookup_key(value)
+        if key is None or key[0] != wanted[0] or key[1] > wanted[1]:  # type: ignore[operator]
+            continue
+        if best is None or not key[1] < best[1][1]:  # type: ignore[operator]
+            best = (index, key)
+    return None if best is None else best[0]
+
+
+def _exact_position(
+    keys: list[object], lookup: object, budget: _WildcardBudget
+) -> int | None | ErrorValue:
+    """The first key equal to the lookup; text lookups may hold wildcards."""
+    wanted = _lookup_key(lookup)
+    if wanted is None:
+        return None
+    pattern = _wildcard_pattern(lookup) if isinstance(lookup, str) else None
+    if isinstance(pattern, ErrorValue):
+        return pattern
+    for index, value in enumerate(keys):
+        if pattern is not None:
+            if not isinstance(value, str):
+                continue
+            matched = _wildcard_matches(pattern, value, budget)
+            if isinstance(matched, ErrorValue):
+                return matched
+        else:
+            matched = _lookup_key(value) == wanted
+        if matched:
+            return index
+    return None
+
+
+def _hlookup_call(
+    children: tuple[_Node, ...],
+    cells: Mapping[str, Scalar],
+    sheet_name: str,
+    budget: _WildcardBudget,
+) -> object:
+    """HLOOKUP: find a value in a table's first row, return one from its column."""
+    arity_error = _arity_range("HLOOKUP", 3, 4, len(children))
+    if arity_error is not None:
+        return arity_error
+    lookup = _scalar_argument(children[0], cells, sheet_name, budget)
+    if isinstance(lookup, ErrorValue):
+        return lookup
+    # The table is a range, a computed array, or one cell as a one-by-one
+    # table. A value typed directly is not a table.
+    table = _eval(children[1], cells, sheet_name, budget)
+    if isinstance(table, _Referenced) or children[1].kind == "cell":
+        table = _Range((_dereference(table),), 1, 1)
+    elif isinstance(table, ArrayValue):
+        table = _Range(
+            tuple(value for row in table.rows for value in row),
+            len(table.rows),
+            len(table.rows[0]),
+        )
+    if isinstance(table, ErrorValue):
+        return table
+    if not isinstance(table, _Range):
+        return ErrorValue("#VALUE!", "HLOOKUP table_array must be a reference or an array")
+    row = _number_argument(children[2], cells, sheet_name, budget)
+    if isinstance(row, ErrorValue):
+        return row
+    row = math.trunc(row)
+    if row < 1:
+        return ErrorValue("#VALUE!", "HLOOKUP row index must be at least 1")
+    if row > table.rows:
+        return ErrorValue("#REF!", "HLOOKUP row index is outside table_array")
+    approximate: bool | ErrorValue = True
+    if len(children) == 4:
+        flag = _scalar_argument(children[3], cells, sheet_name, budget)
+        if isinstance(flag, ErrorValue):
+            return flag
+        approximate = _truth(flag)
+        if isinstance(approximate, ErrorValue):
+            return approximate
+    keys = list(table.values[: table.columns])
+    found = (
+        _approximate_position(keys, lookup)
+        if approximate
+        else _exact_position(keys, lookup, budget)
+    )
+    if isinstance(found, ErrorValue):
+        return found
+    if found is None:
+        return ErrorValue("#N/A", "HLOOKUP value not found")
+    return table.values[(row - 1) * table.columns + found]
+
+
+def _numeric_series(
+    child: _Node,
+    cells: Mapping[str, Scalar],
+    sheet_name: str,
+    budget: _WildcardBudget,
+) -> list[float] | ErrorValue:
+    """Every entry of an XNPV or XIRR series, which must all be numbers."""
+    numbers: list[float] = []
+    for value in _flatten((_dereference(_eval(child, cells, sheet_name, budget)),)):
+        if isinstance(value, ErrorValue):
+            return value
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            return ErrorValue("#VALUE!", "every value and date must be a number")
+        number = _binary64(value)
+        if isinstance(number, ErrorValue):
+            return number
+        numbers.append(number)
+    return numbers
+
+
+def _cash_flows(
+    child: _Node,
+    cells: Mapping[str, Scalar],
+    sheet_name: str,
+    budget: _WildcardBudget,
+) -> list[float] | ErrorValue:
+    """The numbers a periodic cash-flow function reads from one argument.
+
+    The aggregate rule applies: typed directly, numbers, logical values and
+    plain numeric text count; inside a reference or array only numbers count.
+    """
+    numbers: list[float] = []
+    error = _collect_numbers(child, cells, sheet_name, budget, numbers)
+    return numbers if error is None else error
+
+
+def _has_both_signs(flows: list[float]) -> bool:
+    """Whether the flows hold at least one positive and one negative number."""
+    return any(flow > 0.0 for flow in flows) and any(flow < 0.0 for flow in flows)
+
+
+def _schedule_years(values: list[float], dates: list[float]) -> list[float] | ErrorValue:
+    """The time of each dated flow in 365-day years after the first date.
+
+    Dates are truncated to whole days. A date outside the serial range is
+    #VALUE!; a different number of values and dates, or a date before the
+    first one, is #NUM!.
+    """
+    days: list[float] = []
+    for serial in dates:
+        day = float(math.trunc(serial))
+        if not 0.0 <= day <= _MAX_EXCEL_DATE_SERIAL:
+            return ErrorValue("#VALUE!", "date is outside the supported serial range")
+        days.append(day)
+    if len(values) != len(days):
+        return ErrorValue("#NUM!", "values and dates differ in count")
+    first = days[0]
+    if any(day < first for day in days):
+        return ErrorValue("#NUM!", "a date precedes the first date")
+    return [(day - first) / 365.0 for day in days]
+
+
+_NO_RATE = ErrorValue("#NUM!", "the rate calculation did not find a result")
+
+
+def _newton_step(rate: float, value: float, slope: float) -> float | ErrorValue:
+    """The next Newton estimate of a rate from the equation's value and slope."""
+    if not math.isfinite(value) or not math.isfinite(slope) or slope == 0.0:
+        return _NO_RATE
+    following = rate - value / slope
+    return following if math.isfinite(following) else _NO_RATE
+
+
+def _real_power(base: float, exponent: float) -> float:
+    """A positive base raised to a power; a result too large is infinite."""
+    try:
+        return math.pow(base, exponent)
+    except OverflowError:
+        return math.inf
+
+
+def _periodic_rate_step(rate: float, flows: list[float]) -> float | ErrorValue:
+    """Newton step for IRR: the flows are one period apart and the first is now."""
+    base = 1.0 + rate
+    discount = 1.0
+    value = 0.0
+    slope = 0.0
+    for index, flow in enumerate(flows):
+        if discount == 0.0:
+            return _NO_RATE
+        term = flow / discount
+        value += term
+        slope -= index * term / base
+        discount *= base
+    return _newton_step(rate, value, slope)
+
+
+def _dated_rate_step(rate: float, flows: list[float], years: list[float]) -> float | ErrorValue:
+    """Newton step for XIRR: each flow is discounted over its 365-day years."""
+    base = 1.0 + rate
+    value = 0.0
+    slope = 0.0
+    for flow, year in zip(flows, years, strict=True):
+        discount = _real_power(base, year)
+        if discount == 0.0:
+            return _NO_RATE
+        term = flow / discount
+        value += term
+        slope -= year * term / base
+    return _newton_step(rate, value, slope)
+
+
+def _annuity_rate_step(rate: float, terms: tuple[float, ...]) -> float | ErrorValue:
+    """Newton step for RATE on pv*(1+r)^n + pmt*(1+r*type)*((1+r)^n-1)/r + fv = 0."""
+    nper, payment, present, future, due = terms
+    if rate == 0.0:
+        value = present + payment * nper + future
+        slope = present * nper + payment * (due * nper + nper * (nper - 1.0) / 2.0)
+        return _newton_step(rate, value, slope)
+    exponent = nper * math.log1p(rate)
+    try:
+        growth = math.exp(exponent)
+        growth_less_one = math.expm1(exponent)
+    except OverflowError:
+        return _NO_RATE
+    growth_slope = nper * growth / (1.0 + rate)
+    annuity = growth_less_one / rate
+    annuity_slope = (growth_slope - annuity) / rate
+    timing = 1.0 + rate * due
+    value = present * growth + payment * timing * annuity + future
+    slope = present * growth_slope + payment * (due * annuity + timing * annuity_slope)
+    return _newton_step(rate, value, slope)
+
+
+def _solve_rate(
+    guess: float,
+    tolerance: float,
+    tries: int,
+    step: Callable[[float], float | ErrorValue],
+) -> float | ErrorValue:
+    """Newton's method on the rate, starting from `guess`.
+
+    The rate is returned when a Newton step moves it by no more than
+    `tolerance`. A step that would put the rate at or below -100 percent moves
+    it halfway to -100 percent instead, and counts as a try. `tries` tries
+    without a result is #NUM!, as is a guess at or below -100 percent.
+    """
+    rate = guess
+    for _ in range(tries):
+        if rate <= -1.0:
+            return _NO_RATE
+        following = step(rate)
+        if isinstance(following, ErrorValue):
+            return following
+        if following <= -1.0:
+            rate = (rate - 1.0) / 2.0
+        elif abs(following - rate) <= tolerance:
+            return _finite_number(following)
+        else:
+            rate = following
+    return _NO_RATE
+
+
+def _rate_terms(
+    children: tuple[_Node, ...],
+    cells: Mapping[str, Scalar],
+    sheet_name: str,
+    budget: _WildcardBudget,
+) -> list[float] | ErrorValue:
+    """The six RATE arguments as numbers: nper, pmt, pv, fv, type and guess."""
+    future_given = len(children) > 3 and children[3].kind != "missing"
+    values: list[object] = []
+    for index, child in enumerate(children):
+        # An empty fv or type counts as zero, and so does an empty pmt when fv
+        # is given. Any other empty argument is #VALUE!.
+        may_be_empty = index in (3, 4) or (index == 1 and future_given)
+        if may_be_empty and child.kind == "missing":
+            values.append(0.0)
+        else:
+            values.append(_dereference(_eval(child, cells, sheet_name, budget)))
+    if any(isinstance(value, (_Range, ArrayValue)) for value in values):
+        return ErrorValue("#VALUE!", "argument must be a single value")
+    for value in values:
+        if isinstance(value, ErrorValue):
+            return value
+    terms = [0.0, 0.0, 0.0, 0.0, 0.0, 0.1]
+    for index, value in enumerate(values):
+        number = _binary64(value)
+        if isinstance(number, ErrorValue):
+            return number
+        terms[index] = number
+    return terms
+
+
+_CASH_FLOW_ARITY = {
+    "NPV": (2, 255),
+    "IRR": (1, 2),
+    "XNPV": (3, 3),
+    "XIRR": (2, 3),
+    "RATE": (3, 6),
+    "MIRR": (3, 3),
+}
+
+
+def _cash_flow_call(
+    name: str,
+    children: tuple[_Node, ...],
+    cells: Mapping[str, Scalar],
+    sheet_name: str,
+    budget: _WildcardBudget,
+) -> object:
+    """NPV, IRR, XNPV, XIRR, RATE and MIRR."""
+    low, high = _CASH_FLOW_ARITY[name]
+    arity_error = _arity_range(name, low, high, len(children))
+    if arity_error is not None:
+        return arity_error
+    if name == "RATE":
+        terms = _rate_terms(children, cells, sheet_name, budget)
+        if isinstance(terms, ErrorValue):
+            return terms
+        nper, due, guess = terms[0], terms[4], terms[5]
+        if nper <= 0.0:
+            return ErrorValue("#NUM!", "RATE needs a positive number of periods")
+        if due not in (0.0, 1.0):
+            return ErrorValue("#NUM!", "type must be 0 or 1 in this evaluator")
+        annuity = tuple(terms[:5])
+        found = _solve_rate(guess, 1e-7, 20, lambda rate: _annuity_rate_step(rate, annuity))
+        # The annuity equation can hold at -100 percent itself, which is not a
+        # rate RATE returns. A search that settles within the accuracy of that
+        # boundary has found it, not a rate above it.
+        if not isinstance(found, ErrorValue) and found + 1.0 <= 1e-7:
+            return _NO_RATE
+        return found
+
+    arguments: list[list[float] | float] = []
+    for index, child in enumerate(children):
+        series = (name in {"IRR", "MIRR"} and index == 0) or (name == "NPV" and index > 0)
+        dated = (name == "XNPV" and index in (1, 2)) or (name == "XIRR" and index in (0, 1))
+        if series:
+            argument: list[float] | float | ErrorValue = _cash_flows(
+                child, cells, sheet_name, budget
+            )
+        elif dated:
+            argument = _numeric_series(child, cells, sheet_name, budget)
+        else:
+            argument = _number_argument(child, cells, sheet_name, budget)
+        if isinstance(argument, ErrorValue):
+            return argument
+        arguments.append(argument)
+
+    if name == "NPV":
+        base = 1.0 + arguments[0]
+        if base == 0.0:
+            return ErrorValue("#DIV/0!", "NPV rate of -100% divides by zero")
+        discount = 1.0
+        total = 0.0
+        for flows in arguments[1:]:
+            for flow in flows:
+                discount *= base
+                if discount == 0.0:
+                    return ErrorValue("#NUM!", "discount factor is outside the supported range")
+                total += flow / discount
+        return _finite_number(total)
+    if name == "IRR":
+        flows = arguments[0]
+        guess = arguments[1] if len(arguments) == 2 else 0.1
+        if not _has_both_signs(flows):
+            return ErrorValue("#NUM!", "IRR needs a positive and a negative value")
+        return _solve_rate(guess, 1e-7, 20, lambda rate: _periodic_rate_step(rate, flows))
+    if name == "XNPV":
+        rate, flows, dates = arguments
+        years = _schedule_years(flows, dates)
+        if isinstance(years, ErrorValue):
+            return years
+        if rate <= -1.0:
+            return ErrorValue("#NUM!", "XNPV rate must be above -100%")
+        base = 1.0 + rate
+        total = 0.0
+        for flow, year in zip(flows, years, strict=True):
+            discount = _real_power(base, year)
+            if discount == 0.0:
+                return ErrorValue("#NUM!", "discount factor is outside the supported range")
+            total += flow / discount
+        return _finite_number(total)
+    if name == "XIRR":
+        flows, dates = arguments[0], arguments[1]
+        guess = arguments[2] if len(arguments) == 3 else 0.1
+        years = _schedule_years(flows, dates)
+        if isinstance(years, ErrorValue):
+            return years
+        if not _has_both_signs(flows):
+            return ErrorValue("#NUM!", "XIRR needs a positive and a negative value")
+        return _solve_rate(guess, 1e-8, 100, lambda rate: _dated_rate_step(rate, flows, years))
+
+    flows, finance, reinvest = arguments
+    if finance <= -1.0 or reinvest <= -1.0:
+        return ErrorValue("#NUM!", "MIRR rates must be above -100%")
+    if not _has_both_signs(flows):
+        return ErrorValue("#DIV/0!", "MIRR needs a positive and a negative value")
+    finance_base = 1.0 + finance
+    reinvest_base = 1.0 + reinvest
+    discount = 1.0
+    cost = 0.0
+    income = 0.0
+    for flow in flows:
+        income = income * reinvest_base + max(flow, 0.0)
+        if flow < 0.0:
+            if discount == 0.0:
+                return ErrorValue("#NUM!", "discount factor is outside the supported range")
+            cost += flow / discount
+        discount *= finance_base
+    if cost == 0.0 or not math.isfinite(cost) or not math.isfinite(income):
+        return ErrorValue("#NUM!", "MIRR is outside the supported numeric range")
+    return _finite_number(_real_power(-income / cost, 1.0 / (len(flows) - 1)) - 1.0)
 
 
 def _function(

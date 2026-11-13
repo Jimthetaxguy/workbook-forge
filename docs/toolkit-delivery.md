@@ -62,9 +62,9 @@ executable behavior and metadata that an agent can inspect. The main remaining
 integration gap is an explicit path from a named native composition into a
 workbook model. That path is a proposed next milestone, not a delivered feature.
 
-The coverage counts describe different things (catalog counts unchanged at `main` `c506165` since `580aacd` on
-2026-11-06; the rest of this assessment keeps its 2026-09-28 date): 521 inventoried functions,
-123 implemented formula functions, nine directly callable primitive functions,
+The coverage counts describe different things (the implemented-function count is the one after function batch 1 of
+2026-11-12; the rest of this assessment keeps its 2026-09-28 date): 521 inventoried functions,
+171 implemented formula functions, nine directly callable primitive functions,
 ten primitive binary operators, ten XML extraction patterns and nine workbook
 agent operations. None of these counts implies complete Excel support.
 

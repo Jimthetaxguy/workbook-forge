@@ -323,7 +323,7 @@ def test_three_d_references_in_a_workbook_are_typed_as_not_calculated():
         ("=SUM(R1C1Total,1)", "unsupported_formula", "unsupported name 'R1C1Total'"),
         ("=C3PO+1", "unsupported_formula", "unsupported name 'C3PO'"),
         ("=rate_R2", "unsupported_formula", "unsupported name 'rate_R2'"),
-        ("=LOG10(100)", "unsupported_formula", "unsupported function LOG10"),
+        ("=ABC12(100)", "unsupported_formula", "unsupported function ABC12"),
         ("=DEC2BIN(5)", "unsupported_formula", "unsupported function DEC2BIN"),
     ],
 )
@@ -333,6 +333,15 @@ def test_names_and_functions_shaped_like_references_are_not_parse_errors(formula
     assert result["outputs"] == {}
     assert result["diagnostics"][0]["code"] == code
     assert message in result["diagnostics"][0]["message"]
+
+
+def test_a_supported_function_shaped_like_a_reference_is_called_not_read_as_a_cell():
+    # LOG10 is also a valid cell address (column LOG, row 10). The cell holds
+    # 7 so that reading it as a reference could not produce the logarithm.
+    source = model({"A1": {"formula": "=LOG10(100)"}, "LOG10": {"value": 7}}, {"out": "A1"})
+    result = json.loads(engine.calculate(source))
+    assert result["diagnostics"] == []
+    assert result["outputs"] == {"out": 2}
 
 
 @pytest.mark.parametrize("prefix", ["", "="])
