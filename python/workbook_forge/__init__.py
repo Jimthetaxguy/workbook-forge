@@ -988,11 +988,11 @@ class _FormulaRefusal(Exception):
 
 
 def _is_worksheet_refusal(value: object) -> ErrorValue | None:
-    """A formula result the worksheet path reports as ``unsupported_formula``.
+    """An evaluation error the worksheet path reports as ``unsupported_formula``.
 
-    These are the messages :class:`_FormulaRefusal` carries out of
-    :func:`evaluate_result`; ``python_engine`` promotes them to a diagnostic.
-    An ordinary Excel error, such as ``#DIV/0!``, is not one.
+    The scalar path in ``python_engine`` promotes these messages. Elementwise
+    lifting must return the same error for the whole formula. An ordinary Excel
+    error, such as ``#DIV/0!``, still lifts as an array element.
     """
     value = _dereference(value)
     if not isinstance(value, ErrorValue):
