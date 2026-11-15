@@ -27,14 +27,9 @@ const engine = (async () => {
   }
 })();
 const worker = self as unknown as Worker;
-/** Every client that receives patches. One today (the page that started us). */
-const subscribers: { postMessage(message: unknown): void }[] = [worker];
 const host = createWorkerHost({
   engine,
   post: (message, transfer = []) => worker.postMessage(message, transfer),
-  broadcast: (message) => {
-    for (const port of subscribers) port.postMessage(message);
-  },
 });
 
 self.addEventListener('message', (event: MessageEvent<RequestMessage>) => {
