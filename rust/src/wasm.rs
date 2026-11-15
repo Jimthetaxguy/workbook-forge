@@ -95,6 +95,22 @@ impl BrowserWorkbook {
         serde_json::to_string(&self.session.snapshot()).map_err(js_error)
     }
 
+    /// Per sheet name, the version of every cell an edit has written in this
+    /// session: `{"Sheet": {"A1": "3"}}` (decimal strings). A cell not listed
+    /// has not been written since the workbook opened. Recalculated values
+    /// never bump a version (docs/cell-versions.md).
+    #[wasm_bindgen(js_name = cellRevisionsJson)]
+    pub fn cell_revisions_json(&self) -> String {
+        match &self.session {
+            WorkbookSession::Imported(workbook) => {
+                crate::browser_contract::cell_revisions_json(workbook).to_string()
+            }
+            WorkbookSession::Authored(session) => {
+                crate::browser_contract::cell_revisions_json(session).to_string()
+            }
+        }
+    }
+
     /// Per sheet name, where a cell inserted where none existed inherits the
     /// Text (`@`) format from its row or column style:
     /// `{"Sheet": {"text_columns": [[min, max]], "text_rows": [..], "general_rows": [..]}}`

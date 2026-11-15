@@ -50,7 +50,7 @@ Callers should branch on the code, not on the message text, which may change.
 | `merged_cell` | The edit targets a merged range's non-anchor cell. |
 | `out_of_bounds` | The address is outside the Excel grid or the session's grid bound. |
 | `output_exists` | The output path exists or is the source workbook. |
-| `revision_conflict` | The model changed between the snapshot and the operation. |
+| `revision_conflict` | The model changed between the snapshot and the operation. On the command envelope with cell preconditions it means a named cell was written after its `base_version`; the error lists them in `stale_cells` (see [cell versions](cell-versions.md)). |
 | `formula_unsupported` | A formula uses syntax, a function or a reference the engine does not calculate. |
 | `unsupported_sheet_type` | A dialog sheet, macro sheet or other non-worksheet sheet type blocked the operation. Chartsheets are read and preserved byte-for-byte; they are listed and are not modeled as worksheets. |
 | `unsupported_error_value` | A cell stores an error value outside the v1 error set (`#NULL!`, `#DIV/0!`, `#VALUE!`, `#REF!`, `#NAME?`, `#NUM!`, `#N/A`, `#SPILL!`, `#CALC!`), for example `#GETTING_DATA`, `#FIELD!` or `#BLOCKED!`. The model's error enum is fixed for v1; the workbook is refused rather than the value rewritten. |

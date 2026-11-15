@@ -142,6 +142,12 @@ pub trait CommandTarget {
     fn calculate_report_with(&self, context: &CalcContext) -> CalculationReport;
     /// The session's offset from UTC in minutes, for NOW and TODAY.
     fn utc_offset_minutes(&self) -> i32;
+    /// The current revision and each named cell's version (the revision of
+    /// the last applied edit that wrote it, else the opening revision), read
+    /// under one lock.
+    fn cell_revisions(&self, keys: &[String]) -> (u64, Vec<u64>);
+    /// Cells written since the session opened, with their versions.
+    fn written_cell_revisions(&self) -> BTreeMap<String, u64>;
 }
 
 impl CommandTarget for ImportedWorkbook {
@@ -163,6 +169,12 @@ impl CommandTarget for ImportedWorkbook {
     }
     fn utc_offset_minutes(&self) -> i32 {
         Self::utc_offset_minutes(self)
+    }
+    fn cell_revisions(&self, keys: &[String]) -> (u64, Vec<u64>) {
+        ImportedWorkbook::cell_revisions(self, keys)
+    }
+    fn written_cell_revisions(&self) -> BTreeMap<String, u64> {
+        ImportedWorkbook::written_cell_revisions(self)
     }
 }
 
@@ -186,6 +198,28 @@ impl CommandTarget for Session {
     fn utc_offset_minutes(&self) -> i32 {
         Self::utc_offset_minutes(self)
     }
+    fn cell_revisions(&self, keys: &[String]) -> (u64, Vec<u64>) {
+        Session::cell_revisions(self, keys)
+    }
+    fn written_cell_revisions(&self) -> BTreeMap<String, u64> {
+        Session::written_cell_revisions(self)
+    }
+}
+
+/// `{"Sheet": {"A1": "3", ...}, ...}`: the version of every cell an edit has
+/// written in this session, grouped by sheet, as decimal strings. A cell not
+/// listed has not been written since the session opened.
+pub fn cell_revisions_json<W: CommandTarget + ?Sized>(workbook: &W) -> Json {
+    let mut out = serde_json::Map::new();
+    for (key, revision) in workbook.written_cell_revisions() {
+        let (sheet, address) = split_key(&key);
+        out.entry(sheet.to_string())
+            .or_insert_with(|| Json::Object(serde_json::Map::new()))
+            .as_object_mut()
+            .expect("sheet entry is an object")
+            .insert(address.to_string(), json!(revision.to_string()));
+    }
+    Json::Object(out)
 }
 
 /// Compare-and-swap apply through a [`CommandTarget`], with revisions on
@@ -231,13 +265,24 @@ pub fn parse_envelope(text: &str) -> Json {
 // ---- Command envelope: apply + calculate + delta -------------------------
 //
 // One call per user or agent intent. The request is the multi-user command
-// envelope (realtime design, multi-user contract section 6.1). Only
-// `mode: "strict"` (compare-and-swap on `base_revision`, today's semantics)
-// with an empty `preconditions` list is implemented. Everything else fails
-// closed with a rejected response that applies nothing:
+// envelope (realtime design, multi-user contract section 6.1). Two modes are
+// implemented (docs/cell-versions.md):
+//
+// * `mode: "strict"` (the default clients send): compare-and-swap on
+//   `base_revision`. Any write anywhere since refuses with
+//   `revision_conflict`. Preconditions, if sent, are checked as well.
+// * `mode: "cells"`: `base_revision` may be behind the workbook. The command
+//   applies unless a cell named in `preconditions` was written after its
+//   `base_version` (`revision_conflict` with `stale_cells`). An empty list is
+//   a blind write (a last-write-wins client policy).
+//
+// A cell's version is the revision of the last applied edit that wrote its
+// input; recalculation never bumps it. Everything else fails closed with a
+// rejected response that applies nothing:
 //
 // * `mode: "rebase"` -> `unsupported_mode`
-// * non-empty `preconditions` -> `unsupported_precondition`
+// * `preconditions` on an undo or redo -> `unsupported_precondition`
+// * a precondition `base_version` ahead of the workbook -> `invalid_revision`
 // * a malformed envelope (unknown field, missing field, `v` != 1, bad id,
 //   bad actor kind, bad `client_seq`, unknown `op.type`, > 1 MiB)
 //   -> `invalid_request`
@@ -273,8 +318,19 @@ struct CommandEnvelope {
     base_revision: String,
     mode: String,
     #[serde(default)]
-    preconditions: Vec<Json>,
+    preconditions: Vec<Precondition>,
     op: Operation,
+}
+
+/// "Refuse unless this cell is unchanged since `base_version`": the version
+/// the client last read for the cell (a `cell_revision`, or any snapshot
+/// revision taken after the cell's last write).
+#[derive(Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Precondition {
+    sheet: String,
+    address: String,
+    base_version: String,
 }
 
 #[derive(Deserialize)]
@@ -313,6 +369,11 @@ pub struct ChangedCell {
     pub address: String,
     pub value: CalculatedValue,
     pub formula: Option<String>,
+    /// The cell's version after the command, as a decimal string: the
+    /// revision of the last applied edit that wrote its input. A cell whose
+    /// value only recalculated keeps its earlier version.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cell_revision: Option<String>,
 }
 
 #[derive(Default)]
@@ -376,8 +437,11 @@ fn parse_command(text: &str) -> Result<CommandEnvelope, ContractError> {
     if envelope.actor.kind != "human" && envelope.actor.kind != "agent" {
         return Err(invalid("actor.kind must be \"human\" or \"agent\""));
     }
-    if envelope.mode != "strict" && envelope.mode != "rebase" {
-        return Err(invalid("mode must be \"strict\" or \"rebase\""));
+    if !matches!(envelope.mode.as_str(), "strict" | "cells" | "rebase") {
+        return Err(invalid("mode must be \"strict\", \"cells\" or \"rebase\""));
+    }
+    if envelope.preconditions.len() > crate::toolkit::MAX_EDIT_BATCH {
+        return Err(invalid("at most 10000 preconditions per command"));
     }
     Ok(envelope)
 }
@@ -862,11 +926,13 @@ pub fn apply_calculate_diff<W: CommandTarget + ?Sized>(
     }
     let keys: Vec<String> = keys.into_iter().collect();
     let cells = workbook.read_cells(&keys);
+    let (_, versions) = workbook.cell_revisions(&keys);
     let mut deltas = Vec::new();
     let changed: Vec<ChangedCell> = keys
         .iter()
         .zip(cells)
-        .map(|(key, cell)| {
+        .zip(versions)
+        .map(|((key, cell), version)| {
             let (sheet, address) = split_key(key);
             let (input, formula) = input_of(&cell);
             let had_formula = targets
@@ -894,6 +960,7 @@ pub fn apply_calculate_diff<W: CommandTarget + ?Sized>(
                 address: address.to_string(),
                 value,
                 formula: formula.map(|f| f.strip_prefix('=').unwrap_or(&f).to_string()),
+                cell_revision: Some(version.to_string()),
             }
         })
         .collect();
@@ -947,13 +1014,22 @@ fn execute<W: CommandTarget + ?Sized>(
     let kind = envelope.actor.kind.as_str();
     let mut command = command_json(name, meta, kind, command_id, target);
     // UI history runs under the cell-conflict rule rather than strict CAS.
-    let base = match (history, envelope.mode.as_str()) {
+    let mut base = match (history, envelope.mode.as_str()) {
         (None, "strict") => json!({"mode": "strict", "expectedRevision": envelope.base_revision}),
         (_, "rebase") => {
             json!({"mode": "rebase", "baseRevision": envelope.base_revision})
         }
         _ => json!({"mode": "cells", "baseRevision": envelope.base_revision}),
     };
+    if !envelope.preconditions.is_empty() {
+        base["preconditions"] = envelope
+            .preconditions
+            .iter()
+            .map(
+                |p| json!({"sheet": p.sheet, "address": p.address, "base_version": p.base_version}),
+            )
+            .collect();
+    }
     let base_revision = match parse_revision(&envelope.base_revision) {
         Ok(base) => base,
         Err(error) => {
@@ -967,15 +1043,26 @@ fn execute<W: CommandTarget + ?Sized>(
         );
         return log_rejection(inner, envelope, command, base, current, Vec::new(), error);
     }
-    if !envelope.preconditions.is_empty() {
+    if history.is_some() && !envelope.preconditions.is_empty() {
         let error = ContractError::new(
             "unsupported_precondition",
-            "preconditions are not implemented yet; send an empty list",
+            "undo and redo run under their own cell-conflict rule; send no preconditions",
         );
         return log_rejection(inner, envelope, command, base, current, Vec::new(), error);
     }
     let (edits, expected, plan): (Vec<Edit>, u64, Option<HistoryPlan>) = match &envelope.op {
-        Operation::SetCells { edits } => (normalized(edits.clone()), base_revision, None),
+        Operation::SetCells { edits } => {
+            let edits = normalized(edits.clone());
+            match check_preconditions(inner, workbook, envelope, base_revision, current) {
+                Ok(expected) => (edits, expected, None),
+                Err(error) => {
+                    let requested = requested_inputs(&edits);
+                    return log_rejection(
+                        inner, envelope, command, base, current, requested, error,
+                    );
+                }
+            }
+        }
         Operation::Undo { .. } | Operation::Redo { .. } => {
             let kind = history.unwrap_or(HistoryKind::Undo);
             match inner
@@ -1082,6 +1169,96 @@ fn execute<W: CommandTarget + ?Sized>(
         inner.baseline = Some((revision, applied.report.values));
     }
     response
+}
+
+/// Check a `set_cells` envelope's mode and preconditions and return the
+/// revision to apply at. `strict` applies only at `base_revision`; `cells`
+/// applies at the revision its preconditions were read at, so the apply's
+/// compare-and-swap refuses any write that slips in between.
+fn check_preconditions<W: CommandTarget + ?Sized>(
+    inner: &SessionInner,
+    workbook: &W,
+    envelope: &CommandEnvelope,
+    base_revision: u64,
+    current: u64,
+) -> Result<u64, ContractError> {
+    let conflict = |message: &str| ContractError {
+        expected_revision: Some(base_revision.to_string()),
+        current_revision: Some(current.to_string()),
+        ..ContractError::new("revision_conflict", message)
+    };
+    if envelope.mode == "strict" && base_revision != current {
+        return Err(conflict("expected revision does not match"));
+    }
+    if base_revision > current {
+        return Err(conflict("base revision is ahead of the workbook"));
+    }
+    let mut keys = Vec::with_capacity(envelope.preconditions.len());
+    let mut bases = Vec::with_capacity(envelope.preconditions.len());
+    let mut seen = BTreeSet::new();
+    for precondition in &envelope.preconditions {
+        let base_version = parse_revision(&precondition.base_version).map_err(|_| {
+            ContractError::new(
+                "invalid_revision",
+                "precondition base_version must be a decimal string",
+            )
+        })?;
+        if base_version > current {
+            return Err(ContractError {
+                current_revision: Some(current.to_string()),
+                ..ContractError::new(
+                    "invalid_revision",
+                    format!(
+                        "precondition base_version {base_version} for {}!{} is ahead of the workbook",
+                        precondition.sheet, precondition.address
+                    ),
+                )
+            });
+        }
+        let Some(key) = workbook.resolve_key(&precondition.sheet, &precondition.address) else {
+            return Err(invalid(format!(
+                "precondition cell {}!{} cannot be resolved",
+                precondition.sheet, precondition.address
+            )));
+        };
+        if !seen.insert(key.clone()) {
+            return Err(invalid(format!("duplicate precondition for {key}")));
+        }
+        keys.push(key);
+        bases.push(base_version);
+    }
+    let (revision, versions) = workbook.cell_revisions(&keys);
+    let stale: Vec<Json> = keys
+        .iter()
+        .zip(&bases)
+        .zip(&versions)
+        .filter(|((_, base), version)| *version > *base)
+        .map(|((key, base), version)| {
+            let (sheet, address) = split_key(key);
+            json!({
+                "sheet": sheet,
+                "address": address,
+                "base_version": base.to_string(),
+                "cell_revision": version.to_string(),
+                "overwritten_by": inner.log.intent_at_revision(*version),
+            })
+        })
+        .collect();
+    if !stale.is_empty() {
+        let mut error = conflict(&format!(
+            "{} precondition cell(s) changed since their base_version",
+            stale.len()
+        ));
+        error
+            .details
+            .insert("stale_cells".into(), Json::Array(stale));
+        return Err(error);
+    }
+    Ok(if envelope.mode == "strict" {
+        base_revision
+    } else {
+        revision
+    })
 }
 
 fn remember(inner: &mut SessionInner, command_id: &str, scope: Option<String>, response: &Json) {

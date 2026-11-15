@@ -31,6 +31,7 @@ import type {
   ResponseMessage,
   Result,
   CellStyle,
+  Revision,
   Snapshot,
   SnapshotCell,
   SnapshotSheet,
@@ -53,6 +54,8 @@ export interface ForgeWorkbook {
   textLayoutJson?(): string;
   /** True for a 1904 date system workbook (absent on older builds and mocks). */
   usesDate1904?(): boolean;
+  /** Per sheet, the version of each cell written since open (absent on older builds and mocks). */
+  cellRevisionsJson?(): string;
   revisionString(): string;
   applyEditsResultJson(editsJson: string, expectedRevision: string): string;
   submitJson(requestJson: string): string;
@@ -147,12 +150,16 @@ function toStyle(raw: RawStyle | null | undefined): CellStyle | undefined {
 }
 
 /** Forge model JSON cell -> protocol cell. */
-function toCell(raw: { value?: unknown; formula?: string | null; style?: RawStyle | null }) {
+function toCell(
+  raw: { value?: unknown; formula?: string | null; style?: RawStyle | null },
+  cellRevision?: Revision,
+) {
   const cell: SnapshotCell = { value: (raw.value ?? null) as Scalar };
   if (typeof raw.formula === 'string') cell.formula = raw.formula.replace(/^=/, '');
   if (raw.style?.number_format === '@') cell.text = true;
   const style = toStyle(raw.style);
   if (style) cell.style = style;
+  if (cellRevision !== undefined) cell.cellRevision = cellRevision;
   return cell;
 }
 
@@ -226,14 +233,19 @@ function stringifyJson(value: unknown): string {
 /** Forge model JSON -> protocol snapshot sheets. */
 type RawLayout = { text_columns: [number, number][]; text_rows: number[]; general_rows: number[] };
 
+/** Per sheet, the version of each cell written since open (`cellRevisionsJson`). */
+type RawCellRevisions = Record<string, Record<string, Revision>>;
+
 function toSheets(
   raw: { sheets: { name: string; cells?: Record<string, never>; column_widths?: Record<string, number> }[] },
   layouts: Record<string, RawLayout> = {},
+  revisions: RawCellRevisions = {},
 ): SnapshotSheet[] {
   return raw.sheets.map((sheet) => {
+    const versions = revisions[sheet.name] ?? {};
     const out: SnapshotSheet = {
       name: sheet.name,
-      cells: Object.fromEntries(Object.entries(sheet.cells ?? {}).map(([a, c]) => [a, toCell(c)])),
+      cells: Object.fromEntries(Object.entries(sheet.cells ?? {}).map(([a, c]) => [a, toCell(c, versions[a])])),
     };
     const layout = layouts[sheet.name];
     if (layout) out.textFormat = { columns: layout.text_columns, rows: layout.text_rows, generalRows: layout.general_rows };
@@ -430,7 +442,8 @@ export class ForgeEngine {
   private snapshot(wb: ForgeWorkbook): { ok: true; value: Snapshot } {
     const raw = JSON.parse(wb.snapshotJson()) as { sheets: { name: string; cells: Record<string, never> }[] };
     const layouts = wb.textLayoutJson ? (JSON.parse(wb.textLayoutJson()) as Record<string, RawLayout>) : {};
-    const value: Snapshot = { revision: wb.revisionString(), sheets: toSheets(raw, layouts) };
+    const revisions = wb.cellRevisionsJson ? (JSON.parse(wb.cellRevisionsJson()) as RawCellRevisions) : {};
+    const value: Snapshot = { revision: wb.revisionString(), sheets: toSheets(raw, layouts, revisions) };
     if (wb.usesDate1904?.()) value.date1904 = true;
     return { ok: true, value };
   }
@@ -475,7 +488,7 @@ export class ForgeEngine {
         intentsApplied: out.intents_applied,
         calcsChecked: out.calcs_checked,
         calcEvents: out.calc_events,
-        snapshot: { revision: out.revision, sheets: toSheets(out.snapshot) },
+        snapshot: { revision: out.revision, sheets: toSheets(out.snapshot, {}, out.cell_revisions ?? {}) },
         values: out.values,
       },
     };
