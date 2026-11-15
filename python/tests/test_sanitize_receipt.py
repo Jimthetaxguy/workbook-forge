@@ -11,7 +11,9 @@ from __future__ import annotations
 import hashlib
 import json
 from pathlib import Path
+import shutil
 import sys
+import tempfile
 import zipfile
 
 import pytest
@@ -398,3 +400,112 @@ def test_two_keys_that_sanitise_to_one_name_are_refused(tmp_path):
     with pytest.raises(sanitize_receipt.SanitizeError, match="two keys sanitise to 'roundtrip.xlsx'"):
         sanitize_receipt.sanitize(receipt_path, workbook, tmp_path / "out", root=tmp_path / "repo")
     assert not (tmp_path / "out").exists()
+
+
+def test_a_temp_directory_outside_the_static_roots_leaves_the_receipt(tmp_path, monkeypatch):
+    """A temp root the static list does not name still leaves the receipt.
+
+    ``/tmp`` is already in ``MACHINE_LOCAL_ROOTS``, so this case builds its
+    roots under ``/dev/shm``. A runner whose process temp directory is ``/tmp``
+    still executes it. ``TMPDIR`` names a symlink; the receipt records both
+    that symlink and the directory it resolves to. ``TEMP``, ``TMP`` and
+    ``tempfile.gettempdir()`` each name a further directory outside the list.
+    A sibling under ``/dev/shm`` that is not one of those directories stays,
+    and so does ``/usr/bin/osascript``.
+    """
+    base = Path("/dev/shm") / f"wf-sanitise-{tmp_path.name}"
+    if base.exists():
+        shutil.rmtree(base)
+    base.mkdir()
+    try:
+        assert base.parts[1] not in sanitize_receipt.MACHINE_LOCAL_ROOTS
+        env_root = base / "real-temp"
+        env_link = base / "link-temp"
+        env_root.mkdir()
+        env_link.symlink_to(env_root, target_is_directory=True)
+        contract = env_root / "nested" / "contract.json"
+        contract.parent.mkdir()
+        contract.write_bytes(b'{"id":"outside-static-temp"}\n')
+        resolved_contract = contract.resolve()
+        assert "link-temp" not in resolved_contract.as_posix()
+        via_temp = base / "from-temp-env" / "temp.json"
+        via_tmp = base / "from-tmp-env" / "tmp.json"
+        via_gettempdir = base / "from-gettempdir" / "cached.json"
+        for path, payload in (
+            (via_temp, b"temp-env-bytes\n"),
+            (via_tmp, b"tmp-env-bytes\n"),
+            (via_gettempdir, b"gettempdir-bytes\n"),
+        ):
+            path.parent.mkdir()
+            path.write_bytes(payload)
+        sibling = base / "not-this-temp" / "secret.json"
+        sibling.parent.mkdir()
+        sibling.write_text("leave-this-path\n", encoding="utf-8")
+
+        home_resolved: list[str] = []
+        real_resolve = Path.resolve
+
+        def tracking_resolve(self, *args, **kwargs):
+            text = self.as_posix()
+            if text.startswith("/home/") or text.startswith("/Users/"):
+                home_resolved.append(text)
+            return real_resolve(self, *args, **kwargs)
+
+        monkeypatch.setattr(Path, "resolve", tracking_resolve)
+        monkeypatch.setenv("TMPDIR", "/home/example-user/tmp")
+        monkeypatch.setenv("TEMP", "~/tmp")
+        monkeypatch.setenv("TMP", "/Users/example-user/tmp")
+        sanitize_receipt._path_token()
+        assert home_resolved == []
+
+        monkeypatch.setenv("TMPDIR", str(env_link))
+        monkeypatch.setenv("TEMP", str(via_temp.parent))
+        monkeypatch.setenv("TMP", str(via_tmp.parent))
+        monkeypatch.setattr(tempfile, "tempdir", str(via_gettempdir.parent))
+
+        root = tmp_path / "repo"
+        root.mkdir()
+        workbook = tiny_xlsx(tmp_path / "saved.xlsx")
+        link_script = f"file://{env_link}/run.applescript"
+        receipt_path = tmp_path / "receipt.json"
+        receipt_path.write_text(json.dumps({
+            "from_tmpdir": str(resolved_contract),
+            "from_tmpdir_link": str(env_link / "scratch.xlsx"),
+            "from_temp": str(via_temp),
+            "from_tmp": str(via_tmp),
+            "from_gettempdir": str(via_gettempdir),
+            "script": link_script,
+            "reason": f"Excel saved {resolved_contract} after the run.",
+            "notes": "~/Documents/excel-run/notes.txt",
+            "automation": "/usr/bin/osascript",
+            "other": str(sibling),
+            "saved_workbook_sha256": _sha(workbook),
+        }) + "\n", encoding="utf-8")
+        out = tmp_path / "out"
+        result = sanitize_receipt.sanitize(receipt_path, workbook, out, root=root)
+        written = (out / "receipt.json").read_bytes()
+        manifest_bytes = (out / "sanitized.json").read_bytes()
+        for leak in (
+            b"link-temp", b"real-temp", b"from-temp-env", b"from-tmp-env", b"from-gettempdir",
+            b"pinned-home-secret", b"example-user",
+        ):
+            assert leak not in written, leak
+            assert leak not in manifest_bytes, leak
+        assert b"not-this-temp" in written
+        assert b"/usr/bin/osascript" in written
+        document = json.loads(written)
+        assert document["from_tmpdir"] == "sha256:" + _sha(contract)
+        assert document["from_tmpdir_link"] == "scratch.xlsx"
+        assert document["from_temp"] == "sha256:" + _sha(via_temp)
+        assert document["from_tmp"] == "sha256:" + _sha(via_tmp)
+        assert document["from_gettempdir"] == "sha256:" + _sha(via_gettempdir)
+        assert document["script"] == "run.applescript"
+        assert document["reason"] == "Excel saved contract.json after the run."
+        assert document["notes"] == "notes.txt"
+        assert document["automation"] == "/usr/bin/osascript"
+        assert document["other"] == sibling.as_posix()
+        assert _sha(out / "saved.xlsx") == _sha(workbook)
+        assert result.receipt_warnings == []
+        assert home_resolved == []
+    finally:
+        shutil.rmtree(base, ignore_errors=True)
