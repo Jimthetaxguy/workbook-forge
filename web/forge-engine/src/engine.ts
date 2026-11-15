@@ -481,6 +481,9 @@ export class ForgeEngine {
     }
     const out = JSON.parse(this.wasm.replayJson(baseline, text));
     if (!out.ok) return { ok: false, error: out.error };
+    const snapshot: Snapshot = { revision: out.revision, sheets: toSheets(out.snapshot, {}, out.cell_revisions ?? {}) };
+    // Same rule as snapshot(): the field is present only for the 1904 system.
+    if (out.date1904 === true) snapshot.date1904 = true;
     return {
       ok: true,
       value: {
@@ -488,7 +491,7 @@ export class ForgeEngine {
         intentsApplied: out.intents_applied,
         calcsChecked: out.calcs_checked,
         calcEvents: out.calc_events,
-        snapshot: { revision: out.revision, sheets: toSheets(out.snapshot, {}, out.cell_revisions ?? {}) },
+        snapshot,
         values: out.values,
       },
     };

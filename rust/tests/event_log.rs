@@ -9,6 +9,7 @@
 //!   A1 = 20:           40, 45, 135, 95, 335
 use serde_json::{Value as Json, json};
 use std::collections::BTreeMap;
+use workbook_forge::CellValue;
 use workbook_forge::browser_contract::CommandSession;
 use workbook_forge::event_log::{Baseline, json_eq, replay, replay_json, sha256_hex};
 use workbook_forge::xlsx::{ImportedWorkbook, import_xlsx_bytes};
@@ -510,6 +511,40 @@ fn replay_reproduces_the_final_state_and_every_recorded_delta() {
     let again = replay(&bytes, &array).expect("replay array");
     assert_eq!(again["calc_events"], result["calc_events"]);
     assert_eq!(again["snapshot"], result["snapshot"]);
+    // realtime-chain.xlsx is the 1900 system, so replay leaves the flag off.
+    assert!(!workbook.uses_date1904());
+    assert!(result.get("date1904").is_none());
+}
+
+/// `fixtures/corpus/op_1904_dates.xlsx` carries `<workbookPr date1904="1">`
+/// and stores 42886 in Log!A1. Replay reports that flag beside the toolkit
+/// snapshot. A blank replay stays on the 1900 system and omits it.
+#[test]
+fn replay_reports_date1904_for_an_imported_1904_workbook_only() {
+    let path = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../fixtures/corpus/op_1904_dates.xlsx"
+    );
+    let bytes = std::fs::read(path).expect("fixtures/corpus/op_1904_dates.xlsx");
+    let workbook = import_xlsx_bytes(&bytes, BTreeMap::new(), BTreeMap::new()).expect("import");
+    assert!(workbook.uses_date1904());
+    let sheet = &workbook.snapshot().sheets[0];
+    assert_eq!(sheet.name, "Log");
+    assert_eq!(sheet.cells["A1"].value, CellValue::Number(42886.0));
+    let session = CommandSession::new();
+    session.set_baseline(Baseline::xlsx("op_1904_dates.xlsx", &bytes));
+    session.start_log(None, json!({ "wasm_sha256": null }), 0);
+    let ndjson = session.export_log_ndjson(workbook.revision(), None);
+    let result = replay(&bytes, &ndjson).expect("replay 1904");
+    assert_eq!(result["ok"], true);
+    assert_eq!(result["date1904"], true);
+    assert_eq!(result["snapshot"], json!(workbook.snapshot()));
+
+    let blank = r#"[{"v":1,"seq":0,"id":"ev_0000","kind":"session","op":"opened","revision":"0","baseline":{"kind":"blank","name":"Sheet1","sha256":null,"bytes":0,"sheet":"Sheet1"}}]"#;
+    let blank_result = replay(b"", blank).expect("blank replay");
+    assert_eq!(blank_result["ok"], true);
+    assert!(blank_result.get("date1904").is_none());
+    assert_eq!(blank_result["snapshot"]["sheets"][0]["name"], "Sheet1");
 }
 
 #[test]

@@ -601,6 +601,7 @@ pub fn parse_events(text: &str) -> Result<Vec<Json>, ContractError> {
 /// `replay(baselineBytes, events)` as a JSON result envelope:
 /// `{"ok":true,"revision","intents_applied","calcs_checked","calc_events",
 /// "snapshot","values"}` or `{"ok":false,"error":{code,...}}`.
+/// `"date1904": true` is present only for an imported 1904 workbook.
 pub fn replay_json(bytes: &[u8], events_text: &str) -> String {
     match replay(bytes, events_text) {
         Ok(value) => value.to_string(),
@@ -618,6 +619,8 @@ pub fn replay_json(bytes: &[u8], events_text: &str) -> String {
 /// `values` are the last logged pass when the last applied intent has a
 /// fresh calc event, so that pass's clock, seed and offset stay with the
 /// returned values. Otherwise the result is calculated once at the end.
+/// An imported workbook that uses the 1904 date system adds `"date1904":
+/// true` beside `snapshot`. A 1900 import and a blank workbook omit it.
 pub fn replay(bytes: &[u8], events_text: &str) -> Result<Json, ContractError> {
     let events = parse_events(events_text)?;
     let opened = events
@@ -651,6 +654,11 @@ pub fn replay(bytes: &[u8], events_text: &str) -> Result<Json, ContractError> {
             let mut summary = replay_on(&workbook, &events)?;
             summary["snapshot"] = json!(workbook.snapshot());
             summary["cell_revisions"] = crate::browser_contract::cell_revisions_json(&workbook);
+            // The toolkit snapshot has no date system. Report the imported
+            // workbook's flag beside it, and only when that workbook uses 1904.
+            if workbook.uses_date1904() {
+                summary["date1904"] = json!(true);
+            }
             if summary.get("values").is_none() {
                 summary["values"] = json!(workbook.calculate(1).values);
             }
