@@ -52,6 +52,9 @@ def test_python_model_scenario_and_detached_snapshots():
     assert updated["outputs"]["revenue"] == 9250
     assert updated["outputs"]["profit"] == 3290
     assert updated["revision"] > initial["revision"]
+    # The revision is session state; no snapshot carries it.
+    assert "revision" not in model.to_dict()
+    assert model.revision == updated["revision"] == 1
 
 
 def test_python_inputs_are_atomic_and_errors_cross_boundary():

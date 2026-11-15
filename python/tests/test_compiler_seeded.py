@@ -61,7 +61,6 @@ def seeded_case(seed, edited=False):
     expected.update({"'Calc'!C1": {"error": "#DIV/0!"}, "'Calc'!C2": 7.0, "'Calc'!C3": 3.0})
     doc = {
         "schema_version": 1,
-        "revision": 0,
         "sheets": [
             {"id": "data", "name": "Data", "cells": {a: {"value": v} for a, v in original.items()}},
             {

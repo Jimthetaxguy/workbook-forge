@@ -383,7 +383,8 @@ mod tests {
     fn browser_blank_workbook_can_author_new_cells_and_export_round_trip() {
         let workbook = create_blank_workbook("Formula Lab").unwrap();
         let initial: Json = serde_json::from_str(&workbook.snapshot_json().unwrap()).unwrap();
-        assert_eq!(initial["revision"], 0);
+        assert!(initial.get("revision").is_none());
+        assert_eq!(workbook.revision_string(), "0");
         assert_eq!(initial["sheets"][0]["name"], "Formula Lab");
         assert_eq!(initial["sheets"][0]["cells"], serde_json::json!({}));
 

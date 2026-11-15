@@ -215,6 +215,9 @@ fn is_address(text: &str) -> bool {
 
 /// The path grammar of the plan's shared definitions, one arm per row.
 fn matches_grammar(path: &str) -> bool {
+    // No conversion lists `revision` any more: the normalised toolkit form
+    // has none (spec 09 step 1). It stays in the grammar because the
+    // calculation session's `open` lists it for a document that carried it.
     if matches!(path, "model_version" | "provenance" | "revision") {
         return true;
     }
@@ -525,7 +528,8 @@ fn integer_rule_is_inclusive_at_two_to_the_53_and_keeps_negative_zero_a_float() 
 #[test]
 fn unnormalised_toolkit_document_lists_required() {
     // Review focus 1: the drop list is relative to the normalised toolkit
-    // form, so `required` and `revision` are listed although never written.
+    // form, so `required` is listed although never written. That form has no
+    // `revision` (spec 09 step 1), so the conversion never lists it.
     let fixture = fixture();
     let case = cases(&fixture, "toolkit_cases")
         .into_iter()
@@ -539,7 +543,7 @@ fn unnormalised_toolkit_document_lists_required() {
             .dropped
             .contains(&"bindings.inputs.x.required".to_string())
     );
-    assert!(conversion.dropped.contains(&"revision".to_string()));
+    assert!(!conversion.dropped.contains(&"revision".to_string()));
     let addresses: Vec<_> = workbook.sheets[0].cells.keys().cloned().collect();
     assert_eq!(addresses, ["A1", "B1"]);
 }

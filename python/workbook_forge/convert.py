@@ -113,7 +113,6 @@ def to_toolkit(
         ledger.dropped("provenance")
     for index in range(len(workbook.diagnostics)):
         ledger.dropped(f"diagnostics[{index}]")
-    ledger.added("revision")
     sheets = []
     for index, sheet in enumerate(workbook.sheets):
         prefix = f"sheets[{index}]"
@@ -158,7 +157,6 @@ def to_toolkit(
             outputs[name] = {"sheet": target.sheet, "address": target.address}
     built = {
         "schema_version": workbook.schema_version,
-        "revision": 0,
         "sheets": sheets,
         "inputs": inputs,
         "outputs": outputs,
@@ -200,7 +198,6 @@ def to_canonical(
     except ToolkitError as error:
         raise ConversionError(error.code, error.message) from error
     ledger = _Ledger()
-    ledger.dropped("revision")
     ledger.added("model_version")
     metadata: dict[str, Any] = {}
     # A toolkit document does not say whether it was authored or imported, so

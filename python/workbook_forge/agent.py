@@ -135,20 +135,20 @@ def _selected_outputs(snapshot: dict, arguments: dict) -> dict:
     return {name: deepcopy(snapshot["outputs"][name]) for name in sorted(names)}
 
 
-def _expected(snapshot: dict, arguments: dict, *, required: bool = False):
+def _expected(revision: int, arguments: dict, *, required: bool = False):
     if "expected_revision" not in arguments:
         if required:
             _fail("invalid_request", "expected_revision is required")
         return
     expected = _integer(arguments["expected_revision"], "expected_revision", 0)
-    if expected != snapshot["revision"]:
-        _fail("revision_conflict", f"expected revision {expected} does not match {snapshot['revision']}")
+    if expected != revision:
+        _fail("revision_conflict", f"expected revision {expected} does not match {revision}")
 
 
-def _paging(snapshot: dict, arguments: dict) -> tuple[int, int]:
+def _paging(revision: int, arguments: dict) -> tuple[int, int]:
     offset = _integer(arguments.get("offset", 0), "offset", 0)
     limit = _integer(arguments.get("limit", 40), "limit", 1, MAX_PAGE_CELLS)
-    _expected(snapshot, arguments, required=offset > 0)
+    _expected(revision, arguments, required=offset > 0)
     return offset, limit
 
 
@@ -203,12 +203,13 @@ class AgentWorkbook:
         with self._lock:
             return self._model.revision
 
-    def _detached(self, snapshot: dict, *, outputs: dict | None = None) -> WorkbookModel:
+    def _detached(self, snapshot: dict, revision: int, *, outputs: dict | None = None) -> WorkbookModel:
         document = deepcopy(snapshot)
         if outputs is not None:
             document["outputs"] = deepcopy(outputs)
         detached = WorkbookModel(
-            document=document, backend=self._model.backend, _names=self._model._names
+            document=document, backend=self._model.backend, _names=self._model._names,
+            _revision=revision,
         )
         # Source bytes and their original model are immutable. Keep this same
         # preservation authority on previews and exports instead of reimporting
@@ -297,17 +298,15 @@ class AgentWorkbook:
                     _fail("invalid_request", "arguments must be an object")
                 if operation not in _OPERATIONS:
                     _fail("unknown_operation", "unknown operation")
-                snapshot = self._model.to_dict()
-                revision = snapshot["revision"]
-                result, revision = self._dispatch(operation, arguments, snapshot, request_id)
+                snapshot, revision = self._model.snapshot_with_revision()
+                result, revision = self._dispatch(operation, arguments, snapshot, revision, request_id)
                 response = self._envelope(request_id, operation, revision, result)
                 self._check_response(response)
                 return response
             except Exception as error:
                 return self._error(request_id, operation, revision, error)
 
-    def _dispatch(self, operation: str, arguments: dict, snapshot: dict, request_id: str | None) -> tuple[Any, int]:
-        revision = snapshot["revision"]
+    def _dispatch(self, operation: str, arguments: dict, snapshot: dict, revision: int, request_id: str | None) -> tuple[Any, int]:
         if operation == "discover":
             _arguments(arguments, set())
             return operation_catalog(), revision
@@ -319,19 +318,19 @@ class AgentWorkbook:
             if operation == "read":
                 allowed |= {"sheet", "range"}
             _arguments(arguments, allowed, {"output"} if operation == "explain" else set())
-            return self._read(snapshot, arguments, explain=operation == "explain"), revision
+            return self._read(snapshot, revision, arguments, explain=operation == "explain"), revision
         if operation == "calculate":
             _arguments(arguments, {"outputs", "workers"})
             workers = _integer(arguments.get("workers", 1), "workers", 1, 8)
-            detached = self._detached(snapshot, outputs=_selected_outputs(snapshot, arguments))
+            detached = self._detached(snapshot, revision, outputs=_selected_outputs(snapshot, arguments))
             report = detached.calculate(workers=workers)
             return _compact(report, stale=self._model.revision != revision), revision
         if operation == "preview_inputs":
             _arguments(arguments, {"values", "expected_revision", "outputs"}, {"values", "expected_revision"})
-            _expected(snapshot, arguments, required=True)
+            _expected(revision, arguments, required=True)
             values = _inputs(arguments, snapshot)
             self._preflight_imported(snapshot, self._input_edit_records(snapshot, values))
-            detached = self._detached(snapshot, outputs=_selected_outputs(snapshot, arguments))
+            detached = self._detached(snapshot, revision, outputs=_selected_outputs(snapshot, arguments))
             before = detached.calculate()
             proposed = detached.set_inputs(values, expected_revision=revision)
             after_snapshot, after = detached.to_dict(), detached.calculate()
@@ -343,10 +342,10 @@ class AgentWorkbook:
             stale = self._model.revision != revision
             return {"applied": False, "base_revision": revision, "proposed_revision": proposed, "changes": changes, "before": _compact(before, stale=stale), "after": _compact(after, stale=stale)}, revision
         if operation in {"set_inputs", "edit"}:
-            return self._mutate(operation, arguments, snapshot, request_id)
+            return self._mutate(operation, arguments, snapshot, revision, request_id)
         if operation == "export":
             _arguments(arguments, {"filename", "expected_revision"}, {"filename", "expected_revision"})
-            _expected(snapshot, arguments, required=True)
+            _expected(revision, arguments, required=True)
             filename = arguments["filename"]
             if not isinstance(filename, str) or _FILENAME.fullmatch(filename) is None:
                 _fail("invalid_request", "filename must be one safe .xlsx filename")
@@ -360,7 +359,7 @@ class AgentWorkbook:
             # Calculate and publish exactly the revision checked above, keeping
             # imported package bytes even if an independent host edit races us.
             try:
-                result = export_xlsx(self._detached(snapshot), target)
+                result = export_xlsx(self._detached(snapshot, revision), target)
             except OSError as error:
                 raise _OperationError("export_error", os_error_message(error)) from error
             except (WorkbookError, ValueError) as error:
@@ -399,11 +398,10 @@ class AgentWorkbook:
                 except UnsupportedWorkbook as error:
                     _fail("unsupported_operation", str(error))
 
-    def _mutate(self, operation: str, arguments: dict, snapshot: dict, request_id: str | None) -> tuple[dict, int]:
+    def _mutate(self, operation: str, arguments: dict, snapshot: dict, previous: int, request_id: str | None) -> tuple[dict, int]:
         field = "values" if operation == "set_inputs" else "edits"
         _arguments(arguments, {field, "expected_revision"}, {field, "expected_revision"})
-        _expected(snapshot, arguments, required=True)
-        previous = snapshot["revision"]
+        _expected(previous, arguments, required=True)
         changed = []
         if operation == "set_inputs":
             values = _inputs(arguments, snapshot)
@@ -446,12 +444,12 @@ class AgentWorkbook:
         receipt["revision"] = revision
         return receipt, revision
 
-    def _read(self, snapshot: dict, arguments: dict, *, explain: bool) -> dict:
-        offset, limit = _paging(snapshot, arguments)
+    def _read(self, snapshot: dict, revision: int, arguments: dict, *, explain: bool) -> dict:
+        offset, limit = _paging(revision, arguments)
         has_sheet, has_output = "sheet" in arguments, "output" in arguments
         if has_sheet == has_output or "range" in arguments and not has_sheet:
             _fail("invalid_request", "select exactly one sheet or output; range requires sheet")
-        detached = self._detached(snapshot)
+        detached = self._detached(snapshot, revision)
         inspection = detached.inspect()
         dependencies = inspection.get("dependencies", {})
         cells = {f"{sheet['name']}!{address}": cell for sheet in snapshot["sheets"] for address, cell in sheet["cells"].items()}
@@ -488,7 +486,7 @@ class AgentWorkbook:
         page = []
         calculation = None
         if explain:
-            calculation = self._detached(snapshot, outputs={name: binding}).calculate()
+            calculation = self._detached(snapshot, revision, outputs={name: binding}).calculate()
         for current in ordered[offset:offset + limit]:
             sheet, address = current.rsplit("!", 1)
             content = deepcopy(cells.get(current, {"value": None}))

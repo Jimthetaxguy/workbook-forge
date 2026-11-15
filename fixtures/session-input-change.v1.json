@@ -1,0 +1,1620 @@
+{
+  "fixture_version": 1,
+  "note": "Hand-authored for spec 09 step 1. Every expected value is independent arithmetic, an Excel fact (=1/0 is #DIV/0!, NA() is #N/A, the 1900 date serial) or a stated contract rule; none is copied from an engine run. Reports omit `engine`.",
+  "numeric_tolerance": 1e-12,
+  "calc": {"now_ms": 1767225600000, "utc_offset_minutes": 0, "seed": "1"},
+  "comparison": "Every calculation-report.v2 field except `engine` is compared. Two integers (revisions, counts, now_ms, utc_offset_minutes) are equal only when they are the same integer. Any other pair of numbers is equal when |actual - expected| <= numeric_tolerance * max(1, |expected|); a calculated value is a binary64 number even where this file writes it without a fraction. An error value is compared on `error` only. Diagnostics are compared in order on (code, sheet, address), and each actual `message` must be a non-empty string. Everything else is exact, including list order. In a document's `open` block, conversion `present` means only that the conversion is not null. A source_fingerprint is a literal: `sha256:` and the SHA-256 of the exact bytes the test passes to open, taken with `shasum -a 256` and not from a session. Those bytes are the document_fixture file, or the UTF-8 bytes of the document's document_text, which is the same document as its `document` member written as one line of JSON text.",
+  "derivation": {
+    "arithmetic": "Quantities q = 100, 120, 150 (Forecast!B2:B4). C = price * q; D = cost * q; E = C - D - fixed; F2 = sum of C; F3 = sum of E; F4 = fixed / (price - cost) when price > cost, otherwise #N/A. States (price, cost, fixed): A (20, 8, 1000): C 2000, 2400, 3000; D 800, 960, 1200; E 200, 440, 800; F2 7400; F3 1440; F4 1000/12. B (25, 8, 1000): C 2500, 3000, 3750; D as A; E 700, 1040, 1550; F2 9250; F3 3290; F4 1000/17. C (25, 10, 1020): C as B; D 1000, 1200, 1500; E 480, 780, 1230; F2 9250; F3 2490; F4 1020/15 = 68. D (30, 10, 1020): C 3000, 3600, 4500; D as C; E 980, 1380, 1980; F2 11100; F3 4340; F4 1020/20 = 51. E (10, 10, 1020): C and D 1000, 1200, 1500; E -1020 three times; F2 3700; F3 -3060; F4 #N/A because price is not above cost.",
+    "now": "The pinned now_ms 1767225600000 is 20454 * 86400000, exactly 20454 days after 1970-01-01, whose 1900-system serial is 25569; with a zero offset NOW() is 25569 + 20454 = 46023.",
+    "formula_counts": "calculated_formulas and unresolved_formulas range over the formula cells in the pass's closure: every formula cell when no outputs are bound, otherwise the formula cells the bound outputs depend on. calculated_formulas counts those with a key in values, unresolved_formulas those without. Each document's formula_counts member works its two numbers out by hand from its bound outputs.",
+    "evaluated_cells": "A pass with no base (base_revision null) runs every formula cell in the closure that is free of a structural error. A pass with a base runs the cells downstream of the inputs changed since that base: unit_price reaches C2:C4, E2:E4, F2, F3, F4 (9); unit_cost and fixed_cost together reach D2:D4, E2:E4, F3, F4 (8). Forecast!J1 is volatile and runs on every pass; Forecast!F5 has no precedent and runs only on a full pass; Forecast!J2 does not parse and never runs. A preview runs on a detached copy with no published report, so its `before` pass is full.",
+    "origin": "inputs[].origin is null until this session (or the session a preview was forked from) has applied that input, then `authored`.",
+    "diagnostic_code": "parse_error is the documented engine code for a formula that does not parse (docs/refusal-codes.md)."
+  },
+  "documents": {
+    "planner": {
+      "entry": "model",
+      "formula_counts": "Bound outputs are Forecast!F2, F3 and F4. F2 = SUM(C2:C4) reaches C2, C3, C4. F3 = SUM(E2:E4) reaches E2, E3, E4, and each E row reads its C and D, so D2, D3, D4 join. F4 reads only the three Assumptions values. Closure formula cells: C2:C4 (3) + D2:D4 (3) + E2:E4 (3) + F2, F3, F4 (3) = 12, which is every formula cell in the document. All 12 have a value in every state, so calculated_formulas is 12 and unresolved_formulas is 0.",
+      "document": {
+        "schema_version": 1,
+        "sheets": [
+          {
+            "id": "assumptions",
+            "name": "Assumptions",
+            "cells": {"B1": {"value": 20}, "B2": {"value": 8}, "B3": {"value": 1000}}
+          },
+          {
+            "id": "forecast",
+            "name": "Forecast",
+            "cells": {
+              "B2": {"value": 100},
+              "B3": {"value": 120},
+              "B4": {"value": 150},
+              "C2": {"value": null, "formula": "=B2*Assumptions!$B$1"},
+              "D2": {"value": null, "formula": "=B2*Assumptions!$B$2"},
+              "E2": {"value": null, "formula": "=C2-D2-Assumptions!$B$3"},
+              "C3": {"value": null, "formula": "=B3*Assumptions!$B$1"},
+              "D3": {"value": null, "formula": "=B3*Assumptions!$B$2"},
+              "E3": {"value": null, "formula": "=C3-D3-Assumptions!$B$3"},
+              "C4": {"value": null, "formula": "=B4*Assumptions!$B$1"},
+              "D4": {"value": null, "formula": "=B4*Assumptions!$B$2"},
+              "E4": {"value": null, "formula": "=C4-D4-Assumptions!$B$3"},
+              "F2": {"value": null, "formula": "=SUM(C2:C4)"},
+              "F3": {"value": null, "formula": "=SUM(E2:E4)"},
+              "F4": {
+                "value": null,
+                "formula": "=IF(Assumptions!B1>Assumptions!B2,Assumptions!B3/(Assumptions!B1-Assumptions!B2),NA())"
+              }
+            }
+          }
+        ],
+        "inputs": {
+          "unit_price": {"sheet": "Assumptions", "address": "B1", "kind": "number", "required": true},
+          "unit_cost": {"sheet": "Assumptions", "address": "B2", "kind": "number", "required": true},
+          "fixed_cost": {"sheet": "Assumptions", "address": "B3", "kind": "number", "required": true}
+        },
+        "outputs": {
+          "revenue": {"sheet": "Forecast", "address": "F2"},
+          "profit": {"sheet": "Forecast", "address": "F3"},
+          "break_even_units": {"sheet": "Forecast", "address": "F4"}
+        }
+      },
+      "open": {"revision": 0, "model_version": null, "source_fingerprint": null, "conversion": null}
+    },
+    "canonical": {
+      "entry": "open",
+      "formula_counts": "Bound outputs are Forecast!F2, F3, F4, F5, J1 and J2. F2, F3 and F4 reach the same 12 formula cells as the planner document. F5 (=1/0), J1 (=NOW()) and J2 (=1+) are bound outputs themselves and read no other cell. Closure formula cells: 12 + 3 = 15, which is every formula cell in the file. J2 does not parse, so it has no key in values; the other 14 do (an error value such as #DIV/0! or #N/A is a value). calculated_formulas is 14 and unresolved_formulas is 1.",
+      "document_fixture": "operating-scenario.workbook.json",
+      "input_kinds": {"unit_price": "number", "unit_cost": "number", "fixed_cost": "number"},
+      "open": {
+        "revision": 0,
+        "model_version": 1,
+        "source_fingerprint": "sha256:6c54429516c1a74e864c1d44b17115b228046e402b1db0fddbfb4a2364137d79",
+        "conversion": "present"
+      }
+    },
+    "legacy_revision": {
+      "entry": "open",
+      "formula_counts": "The bound output is S!A3 (=A1+A2), the only formula cell; it reads two plain values. Closure formula cells: 1. It has a value, so calculated_formulas is 1 and unresolved_formulas is 0.",
+      "document": {
+        "schema_version": 1,
+        "revision": 7,
+        "sheets": [
+          {
+            "id": "s",
+            "name": "S",
+            "cells": {"A1": {"value": 1}, "A2": {"value": 2}, "A3": {"value": null, "formula": "=A1+A2"}}
+          }
+        ],
+        "inputs": {"a": {"sheet": "S", "address": "A1", "kind": "number", "required": true}},
+        "outputs": {"sum": {"sheet": "S", "address": "A3"}}
+      },
+      "document_text": "{\"schema_version\":1,\"revision\":7,\"sheets\":[{\"id\":\"s\",\"name\":\"S\",\"cells\":{\"A1\":{\"value\":1},\"A2\":{\"value\":2},\"A3\":{\"value\":null,\"formula\":\"=A1+A2\"}}}],\"inputs\":{\"a\":{\"sheet\":\"S\",\"address\":\"A1\",\"kind\":\"number\",\"required\":true}},\"outputs\":{\"sum\":{\"sheet\":\"S\",\"address\":\"A3\"}}}",
+      "open": {
+        "revision": 0,
+        "model_version": null,
+        "source_fingerprint": "sha256:02c7ed20265b603ea530aeb2356533d02b31eb3d3dc035cb6bdae9638f891c01",
+        "conversion": {"dropped": ["revision"], "added": []}
+      }
+    },
+    "cache": {
+      "entry": "model",
+      "formula_counts": "Bound outputs are S!A1 (=1+1) and S!B1 (=1+); neither reads another cell. Closure formula cells: 2. A1 has a value (2) and B1 does not parse, so calculated_formulas is 1 and unresolved_formulas is 1.",
+      "document": {
+        "schema_version": 1,
+        "sheets": [
+          {
+            "id": "s",
+            "name": "S",
+            "cells": {
+              "A1": {"value": null, "formula": "=1+1", "cached_value": 999},
+              "B1": {"value": null, "formula": "=1+", "cached_value": 5}
+            }
+          }
+        ],
+        "inputs": {},
+        "outputs": {"two": {"sheet": "S", "address": "A1"}, "broken": {"sheet": "S", "address": "B1"}}
+      },
+      "open": {"revision": 0, "model_version": null, "source_fingerprint": null, "conversion": null}
+    },
+    "partial": {
+      "entry": "model",
+      "formula_counts": "The document has three formula cells: S!A3 (=A1+A2), S!B1 (=A1*10) and S!B2 (=1+, which does not parse). Bound outputs are S!A1 and S!A2, which are plain values, and S!A3, which reads A1 and A2. The closure is therefore A1, A2 and A3, and its only formula cell is A3. B1 and B2 are formula cells no bound output depends on: they are outside the closure, so they are absent from values and evaluated_cells, B2 gets no parse_error diagnostic, and neither is counted. A3 has a value on every pass, so calculated_formulas is 1 and unresolved_formulas is 0. Counted over the whole workbook instead, the numbers would be 2 and 1.",
+      "outputs_on_plain_cells": "echo is bound to the input cell S!A1 and fixed to the literal S!A2. Neither is a formula, so each takes its origin as an input does and its result is the cell's value: both origins are null and the results 1 and 2 before any write; after the session sets a = 10, echo is `authored` with result 10 and fixed is unchanged. sum = A1 + A2 is 1 + 2 = 3, then 10 + 2 = 12.",
+      "document": {
+        "schema_version": 1,
+        "sheets": [
+          {
+            "id": "s",
+            "name": "S",
+            "cells": {
+              "A1": {"value": 1},
+              "A2": {"value": 2},
+              "A3": {"value": null, "formula": "=A1+A2"},
+              "B1": {"value": null, "formula": "=A1*10"},
+              "B2": {"value": null, "formula": "=1+"}
+            }
+          }
+        ],
+        "inputs": {"a": {"sheet": "S", "address": "A1", "kind": "number", "required": true}},
+        "outputs": {
+          "echo": {"sheet": "S", "address": "A1"},
+          "fixed": {"sheet": "S", "address": "A2"},
+          "sum": {"sheet": "S", "address": "A3"}
+        }
+      },
+      "open": {"revision": 0, "model_version": null, "source_fingerprint": null, "conversion": null}
+    }
+  },
+  "scenarios": [
+    {
+      "id": "input-changes",
+      "documents": ["planner", "canonical"],
+      "steps": [
+        {
+          "id": "s01",
+          "op": "calculate",
+          "expect": {
+            "planner": {
+              "report_version": 2,
+              "stage": "calculate",
+              "behavior_profile": "workbook-forge",
+              "schema_version": 1,
+              "model_version": null,
+              "source_fingerprint": null,
+              "revision": 0,
+              "base_revision": null,
+              "calc": {"now_ms": 1767225600000, "utc_offset_minutes": 0, "seed": "1"},
+              "inputs": [
+                {"name": "fixed_cost", "sheet": "Assumptions", "address": "B3", "origin": null, "value": 1000},
+                {"name": "unit_cost", "sheet": "Assumptions", "address": "B2", "origin": null, "value": 8},
+                {"name": "unit_price", "sheet": "Assumptions", "address": "B1", "origin": null, "value": 20}
+              ],
+              "outputs": [
+                {
+                  "name": "break_even_units",
+                  "sheet": "Forecast",
+                  "address": "F4",
+                  "origin": "calculated",
+                  "result": 83.33333333333333
+                },
+                {"name": "profit", "sheet": "Forecast", "address": "F3", "origin": "calculated", "result": 1440},
+                {"name": "revenue", "sheet": "Forecast", "address": "F2", "origin": "calculated", "result": 7400}
+              ],
+              "values": {
+                "Assumptions!B1": 20,
+                "Assumptions!B2": 8,
+                "Assumptions!B3": 1000,
+                "Forecast!B2": 100,
+                "Forecast!B3": 120,
+                "Forecast!B4": 150,
+                "Forecast!C2": 2000,
+                "Forecast!C3": 2400,
+                "Forecast!C4": 3000,
+                "Forecast!D2": 800,
+                "Forecast!D3": 960,
+                "Forecast!D4": 1200,
+                "Forecast!E2": 200,
+                "Forecast!E3": 440,
+                "Forecast!E4": 800,
+                "Forecast!F2": 7400,
+                "Forecast!F3": 1440,
+                "Forecast!F4": 83.33333333333333
+              },
+              "evaluated_cells": [
+                "Forecast!C2",
+                "Forecast!C3",
+                "Forecast!C4",
+                "Forecast!D2",
+                "Forecast!D3",
+                "Forecast!D4",
+                "Forecast!E2",
+                "Forecast!E3",
+                "Forecast!E4",
+                "Forecast!F2",
+                "Forecast!F3",
+                "Forecast!F4"
+              ],
+              "stale": false,
+              "diagnostics": [],
+              "calculated_formulas": 12,
+              "unresolved_formulas": 0
+            },
+            "canonical": {
+              "report_version": 2,
+              "stage": "calculate",
+              "behavior_profile": "workbook-forge",
+              "schema_version": 1,
+              "model_version": 1,
+              "source_fingerprint": "sha256:6c54429516c1a74e864c1d44b17115b228046e402b1db0fddbfb4a2364137d79",
+              "revision": 0,
+              "base_revision": null,
+              "calc": {"now_ms": 1767225600000, "utc_offset_minutes": 0, "seed": "1"},
+              "inputs": [
+                {"name": "fixed_cost", "sheet": "Assumptions", "address": "B3", "origin": null, "value": 1000},
+                {"name": "unit_cost", "sheet": "Assumptions", "address": "B2", "origin": null, "value": 8},
+                {"name": "unit_price", "sheet": "Assumptions", "address": "B1", "origin": null, "value": 20}
+              ],
+              "outputs": [
+                {
+                  "name": "break_even_units",
+                  "sheet": "Forecast",
+                  "address": "F4",
+                  "origin": "calculated",
+                  "result": 83.33333333333333
+                },
+                {
+                  "name": "division_error",
+                  "sheet": "Forecast",
+                  "address": "F5",
+                  "origin": "calculated",
+                  "result": {"error": "#DIV/0!"}
+                },
+                {
+                  "name": "parse_probe",
+                  "sheet": "Forecast",
+                  "address": "J2",
+                  "origin": "not_calculated",
+                  "result": null
+                },
+                {"name": "profit", "sheet": "Forecast", "address": "F3", "origin": "calculated", "result": 1440},
+                {"name": "revenue", "sheet": "Forecast", "address": "F2", "origin": "calculated", "result": 7400},
+                {
+                  "name": "unsupported_probe",
+                  "sheet": "Forecast",
+                  "address": "J1",
+                  "origin": "calculated",
+                  "result": 46023
+                }
+              ],
+              "values": {
+                "Assumptions!B1": 20,
+                "Assumptions!B2": 8,
+                "Assumptions!B3": 1000,
+                "Forecast!B2": 100,
+                "Forecast!B3": 120,
+                "Forecast!B4": 150,
+                "Forecast!C2": 2000,
+                "Forecast!C3": 2400,
+                "Forecast!C4": 3000,
+                "Forecast!D2": 800,
+                "Forecast!D3": 960,
+                "Forecast!D4": 1200,
+                "Forecast!E2": 200,
+                "Forecast!E3": 440,
+                "Forecast!E4": 800,
+                "Forecast!F2": 7400,
+                "Forecast!F3": 1440,
+                "Forecast!F4": 83.33333333333333,
+                "Forecast!F5": {"error": "#DIV/0!"},
+                "Forecast!J1": 46023
+              },
+              "evaluated_cells": [
+                "Forecast!C2",
+                "Forecast!C3",
+                "Forecast!C4",
+                "Forecast!D2",
+                "Forecast!D3",
+                "Forecast!D4",
+                "Forecast!E2",
+                "Forecast!E3",
+                "Forecast!E4",
+                "Forecast!F2",
+                "Forecast!F3",
+                "Forecast!F4",
+                "Forecast!F5",
+                "Forecast!J1"
+              ],
+              "stale": false,
+              "diagnostics": [{"code": "parse_error", "sheet": "Forecast", "address": "J2"}],
+              "calculated_formulas": 14,
+              "unresolved_formulas": 1
+            }
+          }
+        },
+        {"id": "s02", "op": "set_inputs", "values": {"unit_price": 25}, "expected_revision": 0, "returns": 1},
+        {
+          "id": "s03",
+          "op": "calculate",
+          "expect": {
+            "planner": {
+              "report_version": 2,
+              "stage": "calculate",
+              "behavior_profile": "workbook-forge",
+              "schema_version": 1,
+              "model_version": null,
+              "source_fingerprint": null,
+              "revision": 1,
+              "base_revision": 0,
+              "calc": {"now_ms": 1767225600000, "utc_offset_minutes": 0, "seed": "1"},
+              "inputs": [
+                {"name": "fixed_cost", "sheet": "Assumptions", "address": "B3", "origin": null, "value": 1000},
+                {"name": "unit_cost", "sheet": "Assumptions", "address": "B2", "origin": null, "value": 8},
+                {"name": "unit_price", "sheet": "Assumptions", "address": "B1", "origin": "authored", "value": 25}
+              ],
+              "outputs": [
+                {
+                  "name": "break_even_units",
+                  "sheet": "Forecast",
+                  "address": "F4",
+                  "origin": "calculated",
+                  "result": 58.8235294117647
+                },
+                {"name": "profit", "sheet": "Forecast", "address": "F3", "origin": "calculated", "result": 3290},
+                {"name": "revenue", "sheet": "Forecast", "address": "F2", "origin": "calculated", "result": 9250}
+              ],
+              "values": {
+                "Assumptions!B1": 25,
+                "Assumptions!B2": 8,
+                "Assumptions!B3": 1000,
+                "Forecast!B2": 100,
+                "Forecast!B3": 120,
+                "Forecast!B4": 150,
+                "Forecast!C2": 2500,
+                "Forecast!C3": 3000,
+                "Forecast!C4": 3750,
+                "Forecast!D2": 800,
+                "Forecast!D3": 960,
+                "Forecast!D4": 1200,
+                "Forecast!E2": 700,
+                "Forecast!E3": 1040,
+                "Forecast!E4": 1550,
+                "Forecast!F2": 9250,
+                "Forecast!F3": 3290,
+                "Forecast!F4": 58.8235294117647
+              },
+              "evaluated_cells": [
+                "Forecast!C2",
+                "Forecast!C3",
+                "Forecast!C4",
+                "Forecast!E2",
+                "Forecast!E3",
+                "Forecast!E4",
+                "Forecast!F2",
+                "Forecast!F3",
+                "Forecast!F4"
+              ],
+              "stale": false,
+              "diagnostics": [],
+              "calculated_formulas": 12,
+              "unresolved_formulas": 0
+            },
+            "canonical": {
+              "report_version": 2,
+              "stage": "calculate",
+              "behavior_profile": "workbook-forge",
+              "schema_version": 1,
+              "model_version": 1,
+              "source_fingerprint": "sha256:6c54429516c1a74e864c1d44b17115b228046e402b1db0fddbfb4a2364137d79",
+              "revision": 1,
+              "base_revision": 0,
+              "calc": {"now_ms": 1767225600000, "utc_offset_minutes": 0, "seed": "1"},
+              "inputs": [
+                {"name": "fixed_cost", "sheet": "Assumptions", "address": "B3", "origin": null, "value": 1000},
+                {"name": "unit_cost", "sheet": "Assumptions", "address": "B2", "origin": null, "value": 8},
+                {"name": "unit_price", "sheet": "Assumptions", "address": "B1", "origin": "authored", "value": 25}
+              ],
+              "outputs": [
+                {
+                  "name": "break_even_units",
+                  "sheet": "Forecast",
+                  "address": "F4",
+                  "origin": "calculated",
+                  "result": 58.8235294117647
+                },
+                {
+                  "name": "division_error",
+                  "sheet": "Forecast",
+                  "address": "F5",
+                  "origin": "calculated",
+                  "result": {"error": "#DIV/0!"}
+                },
+                {
+                  "name": "parse_probe",
+                  "sheet": "Forecast",
+                  "address": "J2",
+                  "origin": "not_calculated",
+                  "result": null
+                },
+                {"name": "profit", "sheet": "Forecast", "address": "F3", "origin": "calculated", "result": 3290},
+                {"name": "revenue", "sheet": "Forecast", "address": "F2", "origin": "calculated", "result": 9250},
+                {
+                  "name": "unsupported_probe",
+                  "sheet": "Forecast",
+                  "address": "J1",
+                  "origin": "calculated",
+                  "result": 46023
+                }
+              ],
+              "values": {
+                "Assumptions!B1": 25,
+                "Assumptions!B2": 8,
+                "Assumptions!B3": 1000,
+                "Forecast!B2": 100,
+                "Forecast!B3": 120,
+                "Forecast!B4": 150,
+                "Forecast!C2": 2500,
+                "Forecast!C3": 3000,
+                "Forecast!C4": 3750,
+                "Forecast!D2": 800,
+                "Forecast!D3": 960,
+                "Forecast!D4": 1200,
+                "Forecast!E2": 700,
+                "Forecast!E3": 1040,
+                "Forecast!E4": 1550,
+                "Forecast!F2": 9250,
+                "Forecast!F3": 3290,
+                "Forecast!F4": 58.8235294117647,
+                "Forecast!F5": {"error": "#DIV/0!"},
+                "Forecast!J1": 46023
+              },
+              "evaluated_cells": [
+                "Forecast!C2",
+                "Forecast!C3",
+                "Forecast!C4",
+                "Forecast!E2",
+                "Forecast!E3",
+                "Forecast!E4",
+                "Forecast!F2",
+                "Forecast!F3",
+                "Forecast!F4",
+                "Forecast!J1"
+              ],
+              "stale": false,
+              "diagnostics": [{"code": "parse_error", "sheet": "Forecast", "address": "J2"}],
+              "calculated_formulas": 14,
+              "unresolved_formulas": 1
+            }
+          }
+        },
+        {"id": "s04", "op": "set_inputs", "values": {"fixed_cost": 1020}, "expected_revision": 1, "returns": 2},
+        {"id": "s05", "op": "set_inputs", "values": {"unit_cost": 10}, "expected_revision": 2, "returns": 3},
+        {
+          "id": "s06",
+          "op": "calculate",
+          "expect": {
+            "planner": {
+              "report_version": 2,
+              "stage": "calculate",
+              "behavior_profile": "workbook-forge",
+              "schema_version": 1,
+              "model_version": null,
+              "source_fingerprint": null,
+              "revision": 3,
+              "base_revision": 1,
+              "calc": {"now_ms": 1767225600000, "utc_offset_minutes": 0, "seed": "1"},
+              "inputs": [
+                {"name": "fixed_cost", "sheet": "Assumptions", "address": "B3", "origin": "authored", "value": 1020},
+                {"name": "unit_cost", "sheet": "Assumptions", "address": "B2", "origin": "authored", "value": 10},
+                {"name": "unit_price", "sheet": "Assumptions", "address": "B1", "origin": "authored", "value": 25}
+              ],
+              "outputs": [
+                {
+                  "name": "break_even_units",
+                  "sheet": "Forecast",
+                  "address": "F4",
+                  "origin": "calculated",
+                  "result": 68
+                },
+                {"name": "profit", "sheet": "Forecast", "address": "F3", "origin": "calculated", "result": 2490},
+                {"name": "revenue", "sheet": "Forecast", "address": "F2", "origin": "calculated", "result": 9250}
+              ],
+              "values": {
+                "Assumptions!B1": 25,
+                "Assumptions!B2": 10,
+                "Assumptions!B3": 1020,
+                "Forecast!B2": 100,
+                "Forecast!B3": 120,
+                "Forecast!B4": 150,
+                "Forecast!C2": 2500,
+                "Forecast!C3": 3000,
+                "Forecast!C4": 3750,
+                "Forecast!D2": 1000,
+                "Forecast!D3": 1200,
+                "Forecast!D4": 1500,
+                "Forecast!E2": 480,
+                "Forecast!E3": 780,
+                "Forecast!E4": 1230,
+                "Forecast!F2": 9250,
+                "Forecast!F3": 2490,
+                "Forecast!F4": 68
+              },
+              "evaluated_cells": [
+                "Forecast!D2",
+                "Forecast!D3",
+                "Forecast!D4",
+                "Forecast!E2",
+                "Forecast!E3",
+                "Forecast!E4",
+                "Forecast!F3",
+                "Forecast!F4"
+              ],
+              "stale": false,
+              "diagnostics": [],
+              "calculated_formulas": 12,
+              "unresolved_formulas": 0
+            },
+            "canonical": {
+              "report_version": 2,
+              "stage": "calculate",
+              "behavior_profile": "workbook-forge",
+              "schema_version": 1,
+              "model_version": 1,
+              "source_fingerprint": "sha256:6c54429516c1a74e864c1d44b17115b228046e402b1db0fddbfb4a2364137d79",
+              "revision": 3,
+              "base_revision": 1,
+              "calc": {"now_ms": 1767225600000, "utc_offset_minutes": 0, "seed": "1"},
+              "inputs": [
+                {"name": "fixed_cost", "sheet": "Assumptions", "address": "B3", "origin": "authored", "value": 1020},
+                {"name": "unit_cost", "sheet": "Assumptions", "address": "B2", "origin": "authored", "value": 10},
+                {"name": "unit_price", "sheet": "Assumptions", "address": "B1", "origin": "authored", "value": 25}
+              ],
+              "outputs": [
+                {
+                  "name": "break_even_units",
+                  "sheet": "Forecast",
+                  "address": "F4",
+                  "origin": "calculated",
+                  "result": 68
+                },
+                {
+                  "name": "division_error",
+                  "sheet": "Forecast",
+                  "address": "F5",
+                  "origin": "calculated",
+                  "result": {"error": "#DIV/0!"}
+                },
+                {
+                  "name": "parse_probe",
+                  "sheet": "Forecast",
+                  "address": "J2",
+                  "origin": "not_calculated",
+                  "result": null
+                },
+                {"name": "profit", "sheet": "Forecast", "address": "F3", "origin": "calculated", "result": 2490},
+                {"name": "revenue", "sheet": "Forecast", "address": "F2", "origin": "calculated", "result": 9250},
+                {
+                  "name": "unsupported_probe",
+                  "sheet": "Forecast",
+                  "address": "J1",
+                  "origin": "calculated",
+                  "result": 46023
+                }
+              ],
+              "values": {
+                "Assumptions!B1": 25,
+                "Assumptions!B2": 10,
+                "Assumptions!B3": 1020,
+                "Forecast!B2": 100,
+                "Forecast!B3": 120,
+                "Forecast!B4": 150,
+                "Forecast!C2": 2500,
+                "Forecast!C3": 3000,
+                "Forecast!C4": 3750,
+                "Forecast!D2": 1000,
+                "Forecast!D3": 1200,
+                "Forecast!D4": 1500,
+                "Forecast!E2": 480,
+                "Forecast!E3": 780,
+                "Forecast!E4": 1230,
+                "Forecast!F2": 9250,
+                "Forecast!F3": 2490,
+                "Forecast!F4": 68,
+                "Forecast!F5": {"error": "#DIV/0!"},
+                "Forecast!J1": 46023
+              },
+              "evaluated_cells": [
+                "Forecast!D2",
+                "Forecast!D3",
+                "Forecast!D4",
+                "Forecast!E2",
+                "Forecast!E3",
+                "Forecast!E4",
+                "Forecast!F3",
+                "Forecast!F4",
+                "Forecast!J1"
+              ],
+              "stale": false,
+              "diagnostics": [{"code": "parse_error", "sheet": "Forecast", "address": "J2"}],
+              "calculated_formulas": 14,
+              "unresolved_formulas": 1
+            }
+          }
+        },
+        {
+          "id": "s07",
+          "op": "set_inputs",
+          "values": {"unit_cost": 9},
+          "expected_revision": 1,
+          "error": "revision_conflict",
+          "revision_after": 3
+        },
+        {
+          "id": "s08",
+          "op": "set_inputs",
+          "values": {"nope": 1},
+          "expected_revision": 3,
+          "error": "invalid_input",
+          "revision_after": 3
+        },
+        {
+          "id": "s09",
+          "op": "set_inputs",
+          "values": {"unit_price": 30, "nope": 1},
+          "expected_revision": 3,
+          "error": "invalid_input",
+          "revision_after": 3
+        },
+        {
+          "id": "s10",
+          "op": "set_inputs",
+          "values": {"unit_price": "thirty"},
+          "expected_revision": 3,
+          "error": "invalid_input",
+          "revision_after": 3
+        },
+        {
+          "id": "s11",
+          "op": "calculate",
+          "expect": {
+            "planner": {
+              "report_version": 2,
+              "stage": "calculate",
+              "behavior_profile": "workbook-forge",
+              "schema_version": 1,
+              "model_version": null,
+              "source_fingerprint": null,
+              "revision": 3,
+              "base_revision": 3,
+              "calc": {"now_ms": 1767225600000, "utc_offset_minutes": 0, "seed": "1"},
+              "inputs": [
+                {"name": "fixed_cost", "sheet": "Assumptions", "address": "B3", "origin": "authored", "value": 1020},
+                {"name": "unit_cost", "sheet": "Assumptions", "address": "B2", "origin": "authored", "value": 10},
+                {"name": "unit_price", "sheet": "Assumptions", "address": "B1", "origin": "authored", "value": 25}
+              ],
+              "outputs": [
+                {
+                  "name": "break_even_units",
+                  "sheet": "Forecast",
+                  "address": "F4",
+                  "origin": "calculated",
+                  "result": 68
+                },
+                {"name": "profit", "sheet": "Forecast", "address": "F3", "origin": "calculated", "result": 2490},
+                {"name": "revenue", "sheet": "Forecast", "address": "F2", "origin": "calculated", "result": 9250}
+              ],
+              "values": {
+                "Assumptions!B1": 25,
+                "Assumptions!B2": 10,
+                "Assumptions!B3": 1020,
+                "Forecast!B2": 100,
+                "Forecast!B3": 120,
+                "Forecast!B4": 150,
+                "Forecast!C2": 2500,
+                "Forecast!C3": 3000,
+                "Forecast!C4": 3750,
+                "Forecast!D2": 1000,
+                "Forecast!D3": 1200,
+                "Forecast!D4": 1500,
+                "Forecast!E2": 480,
+                "Forecast!E3": 780,
+                "Forecast!E4": 1230,
+                "Forecast!F2": 9250,
+                "Forecast!F3": 2490,
+                "Forecast!F4": 68
+              },
+              "evaluated_cells": [],
+              "stale": false,
+              "diagnostics": [],
+              "calculated_formulas": 12,
+              "unresolved_formulas": 0
+            },
+            "canonical": {
+              "report_version": 2,
+              "stage": "calculate",
+              "behavior_profile": "workbook-forge",
+              "schema_version": 1,
+              "model_version": 1,
+              "source_fingerprint": "sha256:6c54429516c1a74e864c1d44b17115b228046e402b1db0fddbfb4a2364137d79",
+              "revision": 3,
+              "base_revision": 3,
+              "calc": {"now_ms": 1767225600000, "utc_offset_minutes": 0, "seed": "1"},
+              "inputs": [
+                {"name": "fixed_cost", "sheet": "Assumptions", "address": "B3", "origin": "authored", "value": 1020},
+                {"name": "unit_cost", "sheet": "Assumptions", "address": "B2", "origin": "authored", "value": 10},
+                {"name": "unit_price", "sheet": "Assumptions", "address": "B1", "origin": "authored", "value": 25}
+              ],
+              "outputs": [
+                {
+                  "name": "break_even_units",
+                  "sheet": "Forecast",
+                  "address": "F4",
+                  "origin": "calculated",
+                  "result": 68
+                },
+                {
+                  "name": "division_error",
+                  "sheet": "Forecast",
+                  "address": "F5",
+                  "origin": "calculated",
+                  "result": {"error": "#DIV/0!"}
+                },
+                {
+                  "name": "parse_probe",
+                  "sheet": "Forecast",
+                  "address": "J2",
+                  "origin": "not_calculated",
+                  "result": null
+                },
+                {"name": "profit", "sheet": "Forecast", "address": "F3", "origin": "calculated", "result": 2490},
+                {"name": "revenue", "sheet": "Forecast", "address": "F2", "origin": "calculated", "result": 9250},
+                {
+                  "name": "unsupported_probe",
+                  "sheet": "Forecast",
+                  "address": "J1",
+                  "origin": "calculated",
+                  "result": 46023
+                }
+              ],
+              "values": {
+                "Assumptions!B1": 25,
+                "Assumptions!B2": 10,
+                "Assumptions!B3": 1020,
+                "Forecast!B2": 100,
+                "Forecast!B3": 120,
+                "Forecast!B4": 150,
+                "Forecast!C2": 2500,
+                "Forecast!C3": 3000,
+                "Forecast!C4": 3750,
+                "Forecast!D2": 1000,
+                "Forecast!D3": 1200,
+                "Forecast!D4": 1500,
+                "Forecast!E2": 480,
+                "Forecast!E3": 780,
+                "Forecast!E4": 1230,
+                "Forecast!F2": 9250,
+                "Forecast!F3": 2490,
+                "Forecast!F4": 68,
+                "Forecast!F5": {"error": "#DIV/0!"},
+                "Forecast!J1": 46023
+              },
+              "evaluated_cells": ["Forecast!J1"],
+              "stale": false,
+              "diagnostics": [{"code": "parse_error", "sheet": "Forecast", "address": "J2"}],
+              "calculated_formulas": 14,
+              "unresolved_formulas": 1
+            }
+          }
+        },
+        {
+          "id": "s12",
+          "op": "preview_inputs",
+          "values": {"unit_price": 30},
+          "expected_revision": 2,
+          "error": "revision_conflict",
+          "revision_after": 3
+        },
+        {
+          "id": "s13",
+          "op": "preview_inputs",
+          "values": {"unit_price": 30},
+          "expected_revision": 3,
+          "revision_after": 3,
+          "expect": {
+            "planner": {
+              "applied": false,
+              "base_revision": 3,
+              "proposed_revision": 4,
+              "changes": [{"sheet": "Assumptions", "address": "B1", "before": 25, "after": 30}],
+              "before": {
+                "report_version": 2,
+                "stage": "calculate",
+                "behavior_profile": "workbook-forge",
+                "schema_version": 1,
+                "model_version": null,
+                "source_fingerprint": null,
+                "revision": 3,
+                "base_revision": null,
+                "calc": {"now_ms": 1767225600000, "utc_offset_minutes": 0, "seed": "1"},
+                "inputs": [
+                  {"name": "fixed_cost", "sheet": "Assumptions", "address": "B3", "origin": "authored", "value": 1020},
+                  {"name": "unit_cost", "sheet": "Assumptions", "address": "B2", "origin": "authored", "value": 10},
+                  {"name": "unit_price", "sheet": "Assumptions", "address": "B1", "origin": "authored", "value": 25}
+                ],
+                "outputs": [
+                  {
+                    "name": "break_even_units",
+                    "sheet": "Forecast",
+                    "address": "F4",
+                    "origin": "calculated",
+                    "result": 68
+                  },
+                  {"name": "profit", "sheet": "Forecast", "address": "F3", "origin": "calculated", "result": 2490},
+                  {"name": "revenue", "sheet": "Forecast", "address": "F2", "origin": "calculated", "result": 9250}
+                ],
+                "values": {
+                  "Assumptions!B1": 25,
+                  "Assumptions!B2": 10,
+                  "Assumptions!B3": 1020,
+                  "Forecast!B2": 100,
+                  "Forecast!B3": 120,
+                  "Forecast!B4": 150,
+                  "Forecast!C2": 2500,
+                  "Forecast!C3": 3000,
+                  "Forecast!C4": 3750,
+                  "Forecast!D2": 1000,
+                  "Forecast!D3": 1200,
+                  "Forecast!D4": 1500,
+                  "Forecast!E2": 480,
+                  "Forecast!E3": 780,
+                  "Forecast!E4": 1230,
+                  "Forecast!F2": 9250,
+                  "Forecast!F3": 2490,
+                  "Forecast!F4": 68
+                },
+                "evaluated_cells": [
+                  "Forecast!C2",
+                  "Forecast!C3",
+                  "Forecast!C4",
+                  "Forecast!D2",
+                  "Forecast!D3",
+                  "Forecast!D4",
+                  "Forecast!E2",
+                  "Forecast!E3",
+                  "Forecast!E4",
+                  "Forecast!F2",
+                  "Forecast!F3",
+                  "Forecast!F4"
+                ],
+                "stale": false,
+                "diagnostics": [],
+                "calculated_formulas": 12,
+                "unresolved_formulas": 0
+              },
+              "after": {
+                "report_version": 2,
+                "stage": "calculate",
+                "behavior_profile": "workbook-forge",
+                "schema_version": 1,
+                "model_version": null,
+                "source_fingerprint": null,
+                "revision": 4,
+                "base_revision": 3,
+                "calc": {"now_ms": 1767225600000, "utc_offset_minutes": 0, "seed": "1"},
+                "inputs": [
+                  {"name": "fixed_cost", "sheet": "Assumptions", "address": "B3", "origin": "authored", "value": 1020},
+                  {"name": "unit_cost", "sheet": "Assumptions", "address": "B2", "origin": "authored", "value": 10},
+                  {"name": "unit_price", "sheet": "Assumptions", "address": "B1", "origin": "authored", "value": 30}
+                ],
+                "outputs": [
+                  {
+                    "name": "break_even_units",
+                    "sheet": "Forecast",
+                    "address": "F4",
+                    "origin": "calculated",
+                    "result": 51
+                  },
+                  {"name": "profit", "sheet": "Forecast", "address": "F3", "origin": "calculated", "result": 4340},
+                  {"name": "revenue", "sheet": "Forecast", "address": "F2", "origin": "calculated", "result": 11100}
+                ],
+                "values": {
+                  "Assumptions!B1": 30,
+                  "Assumptions!B2": 10,
+                  "Assumptions!B3": 1020,
+                  "Forecast!B2": 100,
+                  "Forecast!B3": 120,
+                  "Forecast!B4": 150,
+                  "Forecast!C2": 3000,
+                  "Forecast!C3": 3600,
+                  "Forecast!C4": 4500,
+                  "Forecast!D2": 1000,
+                  "Forecast!D3": 1200,
+                  "Forecast!D4": 1500,
+                  "Forecast!E2": 980,
+                  "Forecast!E3": 1380,
+                  "Forecast!E4": 1980,
+                  "Forecast!F2": 11100,
+                  "Forecast!F3": 4340,
+                  "Forecast!F4": 51
+                },
+                "evaluated_cells": [
+                  "Forecast!C2",
+                  "Forecast!C3",
+                  "Forecast!C4",
+                  "Forecast!E2",
+                  "Forecast!E3",
+                  "Forecast!E4",
+                  "Forecast!F2",
+                  "Forecast!F3",
+                  "Forecast!F4"
+                ],
+                "stale": false,
+                "diagnostics": [],
+                "calculated_formulas": 12,
+                "unresolved_formulas": 0
+              }
+            },
+            "canonical": {
+              "applied": false,
+              "base_revision": 3,
+              "proposed_revision": 4,
+              "changes": [{"sheet": "Assumptions", "address": "B1", "before": 25, "after": 30}],
+              "before": {
+                "report_version": 2,
+                "stage": "calculate",
+                "behavior_profile": "workbook-forge",
+                "schema_version": 1,
+                "model_version": 1,
+                "source_fingerprint": "sha256:6c54429516c1a74e864c1d44b17115b228046e402b1db0fddbfb4a2364137d79",
+                "revision": 3,
+                "base_revision": null,
+                "calc": {"now_ms": 1767225600000, "utc_offset_minutes": 0, "seed": "1"},
+                "inputs": [
+                  {"name": "fixed_cost", "sheet": "Assumptions", "address": "B3", "origin": "authored", "value": 1020},
+                  {"name": "unit_cost", "sheet": "Assumptions", "address": "B2", "origin": "authored", "value": 10},
+                  {"name": "unit_price", "sheet": "Assumptions", "address": "B1", "origin": "authored", "value": 25}
+                ],
+                "outputs": [
+                  {
+                    "name": "break_even_units",
+                    "sheet": "Forecast",
+                    "address": "F4",
+                    "origin": "calculated",
+                    "result": 68
+                  },
+                  {
+                    "name": "division_error",
+                    "sheet": "Forecast",
+                    "address": "F5",
+                    "origin": "calculated",
+                    "result": {"error": "#DIV/0!"}
+                  },
+                  {
+                    "name": "parse_probe",
+                    "sheet": "Forecast",
+                    "address": "J2",
+                    "origin": "not_calculated",
+                    "result": null
+                  },
+                  {"name": "profit", "sheet": "Forecast", "address": "F3", "origin": "calculated", "result": 2490},
+                  {"name": "revenue", "sheet": "Forecast", "address": "F2", "origin": "calculated", "result": 9250},
+                  {
+                    "name": "unsupported_probe",
+                    "sheet": "Forecast",
+                    "address": "J1",
+                    "origin": "calculated",
+                    "result": 46023
+                  }
+                ],
+                "values": {
+                  "Assumptions!B1": 25,
+                  "Assumptions!B2": 10,
+                  "Assumptions!B3": 1020,
+                  "Forecast!B2": 100,
+                  "Forecast!B3": 120,
+                  "Forecast!B4": 150,
+                  "Forecast!C2": 2500,
+                  "Forecast!C3": 3000,
+                  "Forecast!C4": 3750,
+                  "Forecast!D2": 1000,
+                  "Forecast!D3": 1200,
+                  "Forecast!D4": 1500,
+                  "Forecast!E2": 480,
+                  "Forecast!E3": 780,
+                  "Forecast!E4": 1230,
+                  "Forecast!F2": 9250,
+                  "Forecast!F3": 2490,
+                  "Forecast!F4": 68,
+                  "Forecast!F5": {"error": "#DIV/0!"},
+                  "Forecast!J1": 46023
+                },
+                "evaluated_cells": [
+                  "Forecast!C2",
+                  "Forecast!C3",
+                  "Forecast!C4",
+                  "Forecast!D2",
+                  "Forecast!D3",
+                  "Forecast!D4",
+                  "Forecast!E2",
+                  "Forecast!E3",
+                  "Forecast!E4",
+                  "Forecast!F2",
+                  "Forecast!F3",
+                  "Forecast!F4",
+                  "Forecast!F5",
+                  "Forecast!J1"
+                ],
+                "stale": false,
+                "diagnostics": [{"code": "parse_error", "sheet": "Forecast", "address": "J2"}],
+                "calculated_formulas": 14,
+                "unresolved_formulas": 1
+              },
+              "after": {
+                "report_version": 2,
+                "stage": "calculate",
+                "behavior_profile": "workbook-forge",
+                "schema_version": 1,
+                "model_version": 1,
+                "source_fingerprint": "sha256:6c54429516c1a74e864c1d44b17115b228046e402b1db0fddbfb4a2364137d79",
+                "revision": 4,
+                "base_revision": 3,
+                "calc": {"now_ms": 1767225600000, "utc_offset_minutes": 0, "seed": "1"},
+                "inputs": [
+                  {"name": "fixed_cost", "sheet": "Assumptions", "address": "B3", "origin": "authored", "value": 1020},
+                  {"name": "unit_cost", "sheet": "Assumptions", "address": "B2", "origin": "authored", "value": 10},
+                  {"name": "unit_price", "sheet": "Assumptions", "address": "B1", "origin": "authored", "value": 30}
+                ],
+                "outputs": [
+                  {
+                    "name": "break_even_units",
+                    "sheet": "Forecast",
+                    "address": "F4",
+                    "origin": "calculated",
+                    "result": 51
+                  },
+                  {
+                    "name": "division_error",
+                    "sheet": "Forecast",
+                    "address": "F5",
+                    "origin": "calculated",
+                    "result": {"error": "#DIV/0!"}
+                  },
+                  {
+                    "name": "parse_probe",
+                    "sheet": "Forecast",
+                    "address": "J2",
+                    "origin": "not_calculated",
+                    "result": null
+                  },
+                  {"name": "profit", "sheet": "Forecast", "address": "F3", "origin": "calculated", "result": 4340},
+                  {"name": "revenue", "sheet": "Forecast", "address": "F2", "origin": "calculated", "result": 11100},
+                  {
+                    "name": "unsupported_probe",
+                    "sheet": "Forecast",
+                    "address": "J1",
+                    "origin": "calculated",
+                    "result": 46023
+                  }
+                ],
+                "values": {
+                  "Assumptions!B1": 30,
+                  "Assumptions!B2": 10,
+                  "Assumptions!B3": 1020,
+                  "Forecast!B2": 100,
+                  "Forecast!B3": 120,
+                  "Forecast!B4": 150,
+                  "Forecast!C2": 3000,
+                  "Forecast!C3": 3600,
+                  "Forecast!C4": 4500,
+                  "Forecast!D2": 1000,
+                  "Forecast!D3": 1200,
+                  "Forecast!D4": 1500,
+                  "Forecast!E2": 980,
+                  "Forecast!E3": 1380,
+                  "Forecast!E4": 1980,
+                  "Forecast!F2": 11100,
+                  "Forecast!F3": 4340,
+                  "Forecast!F4": 51,
+                  "Forecast!F5": {"error": "#DIV/0!"},
+                  "Forecast!J1": 46023
+                },
+                "evaluated_cells": [
+                  "Forecast!C2",
+                  "Forecast!C3",
+                  "Forecast!C4",
+                  "Forecast!E2",
+                  "Forecast!E3",
+                  "Forecast!E4",
+                  "Forecast!F2",
+                  "Forecast!F3",
+                  "Forecast!F4",
+                  "Forecast!J1"
+                ],
+                "stale": false,
+                "diagnostics": [{"code": "parse_error", "sheet": "Forecast", "address": "J2"}],
+                "calculated_formulas": 14,
+                "unresolved_formulas": 1
+              }
+            }
+          }
+        },
+        {
+          "id": "s14",
+          "op": "calculate",
+          "expect": {
+            "planner": {
+              "report_version": 2,
+              "stage": "calculate",
+              "behavior_profile": "workbook-forge",
+              "schema_version": 1,
+              "model_version": null,
+              "source_fingerprint": null,
+              "revision": 3,
+              "base_revision": 3,
+              "calc": {"now_ms": 1767225600000, "utc_offset_minutes": 0, "seed": "1"},
+              "inputs": [
+                {"name": "fixed_cost", "sheet": "Assumptions", "address": "B3", "origin": "authored", "value": 1020},
+                {"name": "unit_cost", "sheet": "Assumptions", "address": "B2", "origin": "authored", "value": 10},
+                {"name": "unit_price", "sheet": "Assumptions", "address": "B1", "origin": "authored", "value": 25}
+              ],
+              "outputs": [
+                {
+                  "name": "break_even_units",
+                  "sheet": "Forecast",
+                  "address": "F4",
+                  "origin": "calculated",
+                  "result": 68
+                },
+                {"name": "profit", "sheet": "Forecast", "address": "F3", "origin": "calculated", "result": 2490},
+                {"name": "revenue", "sheet": "Forecast", "address": "F2", "origin": "calculated", "result": 9250}
+              ],
+              "values": {
+                "Assumptions!B1": 25,
+                "Assumptions!B2": 10,
+                "Assumptions!B3": 1020,
+                "Forecast!B2": 100,
+                "Forecast!B3": 120,
+                "Forecast!B4": 150,
+                "Forecast!C2": 2500,
+                "Forecast!C3": 3000,
+                "Forecast!C4": 3750,
+                "Forecast!D2": 1000,
+                "Forecast!D3": 1200,
+                "Forecast!D4": 1500,
+                "Forecast!E2": 480,
+                "Forecast!E3": 780,
+                "Forecast!E4": 1230,
+                "Forecast!F2": 9250,
+                "Forecast!F3": 2490,
+                "Forecast!F4": 68
+              },
+              "evaluated_cells": [],
+              "stale": false,
+              "diagnostics": [],
+              "calculated_formulas": 12,
+              "unresolved_formulas": 0
+            },
+            "canonical": {
+              "report_version": 2,
+              "stage": "calculate",
+              "behavior_profile": "workbook-forge",
+              "schema_version": 1,
+              "model_version": 1,
+              "source_fingerprint": "sha256:6c54429516c1a74e864c1d44b17115b228046e402b1db0fddbfb4a2364137d79",
+              "revision": 3,
+              "base_revision": 3,
+              "calc": {"now_ms": 1767225600000, "utc_offset_minutes": 0, "seed": "1"},
+              "inputs": [
+                {"name": "fixed_cost", "sheet": "Assumptions", "address": "B3", "origin": "authored", "value": 1020},
+                {"name": "unit_cost", "sheet": "Assumptions", "address": "B2", "origin": "authored", "value": 10},
+                {"name": "unit_price", "sheet": "Assumptions", "address": "B1", "origin": "authored", "value": 25}
+              ],
+              "outputs": [
+                {
+                  "name": "break_even_units",
+                  "sheet": "Forecast",
+                  "address": "F4",
+                  "origin": "calculated",
+                  "result": 68
+                },
+                {
+                  "name": "division_error",
+                  "sheet": "Forecast",
+                  "address": "F5",
+                  "origin": "calculated",
+                  "result": {"error": "#DIV/0!"}
+                },
+                {
+                  "name": "parse_probe",
+                  "sheet": "Forecast",
+                  "address": "J2",
+                  "origin": "not_calculated",
+                  "result": null
+                },
+                {"name": "profit", "sheet": "Forecast", "address": "F3", "origin": "calculated", "result": 2490},
+                {"name": "revenue", "sheet": "Forecast", "address": "F2", "origin": "calculated", "result": 9250},
+                {
+                  "name": "unsupported_probe",
+                  "sheet": "Forecast",
+                  "address": "J1",
+                  "origin": "calculated",
+                  "result": 46023
+                }
+              ],
+              "values": {
+                "Assumptions!B1": 25,
+                "Assumptions!B2": 10,
+                "Assumptions!B3": 1020,
+                "Forecast!B2": 100,
+                "Forecast!B3": 120,
+                "Forecast!B4": 150,
+                "Forecast!C2": 2500,
+                "Forecast!C3": 3000,
+                "Forecast!C4": 3750,
+                "Forecast!D2": 1000,
+                "Forecast!D3": 1200,
+                "Forecast!D4": 1500,
+                "Forecast!E2": 480,
+                "Forecast!E3": 780,
+                "Forecast!E4": 1230,
+                "Forecast!F2": 9250,
+                "Forecast!F3": 2490,
+                "Forecast!F4": 68,
+                "Forecast!F5": {"error": "#DIV/0!"},
+                "Forecast!J1": 46023
+              },
+              "evaluated_cells": ["Forecast!J1"],
+              "stale": false,
+              "diagnostics": [{"code": "parse_error", "sheet": "Forecast", "address": "J2"}],
+              "calculated_formulas": 14,
+              "unresolved_formulas": 1
+            }
+          }
+        },
+        {"id": "s15", "op": "set_inputs", "values": {"unit_price": 10}, "expected_revision": 3, "returns": 4},
+        {
+          "id": "s16",
+          "op": "calculate",
+          "expect": {
+            "planner": {
+              "report_version": 2,
+              "stage": "calculate",
+              "behavior_profile": "workbook-forge",
+              "schema_version": 1,
+              "model_version": null,
+              "source_fingerprint": null,
+              "revision": 4,
+              "base_revision": 3,
+              "calc": {"now_ms": 1767225600000, "utc_offset_minutes": 0, "seed": "1"},
+              "inputs": [
+                {"name": "fixed_cost", "sheet": "Assumptions", "address": "B3", "origin": "authored", "value": 1020},
+                {"name": "unit_cost", "sheet": "Assumptions", "address": "B2", "origin": "authored", "value": 10},
+                {"name": "unit_price", "sheet": "Assumptions", "address": "B1", "origin": "authored", "value": 10}
+              ],
+              "outputs": [
+                {
+                  "name": "break_even_units",
+                  "sheet": "Forecast",
+                  "address": "F4",
+                  "origin": "calculated",
+                  "result": {"error": "#N/A"}
+                },
+                {"name": "profit", "sheet": "Forecast", "address": "F3", "origin": "calculated", "result": -3060},
+                {"name": "revenue", "sheet": "Forecast", "address": "F2", "origin": "calculated", "result": 3700}
+              ],
+              "values": {
+                "Assumptions!B1": 10,
+                "Assumptions!B2": 10,
+                "Assumptions!B3": 1020,
+                "Forecast!B2": 100,
+                "Forecast!B3": 120,
+                "Forecast!B4": 150,
+                "Forecast!C2": 1000,
+                "Forecast!C3": 1200,
+                "Forecast!C4": 1500,
+                "Forecast!D2": 1000,
+                "Forecast!D3": 1200,
+                "Forecast!D4": 1500,
+                "Forecast!E2": -1020,
+                "Forecast!E3": -1020,
+                "Forecast!E4": -1020,
+                "Forecast!F2": 3700,
+                "Forecast!F3": -3060,
+                "Forecast!F4": {"error": "#N/A"}
+              },
+              "evaluated_cells": [
+                "Forecast!C2",
+                "Forecast!C3",
+                "Forecast!C4",
+                "Forecast!E2",
+                "Forecast!E3",
+                "Forecast!E4",
+                "Forecast!F2",
+                "Forecast!F3",
+                "Forecast!F4"
+              ],
+              "stale": false,
+              "diagnostics": [],
+              "calculated_formulas": 12,
+              "unresolved_formulas": 0
+            },
+            "canonical": {
+              "report_version": 2,
+              "stage": "calculate",
+              "behavior_profile": "workbook-forge",
+              "schema_version": 1,
+              "model_version": 1,
+              "source_fingerprint": "sha256:6c54429516c1a74e864c1d44b17115b228046e402b1db0fddbfb4a2364137d79",
+              "revision": 4,
+              "base_revision": 3,
+              "calc": {"now_ms": 1767225600000, "utc_offset_minutes": 0, "seed": "1"},
+              "inputs": [
+                {"name": "fixed_cost", "sheet": "Assumptions", "address": "B3", "origin": "authored", "value": 1020},
+                {"name": "unit_cost", "sheet": "Assumptions", "address": "B2", "origin": "authored", "value": 10},
+                {"name": "unit_price", "sheet": "Assumptions", "address": "B1", "origin": "authored", "value": 10}
+              ],
+              "outputs": [
+                {
+                  "name": "break_even_units",
+                  "sheet": "Forecast",
+                  "address": "F4",
+                  "origin": "calculated",
+                  "result": {"error": "#N/A"}
+                },
+                {
+                  "name": "division_error",
+                  "sheet": "Forecast",
+                  "address": "F5",
+                  "origin": "calculated",
+                  "result": {"error": "#DIV/0!"}
+                },
+                {
+                  "name": "parse_probe",
+                  "sheet": "Forecast",
+                  "address": "J2",
+                  "origin": "not_calculated",
+                  "result": null
+                },
+                {"name": "profit", "sheet": "Forecast", "address": "F3", "origin": "calculated", "result": -3060},
+                {"name": "revenue", "sheet": "Forecast", "address": "F2", "origin": "calculated", "result": 3700},
+                {
+                  "name": "unsupported_probe",
+                  "sheet": "Forecast",
+                  "address": "J1",
+                  "origin": "calculated",
+                  "result": 46023
+                }
+              ],
+              "values": {
+                "Assumptions!B1": 10,
+                "Assumptions!B2": 10,
+                "Assumptions!B3": 1020,
+                "Forecast!B2": 100,
+                "Forecast!B3": 120,
+                "Forecast!B4": 150,
+                "Forecast!C2": 1000,
+                "Forecast!C3": 1200,
+                "Forecast!C4": 1500,
+                "Forecast!D2": 1000,
+                "Forecast!D3": 1200,
+                "Forecast!D4": 1500,
+                "Forecast!E2": -1020,
+                "Forecast!E3": -1020,
+                "Forecast!E4": -1020,
+                "Forecast!F2": 3700,
+                "Forecast!F3": -3060,
+                "Forecast!F4": {"error": "#N/A"},
+                "Forecast!F5": {"error": "#DIV/0!"},
+                "Forecast!J1": 46023
+              },
+              "evaluated_cells": [
+                "Forecast!C2",
+                "Forecast!C3",
+                "Forecast!C4",
+                "Forecast!E2",
+                "Forecast!E3",
+                "Forecast!E4",
+                "Forecast!F2",
+                "Forecast!F3",
+                "Forecast!F4",
+                "Forecast!J1"
+              ],
+              "stale": false,
+              "diagnostics": [{"code": "parse_error", "sheet": "Forecast", "address": "J2"}],
+              "calculated_formulas": 14,
+              "unresolved_formulas": 1
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "legacy-revision",
+      "documents": ["legacy_revision"],
+      "steps": [
+        {
+          "id": "l01",
+          "op": "calculate",
+          "expect": {
+            "legacy_revision": {
+              "report_version": 2,
+              "stage": "calculate",
+              "behavior_profile": "workbook-forge",
+              "schema_version": 1,
+              "model_version": null,
+              "source_fingerprint": "sha256:02c7ed20265b603ea530aeb2356533d02b31eb3d3dc035cb6bdae9638f891c01",
+              "revision": 0,
+              "base_revision": null,
+              "calc": {"now_ms": 1767225600000, "utc_offset_minutes": 0, "seed": "1"},
+              "inputs": [{"name": "a", "sheet": "S", "address": "A1", "origin": null, "value": 1}],
+              "outputs": [{"name": "sum", "sheet": "S", "address": "A3", "origin": "calculated", "result": 3}],
+              "values": {"S!A1": 1, "S!A2": 2, "S!A3": 3},
+              "evaluated_cells": ["S!A3"],
+              "stale": false,
+              "diagnostics": [],
+              "calculated_formulas": 1,
+              "unresolved_formulas": 0
+            }
+          }
+        },
+        {
+          "id": "l02",
+          "op": "set_inputs",
+          "values": {"a": 10},
+          "expected_revision": 7,
+          "error": "revision_conflict",
+          "revision_after": 0
+        },
+        {"id": "l03", "op": "set_inputs", "values": {"a": 10}, "expected_revision": 0, "returns": 1},
+        {
+          "id": "l04",
+          "op": "calculate",
+          "expect": {
+            "legacy_revision": {
+              "report_version": 2,
+              "stage": "calculate",
+              "behavior_profile": "workbook-forge",
+              "schema_version": 1,
+              "model_version": null,
+              "source_fingerprint": "sha256:02c7ed20265b603ea530aeb2356533d02b31eb3d3dc035cb6bdae9638f891c01",
+              "revision": 1,
+              "base_revision": 0,
+              "calc": {"now_ms": 1767225600000, "utc_offset_minutes": 0, "seed": "1"},
+              "inputs": [{"name": "a", "sheet": "S", "address": "A1", "origin": "authored", "value": 10}],
+              "outputs": [{"name": "sum", "sheet": "S", "address": "A3", "origin": "calculated", "result": 12}],
+              "values": {"S!A1": 10, "S!A2": 2, "S!A3": 12},
+              "evaluated_cells": ["S!A3"],
+              "stale": false,
+              "diagnostics": [],
+              "calculated_formulas": 1,
+              "unresolved_formulas": 0
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "partial-closure",
+      "documents": ["partial"],
+      "steps": [
+        {
+          "id": "p01",
+          "op": "calculate",
+          "expect": {
+            "partial": {
+              "report_version": 2,
+              "stage": "calculate",
+              "behavior_profile": "workbook-forge",
+              "schema_version": 1,
+              "model_version": null,
+              "source_fingerprint": null,
+              "revision": 0,
+              "base_revision": null,
+              "calc": {"now_ms": 1767225600000, "utc_offset_minutes": 0, "seed": "1"},
+              "inputs": [{"name": "a", "sheet": "S", "address": "A1", "origin": null, "value": 1}],
+              "outputs": [
+                {"name": "echo", "sheet": "S", "address": "A1", "origin": null, "result": 1},
+                {"name": "fixed", "sheet": "S", "address": "A2", "origin": null, "result": 2},
+                {"name": "sum", "sheet": "S", "address": "A3", "origin": "calculated", "result": 3}
+              ],
+              "values": {"S!A1": 1, "S!A2": 2, "S!A3": 3},
+              "evaluated_cells": ["S!A3"],
+              "stale": false,
+              "diagnostics": [],
+              "calculated_formulas": 1,
+              "unresolved_formulas": 0
+            }
+          }
+        },
+        {"id": "p02", "op": "set_inputs", "values": {"a": 10}, "expected_revision": 0, "returns": 1},
+        {
+          "id": "p03",
+          "op": "calculate",
+          "expect": {
+            "partial": {
+              "report_version": 2,
+              "stage": "calculate",
+              "behavior_profile": "workbook-forge",
+              "schema_version": 1,
+              "model_version": null,
+              "source_fingerprint": null,
+              "revision": 1,
+              "base_revision": 0,
+              "calc": {"now_ms": 1767225600000, "utc_offset_minutes": 0, "seed": "1"},
+              "inputs": [{"name": "a", "sheet": "S", "address": "A1", "origin": "authored", "value": 10}],
+              "outputs": [
+                {"name": "echo", "sheet": "S", "address": "A1", "origin": "authored", "result": 10},
+                {"name": "fixed", "sheet": "S", "address": "A2", "origin": null, "result": 2},
+                {"name": "sum", "sheet": "S", "address": "A3", "origin": "calculated", "result": 12}
+              ],
+              "values": {"S!A1": 10, "S!A2": 2, "S!A3": 12},
+              "evaluated_cells": ["S!A3"],
+              "stale": false,
+              "diagnostics": [],
+              "calculated_formulas": 1,
+              "unresolved_formulas": 0
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "imported-cache",
+      "documents": ["cache"],
+      "steps": [
+        {
+          "id": "c01",
+          "op": "calculate",
+          "expect": {
+            "cache": {
+              "report_version": 2,
+              "stage": "calculate",
+              "behavior_profile": "workbook-forge",
+              "schema_version": 1,
+              "model_version": null,
+              "source_fingerprint": null,
+              "revision": 0,
+              "base_revision": null,
+              "calc": {"now_ms": 1767225600000, "utc_offset_minutes": 0, "seed": "1"},
+              "inputs": [],
+              "outputs": [
+                {"name": "broken", "sheet": "S", "address": "B1", "origin": "not_calculated", "result": null},
+                {"name": "two", "sheet": "S", "address": "A1", "origin": "calculated", "result": 2}
+              ],
+              "values": {"S!A1": 2},
+              "evaluated_cells": ["S!A1"],
+              "stale": false,
+              "diagnostics": [{"code": "parse_error", "sheet": "S", "address": "B1"}],
+              "calculated_formulas": 1,
+              "unresolved_formulas": 1
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "open_refusals": {
+    "note": "Documents that CalculationSession.open refuses, with the code each engine reports (the session contract, section 4, reader codes). `document` is text; the test passes its UTF-8 bytes to open with no input_kinds. Bytes that are not JSON and a root that is not an object are refused by open itself as invalid_model in both languages, before a reader is chosen. A JSON object goes to the toolkit reader, and the two readers do not share every code: the Rust reader deserialises into typed structs and a document it cannot deserialise has no code of its own, so open reports it as invalid_model, while the Python reader reports the code of the first rule it finds broken. The cases where the two columns differ are those reader differences; the test also checks that they are exactly the ones named in `reader_differences`.",
+    "reader_differences": ["empty-object", "fractional-version", "list-cell-value"],
+    "cases": [
+      {"name": "not-json", "document": "not json", "python": "invalid_model", "rust": "invalid_model", "reason": "Not JSON."},
+      {"name": "empty", "document": "", "python": "invalid_model", "rust": "invalid_model", "reason": "No document."},
+      {"name": "trailing-text", "document": "{\"schema_version\":1,\"sheets\":[{\"id\":\"s\",\"name\":\"S\",\"cells\":{\"A1\":{\"value\":1}}}],\"inputs\":{},\"outputs\":{}} x", "python": "invalid_model", "rust": "invalid_model", "reason": "Text after the JSON value."},
+      {"name": "byte-order-mark", "document": "\ufeff{\"schema_version\":1,\"sheets\":[{\"id\":\"s\",\"name\":\"S\",\"cells\":{\"A1\":{\"value\":1}}}],\"inputs\":{},\"outputs\":{}}", "python": "invalid_model", "rust": "invalid_model", "reason": "A byte order mark is not JSON."},
+      {"name": "nan-constant", "document": "{\"schema_version\":1,\"sheets\":[{\"id\":\"s\",\"name\":\"S\",\"cells\":{\"A1\":{\"value\":NaN}}}],\"inputs\":{},\"outputs\":{}}", "python": "invalid_model", "rust": "invalid_model", "reason": "NaN is not a JSON value."},
+      {"name": "number-out-of-range", "document": "{\"schema_version\":1,\"sheets\":[{\"id\":\"s\",\"name\":\"S\",\"cells\":{\"A1\":{\"value\":1e400}}}],\"inputs\":{},\"outputs\":{}}", "python": "invalid_model", "rust": "invalid_model", "reason": "1e400 is outside the binary64 range."},
+      {"name": "array-root", "document": "[1,9,[{\"id\":\"d\",\"name\":\"Data\",\"cells\":{\"A1\":{\"value\":1}}}],{},{}]", "python": "invalid_model", "rust": "invalid_model", "reason": "The root is not an object. The second element must not be read as a positional revision."},
+      {"name": "null-root", "document": "null", "python": "invalid_model", "rust": "invalid_model", "reason": "The root is not an object."},
+      {"name": "no-version", "document": "{\"sheets\":[{\"id\":\"s\",\"name\":\"S\",\"cells\":{\"A1\":{\"value\":1}}}],\"inputs\":{},\"outputs\":{}}", "python": "schema_version", "rust": "schema_version", "reason": "A document with no schema_version is not a version 1 document (docs/specs/model-versioning.md)."},
+      {"name": "wrong-version", "document": "{\"schema_version\":2,\"sheets\":[{\"id\":\"s\",\"name\":\"S\",\"cells\":{\"A1\":{\"value\":1}}}],\"inputs\":{},\"outputs\":{}}", "python": "schema_version", "rust": "schema_version", "reason": "Only schema_version 1 is read."},
+      {"name": "empty-object", "document": "{}", "python": "schema_version", "rust": "invalid_model", "reason": "Reader difference. Python checks the version before anything else; the Rust struct reader cannot build a document without `sheets` and has no code of its own."},
+      {"name": "fractional-version", "document": "{\"schema_version\":1.0,\"sheets\":[{\"id\":\"s\",\"name\":\"S\",\"cells\":{\"A1\":{\"value\":1}}}],\"inputs\":{},\"outputs\":{}}", "python": "schema_version", "rust": "invalid_model", "reason": "Reader difference. Python reports the version rule; the Rust struct reader cannot read 1.0 as an integer and has no code of its own."},
+      {"name": "list-cell-value", "document": "{\"schema_version\":1,\"sheets\":[{\"id\":\"s\",\"name\":\"S\",\"cells\":{\"A1\":{\"value\":[1]}}}],\"inputs\":{},\"outputs\":{}}", "python": "invalid_value", "rust": "invalid_model", "reason": "Reader difference. Python reports the cell-value rule; the Rust struct reader cannot read a list as a cell value and has no code of its own."}
+    ]
+  },
+  "revision_key": {
+    "note": "template is JSON text; a test splices each accept or refuse entry in place of @, so large and fractional numbers survive exactly. Every reader of a v1 toolkit document accepts each accept spelling and the absent form, and refuses each refuse spelling. opens_at is the revision of a calculation session opened on an accepted document: the session contract starts it at 0 and reports the dropped key. An engine session built from the same text is seeded by the key; that rule is tested outside this table. reader_differences lists the spellings the two JSON readers do not treat alike; both are general JSON-reader differences, not revision logic.",
+    "template": "{\"schema_version\":1,\"revision\":@,\"sheets\":[{\"id\":\"s\",\"name\":\"S\",\"cells\":{\"A1\":{\"value\":1}}}],\"inputs\":{},\"outputs\":{}}",
+    "absent": "{\"schema_version\":1,\"sheets\":[{\"id\":\"s\",\"name\":\"S\",\"cells\":{\"A1\":{\"value\":1}}}],\"inputs\":{},\"outputs\":{}}",
+    "accept": ["0", "4", "18446744073709551615"],
+    "refuse": ["-1", "true", "false", "null", "1.5", "\"1\"", "18446744073709551616"],
+    "opens_at": 0,
+    "reader_differences": [
+      {
+        "name": "negative-zero",
+        "document": "{\"schema_version\":1,\"revision\":-0,\"sheets\":[{\"id\":\"s\",\"name\":\"S\",\"cells\":{\"A1\":{\"value\":1}}}],\"inputs\":{},\"outputs\":{}}",
+        "python": "accept",
+        "rust": "refuse",
+        "reason": "Python's JSON reader parses -0 as the integer 0; Rust's parses -0 as a float, which is not an unsigned integer."
+      },
+      {
+        "name": "duplicate-key",
+        "document": "{\"schema_version\":1,\"revision\":1,\"revision\":2,\"sheets\":[{\"id\":\"s\",\"name\":\"S\",\"cells\":{\"A1\":{\"value\":1}}}],\"inputs\":{},\"outputs\":{}}",
+        "python": "accept",
+        "rust": "refuse",
+        "reason": "Python's JSON reader keeps the last of two members with the same name; Rust's derived reader refuses a duplicate field."
+      }
+    ]
+  }
+}

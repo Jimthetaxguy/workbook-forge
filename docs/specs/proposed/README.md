@@ -2,9 +2,10 @@
 
 Proposals, not accepted contracts. The current truth is `CONTEXT.md`,
 `README.md`, `docs/specs/compiler-pipeline.md` and `docs/specs/red-flags.md`.
-Where these conflict with those files, those files win. Specs 01–07 declare
-`base: main c84ec07` in their frontmatter, and spec 08 declares
-`base: main 580aacd`. Specs 09–14 were written against `main` `41f28d3` and
+Where these conflict with those files, those files win. Specs 01–04, 06 and
+07 declare `base: main c84ec07` in their frontmatter, and spec 08 declares
+`base: main 580aacd`. Spec 05 was re-based to `main c27ac63` when spec 09
+step 1 added its session contract section. Specs 09–14 were written against `main` `41f28d3` and
 still declare that base. Re-base a spec when it is next edited. This index
 was corrected on 2026-11-07 against `main` `c506165`; the 2026-11-06 recheck
 was against `580aacd`.

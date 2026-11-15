@@ -15,6 +15,7 @@ pub mod extraction;
 pub mod model;
 pub mod names;
 pub mod primitives;
+pub mod session;
 pub mod toolkit;
 pub mod volatile;
 #[cfg(target_arch = "wasm32")]

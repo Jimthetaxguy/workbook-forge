@@ -116,7 +116,6 @@ pub fn to_toolkit(
     for index in 0..workbook.diagnostics.len() {
         record.drop(format!("diagnostics[{index}]"));
     }
-    record.add("revision".to_string());
 
     let mut sheets = Vec::with_capacity(workbook.sheets.len());
     for (index, sheet) in workbook.sheets.iter().enumerate() {
@@ -198,7 +197,6 @@ pub fn to_toolkit(
 
     let model = WorkbookModel {
         schema_version: 1,
-        revision: 0,
         sheets,
         inputs,
         outputs,
@@ -225,7 +223,6 @@ pub fn to_canonical(
 ) -> Result<(model::Workbook, Conversion), ConversionError> {
     model.validate()?;
     let mut record = Record::new();
-    record.drop("revision".to_string());
     record.add("model_version".to_string());
     if envelope.is_some() {
         record.add("metadata.source".to_string());

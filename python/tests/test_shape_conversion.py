@@ -152,19 +152,20 @@ def test_review_focus_na_bang_is_spelled_na():
     cell = workbook.sheets[0].cells["A1"]
     assert cell.value == {"error": "#N/A", "message": None}
     assert cell.data_type == "error"
-    assert conversion.dropped == ("revision", "sheets[0].id")
+    assert conversion.dropped == ("sheets[0].id",)
 
 
 def test_review_focus_unnormalised_toolkit_document_lists_required():
     # Drop lists are relative to the normalised toolkit form: `required` is
-    # dropped even though this document never wrote it.
+    # dropped even though this document never wrote it, and `revision` is not
+    # listed because the normalised form holds none (spec 09 step 1).
     document = _toolkit_document(
         {"B2": {"value": 2.0}, "A1": {"value": 1.0}},
         inputs={"x": {"sheet": "S", "address": "A1", "kind": "number"}},
     )
     workbook, conversion = to_canonical(document)
     assert "bindings.inputs.x.required" in conversion.dropped
-    assert "revision" in conversion.dropped
+    assert "revision" not in conversion.dropped
     assert list(workbook.sheets[0].cells) == ["A1", "B2"]
     assert workbook.sheets[0].dimensions == (1, 2, 1, 2)
 
@@ -210,7 +211,6 @@ def test_to_canonical_lists_a_cached_value_on_a_non_formula_cell_as_dropped():
     workbook, conversion = to_canonical(document)
     assert workbook.sheets[0].cells["A1"].value is None
     assert conversion.dropped == (
-        "revision",
         "sheets[0].cells.A1.blocked_reason",
         "sheets[0].cells.A1.cached_value",
         "sheets[0].id",
@@ -394,8 +394,11 @@ def test_canonical_round_trip_restores_everything_not_listed(workbook, input_kin
 
 @pytest.mark.parametrize("case", _params(CASES["toolkit_cases"]))
 def test_toolkit_round_trip_restores_everything_not_listed(case):
-    original = case["toolkit"]
-    workbook, forward = to_canonical(original)
+    # The v1 reader checks a `revision` key and drops it (spec 09 step 1), so
+    # the document it normalises has none: that key is not part of what a round
+    # trip restores, and no ledger lists it.
+    original = {key: value for key, value in case["toolkit"].items() if key != "revision"}
+    workbook, forward = to_canonical(case["toolkit"])
     # The kinds the document already carries are the only typing the round
     # trip may use; binding typing is otherwise not mechanical.
     kinds = {name: binding["kind"] for name, binding in original.get("inputs", {}).items()}
@@ -426,7 +429,9 @@ def _one_spelling(node):
 
 CORPUS = ROOT / "fixtures" / "corpus"
 # The path grammar of the plan's shared definitions: every listed path must
-# be one of these and nothing else.
+# be one of these and nothing else. `revision` stays in the grammar although
+# neither conversion lists it now: only the session's `open` does, for a
+# toolkit document that carried the legacy key.
 _PATH = re.compile(
     r"^(?:model_version|revision|provenance|metadata\..+|diagnostics\[\d+\]"
     r"|bindings\.inputs\.[^.]+(?:\.(?:kind|required|min|max|choices))?"

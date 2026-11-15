@@ -447,7 +447,7 @@ fn require_bindings(workbook: &Workbook) -> Result<(), ModelError> {
 /// `metadata.defined_names`, which canonical intake fills from
 /// `xl/workbook.xml` (docs/defined-names.md). Absent means no name table:
 /// a name is then refused as unsupported, as before names were read.
-fn defined_names(workbook: &Workbook) -> Result<Option<DefinedNames>, ModelError> {
+pub(crate) fn defined_names(workbook: &Workbook) -> Result<Option<DefinedNames>, ModelError> {
     let Some(items) = workbook.metadata.get("defined_names") else {
         return Ok(None);
     };

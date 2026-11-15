@@ -37,7 +37,7 @@ def workload(kind, size):
     target["cells"].update({a: {"formula": v} for a, v in formulas.items()})
     if target is not sheets[0]:
         sheets.append(target)
-    document = {"schema_version": 1, "revision": 0, "sheets": sheets, "inputs": {}, "outputs": {}}
+    document = {"schema_version": 1, "sheets": sheets, "inputs": {}, "outputs": {}}
 
     def expected(edited=False):
         numbers = dict(values)

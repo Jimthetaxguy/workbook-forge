@@ -173,10 +173,9 @@ def engine(request):
     return importlib.import_module(name)
 
 
-def _model(revision: int = 0, cells: dict | None = None) -> str:
+def _model(cells: dict | None = None) -> str:
     return json.dumps({
         "schema_version": 1,
-        "revision": revision,
         "sheets": [{"id": "data", "name": "Data", "cells": cells or {"A1": {"value": 1}}}],
         "inputs": {},
         "outputs": {},
@@ -187,15 +186,16 @@ EDIT = json.dumps([{"sheet": "Data", "address": "A1", "value": 2}])
 
 
 def test_revision_counter_reaches_its_last_value(engine):
-    session = engine.Session(_model(UINT64_MAX - 1))
+    session = engine.Session(_model(), revision=UINT64_MAX - 1)
     assert session.apply(EDIT, UINT64_MAX - 1) == UINT64_MAX
 
 
 def test_revision_counter_stops_at_its_last_value(engine):
-    session = engine.Session(_model(UINT64_MAX))
+    session = engine.Session(_model(), revision=UINT64_MAX)
     with pytest.raises(ValueError, match="resource_limit"):
         session.apply(EDIT, UINT64_MAX)
-    assert json.loads(session.snapshot())["revision"] == UINT64_MAX
+    assert session.revision == UINT64_MAX
+    assert "revision" not in json.loads(session.snapshot())
 
 
 @pytest.mark.parametrize("address", INSIDE)
