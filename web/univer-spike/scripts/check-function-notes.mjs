@@ -1,6 +1,7 @@
-// Check src/function-notes.ts against catalog/formulas.json: every note names
-// an implemented function, and its argument list agrees with the catalog's
-// counts (required arguments = arity.min; without "..." the total = arity.max).
+// Check src/function-notes.ts against catalog/formulas.json: every implemented
+// function has a note, every note names an implemented function, and its
+// argument list agrees with the catalog's counts (required arguments =
+// arity.min; without "..." the total = arity.max).
 // Needs Node 22.6+ (type stripping), like web/forge-engine's tests.
 import { readFileSync } from 'node:fs';
 import { CATEGORY_LABELS, FUNCTION_NOTES } from '../src/function-notes.ts';
@@ -26,8 +27,8 @@ for (const [name, note] of Object.entries(FUNCTION_NOTES)) {
 const labelled = new Set(CATEGORY_LABELS.map(([id]) => id));
 for (const id of catalog.categories) if (!labelled.has(id)) problems.push(`category ${id} has no label`);
 const missing = catalog.functions.filter((fn) => !(fn.name in FUNCTION_NOTES)).map((fn) => fn.name);
+if (missing.length) problems.push(`listed with argument counts only (no note yet): ${missing.join(', ')}`);
 console.log(`function notes: ${Object.keys(FUNCTION_NOTES).length} notes for ${catalog.functions.length} implemented functions`);
-if (missing.length) console.log(`listed with argument counts only (no note yet): ${missing.join(', ')}`);
 if (problems.length) {
   console.error(problems.join('\n'));
   process.exit(1);
