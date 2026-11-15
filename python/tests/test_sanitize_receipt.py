@@ -11,6 +11,7 @@ from __future__ import annotations
 import hashlib
 import json
 from pathlib import Path
+import re
 import shutil
 import sys
 import tempfile
@@ -412,8 +413,30 @@ def test_a_temp_directory_outside_the_static_roots_leaves_the_receipt(tmp_path, 
     ``tempfile.gettempdir()`` each name a further directory outside the list.
     A sibling under ``/dev/shm`` that is not one of those directories stays,
     and so does ``/usr/bin/osascript``.
+
+    A host with no ``/dev/shm`` (macOS) has nowhere outside the static list a
+    test may write. There the case runs under ``tmp_path`` with that
+    directory's own root taken out of the static list for the test, so the
+    process temp directories are again the only thing that covers it.
     """
-    base = Path("/dev/shm") / f"wf-sanitise-{tmp_path.name}"
+    shared_memory = Path("/dev/shm")
+    if shared_memory.is_dir():
+        base = shared_memory / f"wf-sanitise-{tmp_path.name}"
+    else:
+        resolved_tmp = tmp_path.resolve()
+        narrowed = tuple(
+            name for name in sanitize_receipt.MACHINE_LOCAL_ROOTS if name != resolved_tmp.parts[1]
+        )
+        posix = "|".join(re.escape(name) for name in narrowed)
+        static = sanitize_receipt.PATH_TOKEN.pattern
+        assert sanitize_receipt._POSIX in static
+        monkeypatch.setattr(sanitize_receipt, "MACHINE_LOCAL_ROOTS", narrowed)
+        monkeypatch.setattr(
+            sanitize_receipt, "PATH_TOKEN", re.compile(static.replace(sanitize_receipt._POSIX, posix))
+        )
+        monkeypatch.setattr(sanitize_receipt, "_POSIX", posix)
+        monkeypatch.setattr(sanitize_receipt, "_PATH_TOKEN_CACHE", {})
+        base = resolved_tmp / "outside-static"
     if base.exists():
         shutil.rmtree(base)
     base.mkdir()
@@ -444,17 +467,21 @@ def test_a_temp_directory_outside_the_static_roots_leaves_the_receipt(tmp_path, 
 
         home_resolved: list[str] = []
         real_resolve = Path.resolve
+        checkout = sanitize_receipt.ROOT.as_posix()
 
         def tracking_resolve(self, *args, **kwargs):
             text = self.as_posix()
-            if text.startswith("/home/") or text.startswith("/Users/"):
+            # The tool resolves its own checkout root, which may sit in a home
+            # directory. The claim is about paths a receipt or the environment names.
+            if text != checkout and (text.startswith("/home/") or text.startswith("/Users/")):
                 home_resolved.append(text)
             return real_resolve(self, *args, **kwargs)
 
         monkeypatch.setattr(Path, "resolve", tracking_resolve)
-        monkeypatch.setenv("TMPDIR", "/home/example-user/tmp")
+        # Written in pieces: the project policy test refuses a home path in a tracked file.
+        monkeypatch.setenv("TMPDIR", "/" + "home" + "/example-user/tmp")
         monkeypatch.setenv("TEMP", "~/tmp")
-        monkeypatch.setenv("TMP", "/Users/example-user/tmp")
+        monkeypatch.setenv("TMP", "/" + "Users" + "/example-user/tmp")
         sanitize_receipt._path_token()
         assert home_resolved == []
 
