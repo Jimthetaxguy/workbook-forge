@@ -109,7 +109,7 @@ limits, and replace the retained binary before private execution.
 
 At the 2026-09-28 checkpoint (`32f49e2`) the function inventory identified 3
 source functions separately from 115 SDK runtime profiles. The catalog now
-records 123 implemented functions (`CONTEXT.md` at the repository root), and the
+records 171 implemented functions (`CONTEXT.md` at the repository root), and the
 historical built-in catalog remains 521 rows. Inventory refresh and
 target-build reconciliation remain required. Excel Desktop was not launched;
 actual recalculation and no-repair opening remain unverified. Backend parity and
