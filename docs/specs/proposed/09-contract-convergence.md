@@ -314,7 +314,7 @@ Applied on 2026-11-09 with the decision.
 - The same document bytes hydrate and calculate to the same values, errors and
   diagnostics in both engines before and after each step, on
   `fixtures/operating-scenario.workbook.json`, the toolkit documents
-  `test_dual_engines.py` builds, and every `fixtures/corpus` workbook. (The 1,691 cases
+  `test_dual_engines.py` builds, and every `fixtures/corpus` workbook. (The 2,627 cases
   in `fixtures/formula-cases.jsonl` have no workbook form and are not part of this
   evidence.)
 - Every toolkit preservation test (`test_absent_cell_export`, `test_toolkit_xlsx`,
