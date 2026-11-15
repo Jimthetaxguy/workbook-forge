@@ -268,6 +268,7 @@ def test_canonical_receipt_refusal_carries_no_path(private_dir):
 
 def test_source_cli_process_and_os_errors_use_fixed_sentences(tmp_path, monkeypatch, capsys):
     from workbook_forge import source_cli
+    from workbook_forge.source_contract import SourceDiagnostic
 
     token_dir = tmp_path / TOKEN
     token_dir.mkdir()
@@ -277,6 +278,11 @@ def test_source_cli_process_and_os_errors_use_fixed_sentences(tmp_path, monkeypa
     cases = [
         (
             OSError(13, "Permission denied", compiler),
+            "io_error",
+            "Permission denied",
+        ),
+        (
+            SourceDiagnostic("missing_toolchain", "Rust compiler could not be launched"),
             "missing_toolchain",
             "Rust compiler could not be launched",
         ),
@@ -310,3 +316,56 @@ def test_source_cli_process_and_os_errors_use_fixed_sentences(tmp_path, monkeypa
         payload = json.loads(capsys.readouterr().out)
         assert payload == {"ok": False, "code": code, "message": message}
         assert TOKEN not in json.dumps(payload)
+
+
+@pytest.mark.parametrize("profile", ["graph-v6", "numeric-v1"])
+def test_source_cli_missing_input_with_python_is_not_a_compiler_failure(tmp_path, capsys, profile):
+    from workbook_forge import source_cli
+
+    token_dir = tmp_path / TOKEN
+    token_dir.mkdir()
+    missing = token_dir / "missing.xlsx"
+    bundle = token_dir / "bundle"
+    assert source_cli.main(
+        ["compile", str(missing), str(bundle), "--language", "python", "--profile", profile]
+    ) == 1
+    payload = json.loads(capsys.readouterr().out)
+    assert payload == {"ok": False, "code": "io_error", "message": "No such file or directory"}
+    assert TOKEN not in json.dumps(payload)
+    assert not bundle.exists()
+
+
+def test_workbook_open_os_error_during_package_read_carries_no_path(private_dir, monkeypatch):
+    source = private_dir / "package.xlsx"
+    source.write_bytes(b"PK")
+    real_open = Path.open
+    monkeypatch.setattr(
+        "workbook_forge.workbook._preflight_archive_directory",
+        lambda stream, size: 1,
+    )
+
+    class FailingRead:
+        def __init__(self, raw):
+            self._raw = raw
+
+        def fileno(self):
+            return self._raw.fileno()
+
+        def seek(self, *args, **kwargs):
+            return self._raw.seek(*args, **kwargs)
+
+        def read(self, *args, **kwargs):
+            raise OSError(13, "Permission denied", str(source))
+
+        def close(self):
+            self._raw.close()
+
+    def opening(self, *args, **kwargs):
+        return FailingRead(real_open(self, *args, **kwargs))
+
+    monkeypatch.setattr(Path, "open", opening)
+    with pytest.raises(WorkbookError) as caught:
+        Workbook.open(source)
+    message = str(caught.value)
+    assert message == "cannot open workbook: Permission denied"
+    assert TOKEN not in message

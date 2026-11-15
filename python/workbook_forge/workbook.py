@@ -754,7 +754,7 @@ class Workbook:
             try:
                 data = source_stream.read(MAX_COMPRESSED_PACKAGE_BYTES + 1)
             except OSError as exc:
-                raise WorkbookError(f"cannot open workbook: {exc}") from exc
+                raise WorkbookError(f"cannot open workbook: {os_error_message(exc)}") from exc
             if len(data) > MAX_COMPRESSED_PACKAGE_BYTES:
                 raise UnsupportedWorkbook("compressed workbook exceeds size limit")
             source_stream.close()
