@@ -1,0 +1,3 @@
+naive_round_nearest(18446744073709551605, 100) = 0
+expected: 18446744073709551600 (or an explicit 'does not fit')
+naive split of 10000 cents three ways: [3333, 3333, 3333], sum = 9999
