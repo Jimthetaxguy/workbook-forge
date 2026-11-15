@@ -83,7 +83,15 @@ message: `name_cycle` becomes `cycle`/`cycle`, `resource_limit` stays
 
 - Toolkit sessions take the table beside the document, never inside it:
   `python_engine.Session(model_json, names_json)`, the native
-  `Session(model_json, names_json)` and `toolkit::Session::with_names`. The
+  `Session(model_json, names_json)` and `toolkit::Session::with_names`. Both
+  Python constructors also take a keyword `revision`, the value the session
+  counter starts at; without it the counter starts at the document's legacy
+  `revision` key, or at 0 when the document has none. Either refuses a seed
+  that is not an integer from 0 to 18446744073709551615, a boolean included,
+  with `invalid_request`. The Rust equivalent is
+  `toolkit::Session::with_names_at(model, names, revision)`. The seed is for
+  detached copies (agent previews and exports), which must report the
+  revision of the session they came from. The
   table is a JSON array of `{name, sheet, formula, hidden}`. `import_xlsx` in
   both languages builds it from the package; the browser's `openXlsx` gets it
   through the Rust importer. The workbook document schema is unchanged.

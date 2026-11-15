@@ -1,8 +1,10 @@
 //! Independent Rust OOXML / toolkit-IR benchmark adapter. No Python execution.
 use std::collections::BTreeMap;
-use workbook_forge::{WorkbookModel, xlsx};
+use workbook_forge::{CalculationReport, Session, WorkbookModel, toolkit, xlsx};
 
-fn read_ir(path: &str) -> Result<WorkbookModel, Box<dyn std::error::Error>> {
+/// The model and the legacy `revision` a v1 document may still carry (0 when
+/// absent); the model itself holds none.
+fn read_ir(path: &str) -> Result<(WorkbookModel, u64), Box<dyn std::error::Error>> {
     use std::io::Read;
     let mut bytes = Vec::new();
     std::fs::File::open(path)?
@@ -11,9 +13,17 @@ fn read_ir(path: &str) -> Result<WorkbookModel, Box<dyn std::error::Error>> {
     if bytes.len() > 16 * 1024 * 1024 {
         return Err("IR exceeds benchmark adapter's 16 MiB input limit".into());
     }
-    let model: WorkbookModel = serde_json::from_slice(&bytes)?;
+    let (model, revision) = toolkit::read_document(&bytes)?;
     model.validate()?;
-    Ok(model)
+    Ok((model, revision))
+}
+
+/// A stateless pass that reports the revision the document carried.
+fn calculate(
+    model: &WorkbookModel,
+    revision: u64,
+) -> Result<CalculationReport, Box<dyn std::error::Error>> {
+    Ok(Session::with_names_at(model.clone(), None, revision)?.calculate(1))
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -24,16 +34,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!("{}", serde_json::to_string(&imported.snapshot())?);
         }
         Some("calculate") if args.len() == 3 => {
-            println!("{}", serde_json::to_string(&workbook_forge::calculate(&read_ir(&args[2])?, 1))?);
+            let (model, revision) = read_ir(&args[2])?;
+            println!("{}", serde_json::to_string(&calculate(&model, revision)?)?);
         }
         Some("emit-fresh") if args.len() == 4 => {
-            let model = read_ir(&args[2])?;
+            let (model, revision) = read_ir(&args[2])?;
             xlsx::export_xlsx(&model, &args[3])?;
-            println!("{}", serde_json::to_string(&workbook_forge::calculate(&model, 1))?);
+            println!("{}", serde_json::to_string(&calculate(&model, revision)?)?);
         }
         Some("emit") if args.len() == 5 => {
-            let mut model = read_ir(&args[3])?;
-            let report = workbook_forge::calculate(&model, 1);
+            let (mut model, revision) = read_ir(&args[3])?;
+            let report = calculate(&model, revision)?;
             let imported = xlsx::import_xlsx(&args[2], BTreeMap::new(), BTreeMap::new())?;
             // Existing readers assign different runtime-local sheet IDs. Cell
             // references use sheet names; bind IDs only after matching names/order.

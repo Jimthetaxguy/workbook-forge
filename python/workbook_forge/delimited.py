@@ -221,7 +221,6 @@ def to_document(
                 cells[f"{_column_name(column)}{row}"] = {"value": value}
     return {
         "schema_version": 1,
-        "revision": 0,
         "sheets": [{"id": "sheet-1", "name": sheet_name, "cells": cells, "column_widths": {}}],
         "inputs": {},
         "outputs": {},

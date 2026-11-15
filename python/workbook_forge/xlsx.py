@@ -314,7 +314,6 @@ def import_xlsx(
         styles, style_metadata = _styles(workbook)
         document: dict[str, Any] = {
             "schema_version": 1,
-            "revision": 0,
             "sheets": [],
             "inputs": inputs or {},
             "outputs": outputs or {},
@@ -1140,11 +1139,12 @@ def export_xlsx(
         raise WorkbookError("refusing to overwrite the source workbook")
     if target.exists():
         raise FileExistsError(OUTPUT_EXISTS_MESSAGE)
-    document = model.to_dict()
+    # The revision is session state: read it with the snapshot, as one read.
+    document, revision = model.snapshot_with_revision()
     calculation = model.calculate() if report is None else copy.deepcopy(report)
     if (
         calculation.get("stale")
-        or calculation.get("revision") != document["revision"]
+        or calculation.get("revision") != revision
         or calculation.get("model_digest") != _digest(document)
     ):
         raise WorkbookError("calculation report is stale or belongs to a different model snapshot")
@@ -1155,7 +1155,7 @@ def export_xlsx(
         authoritative = model.calculate()
         if (
             authoritative.get("stale")
-            or authoritative.get("revision") != document["revision"]
+            or authoritative.get("revision") != revision
             or authoritative.get("model_digest") != _digest(document)
         ):
             raise WorkbookError("model changed while validating the calculation report")
@@ -1218,7 +1218,7 @@ def export_xlsx(
             workbook.save_as(staged)
         with Workbook.open(staged):
             pass
-        if model.revision != document["revision"]:
+        if model.revision != revision:
             raise WorkbookError("model changed during export; retry from its current snapshot")
         link_new(staged, target)
     return target

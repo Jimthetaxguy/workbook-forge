@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
 use workbook_forge::agent::{AgentWorkbook, serve_json_lines};
-use workbook_forge::{CellAddress, InputBinding, WorkbookModel, operating_scenario, xlsx};
+use workbook_forge::{CellAddress, InputBinding, operating_scenario, toolkit, xlsx};
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -63,13 +63,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 output_dir,
             )?
         } else {
-            let mut model: WorkbookModel =
-                serde_json::from_slice(&read_bounded(&source, 128 * 1024 * 1024)?)?;
+            // A v1 document may still carry `revision`. The model does not
+            // hold it; the session starts there, so the wire answers as before.
+            let (mut model, revision) =
+                toolkit::read_document(&read_bounded(&source, 128 * 1024 * 1024)?)?;
             if let Some(bindings) = bindings {
                 model.inputs = bindings.inputs;
                 model.outputs = bindings.outputs;
             }
-            AgentWorkbook::new(model, output_dir)?
+            AgentWorkbook::new_at(model, revision, output_dir)?
         }
     };
     serve_json_lines(&agent, std::io::stdin().lock(), std::io::stdout().lock())?;

@@ -42,7 +42,6 @@ def engine(request):
 def _model(cells, outputs=None, *, inputs=None, sheets=None):
     return {
         "schema_version": 1,
-        "revision": 0,
         "sheets": sheets or [{"id": "data", "name": "Data", "cells": cells}],
         "inputs": inputs or {},
         "outputs": {
@@ -212,8 +211,44 @@ def test_incremental_invalidation_rebuilds_changed_dependency_edges(engine):
     _apply(session, [{"sheet": "Data", "address": "D1", "value": 5}])
     changed = _calculate(session, 8)
     assert changed["outputs"] == {"left": 20, "right": 6}
+    # A snapshot carries no revision, so a stateless pass over it reports 0;
+    # everything else must match the session's incremental result.
     fresh = json.loads(engine.calculate(session.snapshot(), 1))
-    assert _semantic(changed) == _semantic(fresh)
+    assert fresh["revision"] == 0
+    assert {**_semantic(changed), "revision": 0} == _semantic(fresh)
+
+
+def test_legacy_document_revision_seeds_the_session_and_is_never_written(engine):
+    # A v1 document may still carry `revision`. It seeds the session counter,
+    # so a caller that held that revision keeps working, and no snapshot
+    # writes it back (spec 09 step 1).
+    document = {**_model({"A1": {"value": 1}}), "revision": 7}
+    session = _session(engine, document)
+    assert session.revision == 7
+    assert "revision" not in json.loads(session.snapshot())
+    edit = [{"sheet": "Data", "address": "A1", "value": 2}]
+    with pytest.raises(ValueError, match="revision_conflict"):
+        _apply(session, edit, 0)
+    assert _apply(session, edit, 7) == 8
+    assert session.revision == 8
+    assert "revision" not in json.loads(session.snapshot())
+
+
+def test_explicit_revision_seed_wins_over_a_legacy_document_revision(engine):
+    document = json.dumps({**_model({"A1": {"value": 1}}), "revision": 7})
+    session = engine.Session(document, revision=0)
+    assert session.revision == 0
+    assert _apply(session, [{"sheet": "Data", "address": "A1", "value": 2}], 0) == 1
+    assert engine.Session(document, revision=5).revision == 5
+
+
+def test_stateless_reports_echo_a_legacy_document_revision(engine):
+    plain = json.dumps(_model({"A1": {"value": 1}}))
+    legacy = json.dumps({**_model({"A1": {"value": 1}}), "revision": 3})
+    assert json.loads(engine.calculate(plain, 1))["revision"] == 0
+    assert json.loads(engine.inspect(plain))["revision"] == 0
+    assert json.loads(engine.calculate(legacy, 1))["revision"] == 3
+    assert json.loads(engine.inspect(legacy))["revision"] == 3
 
 
 def test_cycles_and_unsupported_formulas_only_block_selected_closures(engine):
@@ -510,7 +545,8 @@ def test_independent_engines_agree_after_seeded_mixed_edits():
             report = _calculate(session, workers=1 if index % 2 else 4)
             assert not report["diagnostics"]
             fresh = json.loads(engine.calculate(session.snapshot(), 1))
-            assert _semantic(report) == _semantic(fresh)
+            assert fresh["revision"] == 0
+            assert {**_semantic(report), "revision": 0} == _semantic(fresh)
             reports.append(report)
         assert _semantic(reports[0]) == _semantic(reports[1])
         assert reports[0]["evaluated_cells"] == reports[1]["evaluated_cells"]

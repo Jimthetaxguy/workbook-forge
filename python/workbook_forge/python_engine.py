@@ -199,6 +199,17 @@ def _validate_input_value(binding: dict, value: Any):
 
 
 def _normalize_model(source: Any) -> dict:
+    return _read_document(source)[0]
+
+
+def _read_document(source: Any) -> tuple[dict, int]:
+    """Normalise a v1 document; the second item is its legacy ``revision``.
+
+    The revision is session state, not document content (spec 09 step 1). A v1
+    document may still carry the key: it is checked here and left out of the
+    model, and returned beside it (0 when absent) so an engine session built
+    from document text can seed its counter. Nothing writes it back.
+    """
     source = _object(source, {"schema_version", "revision", "sheets", "inputs", "outputs"})
     if "schema_version" not in source:
         # A document with no version is not a version 1 document. There is no
@@ -214,7 +225,7 @@ def _normalize_model(source: Any) -> dict:
         _fail("invalid_model", "sheets must be an array")
     if len(sheets) > 1024:
         _fail("resource_limit", "at most 1024 worksheets")
-    model = {"schema_version": 1, "revision": revision, "sheets": [], "inputs": {}, "outputs": {}}
+    model = {"schema_version": 1, "sheets": [], "inputs": {}, "outputs": {}}
     names, identifiers, populated = set(), set(), 0
     for sheet in sheets:
         _object(sheet, {"id", "name", "cells", "column_widths"})
@@ -301,7 +312,7 @@ def _normalize_model(source: Any) -> dict:
         _object(binding, {"sheet", "address"})
         _resolve(model, binding.get("sheet"), binding.get("address"))
         model["outputs"][name] = {"sheet": binding["sheet"], "address": binding["address"]}
-    return model
+    return model, revision
 
 
 def _input_edits(model: dict, values: dict) -> list[dict]:
@@ -511,9 +522,21 @@ def _workers(workers: int) -> int:
     return max(1, min(workers, MAX_WORKERS))
 
 
-def _calculate_document(model: dict, workers: int = 1, previous: dict | None = None, dirty: set[str] | None = None, context: CalcContext | None = None, names: DefinedNames | None = None) -> dict:
+def _calculate_document(model: dict, workers: int = 1, previous: dict | None = None, dirty: set[str] | None = None, context: CalcContext | None = None, names: DefinedNames | None = None, *, revision: int = 0, trace: dict | None = None) -> dict:
+    """Run one pass and return its legacy report.
+
+    ``revision`` is the session revision the pass read. ``trace``, when given,
+    receives what the report does not carry: ``ended_early`` (the pass returned
+    before every cell of its closure was evaluated, reused or given its own
+    diagnostic) and ``formulas`` (the formula cells in the pass's closure, or
+    None when no graph was built).
+    """
     workers = _workers(workers)
-    report = {"revision": model["revision"], "outputs": {}, "values": {}, "diagnostics": [], "evaluated_cells": [], "stale": False}
+    report = {"revision": revision, "outputs": {}, "values": {}, "diagnostics": [], "evaluated_cells": [], "stale": False}
+    if trace is None:
+        trace = {}
+    # Every early return below leaves this set; only the completed path clears it.
+    trace.update(ended_early=True, formulas=None)
     try:
         _input_edits(model, {})
         graph = _Graph.build(model, names)
@@ -521,6 +544,7 @@ def _calculate_document(model: dict, workers: int = 1, previous: dict | None = N
         report["diagnostics"].append(_diagnostic(error))
         return report
     selected, reverse = graph.closure(model), graph.reverse()
+    trace["formulas"] = {current for current in selected if "formula" in graph.cells.get(current, {})}
     # A volatile formula is dirty on every pass; one context serves the pass.
     if graph.volatile & selected:
         if context is None:
@@ -612,6 +636,7 @@ def _calculate_document(model: dict, workers: int = 1, previous: dict | None = N
                     report["diagnostics"].append(_diagnostic(error, current))
                     break
                 report["outputs"][name] = deepcopy(value)
+        trace["ended_early"] = False
         return report
     finally:
         if executor is not None:
@@ -621,15 +646,26 @@ def _calculate_document(model: dict, workers: int = 1, previous: dict | None = N
 
 
 class Session:
-    """Thread-safe transient Python session; snapshots are detached JSON data."""
+    """Thread-safe transient Python session; snapshots are detached JSON data.
 
-    def __init__(self, model_json: str, names_json: str | None = None):
+    The revision is a counter on the session, not a field of the document. A
+    legacy ``revision`` key in ``model_json`` seeds it; an explicit ``revision``
+    argument wins; without either it starts at 0. No snapshot carries the key.
+    """
+
+    def __init__(self, model_json: str, names_json: str | None = None, *, revision: int | None = None):
         """``names_json`` is the workbook's defined-name table (read-only): a
         JSON array of ``{name, sheet, formula, hidden}``."""
-        self._model = _normalize_model(_decode(model_json))
+        if revision is not None and (type(revision) is not int or not 0 <= revision <= _UINT64_MAX):
+            _fail("invalid_request", "revision must be an unsigned 64-bit integer")
+        self._model, legacy = _read_document(_decode(model_json))
+        self._revision = legacy if revision is None else revision
         self._names = _names(names_json)
         self._published: dict | None = None
         self._dirty: set[str] = set()
+        # Cells whose value or formula this session (or the one it was forked
+        # from) wrote; calculation-report.v2 reports them as "authored".
+        self._authored: set[str] = set()
         self._lock = RLock()
         self._utc_offset_minutes = 0
 
@@ -647,9 +683,34 @@ class Session:
         with self._lock:
             self._utc_offset_minutes = minutes
 
+    @property
+    def revision(self) -> int:
+        with self._lock:
+            return self._revision
+
     def snapshot(self) -> str:
         with self._lock:
             return _encode(self._model)
+
+    def snapshot_with_revision(self) -> tuple[str, int]:
+        """The document and the revision it was read at, under one lock."""
+        with self._lock:
+            return _encode(self._model), self._revision
+
+    def fork(self) -> Session:
+        """A detached session at the same revision; nothing is shared but the
+        read-only name table. It has no published pass of its own."""
+        fork = object.__new__(Session)
+        with self._lock:
+            fork._model = deepcopy(self._model)
+            fork._revision = self._revision
+            fork._authored = set(self._authored)
+            fork._utc_offset_minutes = self._utc_offset_minutes
+        fork._names = self._names
+        fork._published = None
+        fork._dirty = set()
+        fork._lock = RLock()
+        return fork
 
     def apply(self, edits_json: str, expected_revision: int | None = None) -> int:
         edits = _decode(edits_json)
@@ -660,11 +721,11 @@ class Session:
         if expected_revision is not None and (type(expected_revision) is not int or not 0 <= expected_revision <= _UINT64_MAX):
             _fail("revision_conflict", "expected revision must be an unsigned 64-bit integer")
         with self._lock:
-            if expected_revision is not None and expected_revision != self._model["revision"]:
-                _fail("revision_conflict", f"expected revision does not match {self._model['revision']}")
+            if expected_revision is not None and expected_revision != self._revision:
+                _fail("revision_conflict", f"expected revision does not match {self._revision}")
             if not edits:
-                return self._model["revision"]
-            candidate, changed = deepcopy(self._model), set()
+                return self._revision
+            candidate, changed, authored = deepcopy(self._model), set(), set()
             sheets = {sheet["name"]: sheet for sheet in candidate["sheets"]}
             for edit in edits:
                 _object(edit, {"sheet", "address", "value", "formula", "style"})
@@ -675,6 +736,8 @@ class Session:
                 if target in changed:
                     _fail("invalid_edit", "a batch may edit each cell only once")
                 changed.add(target)
+                if has_value or has_formula:
+                    authored.add(target)
                 sheet, address = target.rsplit("!", 1)
                 cell = sheets[sheet]["cells"].setdefault(address, {"value": None})
                 if cell.get("blocked_reason") is not None:
@@ -693,38 +756,148 @@ class Session:
             candidate = _normalize_model(candidate)
             _input_edits(candidate, {})
             _Graph.build(candidate, self._names)
-            if candidate["revision"] == _UINT64_MAX:
+            if self._revision == _UINT64_MAX:
                 _fail("resource_limit", "revision counter exhausted")
-            candidate["revision"] += 1
             self._model = candidate
+            self._revision += 1
             self._dirty.update(changed)
-            return candidate["revision"]
+            self._authored.update(authored)
+            return self._revision
 
     def set_inputs(self, inputs_json: str, expected_revision: int | None = None) -> int:
         values = _decode(inputs_json)
         if expected_revision is not None and (type(expected_revision) is not int or not 0 <= expected_revision <= _UINT64_MAX):
             _fail("revision_conflict", "expected revision must be an unsigned 64-bit integer")
         with self._lock:
-            if expected_revision is not None and expected_revision != self._model["revision"]:
+            if expected_revision is not None and expected_revision != self._revision:
                 _fail("revision_conflict", "model revision conflict")
             edits = _input_edits(self._model, values)
-            return self.apply(_encode(edits), expected_revision=self._model["revision"])
+            return self.apply(_encode(edits), expected_revision=self._revision)
+
+    def _pass(self, workers: int, context: CalcContext | None) -> dict:
+        """Run one pass over a coherent read and publish it if it may be.
+
+        A pass is published only when it completed and the session is still at
+        the revision it read. A pass that ended early (a graph-level refusal or
+        an exhausted result budget) is returned and not published: the published
+        base and the dirty set stay exactly as they were (spec 05, "a failure
+        publishes nothing").
+        """
+        with self._lock:
+            model, previous, dirty = deepcopy(self._model), deepcopy(self._published), self._dirty.copy()
+            offset, revision, authored = self._utc_offset_minutes, self._revision, set(self._authored)
+        if context is None:
+            context = CalcContext.capture(offset)
+        trace: dict = {}
+        # trace is filled in place; a wrapper that forwards its keyword
+        # arguments sees the same dict.
+        report = _calculate_document(model, workers, previous, dirty, context, self._names, revision=revision, trace=trace)
+        ended_early = trace.get("ended_early", False)
+        with self._lock:
+            if self._revision != report["revision"]:
+                report["stale"] = True
+            elif not ended_early:
+                self._published = deepcopy(report)
+                self._dirty.clear()
+        return {
+            "model": model,
+            "report": report,
+            "base_revision": previous["revision"] if previous is not None else None,
+            "context": context,
+            "authored": authored,
+            "ended_early": ended_early,
+            "formulas": trace.get("formulas"),
+        }
 
     def calculate(self, workers: int = 1, context: CalcContext | None = None) -> str:
         """Calculate the current revision; ``context`` pins the clock and seed."""
-        with self._lock:
-            model, previous, dirty = deepcopy(self._model), deepcopy(self._published), self._dirty.copy()
-            offset = self._utc_offset_minutes
-        if context is None:
-            context = CalcContext.capture(offset)
-        report = _calculate_document(model, workers, previous, dirty, context, self._names)
-        with self._lock:
-            if self._model["revision"] != report["revision"]:
-                report["stale"] = True
-            else:
-                self._published = deepcopy(report)
-                self._dirty.clear()
-        return _encode(report)
+        return _encode(self._pass(workers, context)["report"])
+
+    def calculate_report(
+        self,
+        workers: int = 1,
+        calc_json: str | None = None,
+        *,
+        model_version: int | None = None,
+        source_fingerprint: str | None = None,
+    ) -> str:
+        """Calculate the current revision and return a ``calculation-report.v2``.
+
+        ``calc_json`` is a JSON ``{now_ms, utc_offset_minutes, seed}`` pinning
+        the clock and seed. It is the same pass and the same publish rule as
+        :meth:`calculate`; only the report shape differs.
+        """
+        context = None
+        if calc_json is not None:
+            try:
+                context = CalcContext.from_dict(_decode(calc_json))
+            except ToolkitError:
+                raise
+            except (ValueError, TypeError, KeyError, AttributeError) as error:
+                _fail("invalid_request", f"calc: {error}")
+        passed = self._pass(workers, context)
+        return _encode(_report_v2(passed, engine="python", model_version=model_version, source_fingerprint=source_fingerprint))
+
+
+def _report_v2(passed: dict, *, engine: str, model_version: int | None, source_fingerprint: str | None) -> dict:
+    """Assemble ``calculation-report.v2`` from one pass (all 18 keys, always).
+
+    A formula cell's result comes only from this pass; a ``cached_value`` in
+    the document is never read. A bound output is copied from the pass's
+    budgeted outputs, not from its values, so this report materialises no more
+    result cells than the legacy report does: a formula output the output
+    result budget did not admit is ``not_calculated`` with no result.
+    """
+    model, report, authored = passed["model"], passed["report"], passed["authored"]
+    cells, values, budgeted = _cells(model), report["values"], report["outputs"]
+
+    def located(binding: dict) -> tuple[str, str, str]:
+        key = _resolve(model, binding["sheet"], binding["address"])
+        sheet, address = key.rsplit("!", 1)
+        return key, sheet, address
+
+    inputs = []
+    for name in sorted(model["inputs"]):
+        key, sheet, address = located(model["inputs"][name])
+        inputs.append({"name": name, "sheet": sheet, "address": address, "origin": "authored" if key in authored else None, "value": deepcopy(cells.get(key, {}).get("value"))})
+    outputs = []
+    for name in sorted(model["outputs"]):
+        key, sheet, address = located(model["outputs"][name])
+        cell = cells.get(key, {})
+        if "formula" in cell:
+            origin, result = ("calculated", deepcopy(budgeted[name])) if name in budgeted else ("not_calculated", None)
+        else:
+            origin = "authored" if key in authored else None
+            result = deepcopy(budgeted[name]) if name in budgeted else deepcopy(cell.get("value"))
+        outputs.append({"name": name, "sheet": sheet, "address": address, "origin": origin, "result": result})
+    # Both counts range over the formula cells in the pass's closure. A pass
+    # refused before its graph was built has no closure of its own; it covers
+    # no formula it can vouch for, so every formula cell in the document counts
+    # as unresolved.
+    formulas = passed["formulas"]
+    if formulas is None:
+        formulas = {key for key, cell in cells.items() if "formula" in cell}
+    calculated = sum(1 for key in formulas if key in values)
+    return {
+        "report_version": 2,
+        "stage": "calculate",
+        "engine": engine,
+        "behavior_profile": "workbook-forge",
+        "schema_version": 1,
+        "model_version": model_version,
+        "source_fingerprint": source_fingerprint,
+        "revision": report["revision"],
+        "base_revision": passed["base_revision"],
+        "calc": passed["context"].to_dict(),
+        "inputs": inputs,
+        "outputs": outputs,
+        "values": report["values"],
+        "evaluated_cells": report["evaluated_cells"],
+        "stale": report["stale"],
+        "diagnostics": report["diagnostics"],
+        "calculated_formulas": calculated,
+        "unresolved_formulas": len(formulas) - calculated,
+    }
 
 
 def calculate(
@@ -739,11 +912,12 @@ def calculate(
     ``context`` pins the clock and seed of volatile functions; without one the
     pass captures its own (see :meth:`CalcContext.capture`). ``names_json`` is
     the workbook's defined-name table, the same JSON array a session takes.
-    Without it, a name in a formula is refused as unsupported.
+    Without it, a name in a formula is refused as unsupported. A stateless
+    call has no session: the report's ``revision`` echoes a legacy ``revision``
+    key in the document, and is 0 without one.
     """
-    return _encode(_calculate_document(
-        _normalize_model(_decode(model_json)), workers, context=context, names=_names(names_json)
-    ))
+    model, revision = _read_document(_decode(model_json))
+    return _encode(_calculate_document(model, workers, context=context, names=_names(names_json), revision=revision))
 
 
 def _names(names_json: str | None) -> DefinedNames | None:
@@ -757,12 +931,12 @@ def _names(names_json: str | None) -> DefinedNames | None:
 
 def inspect(model_json: str, names_json: str | None = None) -> str:
     """Inspect structure and unsupported features without evaluating formulas."""
-    model = _normalize_model(_decode(model_json))
+    model, revision = _read_document(_decode(model_json))
     try:
         graph = _Graph.build(model, _names(names_json))
     except ToolkitError as error:
-        return _encode({"revision": model["revision"], "diagnostics": [_diagnostic(error)]})
-    return _encode({"revision": model["revision"], "sheets": [{"id": sheet["id"], "name": sheet["name"], "populated_cells": len(sheet["cells"])} for sheet in model["sheets"]], "dependencies": {current: sorted(dependencies) for current, dependencies in sorted(graph.dependencies.items())}, "diagnostics": [_diagnostic(error, current) for current, error in sorted(graph.errors.items())], "inputs": model["inputs"], "outputs": model["outputs"]})
+        return _encode({"revision": revision, "diagnostics": [_diagnostic(error)]})
+    return _encode({"revision": revision, "sheets": [{"id": sheet["id"], "name": sheet["name"], "populated_cells": len(sheet["cells"])} for sheet in model["sheets"]], "dependencies": {current: sorted(dependencies) for current, dependencies in sorted(graph.dependencies.items())}, "diagnostics": [_diagnostic(error, current) for current, error in sorted(graph.errors.items())], "inputs": model["inputs"], "outputs": model["outputs"]})
 
 
 def analyze_formula(formula: str) -> str:
@@ -788,5 +962,5 @@ def scenario() -> str:
     forecast["cells"].update({"F2": {"value": None, "formula": "=SUM(C2:C4)", "style": money.copy()}, "F3": {"value": None, "formula": "=SUM(E2:E4)", "style": money.copy()}, "F4": {"value": None, "formula": "=IF(Assumptions!B1>Assumptions!B2,Assumptions!B3/(Assumptions!B1-Assumptions!B2),NA())", "style": {"number_format": "0.00"}}})
     for address, label in [("G2", "Total revenue"), ("G3", "Total profit"), ("G4", "Break-even units per period")]:
         forecast["cells"][address] = {"value": label}
-    model = {"schema_version": 1, "revision": 0, "sheets": [assumptions, forecast], "inputs": {name: {"sheet": "Assumptions", "address": f"B{row}", "kind": "number", "required": True, "min": 0} for name, row in [("unit_price", 1), ("unit_cost", 2), ("fixed_cost", 3)]}, "outputs": {name: {"sheet": "Forecast", "address": address} for name, address in [("revenue", "F2"), ("profit", "F3"), ("break_even_units", "F4")]}}
+    model = {"schema_version": 1, "sheets": [assumptions, forecast], "inputs": {name: {"sheet": "Assumptions", "address": f"B{row}", "kind": "number", "required": True, "min": 0} for name, row in [("unit_price", 1), ("unit_cost", 2), ("fixed_cost", 3)]}, "outputs": {name: {"sheet": "Forecast", "address": address} for name, address in [("revenue", "F2"), ("profit", "F3"), ("break_even_units", "F4")]}}
     return _encode(_normalize_model(model))
