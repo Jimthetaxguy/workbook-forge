@@ -149,6 +149,64 @@ def test_a_blank_reference_calculates_to_zero_not_null():
     assert "B1" not in cells
 
 
+def test_an_unsupported_xlookup_mode_is_an_unsupported_formula():
+    """Canonical calculate reports an unsupported XLOOKUP mode as unsupported_formula."""
+
+    def formula(address, expression):
+        return {
+            "address": address,
+            "value": None,
+            "data_type": "blank",
+            "formula": {"expression": expression, "dependencies": [], "result": None},
+        }
+
+    def number(address, value):
+        return {"address": address, "value": value, "data_type": "number"}
+
+    document = {
+        "schema_version": 1,
+        "model_version": 1,
+        "metadata": {},
+        "sheets": [
+            {
+                "name": "S",
+                "cells": {
+                    "A1": formula("A1", "=XLOOKUP(1,B1:B1,C1:C1,,1)"),
+                    "A2": formula("A2", "=XLOOKUP(1,B1:B1,C1:C1)"),
+                    "A3": formula("A3", "=XLOOKUP(1,B1:B1,C1:C1,,,2)"),
+                    "B1": number("B1", 1),
+                    "C1": number("C1", 2),
+                },
+            }
+        ],
+    }
+    calculated = calculate(hydrate(json.dumps(document).encode()))
+    cells = calculated.sheet("S").cells
+    assert cells["A1"].formula.result is None
+    assert cells["A1"].formula.dependencies == ("S!B1", "S!C1")
+    assert cells["A2"].formula.result == 2
+    assert cells["A3"].formula.result is None
+    assert [
+        (item.address, item.code, item.classification, item.message, item.function)
+        for item in calculated.diagnostics
+    ] == [
+        (
+            "A1",
+            "unsupported_formula",
+            "unsupported",
+            "XLOOKUP supports exact match_mode=0 only",
+            None,
+        ),
+        (
+            "A3",
+            "unsupported_formula",
+            "unsupported",
+            "XLOOKUP search_mode must be 1 or -1",
+            None,
+        ),
+    ]
+
+
 def test_writing_an_unsupported_version_is_refused():
     import dataclasses
 
