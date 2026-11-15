@@ -27,7 +27,6 @@ def write_fixture(directory: Path):
     model = WorkbookModel(
         document={
             "schema_version": 1,
-            "revision": 0,
             "sheets": [{"id": "calc", "name": "Calc", "cells": cells}],
             "inputs": {},
             "outputs": outputs,

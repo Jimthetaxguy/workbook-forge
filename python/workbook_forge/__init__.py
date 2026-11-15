@@ -971,12 +971,28 @@ def _binary_array_parts(value: object) -> tuple[tuple[int, int], tuple[object, .
     return None
 
 
-def _is_worksheet_refusal(value: object) -> ErrorValue | None:
-    """An evaluation error the worksheet path reports as ``unsupported_formula``.
+class _FormulaRefusal(Exception):
+    """The evaluator met a construct it reads but does not calculate.
 
-    The scalar path in ``python_engine`` promotes these messages. Elementwise
-    lifting must return the same error for the whole formula. An ordinary Excel
-    error, such as ``#DIV/0!``, still lifts as an array element.
+    A refusal is not an Excel error value. Carried as one it could be replaced
+    by ``IFERROR``, answered TRUE by ``ISERROR``, or lost behind another
+    argument's error, and the formula would then report a result it never
+    calculated. Raising takes it past every function straight to
+    :func:`evaluate_result`, which returns ``error`` as the formula's result.
+    A branch that is never evaluated raises nothing.
+    """
+
+    def __init__(self, error: ErrorValue) -> None:
+        super().__init__(error.message)
+        self.error = error
+
+
+def _is_worksheet_refusal(value: object) -> ErrorValue | None:
+    """An evaluation error reported as ``unsupported_formula``.
+
+    Worksheet calculation and canonical calculate both promote these messages.
+    Elementwise lifting must return the same error for the whole formula. An
+    ordinary Excel error, such as ``#DIV/0!``, still lifts as an array element.
     """
     value = _dereference(value)
     if not isinstance(value, ErrorValue):
@@ -1001,11 +1017,6 @@ def _apply_binary_values(
 
     if left_array is not None and right_array is not None and left_array[0] != right_array[0]:
         return ErrorValue("#VALUE!", "array operator operands must have identical shapes")
-    for operand, parts in ((left, left_array), (right, right_array)):
-        if parts is None:
-            refusal = _is_worksheet_refusal(operand)
-            if refusal is not None:
-                return refusal
     shape = left_array[0] if left_array is not None else right_array[0]
     assert shape is not None
     rows, columns = shape
@@ -3656,9 +3667,13 @@ def _exact_match(
     if isinstance(direction, ErrorValue):
         return direction
     if match != 0:
-        return ErrorValue("#VALUE!", f"{function_name} supports exact match_mode=0 only")
+        raise _FormulaRefusal(
+            ErrorValue("#VALUE!", f"{function_name} supports exact match_mode=0 only")
+        )
     if direction not in (1, -1):
-        return ErrorValue("#VALUE!", f"{function_name} search_mode must be 1 or -1")
+        raise _FormulaRefusal(
+            ErrorValue("#VALUE!", f"{function_name} search_mode must be 1 or -1")
+        )
     indices = range(len(lookup_array.values))
     if direction == -1:
         indices = range(len(lookup_array.values) - 1, -1, -1)
@@ -5228,7 +5243,7 @@ def _function(
         "MAXIFS",
         *fixed,
     }:
-        return ErrorValue("#NAME?", f"unsupported function {name}")
+        raise _FormulaRefusal(ErrorValue("#NAME?", f"unsupported function {name}"))
     if name in fixed and not fixed[name][0] <= len(args) <= fixed[name][1]:
         low, high = fixed[name]
         expected = str(low) if low == high else f"{low} through {high}"
@@ -5958,7 +5973,7 @@ def _function(
                 len(columns),
             )
         return array.values[(row - 1) * array.columns + column - 1]
-    return ErrorValue("#NAME?", f"unsupported function {name}")
+    raise _FormulaRefusal(ErrorValue("#NAME?", f"unsupported function {name}"))
 
 
 def _nper_call(args: tuple[object, ...]) -> object:
@@ -6974,6 +6989,8 @@ def evaluate_result(
                 )
             )
         return _check_text_result(value)
+    except _FormulaRefusal as refusal:
+        return refusal.error
     except _FormulaSyntaxError as error:
         return ErrorValue("#VALUE!", str(error))
     except RecursionError:

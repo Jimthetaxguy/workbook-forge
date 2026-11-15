@@ -20,13 +20,18 @@ it (a value, a key, or a token inside a longer string) becomes
   would be the account name.
 
 A machine-local path is a POSIX path under one of the home, temporary or
-volume roots in ``MACHINE_LOCAL_ROOTS``, a ``~`` path, a Windows drive path or
-a ``file://`` URL. System paths such as ``/usr/bin/osascript`` are left alone.
-Relative paths are never touched. A ``~`` path is never expanded, and a path
-under ``/home`` or ``/Users`` is never resolved or read; both keep the basename
-or the marker. A path that resolves into one of those directories is not
-fingerprinted either. A Windows path is never resolved on this host; it always
-falls back to its basename or the marker.
+volume roots in ``MACHINE_LOCAL_ROOTS``, a path under the process temporary
+directory, a ``~`` path, a Windows drive path or a ``file://`` URL. The
+process temporary directory is ``tempfile.gettempdir()`` together with
+``TMPDIR``, ``TEMP`` and ``TMP``. Each of those values is resolved, and the
+resolved directory counts as well, except that a ``~`` value is never expanded
+and a path under ``/home`` or ``/Users`` is never resolved. System paths such
+as ``/usr/bin/osascript`` are left alone. Relative paths are never touched. A
+``~`` path is never expanded, and a path under ``/home`` or ``/Users`` is
+never resolved or read; both keep the basename or the marker. A path that
+resolves into one of those directories is not fingerprinted either. A Windows
+path is never resolved on this host; it always falls back to its basename or
+the marker.
 
 A string that starts with a path is taken as one path to its end, so a path
 with spaces survives as a whole. A path with spaces in the middle of prose is
@@ -55,10 +60,12 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 import hashlib
 import json
+import os
 from pathlib import Path, PurePosixPath, PureWindowsPath
 import re
 import shutil
 import sys
+import tempfile
 from typing import Any
 import zipfile
 
@@ -69,6 +76,8 @@ from workbook_forge.model import content_fingerprint  # noqa: E402
 
 #: Top-level POSIX directories under which a path names this machine rather
 #: than the repository: home directories, temporary folders and mounted volumes.
+#: A process temporary directory whose first component is not in this list is
+#: added at match time by ``_path_token``.
 MACHINE_LOCAL_ROOTS = (
     "Users", "home", "root", "private", "var", "tmp", "Volumes", "mnt", "media", "Library", "Applications",
 )
@@ -171,6 +180,138 @@ def _under_home_directory(path: Path) -> bool:
     return len(parts) >= 2 and parts[0] == "/" and parts[1] in HOME_ROOTS
 
 
+def _literal_posix_prefix(text: str) -> str | None:
+    """An absolute POSIX prefix, or None when the value must not be resolved.
+
+    ``~`` paths and Windows paths are refused so they are never expanded or
+    resolved. A path under ``/home`` or ``/Users`` is refused for the same
+    reason. ``.`` and ``..`` segments are refused so the prefix cannot climb
+    out of the directory that was named.
+    """
+    if not text or text.startswith("~"):
+        return None
+    if re.match(r"[A-Za-z]:", text) or "\\" in text:
+        return None
+    stripped = text.rstrip("/")
+    if not stripped.startswith("/") or any(character.isspace() for character in stripped):
+        return None
+    parts = stripped.split("/")
+    if len(parts) < 2 or any(part in ("", ".", "..") for part in parts[1:]):
+        return None
+    if _under_home_directory(Path(stripped)):
+        return None
+    return stripped
+
+
+def _outside_static_roots(prefix: str) -> bool:
+    """True when ``prefix`` is not already covered by ``MACHINE_LOCAL_ROOTS``."""
+    parts = prefix.split("/")
+    return len(parts) >= 2 and parts[1] not in MACHINE_LOCAL_ROOTS
+
+
+def _resolve_temp_prefix(prefix: str) -> str | None:
+    """Resolved form of a temp prefix, or None when resolution is refused.
+
+    A path under ``/home`` or ``/Users`` is not resolved. A result that lands
+    in one of those directories, or on the filesystem root, is dropped.
+    """
+    path = Path(prefix)
+    if _under_home_directory(path):
+        return None
+    try:
+        resolved = path.resolve()
+    except (OSError, RuntimeError):
+        return None
+    if _under_home_directory(resolved):
+        return None
+    text = resolved.as_posix()
+    if text in ("", "/") or ".." in resolved.parts:
+        return None
+    return text
+
+
+def _prefixes_for_temp_value(raw: str) -> tuple[str, ...]:
+    """Prefixes from one ``TMPDIR``, ``TEMP``, ``TMP`` or ``gettempdir`` value.
+
+    A ``~`` path is not expanded. A relative path is made absolute with
+    ``os.path.abspath``, which does not expand ``~``. The directory is kept
+    as written and, when resolution stays outside ``/home`` and ``/Users``,
+    the resolved directory is kept too. A directory the static roots already
+    cover is omitted, so those paths keep the static expression.
+    """
+    if not raw or raw.startswith("~"):
+        return ()
+    candidates = [raw]
+    if not raw.startswith("/") and not re.match(r"[A-Za-z]:", raw) and "\\" not in raw:
+        candidates.append(os.path.abspath(raw))
+    found: list[str] = []
+    seen: set[str] = set()
+    for text in candidates:
+        prefix = _literal_posix_prefix(text)
+        if prefix is None:
+            continue
+        resolved = _resolve_temp_prefix(prefix)
+        for item in (prefix, resolved):
+            if item and item not in seen and _outside_static_roots(item):
+                seen.add(item)
+                found.append(item)
+    return tuple(found)
+
+
+def _process_temp_prefixes(sources: tuple[str, ...]) -> tuple[str, ...]:
+    """Temp prefixes from the process environment, longest first."""
+    found: list[str] = []
+    seen: set[str] = set()
+    for raw in sources:
+        for prefix in _prefixes_for_temp_value(raw):
+            if prefix not in seen:
+                seen.add(prefix)
+                found.append(prefix)
+    found.sort(key=len, reverse=True)
+    return tuple(found)
+
+
+def _compile_path_token(prefixes: tuple[str, ...]) -> re.Pattern[str]:
+    """``PATH_TOKEN`` plus the process temp directories that the static list misses."""
+    if not prefixes:
+        return PATH_TOKEN
+    extra = "|".join(re.escape(prefix) for prefix in prefixes)
+    return re.compile(
+        rf"(?<![\w./\\-])(?:file://)?(?:"
+        rf"~(?=/)|/(?:{_POSIX})(?=/)|(?:{extra})(?=/|$)|[A-Za-z]:\\"
+        rf""")[^\s"'<>|]*"""
+    )
+
+
+_PATH_TOKEN_CACHE: dict[tuple[str, str, str, str], re.Pattern[str]] = {}
+
+
+def _path_token() -> re.Pattern[str]:
+    """Machine-local path expression, including the process temporary directory.
+
+    The static roots stay in ``PATH_TOKEN``. ``TMPDIR``, ``TEMP``, ``TMP`` and
+    ``tempfile.gettempdir()`` are read on each new environment so a temp
+    directory outside that list is still rewritten. ``~`` is never expanded,
+    and a home path is never resolved.
+    """
+    try:
+        system_temp = tempfile.gettempdir()
+    except OSError:
+        system_temp = ""
+    key = (
+        os.environ.get("TMPDIR", ""),
+        os.environ.get("TEMP", ""),
+        os.environ.get("TMP", ""),
+        system_temp,
+    )
+    cached = _PATH_TOKEN_CACHE.get(key)
+    if cached is not None:
+        return cached
+    pattern = _compile_path_token(_process_temp_prefixes(key))
+    _PATH_TOKEN_CACHE[key] = pattern
+    return pattern
+
+
 def _classify(token: str) -> tuple[Path | None, str]:
     """(a path on this host to resolve, or None; the replacement to fall back on).
 
@@ -229,8 +370,9 @@ def rewrite_path(token: str, root: Path, *, whole: bool) -> tuple[str, str]:
 
 def sanitize_text(text: str, root: Path, location: str, changes: list[Change]) -> str:
     """Rewrite every machine-local path token in one string."""
+    pattern = _path_token()
     stripped = text.strip()
-    if PATH_TOKEN.match(stripped) is not None:
+    if pattern.match(stripped) is not None:
         # The string is a path, spaces included, to its end.
         replacement, kind = rewrite_path(stripped, root, whole=True)
         if replacement != stripped:
@@ -247,7 +389,7 @@ def sanitize_text(text: str, root: Path, location: str, changes: list[Change]) -
             changes.append(Change(location, kind, token, replacement))
         return replacement + tail
 
-    return PATH_TOKEN.sub(substitute, text)
+    return pattern.sub(substitute, text)
 
 
 def sanitize_document(document: Any, root: Path, location: str = "", changes: list[Change] | None = None) -> Any:
@@ -302,7 +444,7 @@ def scan_workbook(path: Path) -> list[tuple[str, str]]:
                 if not info.filename.lower().endswith((".xml", ".rels", ".txt", ".json")):
                     continue
                 text = archive.read(info).decode("utf-8", errors="ignore")
-                tokens = sorted({_split_token(match.group(0))[0] for match in PATH_TOKEN.finditer(text)})
+                tokens = sorted({_split_token(match.group(0))[0] for match in _path_token().finditer(text)})
                 found.extend((info.filename, token) for token in tokens if token)
     except zipfile.BadZipFile:
         found.append(("<package>", ""))

@@ -37,10 +37,17 @@ impl OwnedWorkbook {
             Self::Imported(imported) => imported.names(),
         }
     }
-    fn snapshot(&self) -> WorkbookModel {
+    /// The model and its revision, read under one lock: the model holds none.
+    fn snapshot_with_revision(&self) -> (WorkbookModel, u64) {
         match self {
-            Self::Authored(session) => session.snapshot(),
-            Self::Imported(imported) => imported.snapshot(),
+            Self::Authored(session) => session.snapshot_with_revision(),
+            Self::Imported(imported) => imported.snapshot_with_revision(),
+        }
+    }
+    fn revision(&self) -> u64 {
+        match self {
+            Self::Authored(session) => session.revision(),
+            Self::Imported(imported) => imported.revision(),
         }
     }
     fn validate_imported(&self, edits: &[Edit]) -> Result<()> {
@@ -69,7 +76,17 @@ pub struct AgentWorkbook {
 }
 impl AgentWorkbook {
     pub fn new(model: WorkbookModel, output_dir: impl AsRef<Path>) -> Result<Self> {
-        let session = Session::new(model)?;
+        Self::new_at(model, 0, output_dir)
+    }
+    /// [`AgentWorkbook::new`] starting at `revision`: for a v1 document that
+    /// carried a legacy `revision` key (`toolkit::read_document`), so it
+    /// answers and accepts the revision it did before the key left the model.
+    pub fn new_at(
+        model: WorkbookModel,
+        revision: u64,
+        output_dir: impl AsRef<Path>,
+    ) -> Result<Self> {
+        let session = Session::with_names_at(model, None, revision)?;
         Ok(Self {
             workbook: Mutex::new(OwnedWorkbook::Authored(session)),
             output_dir: export_directory(output_dir.as_ref())?,
@@ -90,12 +107,12 @@ impl AgentWorkbook {
                 return failure(None, None, 0, "session_failure", "agent lock poisoned");
             }
         };
-        let model = workbook.snapshot();
+        let (model, revision) = workbook.snapshot_with_revision();
         if serde_json::to_vec(&request).map_or(true, |bytes| bytes.len() > MAX_REQUEST_BYTES) {
             return failure(
                 None,
                 None,
-                model.revision,
+                revision,
                 "resource_limit",
                 "request exceeds 1 MiB",
             );
@@ -111,18 +128,16 @@ impl AgentWorkbook {
                     .get("operation")
                     .and_then(Value::as_str)
                     .filter(|operation| !operation.is_empty());
-                return failure(id, operation, model.revision, &error.code, &error.message);
+                return failure(id, operation, revision, &error.code, &error.message);
             }
         };
-        let outcome = self.execute(&workbook, &model, operation, arguments, id);
+        let outcome = self.execute(&workbook, (&model, revision), operation, arguments, id);
         match outcome {
-            Ok(result) => {
-                bounded_response(success(id, operation, workbook.snapshot().revision, result))
-            }
+            Ok(result) => bounded_response(success(id, operation, workbook.revision(), result)),
             Err(error) => failure(
                 id,
                 Some(operation),
-                workbook.snapshot().revision,
+                workbook.revision(),
                 &error.code,
                 &error.message,
             ),
@@ -130,21 +145,19 @@ impl AgentWorkbook {
     }
     /// Return a transport error with the current revision and no request identity.
     pub fn transport_error(&self, code: &str, message: &str) -> Value {
-        let revision = self
-            .workbook
-            .lock()
-            .map(|w| w.snapshot().revision)
-            .unwrap_or(0);
+        let revision = self.workbook.lock().map(|w| w.revision()).unwrap_or(0);
         failure(None, None, revision, code, message)
     }
     fn execute(
         &self,
         workbook: &OwnedWorkbook,
-        model: &WorkbookModel,
+        snapshot: (&WorkbookModel, u64),
         operation: &str,
         arguments: &Arguments,
         id: Option<&str>,
     ) -> Result<Value> {
+        // The model and the revision it was read at, as one pair.
+        let (model, revision) = snapshot;
         match operation {
             "discover" => {
                 only(arguments, &[])?;
@@ -159,9 +172,12 @@ impl AgentWorkbook {
                     "source":{"kind":if matches!(workbook,OwnedWorkbook::Imported(_)){"xlsx"}else{"authored"}}
                 }))
             }
-            "read" | "explain" => {
-                read_page(model, workbook.names(), arguments, operation == "explain")
-            }
+            "read" | "explain" => read_page(
+                snapshot,
+                workbook.names(),
+                arguments,
+                operation == "explain",
+            ),
             "calculate" => {
                 only(arguments, &["outputs", "workers"])?;
                 let workers = integer(arguments, "workers", Some(1), "invalid_request")?;
@@ -173,6 +189,7 @@ impl AgentWorkbook {
                     selected,
                     workbook.names(),
                     workers as usize,
+                    revision,
                 )?))
             }
             "preview_inputs" | "set_inputs" => {
@@ -185,10 +202,10 @@ impl AgentWorkbook {
                         &["values", "expected_revision"]
                     },
                 )?;
-                check_revision(model, arguments, true)?;
+                check_revision(revision, arguments, true)?;
                 let values = input_values(arguments)?;
                 let edits = toolkit::validate_inputs(model, &values).map_err(input_error)?;
-                let candidate = validate_candidate(workbook, model, &edits)?;
+                let (candidate, proposed) = validate_candidate(workbook, snapshot, &edits)?;
                 if preview {
                     let before = select_outputs(model, arguments.get("outputs"))?;
                     let after = select_outputs(&candidate, arguments.get("outputs"))?;
@@ -197,24 +214,18 @@ impl AgentWorkbook {
                         json!({"sheet":sheet.name,"address":address,"before":sheet.cells.get(&address).map(|cell| &cell.value).unwrap_or(&CellValue::Blank),"after":edit.value})
                     }).collect::<Vec<_>>();
                     let names = workbook.names();
-                    let before_report = calculate_with_names(before, names.clone(), 1)?;
-                    let after_report = calculate_with_names(after, names, 1)?;
+                    let before_report = calculate_with_names(before, names.clone(), 1, revision)?;
+                    let after_report = calculate_with_names(after, names, 1, proposed)?;
                     Ok(
-                        json!({"applied":false,"base_revision":model.revision,"proposed_revision":candidate.revision,"changes":changes,"before":compact_report(&before_report),"after":compact_report(&after_report)}),
+                        json!({"applied":false,"base_revision":revision,"proposed_revision":proposed,"changes":changes,"before":compact_report(&before_report),"after":compact_report(&after_report)}),
                     )
                 } else {
-                    self.commit(
-                        workbook,
-                        model,
-                        edits,
-                        candidate.revision,
-                        (id, operation, None),
-                    )
+                    self.commit(workbook, snapshot, edits, proposed, (id, operation, None))
                 }
             }
             "edit" => {
                 only(arguments, &["edits", "expected_revision"])?;
-                check_revision(model, arguments, true)?;
+                check_revision(revision, arguments, true)?;
                 let raw = arguments
                     .get("edits")
                     .and_then(Value::as_array)
@@ -255,18 +266,18 @@ impl AgentWorkbook {
                             .map_err(|e| error("invalid_request", e.to_string()))?,
                     );
                 }
-                let candidate = validate_candidate(workbook, model, &edits)?;
+                let (_, proposed) = validate_candidate(workbook, snapshot, &edits)?;
                 self.commit(
                     workbook,
-                    model,
+                    snapshot,
                     edits,
-                    candidate.revision,
+                    proposed,
                     (id, operation, Some(raw)),
                 )
             }
             "export" => {
                 only(arguments, &["filename", "expected_revision"])?;
-                check_revision(model, arguments, true)?;
+                check_revision(revision, arguments, true)?;
                 let filename = text(arguments, "filename", "invalid_request")?;
                 if !safe_filename(filename) {
                     return Err(error(
@@ -280,7 +291,7 @@ impl AgentWorkbook {
                 }
                 // No file is created if any required result is unavailable.
                 let selected = select_outputs(model, None)?;
-                if !calculate_with_names(selected, workbook.names(), 1)?
+                if !calculate_with_names(selected, workbook.names(), 1, revision)?
                     .diagnostics
                     .is_empty()
                 {
@@ -294,7 +305,7 @@ impl AgentWorkbook {
                 let bytes = std::fs::metadata(path)
                     .map_err(|e| error("export_error", e.to_string()))?
                     .len();
-                Ok(json!({"filename":filename,"revision":model.revision,"bytes":bytes}))
+                Ok(json!({"filename":filename,"revision":revision,"bytes":bytes}))
             }
             _ => Err(error("unknown_operation", "unknown agent operation")),
         }
@@ -302,11 +313,12 @@ impl AgentWorkbook {
     fn commit(
         &self,
         workbook: &OwnedWorkbook,
-        model: &WorkbookModel,
+        snapshot: (&WorkbookModel, u64),
         edits: Vec<Edit>,
         proposed_revision: u64,
         context: (Option<&str>, &str, Option<&Vec<Value>>),
     ) -> Result<Value> {
+        let (model, revision) = snapshot;
         let (id, operation, submitted) = context;
         let changed = edits
             .iter()
@@ -327,9 +339,9 @@ impl AgentWorkbook {
                 json!({"sheet":sheet.name,"address":address,"fields":fields})
             })
             .collect::<Vec<_>>();
-        let receipt = json!({"previous_revision":model.revision,"revision":proposed_revision,"changed_cells":changed});
+        let receipt = json!({"previous_revision":revision,"revision":proposed_revision,"changed_cells":changed});
         ensure_response_size(&success(id, operation, proposed_revision, receipt.clone()))?;
-        workbook.apply(edits, model.revision)?;
+        workbook.apply(edits, revision)?;
         Ok(receipt)
     }
 }
@@ -394,10 +406,10 @@ fn integer(arguments: &Arguments, name: &str, default: Option<u64>, code: &str) 
             .ok_or_else(|| error(code, format!("{name} must be a nonnegative integer"))),
     }
 }
-fn check_revision(model: &WorkbookModel, arguments: &Arguments, required: bool) -> Result<()> {
+fn check_revision(revision: u64, arguments: &Arguments, required: bool) -> Result<()> {
     if required || arguments.contains_key("expected_revision") {
         let expected = integer(arguments, "expected_revision", None, "invalid_request")?;
-        if expected != model.revision {
+        if expected != revision {
             return Err(error(
                 "revision_conflict",
                 "expected revision does not match current revision",
@@ -436,15 +448,18 @@ fn input_values(arguments: &Arguments) -> Result<BTreeMap<String, CellValue>> {
     serde_json::from_value(Value::Object(values.clone()))
         .map_err(|e| error("invalid_input", e.to_string()))
 }
+/// Apply the edits to a detached copy seeded at the snapshot's revision, and
+/// return the candidate model with the revision the commit would produce.
 fn validate_candidate(
     workbook: &OwnedWorkbook,
-    model: &WorkbookModel,
+    snapshot: (&WorkbookModel, u64),
     edits: &[Edit],
-) -> Result<WorkbookModel> {
-    let candidate = Session::with_names(model.clone(), workbook.names())?;
-    candidate.apply(edits.to_vec(), Some(model.revision))?;
+) -> Result<(WorkbookModel, u64)> {
+    let (model, revision) = snapshot;
+    let candidate = Session::with_names_at(model.clone(), workbook.names(), revision)?;
+    let proposed = candidate.apply(edits.to_vec(), Some(revision))?;
     workbook.validate_imported(edits)?;
-    Ok(candidate.snapshot())
+    Ok((candidate.snapshot(), proposed))
 }
 fn select_outputs(model: &WorkbookModel, outputs: Option<&Value>) -> Result<WorkbookModel> {
     let names = match outputs {
@@ -515,21 +530,23 @@ fn label(model: &WorkbookModel, sheet: &str, address: &str) -> Result<String> {
     let (sheet, address) = resolve(model, sheet, address)?;
     Ok(format!("{}!{}", sheet.name, address))
 }
-/// Calculate a detached copy with the workbook's defined-name table.
-/// The copy itself does not carry the table.
+/// Calculate a detached copy with the workbook's defined-name table, at the
+/// revision the report must carry. The copy itself carries neither.
 fn calculate_with_names(
     model: WorkbookModel,
     names: Option<crate::DefinedNames>,
     workers: usize,
+    revision: u64,
 ) -> Result<CalculationReport> {
-    Ok(Session::with_names(model, names)?.calculate(workers))
+    Ok(Session::with_names_at(model, names, revision)?.calculate(workers))
 }
 fn read_page(
-    model: &WorkbookModel,
+    snapshot: (&WorkbookModel, u64),
     names: Option<crate::DefinedNames>,
     arguments: &Arguments,
     explain: bool,
 ) -> Result<Value> {
+    let (model, revision) = snapshot;
     only(
         arguments,
         if explain {
@@ -550,7 +567,7 @@ fn read_page(
     if !(1..=100).contains(&limit) {
         return Err(error("invalid_request", "limit must be between 1 and 100"));
     }
-    check_revision(model, arguments, offset > 0)?;
+    check_revision(revision, arguments, offset > 0)?;
     if arguments.contains_key("sheet") == arguments.contains_key("output") {
         return Err(error(
             "invalid_request",
@@ -588,7 +605,7 @@ fn read_page(
         }
         if explain {
             let selected_model = select_outputs(model, Some(&json!([output])))?;
-            report = Some(calculate_with_names(selected_model, names, 1)?);
+            report = Some(calculate_with_names(selected_model, names, 1, revision)?);
         }
     } else {
         let sheet_name = text(arguments, "sheet", "invalid_reference")?;
@@ -1204,5 +1221,91 @@ mod tests {
             ));
         }
         assert_eq!(call(&agent, "describe", json!({}))["revision"], 1);
+    }
+
+    /// Every revision on the wire follows the session, not a base of 0: the
+    /// detached preview and export sessions are seeded with it.
+    #[test]
+    fn preview_and_export_at_a_base_revision_above_zero() {
+        let agent = scenario();
+        for (revision, price) in [(0, 22), (1, 25)] {
+            let receipt = ok(call(
+                &agent,
+                "set_inputs",
+                json!({"values":{"unit_price":price},"expected_revision":revision}),
+            ));
+            assert_eq!(receipt["previous_revision"], revision);
+            assert_eq!(receipt["revision"], revision + 1);
+        }
+        let response = call(
+            &agent,
+            "preview_inputs",
+            json!({"values":{"unit_price":30},"expected_revision":2}),
+        );
+        assert_eq!(response["revision"], 2);
+        let preview = ok(response);
+        assert_eq!(preview["base_revision"], 2);
+        assert_eq!(preview["proposed_revision"], 3);
+        assert_eq!(preview["before"]["revision"], 2);
+        assert_eq!(preview["after"]["revision"], 3);
+        // 370 units are sold, so profit rises by 370 for each unit of price:
+        // 1440 at 20, 3290 at 25 and 5140 at 30.
+        assert_eq!(preview["before"]["outputs"]["profit"], 3290.0);
+        assert_eq!(preview["after"]["outputs"]["profit"], 5140.0);
+        let response = call(&agent, "calculate", json!({}));
+        assert_eq!(response["revision"], 2);
+        assert_eq!(ok(response)["revision"], 2);
+        let response = call(
+            &agent,
+            "export",
+            json!({"filename":"base.xlsx","expected_revision":2}),
+        );
+        assert_eq!(response["revision"], 2);
+        assert_eq!(ok(response)["revision"], 2);
+        code(
+            call(
+                &agent,
+                "preview_inputs",
+                json!({"values":{"unit_price":30},"expected_revision":0}),
+            ),
+            "revision_conflict",
+        );
+    }
+    /// A v1 document written before the revision left the model still answers
+    /// at the revision it carried (spec 09 step 1).
+    #[test]
+    fn a_legacy_document_revision_seeds_the_wire_revision() {
+        let mut document = serde_json::to_value(toolkit::operating_scenario()).unwrap();
+        document["revision"] = json!(5);
+        let (model, legacy) =
+            toolkit::read_document(&serde_json::to_vec(&document).unwrap()).unwrap();
+        assert_eq!(legacy, 5);
+        let agent = AgentWorkbook::new_at(model, legacy, directory()).unwrap();
+        assert_eq!(call(&agent, "describe", json!({}))["revision"], 5);
+        assert_eq!(ok(call(&agent, "calculate", json!({})))["revision"], 5);
+        code(
+            call(
+                &agent,
+                "set_inputs",
+                json!({"values":{"unit_price":25},"expected_revision":0}),
+            ),
+            "revision_conflict",
+        );
+        let response = call(
+            &agent,
+            "set_inputs",
+            json!({"values":{"unit_price":25},"expected_revision":5}),
+        );
+        assert_eq!(response["revision"], 6);
+        let receipt = ok(response);
+        assert_eq!(receipt["previous_revision"], 5);
+        assert_eq!(receipt["revision"], 6);
+        assert_eq!(call(&agent, "describe", json!({}))["revision"], 6);
+        // The same document without the key starts at 0.
+        document.as_object_mut().unwrap().remove("revision");
+        let (model, legacy) =
+            toolkit::read_document(&serde_json::to_vec(&document).unwrap()).unwrap();
+        let agent = AgentWorkbook::new_at(model, legacy, directory()).unwrap();
+        assert_eq!(call(&agent, "describe", json!({}))["revision"], 0);
     }
 }

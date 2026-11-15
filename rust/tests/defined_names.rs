@@ -78,7 +78,7 @@ fn toolkit_model(fixture: &Json, cells: &BTreeMap<String, (String, String)>) -> 
         sheets[sheet.as_str()]["cells"][address.as_str()] = json!({"formula": case["formula"]});
     }
     serde_json::from_value(json!({
-        "schema_version": 1, "revision": 0,
+        "schema_version": 1,
         "sheets": sheets.values().cloned().collect::<Vec<_>>(),
         "inputs": {}, "outputs": {}
     }))

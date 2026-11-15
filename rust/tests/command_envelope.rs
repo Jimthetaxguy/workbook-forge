@@ -276,7 +276,7 @@ fn changed_stays_correct_after_an_interleaved_legacy_apply() {
 }
 
 #[test]
-fn rebase_mode_and_preconditions_fail_closed() {
+fn rebase_mode_and_malformed_preconditions_fail_closed() {
     let workbook = chain();
     let session = CommandSession::new();
     let mut rebase = envelope("rb", "0", set("A1", 5.0));
@@ -284,11 +284,13 @@ fn rebase_mode_and_preconditions_fail_closed() {
     let response = run(&session, &workbook, &rebase);
     assert_eq!(response["status"], "rejected");
     assert_eq!(response["error"]["code"], "unsupported_mode");
+    // Preconditions are implemented (tests/cell_versions.rs); the draft
+    // `{cell, unchanged_since}` shape is a malformed envelope.
     let mut pre = envelope("pc", "0", set("A1", 5.0));
     pre["preconditions"] = json!([{"cell": "Sheet1!A1", "unchanged_since": "0"}]);
     let response = run(&session, &workbook, &pre);
     assert_eq!(response["status"], "rejected");
-    assert_eq!(response["error"]["code"], "unsupported_precondition");
+    assert_eq!(response["error"]["code"], "invalid_request");
     assert_eq!(revision_string(&workbook), "0");
     assert_eq!(full_values(&workbook)["Sheet1!A1"], json!(1.0));
 }

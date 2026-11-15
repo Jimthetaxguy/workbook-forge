@@ -1,0 +1,141 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://workbook-forge.dev/schemas/calculation-report.v2.schema.json",
+  "title": "Workbook Forge calculation report v2",
+  "description": "Produced by the calculation session (spec 09 step 1): one report for one pass over the owner model, carrying the session revision the pass read, the revision of the published report it reused as its base, and the calculation context. schema_version is pinned to 1 and model_version to 1 or null because no version moves before spec 09 step 6; model_version is 1 only when the session was opened from a canonical v1 document. A cell's imported cache is never read: a formula cell without a fresh value is not_calculated with a null result. calculated_formulas and unresolved_formulas count the formula cells in the pass's closure (every formula cell when no outputs are bound, otherwise the formula cells the bound outputs depend on) that do and do not have a key in values.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "report_version",
+    "stage",
+    "engine",
+    "behavior_profile",
+    "schema_version",
+    "model_version",
+    "source_fingerprint",
+    "revision",
+    "base_revision",
+    "calc",
+    "inputs",
+    "outputs",
+    "values",
+    "evaluated_cells",
+    "stale",
+    "diagnostics",
+    "calculated_formulas",
+    "unresolved_formulas"
+  ],
+  "properties": {
+    "report_version": {"const": 2},
+    "stage": {"const": "calculate"},
+    "engine": {"enum": ["python", "rust"]},
+    "behavior_profile": {"const": "workbook-forge"},
+    "schema_version": {"const": 1},
+    "model_version": {"enum": [1, null]},
+    "source_fingerprint": {
+      "oneOf": [
+        {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+        {"type": "null"}
+      ]
+    },
+    "revision": {"$ref": "#/$defs/revision"},
+    "base_revision": {
+      "oneOf": [
+        {"$ref": "#/$defs/revision"},
+        {"type": "null"}
+      ]
+    },
+    "calc": {"$ref": "#/$defs/calc"},
+    "inputs": {"type": "array", "items": {"$ref": "#/$defs/input"}},
+    "outputs": {"type": "array", "items": {"$ref": "#/$defs/output"}},
+    "values": {"type": "object", "additionalProperties": {"$ref": "#/$defs/value"}},
+    "evaluated_cells": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+    "stale": {"type": "boolean"},
+    "diagnostics": {"type": "array", "items": {"$ref": "#/$defs/diagnostic"}},
+    "calculated_formulas": {"type": "integer", "minimum": 0},
+    "unresolved_formulas": {"type": "integer", "minimum": 0}
+  },
+  "$defs": {
+    "revision": {"type": "integer", "minimum": 0, "maximum": 18446744073709551615},
+    "calc": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["now_ms", "utc_offset_minutes", "seed"],
+      "properties": {
+        "now_ms": {"type": "integer"},
+        "utc_offset_minutes": {"type": "integer"},
+        "seed": {"type": "string", "pattern": "^[0-9]+$"}
+      }
+    },
+    "input": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "sheet", "address", "origin", "value"],
+      "properties": {
+        "name": {"type": "string"},
+        "sheet": {"type": "string"},
+        "address": {"type": "string"},
+        "origin": {"enum": ["authored", null]},
+        "value": {"$ref": "#/$defs/scalar"}
+      }
+    },
+    "output": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "sheet", "address", "origin", "result"],
+      "properties": {
+        "name": {"type": "string"},
+        "sheet": {"type": "string"},
+        "address": {"type": "string"},
+        "origin": {"enum": ["calculated", "not_calculated", "authored", null]},
+        "result": {"$ref": "#/$defs/value"}
+      }
+    },
+    "diagnostic": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "message"],
+      "properties": {
+        "code": {"type": "string"},
+        "message": {"type": "string"},
+        "sheet": {"type": "string"},
+        "address": {"type": "string"}
+      }
+    },
+    "value": {
+      "oneOf": [
+        {"$ref": "#/$defs/scalar"},
+        {"$ref": "#/$defs/rows"}
+      ]
+    },
+    "rows": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["rows"],
+      "properties": {
+        "rows": {
+          "type": "array",
+          "items": {"type": "array", "items": {"$ref": "#/$defs/scalar"}}
+        }
+      }
+    },
+    "scalar": {
+      "oneOf": [
+        {"type": "null"},
+        {"type": "number"},
+        {"type": "string"},
+        {"type": "boolean"},
+        {"$ref": "#/$defs/error"}
+      ]
+    },
+    "error": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["error"],
+      "properties": {
+        "error": {"type": "string"},
+        "message": {"type": ["string", "null"]}
+      }
+    }
+  }
+}

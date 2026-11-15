@@ -64,6 +64,7 @@ class WorkbookModel:
         outputs: Mapping[str, Any] | None = None,
         backend: str = "python",
         _names: str | None = None,
+        _revision: int | None = None,
     ):
         if document is not None and sheets is not None:
             raise ValueError("specify sheets or document, not both")
@@ -72,7 +73,6 @@ class WorkbookModel:
         if document is None:
             data = {
                 "schema_version": 1,
-                "revision": 0,
                 "sheets": [
                     {"id": f"sheet-{index}", "name": name, "cells": {}, "column_widths": {}}
                     for index, name in enumerate(sheets if sheets is not None else ["Sheet1"], 1)
@@ -91,7 +91,10 @@ class WorkbookModel:
         # The imported workbook's defined names, as the engines' JSON table
         # (read-only; docs/defined-names.md). None: no table, names refused.
         self._names = _names
-        self._session = self._new_session(_encode(data))
+        # The revision is session state. A legacy ``revision`` key in
+        # ``document`` seeds the counter; ``_revision`` (a detached copy made
+        # at a known revision) wins over it.
+        self._session = self._new_session(_encode(data), _revision)
         self._source_baseline = None
         self._import_metadata = None
         # Imported drop-down, pivot and chart rules (xlsx_features.FeatureGuard).
@@ -105,10 +108,11 @@ class WorkbookModel:
         # The imported package's envelope.PreservationEnvelope; None when authored.
         self._envelope = None
 
-    def _new_session(self, model_json: str):
+    def _new_session(self, model_json: str, revision: int | None = None):
+        seed = {} if revision is None else {"revision": revision}
         if self._names is None:
-            return self._engine.Session(model_json)
-        return self._engine.Session(model_json, self._names)
+            return self._engine.Session(model_json, **seed)
+        return self._engine.Session(model_json, self._names, **seed)
 
     @property
     def backend(self) -> str:
@@ -116,7 +120,7 @@ class WorkbookModel:
 
     @property
     def revision(self) -> int:
-        return self.to_dict()["revision"]
+        return self._session.revision
 
     @property
     def envelope(self) -> Any:
@@ -126,6 +130,11 @@ class WorkbookModel:
     def to_dict(self) -> dict[str, Any]:
         """Return a detached snapshot; modifying it does not edit this session."""
         return json.loads(self._session.snapshot())
+
+    def snapshot_with_revision(self) -> tuple[dict[str, Any], int]:
+        """A detached snapshot and the revision it was read at, as one read."""
+        document, revision = self._session.snapshot_with_revision()
+        return json.loads(document), revision
 
     def apply(self, edits: Iterable[Mapping[str, Any]], *, expected_revision: int | None = None) -> int:
         """Commit a bounded edit batch atomically or leave the session unchanged."""
@@ -241,18 +250,21 @@ class WorkbookModel:
 
     def calculate(self, *, workers: int = 1) -> dict[str, Any]:
         """Calculate outputs and their dependencies from a coherent snapshot."""
-        snapshot = self.to_dict()
+        snapshot, revision = self.snapshot_with_revision()
         report = json.loads(self._session.calculate(workers))
         report["backend"] = self.backend
-        if report["revision"] == snapshot["revision"]:
+        if report["revision"] == revision:
             report["model_digest"] = _digest(snapshot)
         return report
 
     def inspect(self) -> dict[str, Any]:
+        snapshot, revision = self.snapshot_with_revision()
         if self._names is None:
-            report = json.loads(self._engine.inspect(_encode(self.to_dict())))
+            report = json.loads(self._engine.inspect(_encode(snapshot)))
         else:
-            report = json.loads(self._engine.inspect(_encode(self.to_dict()), self._names))
+            report = json.loads(self._engine.inspect(_encode(snapshot), self._names))
+        # The engine's inspection is stateless; the revision is this session's.
+        report["revision"] = revision
         report["backend"] = self.backend
         if self._import_metadata is not None:
             report["xlsx"] = json.loads(_encode(self._import_metadata))
@@ -264,7 +276,7 @@ class WorkbookModel:
         """Copy a formula with mixed references adjusted by its cell displacement."""
         from .workbook import _cell_position, _normal_address
 
-        snapshot = self.to_dict()
+        snapshot, revision = self.snapshot_with_revision()
         source = _normal_address(source)
         source_sheet = next((item for item in snapshot["sheets"] if item["name"] == sheet), None)
         if source_sheet is None:
@@ -277,7 +289,7 @@ class WorkbookModel:
         copied = self._engine.copy_formula(formula, target_row - source_row, target_column - source_column)
         return self.apply(
             [{"sheet": target_sheet or sheet, "address": target, "formula": copied}],
-            expected_revision=snapshot["revision"],
+            expected_revision=revision,
         )
 
 

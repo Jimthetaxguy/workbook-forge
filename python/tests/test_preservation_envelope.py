@@ -25,6 +25,18 @@ from workbook_forge.xlsx import import_xlsx
 ROOT = Path(__file__).resolve().parents[2]
 CORPUS = ROOT / "fixtures" / "corpus"
 MERGED = CORPUS / "op_merged_cells.xlsx"
+# The Python importer refuses these eight corpus workbooks. The describe loop
+# names the set instead of counting successes against a floor.
+PYTHON_IMPORT_REFUSALS = {
+    "hb_errors_newer_values.xlsx",
+    "hb_in_cell_array_formula.xlsx",
+    "hb_in_cell_list.xlsx",
+    "hb_macro_content_in_xlsx.xlsx",
+    "hb_nested_array.xlsx",
+    "hb_no_cell_references.xlsx",
+    "hb_rows_without_references.xlsx",
+    "hb_strict_ooxml.xlsx",
+}
 DESCRIBE_KEYS = {
     "source",
     "baseline",
@@ -131,14 +143,15 @@ def _importable_corpus() -> list[Path]:
 
 def test_envelope_describe_is_json_and_sorted_for_every_importable_corpus_workbook():
     # One loop, not a parametrisation: the gate forbids skipped tests, and a
-    # workbook the importer refuses has no envelope to describe.
-    described_count = 0
+    # workbook the importer refuses has no envelope to describe. The refused
+    # names are the set below.
+    refused = []
     for path in _importable_corpus():
         try:
             model = import_xlsx(path)
         except WorkbookError:
+            refused.append(path.name)
             continue
-        described_count += 1
         where = path.name
         envelope = model.envelope
         described = envelope.describe()
@@ -163,7 +176,7 @@ def test_envelope_describe_is_json_and_sorted_for_every_importable_corpus_workbo
         ), where
         assert described["date_system"] in {"1900", "1904"}, where
         assert isinstance(described["compatibility_version"], int), where
-    assert described_count >= 40, described_count
+    assert set(refused) == PYTHON_IMPORT_REFUSALS, refused
 
 
 # --- cross-language agreement -----------------------------------------------
@@ -242,7 +255,6 @@ def test_python_and_rust_envelopes_agree_on_identity_and_baseline_bytes():
     rust_side = _rust_envelopes(paths)
     differences = []
     refused_by_rust = []
-    agreed = 0
     for name, left in python_side.items():
         item = rust_side[name]
         if "error" in item:
@@ -256,8 +268,6 @@ def test_python_and_rust_envelopes_agree_on_identity_and_baseline_bytes():
             differences.append(f"{name}: text.cells")
         if left["baseline"]["parts"] != right["baseline"]["parts"]:
             differences.append(f"{name}: baseline.parts")
-        agreed += 1
     assert not differences, "\n".join(differences)
-    # A workbook one importer refuses is a known difference between the two
-    # decoders, named here rather than skipped silently.
-    assert agreed >= 40, f"only {agreed} workbooks agreed; refused by Rust: {refused_by_rust}"
+    # Rust imports every workbook this test described in Python.
+    assert refused_by_rust == [], refused_by_rust

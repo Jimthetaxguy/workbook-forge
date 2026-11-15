@@ -152,19 +152,20 @@ def test_review_focus_na_bang_is_spelled_na():
     cell = workbook.sheets[0].cells["A1"]
     assert cell.value == {"error": "#N/A", "message": None}
     assert cell.data_type == "error"
-    assert conversion.dropped == ("revision", "sheets[0].id")
+    assert conversion.dropped == ("sheets[0].id",)
 
 
 def test_review_focus_unnormalised_toolkit_document_lists_required():
     # Drop lists are relative to the normalised toolkit form: `required` is
-    # dropped even though this document never wrote it.
+    # dropped even though this document never wrote it, and `revision` is not
+    # listed because the normalised form holds none (spec 09 step 1).
     document = _toolkit_document(
         {"B2": {"value": 2.0}, "A1": {"value": 1.0}},
         inputs={"x": {"sheet": "S", "address": "A1", "kind": "number"}},
     )
     workbook, conversion = to_canonical(document)
     assert "bindings.inputs.x.required" in conversion.dropped
-    assert "revision" in conversion.dropped
+    assert "revision" not in conversion.dropped
     assert list(workbook.sheets[0].cells) == ["A1", "B2"]
     assert workbook.sheets[0].dimensions == (1, 2, 1, 2)
 
@@ -210,7 +211,6 @@ def test_to_canonical_lists_a_cached_value_on_a_non_formula_cell_as_dropped():
     workbook, conversion = to_canonical(document)
     assert workbook.sheets[0].cells["A1"].value is None
     assert conversion.dropped == (
-        "revision",
         "sheets[0].cells.A1.blocked_reason",
         "sheets[0].cells.A1.cached_value",
         "sheets[0].id",
@@ -394,8 +394,11 @@ def test_canonical_round_trip_restores_everything_not_listed(workbook, input_kin
 
 @pytest.mark.parametrize("case", _params(CASES["toolkit_cases"]))
 def test_toolkit_round_trip_restores_everything_not_listed(case):
-    original = case["toolkit"]
-    workbook, forward = to_canonical(original)
+    # The v1 reader checks a `revision` key and drops it (spec 09 step 1), so
+    # the document it normalises has none: that key is not part of what a round
+    # trip restores, and no ledger lists it.
+    original = {key: value for key, value in case["toolkit"].items() if key != "revision"}
+    workbook, forward = to_canonical(case["toolkit"])
     # The kinds the document already carries are the only typing the round
     # trip may use; binding typing is otherwise not mechanical.
     kinds = {name: binding["kind"] for name, binding in original.get("inputs", {}).items()}
@@ -425,8 +428,105 @@ def _one_spelling(node):
 # --- the corpus -------------------------------------------------------------
 
 CORPUS = ROOT / "fixtures" / "corpus"
+# Toolkit imports the canonical reader refuses: a blocked formula cell carries
+# an empty expression, which the canonical shape cannot hold.
+_CONVERSION_REFUSALS = {
+    "hb_data_table_formula.xlsx",
+    "hb_shared_formulas.xlsx",
+}
+# Toolkit imports that canonical intake refuses. The conversion refusals above
+# are included; the rest convert and then fail intake.
+_CANONICAL_INTAKE_REFUSALS = {
+    "hb_compat_version_3.xlsx",
+    "hb_data_table_formula.xlsx",
+    "hb_dynamic_array_cached.xlsx",
+    "hb_shared_formulas.xlsx",
+    "op_1904_dates.xlsx",
+    "op_array_formulas.xlsx",
+    "xw_1904_dates.xlsx",
+    "xw_array_formula.xlsx",
+    "xw_dynamic_arrays.xlsx",
+}
+# Corpus workbooks that pass both the toolkit importer and canonical intake.
+_CANONICAL_INTAKE_AGREED = {
+    "hb_3d_references.xlsx",
+    "hb_absolute_targets.xlsx",
+    "hb_bom_part.xlsx",
+    "hb_connections_query.xlsx",
+    "hb_custom_xml.xlsx",
+    "hb_defined_names.xlsx",
+    "hb_dropdown_formulas.xlsx",
+    "hb_dropdown_rules.xlsx",
+    "hb_embedded_ole.xlsx",
+    "hb_errors_as_values.xlsx",
+    "hb_escaped_control_chars.xlsx",
+    "hb_excel_like_markup.xlsx",
+    "hb_external_link.xlsx",
+    "hb_far_off_cell.xlsx",
+    "hb_flatten_has_functions.xlsx",
+    "hb_form_controls.xlsx",
+    "hb_google_sheets_like.xlsx",
+    "hb_huge_shared_strings.xlsx",
+    "hb_inline_and_shared_strings.xlsx",
+    "hb_inline_strings_rich.xlsx",
+    "hb_layout_protection.xlsx",
+    "hb_libreoffice_like.xlsx",
+    "hb_long_formula.xlsx",
+    "hb_many_sheets.xlsx",
+    "hb_many_styles.xlsx",
+    "hb_minimal_no_optional_parts.xlsx",
+    "hb_numbers_like.xlsx",
+    "hb_odd_part_name.xlsx",
+    "hb_pivot_cache.xlsx",
+    "hb_pivot_calculated_field.xlsx",
+    "hb_pivot_fields.xlsx",
+    "hb_prefixed_spreadsheetml.xlsx",
+    "hb_r1c1_looking_names.xlsx",
+    "hb_rich_text_phonetic.xlsx",
+    "hb_slicers.xlsx",
+    "hb_sparklines.xlsx",
+    "hb_stale_dimension.xlsx",
+    "hb_table_totals_calculated.xlsx",
+    "hb_text_columns.xlsx",
+    "hb_text_edge_cases.xlsx",
+    "hb_threaded_comments.xlsx",
+    "hb_timelines.xlsx",
+    "hb_volatile_formulas.xlsx",
+    "hb_wide_sheet.xlsx",
+    "op_budget_shared_strings.xlsx",
+    "op_charts.xlsx",
+    "op_comments_notes.xlsx",
+    "op_conditional_formatting.xlsx",
+    "op_defined_names.xlsx",
+    "op_dropdowns.xlsx",
+    "op_empty_sheets.xlsx",
+    "op_errors_booleans.xlsx",
+    "op_freeze_filter_print.xlsx",
+    "op_hidden_sheets.xlsx",
+    "op_hyperlinks.xlsx",
+    "op_large_60k.xlsx",
+    "op_merged_cells.xlsx",
+    "op_rich_text.xlsx",
+    "op_sheet_name_quoting.xlsx",
+    "op_sparse_far_cell.xlsx",
+    "op_styles_number_formats.xlsx",
+    "op_table_structured_refs.xlsx",
+    "op_text_cells.xlsx",
+    "xw_cached_values.xlsx",
+    "xw_chart_image.xlsx",
+    "xw_chartsheet.xlsx",
+    "xw_comments.xlsx",
+    "xw_conditional_ext.xlsx",
+    "xw_dropdowns.xlsx",
+    "xw_hyperlinks_names.xlsx",
+    "xw_inline_strings.xlsx",
+    "xw_table_totals.xlsx",
+    "xw_text_formats.xlsx",
+}
 # The path grammar of the plan's shared definitions: every listed path must
-# be one of these and nothing else.
+# be one of these and nothing else. `revision` stays in the grammar although
+# neither conversion lists it now: only the session's `open` does, for a
+# toolkit document that carried the legacy key.
 _PATH = re.compile(
     r"^(?:model_version|revision|provenance|metadata\..+|diagnostics\[\d+\]"
     r"|bindings\.inputs\.[^.]+(?:\.(?:kind|required|min|max|choices))?"
@@ -448,7 +548,7 @@ def _accepted_imports():
 
 
 def test_every_importable_corpus_workbook_converts_and_round_trips():
-    converted = 0
+    converted: list[str] = []
     refused: dict[str, str] = {}
     for path, model in _accepted_imports():
         envelope = model.envelope
@@ -462,7 +562,7 @@ def test_every_importable_corpus_workbook_converts_and_round_trips():
             # The refusal is the canonical reader's, named, never a crash.
             refused[path.name] = str(error)
             continue
-        converted += 1
+        converted.append(path.name)
         assert hydrate(workbook.to_json()) == workbook, path.name
         jsonschema.validate(json.loads(workbook.to_json()), SCHEMA)
         for conversion in (forward.dropped, forward.added):
@@ -490,23 +590,29 @@ def test_every_importable_corpus_workbook_converts_and_round_trips():
         back, backward = to_toolkit(workbook, input_kinds={})
         listed = _listed(forward, backward)
         assert _one_spelling(_without(document, listed)) == _without(back, listed), path.name
-    assert converted >= 40, converted
     for name, message in refused.items():
         assert message.startswith("invalid_model: ") and "formula.expression" in message, (
             name,
             message,
         )
-    assert set(refused) <= {"hb_data_table_formula.xlsx", "hb_shared_formulas.xlsx"}, refused
+    assert set(refused) == _CONVERSION_REFUSALS, refused
+    # The converted workbooks are the intake agreement plus the intake
+    # refusals whose documents still convert.
+    assert set(converted) == _CANONICAL_INTAKE_AGREED | (
+        _CANONICAL_INTAKE_REFUSALS - _CONVERSION_REFUSALS
+    ), converted
 
 
 def test_converted_import_agrees_with_canonical_intake_cell_for_cell():
-    compared = 0
+    agreed = []
+    refused = []
     for path, model in _accepted_imports():
         try:
             intake = intake_workbook_model(path)
         except (WorkbookError, CanonicalPackageError):
+            refused.append(path.name)
             continue
-        compared += 1
+        agreed.append(path.name)
         converted, _conversion = to_canonical(model.to_dict(), model.envelope)
         # Metadata is not compared: defined names are the contract's, not step 0's.
         assert converted.provenance == intake.provenance, path.name
@@ -522,8 +628,8 @@ def test_converted_import_agrees_with_canonical_intake_cell_for_cell():
                     *where,
                     address,
                 )
-    # 73 of the corpus workbooks pass both importers today.
-    assert compared >= 70, compared
+    assert set(refused) == _CANONICAL_INTAKE_REFUSALS, refused
+    assert set(agreed) == _CANONICAL_INTAKE_AGREED, agreed
 
 
 def _comparable(cell) -> tuple:

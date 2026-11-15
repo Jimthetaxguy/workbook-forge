@@ -49,7 +49,7 @@ def _toolkit_document() -> dict:
     for case in FIXTURE["cases"]:
         sheet, address = CASE_CELLS[case["id"]]
         sheets[sheet]["cells"][address] = {"formula": case["formula"]}
-    return {"schema_version": 1, "revision": 0, "sheets": list(sheets.values()), "inputs": {}, "outputs": {}}
+    return {"schema_version": 1, "sheets": list(sheets.values()), "inputs": {}, "outputs": {}}
 
 
 def _same(actual, expected) -> bool:

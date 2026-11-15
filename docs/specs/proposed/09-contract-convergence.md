@@ -9,8 +9,9 @@ summary: Converge the canonical and toolkit workbook shapes into one versioned c
 
 ## Problem
 
-Spec 08 established that the tree holds two shapes for workbook meaning and that no
-code converts between them in either language. Capability (sessions, preservation,
+Spec 08 established that the tree holds two shapes for workbook meaning. Section 5
+records the conversion edges step 0 shipped in PR #119; steps 1 to 6 have not
+started. Capability (sessions, preservation,
 agent operations, the browser, the source compiler, the native bridge, the only Rust
 `.xlsx` importer, the cross-engine fixture suite) accrues on the toolkit shape.
 Versioning discipline on read and write, provenance, structured diagnostics, the intake

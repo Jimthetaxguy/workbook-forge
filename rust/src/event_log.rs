@@ -506,6 +506,22 @@ impl EventLog {
     }
 
     /// The latest applied intent after `after_seq` that wrote `key`.
+    /// The applied intent that reached `revision`, if this log recorded it
+    /// (a write through an unlogged path has none). Scans backwards; used
+    /// only to name the writer in a refusal.
+    pub fn intent_at_revision(&self, revision: u64) -> Option<String> {
+        let wanted = revision.to_string();
+        self.events
+            .iter()
+            .rev()
+            .find(|event| {
+                event["kind"] == "intent"
+                    && event["status"] == "applied"
+                    && event["revision"].as_str() == Some(wanted.as_str())
+            })
+            .and_then(|event| event["id"].as_str().map(String::from))
+    }
+
     fn last_writer(&self, key: &str, after_seq: usize) -> Option<String> {
         self.events[after_seq + 1..]
             .iter()
@@ -634,6 +650,7 @@ pub fn replay(bytes: &[u8], events_text: &str) -> Result<Json, ContractError> {
                 .map_err(|e| replay_error("open_failed", e.to_string()))?;
             let mut summary = replay_on(&workbook, &events)?;
             summary["snapshot"] = json!(workbook.snapshot());
+            summary["cell_revisions"] = crate::browser_contract::cell_revisions_json(&workbook);
             if summary.get("values").is_none() {
                 summary["values"] = json!(workbook.calculate(1).values);
             }
@@ -673,6 +690,7 @@ pub fn replay(bytes: &[u8], events_text: &str) -> Result<Json, ContractError> {
             })?;
             let mut summary = replay_on(&session, &events)?;
             summary["snapshot"] = json!(session.snapshot());
+            summary["cell_revisions"] = crate::browser_contract::cell_revisions_json(&session);
             if summary.get("values").is_none() {
                 summary["values"] = json!(session.calculate(1).values);
             }

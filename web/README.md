@@ -16,8 +16,10 @@
   and fill (the handle, Ctrl+D, Ctrl+R) work on values and formulas, and the
   handle continues number, text-and-number and day and month name series.
   A number with no number format that is too long for its column is drawn
-  with its decimals rounded, and never in more than 11 characters, as Excel's
-  General format describes. On a touch device a tap selects without asking
+  with its decimals rounded, and never in more than 11 characters. The
+  [General numbers](../docs/specs/univer-spike.md#general-numbers) section
+  quotes Microsoft's General format and lists the choices that are Workbook
+  Forge's own. On a touch device a tap selects without asking
   for the keyboard, a double tap, the Edit button or the formula bar starts
   typing, and a swipe scrolls the grid; this is tested with emulated touch
   only.

@@ -1726,6 +1726,10 @@ impl ImportedWorkbook {
     pub fn snapshot(&self) -> WorkbookModel {
         self.session.snapshot()
     }
+    /// The model and the revision it is at, read under one lock.
+    pub fn snapshot_with_revision(&self) -> (WorkbookModel, u64) {
+        self.session.snapshot_with_revision()
+    }
     /// The current revision without cloning the model.
     pub fn revision(&self) -> u64 {
         self.session.revision()
@@ -1737,6 +1741,20 @@ impl ImportedWorkbook {
     /// Copy only the named cells (canonical keys), not the whole model.
     pub fn read_cells(&self, keys: &[String]) -> Vec<Option<Cell>> {
         self.session.read_cells(keys)
+    }
+    /// The current revision and each named cell's version (see
+    /// [`Session::cell_revisions`]).
+    pub fn cell_revisions(&self, keys: &[String]) -> (u64, Vec<u64>) {
+        self.session.cell_revisions(keys)
+    }
+    /// Cells written in this session with their versions; any other cell
+    /// has the opening revision.
+    pub fn written_cell_revisions(&self) -> BTreeMap<String, u64> {
+        self.session.written_cell_revisions()
+    }
+    /// The revision the session opened at.
+    pub fn opened_revision(&self) -> u64 {
+        self.session.opened_revision()
     }
     pub fn capabilities(&self) -> &Json {
         &self.capabilities
@@ -2012,19 +2030,16 @@ impl ImportedWorkbook {
         values: &BTreeMap<String, CellValue>,
         expected_revision: Option<u64>,
     ) -> Result<u64> {
-        let model = self.snapshot();
-        if expected_revision.is_some_and(|r| r != model.revision) {
+        let (model, revision) = self.snapshot_with_revision();
+        if expected_revision.is_some_and(|r| r != revision) {
             return Err(err("revision conflict"));
         }
-        self.apply(
-            toolkit::validate_inputs(&model, values)?,
-            Some(model.revision),
-        )
+        self.apply(toolkit::validate_inputs(&model, values)?, Some(revision))
     }
     fn export_package(&self) -> Result<Package> {
-        let model = self.snapshot();
+        let (model, revision) = self.snapshot_with_revision();
         let report = self.calculate(1);
-        if report.stale || report.revision != model.revision {
+        if report.stale || report.revision != revision {
             return Err(err("stale calculation during export"));
         }
         let mut package = self.baseline.clone();
@@ -2037,7 +2052,7 @@ impl ImportedWorkbook {
             &self.sheet_parts,
             self.date1904,
         )?;
-        if self.snapshot().revision != model.revision {
+        if self.revision() != revision {
             return Err(err("model changed during export"));
         }
         Ok(package)
@@ -3401,7 +3416,7 @@ mod tests {
                 .is_err()
         );
         imported.export(temp.path("preserved1904.xlsx")).unwrap();
-        assert_eq!(imported.snapshot().revision, 0);
+        assert_eq!(imported.revision(), 0);
     }
     /// The date system comes from `<workbookPr date1904>` alone, and the
     /// stored serials are the same whichever system the workbook names.

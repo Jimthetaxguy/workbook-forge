@@ -215,6 +215,9 @@ fn is_address(text: &str) -> bool {
 
 /// The path grammar of the plan's shared definitions, one arm per row.
 fn matches_grammar(path: &str) -> bool {
+    // No conversion lists `revision` any more: the normalised toolkit form
+    // has none (spec 09 step 1). It stays in the grammar because the
+    // calculation session's `open` lists it for a document that carried it.
     if matches!(path, "model_version" | "provenance" | "revision") {
         return true;
     }
@@ -371,6 +374,10 @@ fn to_toolkit_refusals() {
             error.to_string(),
             format!("{}: {}", error.code, error.message)
         );
+        if name == "input-kinds-must-name-a-bound-input" {
+            // The same sentence the Python conversion and the toolkit reader use.
+            assert_eq!(error.message, "unknown input b");
+        }
     }
     assert!(seen >= 2, "fixture holds {seen} to_toolkit refusals");
 }
@@ -525,7 +532,8 @@ fn integer_rule_is_inclusive_at_two_to_the_53_and_keeps_negative_zero_a_float() 
 #[test]
 fn unnormalised_toolkit_document_lists_required() {
     // Review focus 1: the drop list is relative to the normalised toolkit
-    // form, so `required` and `revision` are listed although never written.
+    // form, so `required` is listed although never written. That form has no
+    // `revision` (spec 09 step 1), so the conversion never lists it.
     let fixture = fixture();
     let case = cases(&fixture, "toolkit_cases")
         .into_iter()
@@ -539,7 +547,7 @@ fn unnormalised_toolkit_document_lists_required() {
             .dropped
             .contains(&"bindings.inputs.x.required".to_string())
     );
-    assert!(conversion.dropped.contains(&"revision".to_string()));
+    assert!(!conversion.dropped.contains(&"revision".to_string()));
     let addresses: Vec<_> = workbook.sheets[0].cells.keys().cloned().collect();
     assert_eq!(addresses, ["A1", "B1"]);
 }
@@ -740,6 +748,71 @@ fn envelope_marks_only_baseline_cells_imported() {
     ] {
         assert!(conversion.added.contains(&path.to_string()), "{path}");
     }
+}
+
+#[test]
+fn envelope_marks_a_signed_zero_change_authored() {
+    // `CellValue`'s `PartialEq` treats -0.0 and 0.0 as equal. The baseline
+    // comparison keeps the sign, so a cell whose value or cache flips only
+    // that sign is authored. The same sign on both sides stays imported.
+    let imported = import_xlsx_bytes(
+        &corpus("op_merged_cells.xlsx"),
+        BTreeMap::new(),
+        BTreeMap::new(),
+    )
+    .unwrap();
+    let mut envelope = imported.envelope();
+    let mut model = imported.snapshot();
+    let number = |value: f64| Cell::value(CellValue::Number(value));
+    let cached = |value: f64| Cell {
+        formula: Some("1+1".to_string()),
+        cached_value: Some(CellValue::Number(value)),
+        ..Cell::default()
+    };
+    let baseline = envelope
+        .baseline
+        .document
+        .sheets
+        .iter_mut()
+        .find(|sheet| sheet.name == "Report")
+        .unwrap();
+    baseline.cells.insert("Z1".into(), number(0.0));
+    baseline.cells.insert("Z2".into(), number(-0.0));
+    baseline.cells.insert("Z3".into(), number(0.0));
+    baseline.cells.insert("Z4".into(), cached(0.0));
+    baseline.cells.insert("Z5".into(), cached(-0.0));
+    let current = model
+        .sheets
+        .iter_mut()
+        .find(|sheet| sheet.name == "Report")
+        .unwrap();
+    current.cells.insert("Z1".into(), number(-0.0));
+    current.cells.insert("Z2".into(), number(-0.0));
+    current.cells.insert("Z3".into(), number(0.0));
+    current.cells.insert("Z4".into(), cached(-0.0));
+    current.cells.insert("Z5".into(), cached(-0.0));
+
+    let (workbook, _) = to_canonical(&model, Some(&envelope)).unwrap();
+    let document = canonical_json(&workbook);
+    assert_eq!(document["sheets"][0]["name"], "Report");
+    let report = &document["sheets"][0]["cells"];
+    let imported_cell = json!({"origin": "imported", "source": "xl/worksheets/sheet1.xml"});
+    let authored = json!({"origin": "authored"});
+    assert_eq!(report["A1"]["provenance"], imported_cell);
+    assert_eq!(report["Z1"]["provenance"], authored, "value sign");
+    assert_eq!(
+        report["Z2"]["provenance"], imported_cell,
+        "negative zero held"
+    );
+    assert_eq!(
+        report["Z3"]["provenance"], imported_cell,
+        "positive zero held"
+    );
+    assert_eq!(report["Z4"]["provenance"], authored, "cache sign");
+    assert_eq!(
+        report["Z5"]["provenance"], imported_cell,
+        "negative zero cache held"
+    );
 }
 
 #[test]

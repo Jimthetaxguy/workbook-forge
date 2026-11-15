@@ -55,7 +55,6 @@ def _document(cells):
     return json.dumps(
         {
             "schema_version": 1,
-            "revision": 0,
             "sheets": [{"id": "s", "name": "Sheet1", "cells": {a: {"formula": f} for a, f in cells.items()}}],
             "inputs": {},
             "outputs": {},

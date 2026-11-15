@@ -447,24 +447,67 @@ impl InputBinding {
 fn missing_schema_version() -> u32 {
     0
 }
+/// The toolkit workbook document. It holds no revision: the revision is
+/// session state (spec 09 step 1). A v1 document may still carry a root
+/// `revision` key; the reader checks it and does not store it here.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
+#[serde(from = "WorkbookDocumentV1")]
 pub struct WorkbookModel {
-    #[serde(default = "missing_schema_version")]
     pub schema_version: u32,
-    #[serde(default)]
-    pub revision: u64,
     pub sheets: Vec<Sheet>,
-    #[serde(default)]
     pub inputs: BTreeMap<String, InputBinding>,
-    #[serde(default)]
     pub outputs: BTreeMap<String, CellAddress>,
+}
+/// The v1 document as it is read. `WorkbookModel` deserialises through this,
+/// so unknown keys are refused here and no writer can emit `revision`.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct WorkbookDocumentV1 {
+    #[serde(default = "missing_schema_version")]
+    schema_version: u32,
+    /// Accepted so a v1 document written before spec 09 step 1 still loads.
+    /// It must be an unsigned 64-bit integer (`null` is refused: the type is
+    /// not optional). It is never stored in the model; [`read_document`]
+    /// returns it beside the model so a session can be seeded from it.
+    #[serde(default)]
+    revision: u64,
+    sheets: Vec<Sheet>,
+    #[serde(default)]
+    inputs: BTreeMap<String, InputBinding>,
+    #[serde(default)]
+    outputs: BTreeMap<String, CellAddress>,
+}
+impl WorkbookDocumentV1 {
+    fn split(self) -> (WorkbookModel, u64) {
+        (
+            WorkbookModel {
+                schema_version: self.schema_version,
+                sheets: self.sheets,
+                inputs: self.inputs,
+                outputs: self.outputs,
+            },
+            self.revision,
+        )
+    }
+}
+impl From<WorkbookDocumentV1> for WorkbookModel {
+    fn from(document: WorkbookDocumentV1) -> Self {
+        document.split().0
+    }
+}
+/// Read a v1 toolkit document and the legacy `revision` it carried (0 when
+/// the key is absent). The model never holds the revision; a caller that
+/// builds an engine session from document text passes the second value to
+/// [`Session::with_names_at`] so a document that answered revision N before
+/// still does. Plain `serde_json::from_*::<WorkbookModel>` accepts the same
+/// documents and drops the key.
+pub fn read_document(document: &[u8]) -> Result<(WorkbookModel, u64), serde_json::Error> {
+    serde_json::from_slice::<WorkbookDocumentV1>(document).map(WorkbookDocumentV1::split)
 }
 impl Default for WorkbookModel {
     fn default() -> Self {
         Self {
             schema_version: 1,
-            revision: 0,
             sheets: Vec::new(),
             inputs: BTreeMap::new(),
             outputs: BTreeMap::new(),
@@ -1060,7 +1103,7 @@ impl WorkbookModel {
         }
         Ok(())
     }
-    fn resolve(&self, sheet: &str, address: &str) -> Result<String, ToolkitError> {
+    pub(crate) fn resolve(&self, sheet: &str, address: &str) -> Result<String, ToolkitError> {
         let actual = self
             .sheets
             .iter()
@@ -1070,7 +1113,7 @@ impl WorkbookModel {
             })?;
         Ok(key(&actual.name, &canonical_address(address)?))
     }
-    fn get_cell(&self, key: &str) -> Option<&Cell> {
+    pub(crate) fn get_cell(&self, key: &str) -> Option<&Cell> {
         let (sheet, address) = key.rsplit_once('!')?;
         self.sheets
             .iter()
@@ -1461,15 +1504,25 @@ pub fn inspect(model: &WorkbookModel) -> JsonValue {
 }
 /// [`inspect`] with the workbook's defined names expanded.
 pub fn inspect_with_names(model: &WorkbookModel, names: Option<&DefinedNames>) -> JsonValue {
+    inspect_with_names_at(model, names, 0)
+}
+/// [`inspect_with_names`] reporting `revision`. A model holds no revision, so
+/// a stateless inspection reports 0 unless the caller read a legacy value
+/// with [`read_document`] or holds a session's revision.
+pub fn inspect_with_names_at(
+    model: &WorkbookModel,
+    names: Option<&DefinedNames>,
+    revision: u64,
+) -> JsonValue {
     if let Err(error) = model.validate() {
-        return json!({"revision":model.revision,"diagnostics":[Diagnostic::for_key(error,None)]});
+        return json!({"revision":revision,"diagnostics":[Diagnostic::for_key(error,None)]});
     }
     match Graph::build(model, names) {
         Err(error) => {
-            json!({"revision":model.revision,"diagnostics":[Diagnostic::for_key(error,None)]})
+            json!({"revision":revision,"diagnostics":[Diagnostic::for_key(error,None)]})
         }
         Ok(graph) => {
-            json!({"revision":model.revision,"sheets":model.sheets.iter().map(|sheet|json!({"id":sheet.id,"name":sheet.name,"populated_cells":sheet.cells.len()})).collect::<Vec<_>>(),"dependencies":graph.dependencies,"diagnostics":graph.errors.into_iter().map(|(key,error)|Diagnostic::for_key(error,Some(&key))).collect::<Vec<_>>(),"inputs":model.inputs,"outputs":model.outputs})
+            json!({"revision":revision,"sheets":model.sheets.iter().map(|sheet|json!({"id":sheet.id,"name":sheet.name,"populated_cells":sheet.cells.len()})).collect::<Vec<_>>(),"dependencies":graph.dependencies,"diagnostics":graph.errors.into_iter().map(|(key,error)|Diagnostic::for_key(error,Some(&key))).collect::<Vec<_>>(),"inputs":model.inputs,"outputs":model.outputs})
         }
     }
 }
@@ -1565,18 +1618,89 @@ pub fn calculate_with(
     workers: usize,
     context: &CalcContext,
 ) -> CalculationReport {
-    calculate_inner(model, workers, None, &BTreeSet::new(), context, None)
+    calculate_inner(model, 0, workers, None, &BTreeSet::new(), context, None).report
 }
+/// One pass: the report both report shapes share, and what the session needs
+/// beside it. None of this is written into either report.
+struct PassOutcome {
+    report: CalculationReport,
+    /// The pass returned before every cell of its closure was evaluated,
+    /// reused from the base or given its own diagnostic: the whole graph was
+    /// refused, the result budget ran out, or a worker failed. Such a pass is
+    /// returned to the caller and never published (spec 05, "a failure
+    /// publishes nothing").
+    ended_early: bool,
+    /// Formula cells in the pass's closure with a key in `report.values`.
+    calculated_formulas: u64,
+    /// Formula cells in the pass's closure without one. A pass refused before
+    /// its closure was known counts every formula cell in the workbook here,
+    /// as the Python engine does.
+    unresolved_formulas: u64,
+}
+impl PassOutcome {
+    /// Every exit of a pass comes through here, so every report, completed
+    /// or ended early, has its evaluated cells sorted and unique and its
+    /// diagnostics in (sheet, address, code, message) order.
+    fn close(
+        mut report: CalculationReport,
+        model: &WorkbookModel,
+        closure: Option<&BTreeSet<String>>,
+        ended_early: bool,
+    ) -> Self {
+        report.evaluated_cells.sort();
+        report.evaluated_cells.dedup();
+        report.diagnostics.sort_by(|a, b| {
+            (&a.sheet, &a.address, &a.code, &a.message)
+                .cmp(&(&b.sheet, &b.address, &b.code, &b.message))
+        });
+        let (mut calculated_formulas, mut unresolved_formulas) = (0, 0);
+        let mut count = |current: &str| {
+            if report.values.contains_key(current) {
+                calculated_formulas += 1;
+            } else {
+                unresolved_formulas += 1;
+            }
+        };
+        match closure {
+            Some(closure) => closure
+                .iter()
+                .filter(|current| {
+                    model
+                        .get_cell(current)
+                        .is_some_and(|cell| cell.formula.is_some())
+                })
+                .for_each(|current| count(current)),
+            None => {
+                for sheet in &model.sheets {
+                    for (address, cell) in &sheet.cells {
+                        if cell.formula.is_some() {
+                            count(&key(&sheet.name, address));
+                        }
+                    }
+                }
+            }
+        }
+        Self {
+            report,
+            ended_early,
+            calculated_formulas,
+            unresolved_formulas,
+        }
+    }
+}
+/// `revision` is the session revision the pass read (0 for a stateless call);
+/// the model holds none.
 fn calculate_inner(
     model: &WorkbookModel,
+    revision: u64,
     workers: usize,
     previous: Option<&CalculationReport>,
     dirty: &BTreeSet<String>,
     context: &CalcContext,
     names: Option<&DefinedNames>,
-) -> CalculationReport {
+) -> PassOutcome {
     let mut report = CalculationReport {
-        revision: model.revision,
+        revision,
         ..CalculationReport::default()
     };
     let graph = match model.validate().and_then(|()| {
@@ -1586,14 +1710,14 @@ fn calculate_inner(
         Ok(graph) => graph,
         Err(error) => {
             report.diagnostics.push(Diagnostic::for_key(error, None));
-            return report;
+            return PassOutcome::close(report, model, None, true);
         }
     };
     let selected = match graph.closure(model) {
         Ok(selected) => selected,
         Err(error) => {
             report.diagnostics.push(Diagnostic::for_key(error, None));
-            return report;
+            return PassOutcome::close(report, model, None, true);
         }
     };
     // A volatile formula is dirty on every pass; one context serves the pass.
@@ -1626,6 +1750,7 @@ fn calculate_inner(
     let worker_count = workers.clamp(1, MAX_WORKERS);
     let materialized = AtomicUsize::new(0);
     let exhausted = AtomicBool::new(false);
+    let mut worker_failed = false;
     while !ready.is_empty() {
         ready.sort();
         let mut evaluate = Vec::new();
@@ -1638,7 +1763,7 @@ fn calculate_inner(
                     report
                         .diagnostics
                         .push(Diagnostic::for_key(error, Some(current)));
-                    return report;
+                    return PassOutcome::close(report, model, Some(&selected), true);
                 }
                 report.values.insert(current.clone(), value.clone());
             } else if model
@@ -1654,7 +1779,7 @@ fn calculate_inner(
                             report
                                 .diagnostics
                                 .push(Diagnostic::for_key(error, Some(current)));
-                            return report;
+                            return PassOutcome::close(report, model, Some(&selected), true);
                         }
                         report.values.insert(current.clone(), value);
                     }
@@ -1705,7 +1830,11 @@ fn calculate_inner(
             })
         };
         for (current, result) in results {
-            if !current.is_empty() {
+            if current.is_empty() {
+                // A failed worker: its cells have neither a value nor a
+                // diagnostic of their own.
+                worker_failed = true;
+            } else {
                 report.evaluated_cells.push(current.clone());
             }
             match result {
@@ -1718,8 +1847,7 @@ fn calculate_inner(
             }
         }
         if exhausted.load(Ordering::Relaxed) {
-            report.evaluated_cells.sort();
-            return report;
+            return PassOutcome::close(report, model, Some(&selected), true);
         }
         let mut next = Vec::new();
         for current in ready {
@@ -1760,22 +1888,63 @@ fn calculate_inner(
             report.outputs.insert(name.clone(), value.clone());
         }
     }
-    report.evaluated_cells.sort();
-    report.diagnostics.sort_by(|a, b| {
-        (&a.sheet, &a.address, &a.code, &a.message)
-            .cmp(&(&b.sheet, &b.address, &b.code, &b.message))
-    });
-    report
+    PassOutcome::close(report, model, Some(&selected), worker_failed)
 }
 
 struct SessionState {
     model: WorkbookModel,
+    /// The session revision: 0 or the constructor's seed, plus one per
+    /// committed non-empty edit batch. The model document holds none.
+    revision: u64,
     published: Option<CalculationReport>,
     dirty: BTreeSet<String>,
+    /// `Sheet!A1` keys whose value or formula this session (or the session it
+    /// was forked from) wrote.
+    authored: BTreeSet<String>,
     /// Offset from UTC, in minutes, for NOW and TODAY (default 0: UTC).
     utc_offset_minutes: i32,
     /// The imported workbook's defined names: read-only, never edited.
     names: Option<Arc<DefinedNames>>,
+    /// The revision the session opened at: the version of every cell no
+    /// edit has written since.
+    opened_revision: u64,
+    /// Per-cell version index: canonical `Sheet!A1` key -> the revision of
+    /// the last applied edit batch that wrote the cell (value, formula,
+    /// style or removal). Maintained by `apply` under this lock, so a lookup
+    /// is O(1) and always agrees with the session revision. Calculation never
+    /// touches it: a recalculated value (TODAY, RAND, a changed precedent)
+    /// does not bump its cell's version.
+    cell_revisions: HashMap<String, u64>,
+}
+/// What a pass read under the session lock before calculating outside it.
+pub(crate) struct PassInput {
+    model: WorkbookModel,
+    revision: u64,
+    previous: Option<CalculationReport>,
+    dirty: BTreeSet<String>,
+    names: Option<Arc<DefinedNames>>,
+    authored: BTreeSet<String>,
+}
+/// One calculation pass with what it read, for a report builder that needs
+/// more than the legacy report (`session::report_v2`).
+#[derive(Clone, Debug, PartialEq)]
+pub struct CalculationPass {
+    /// The legacy report, as `calculate_with` returns it.
+    pub report: CalculationReport,
+    /// The model the pass read.
+    pub model: WorkbookModel,
+    /// Revision of the published report the pass used as its incremental
+    /// base, or `None` on a full pass.
+    pub base_revision: Option<u64>,
+    pub context: CalcContext,
+    /// `Sheet!A1` keys this session had written when the pass read the model.
+    pub authored: BTreeSet<String>,
+    /// Formula cells in the pass's closure that have a value.
+    pub calculated_formulas: u64,
+    /// Formula cells in the pass's closure that have none.
+    pub unresolved_formulas: u64,
+    /// The pass returned before covering its closure and was not published.
+    pub ended_early: bool,
 }
 /// Clones share one synchronized transient session. Calculation holds no write
 /// lock while evaluating; publication checks the source revision again.
@@ -1788,16 +1957,17 @@ impl Session {
     /// Recovery is sound because every fallible step under the lock works on
     /// a private copy (`apply` builds and validates a candidate model,
     /// `publish` clones the report) and only infallible field moves follow,
-    /// so an unwinding thread cannot leave the model, the published report
-    /// and the dirty set half-updated. Without this, one panic would turn
-    /// every later call on any clone into a panic through PyO3.
+    /// so an unwinding thread cannot leave the model, its revision, the
+    /// published report and the dirty set half-updated. Without this, one
+    /// panic would turn every later call on any clone into a panic through
+    /// PyO3.
     fn state(&self) -> MutexGuard<'_, SessionState> {
         self.state
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
     }
     pub fn new(model: WorkbookModel) -> Result<Self, ToolkitError> {
-        Self::with_names(model, None)
+        Self::with_names_at(model, None, 0)
     }
     /// A session whose formulas may use the workbook's defined names. The
     /// names are read-only: no edit adds, changes or removes one.
@@ -1805,16 +1975,49 @@ impl Session {
         model: WorkbookModel,
         names: Option<DefinedNames>,
     ) -> Result<Self, ToolkitError> {
+        Self::with_names_at(model, names, 0)
+    }
+    /// [`Session::with_names`] starting at `revision` instead of 0: for a
+    /// detached copy of a session that must answer at its revision, and for
+    /// a v1 document that carried a legacy `revision` (see [`read_document`]).
+    pub fn with_names_at(
+        model: WorkbookModel,
+        names: Option<DefinedNames>,
+        revision: u64,
+    ) -> Result<Self, ToolkitError> {
         model.validate()?;
         Ok(Self {
             state: Arc::new(Mutex::new(SessionState {
                 model,
+                revision,
                 published: None,
                 dirty: BTreeSet::new(),
+                authored: BTreeSet::new(),
                 utc_offset_minutes: 0,
                 names: names.map(Arc::new),
+                opened_revision: revision,
+                cell_revisions: HashMap::new(),
             })),
         })
+    }
+    /// A detached copy: the same model, names, offset, revision and authored
+    /// cells in new state, with nothing published. Unlike `clone`, which
+    /// shares one session, an edit on the fork never reaches this session.
+    pub fn fork(&self) -> Session {
+        let state = self.state();
+        Session {
+            state: Arc::new(Mutex::new(SessionState {
+                model: state.model.clone(),
+                revision: state.revision,
+                published: None,
+                dirty: BTreeSet::new(),
+                authored: state.authored.clone(),
+                utc_offset_minutes: state.utc_offset_minutes,
+                names: state.names.clone(),
+                opened_revision: state.opened_revision,
+                cell_revisions: state.cell_revisions.clone(),
+            })),
+        }
     }
     /// The session's defined names, if it has any table.
     pub fn names(&self) -> Option<DefinedNames> {
@@ -1823,9 +2026,16 @@ impl Session {
     pub fn snapshot(&self) -> WorkbookModel {
         self.state().model.clone()
     }
+    /// The model and the revision it is at, read under one lock. The model
+    /// holds no revision, so two separate reads could pair a model with the
+    /// revision of a later edit.
+    pub fn snapshot_with_revision(&self) -> (WorkbookModel, u64) {
+        let state = self.state();
+        (state.model.clone(), state.revision)
+    }
     /// The current revision, read under the lock without cloning the model.
     pub fn revision(&self) -> u64 {
-        self.state().model.revision
+        self.state().revision
     }
     /// Resolve a sheet name (case-insensitive) and A1 address to the canonical
     /// `Sheet!A1` key the calculation report uses.
@@ -1839,16 +2049,76 @@ impl Session {
             .map(|key| state.model.get_cell(key).cloned())
             .collect()
     }
+    /// The revision the session opened at. A cell no edit has written since
+    /// has this version.
+    pub fn opened_revision(&self) -> u64 {
+        self.state().opened_revision
+    }
+    /// The current revision and each named cell's version (canonical
+    /// `Sheet!A1` keys), read under one lock so a later
+    /// `apply(.., Some(revision))` either sees exactly these versions or is
+    /// refused with `revision_conflict`. A cell's version is the revision of
+    /// the last applied edit that wrote it, or the opening revision.
+    pub fn cell_revisions(&self, keys: &[String]) -> (u64, Vec<u64>) {
+        let state = self.state();
+        let versions = keys
+            .iter()
+            .map(|key| {
+                state
+                    .cell_revisions
+                    .get(key)
+                    .copied()
+                    .unwrap_or(state.opened_revision)
+            })
+            .collect();
+        (state.revision, versions)
+    }
+    /// Every cell an edit has written in this session, with its version.
+    /// Cells absent from the map have the opening revision.
+    pub fn written_cell_revisions(&self) -> BTreeMap<String, u64> {
+        self.state()
+            .cell_revisions
+            .iter()
+            .map(|(key, revision)| (key.clone(), *revision))
+            .collect()
+    }
     pub fn published(&self) -> Option<CalculationReport> {
         let state = self.state();
         state
             .published
             .as_ref()
-            .filter(|report| report.revision == state.model.revision)
+            .filter(|report| report.revision == state.revision)
             .cloned()
     }
     pub fn apply(
         &self,
+        edits: Vec<Edit>,
+        expected_revision: Option<u64>,
+    ) -> Result<u64, ToolkitError> {
+        Self::apply_locked(&mut self.state(), edits, expected_revision)
+    }
+    /// Validate named input values against their bindings and commit them as
+    /// one batch. The revision check, the validation and the commit share one
+    /// lock, so no other edit can land between them.
+    pub fn set_inputs(
+        &self,
+        values: &BTreeMap<String, CellValue>,
+        expected_revision: Option<u64>,
+    ) -> Result<u64, ToolkitError> {
+        let mut state = self.state();
+        if expected_revision.is_some_and(|expected| expected != state.revision) {
+            return Err(ToolkitError::new(
+                "revision_conflict",
+                "model revision conflict",
+            ));
+        }
+        let edits = validate_inputs(&state.model, values)?;
+        let revision = state.revision;
+        Self::apply_locked(&mut state, edits, Some(revision))
+    }
+    /// The body of `apply`, on state the caller has locked.
+    fn apply_locked(
+        state: &mut SessionState,
         edits: Vec<Edit>,
         expected_revision: Option<u64>,
     ) -> Result<u64, ToolkitError> {
@@ -1858,18 +2128,20 @@ impl Session {
                 "edit batch exceeds 10000 edits",
             ));
         }
-        let mut state = self.state();
-        if expected_revision.is_some_and(|expected| expected != state.model.revision) {
+        if expected_revision.is_some_and(|expected| expected != state.revision) {
             return Err(ToolkitError::new(
                 "revision_conflict",
-                format!("expected revision does not match {}", state.model.revision),
+                format!("expected revision does not match {}", state.revision),
             ));
         }
         if edits.is_empty() {
-            return Ok(state.model.revision);
+            return Ok(state.revision);
         }
         let mut candidate = state.model.clone();
         let mut changed = BTreeSet::new();
+        // Keys this batch gives a value or formula, and keys it makes absent.
+        let mut written = BTreeSet::new();
+        let mut removed = BTreeSet::new();
         for edit in edits {
             let empty = edit.value.is_none() && edit.formula.is_none() && edit.style.is_none();
             if edit.restore_absent && !empty {
@@ -1907,6 +2179,7 @@ impl Session {
                     ));
                 }
                 sheet.cells.remove(address);
+                removed.insert(target.clone());
                 continue;
             }
             let cell = sheet.cells.entry(address.into()).or_default();
@@ -1915,6 +2188,9 @@ impl Session {
                     "unsupported_edit",
                     format!("{target} contains preserved-only content"),
                 ));
+            }
+            if edit.value.is_some() || edit.formula.is_some() {
+                written.insert(target.clone());
             }
             if let Some(value) = edit.value {
                 cell.value = value;
@@ -1934,13 +2210,21 @@ impl Session {
         candidate.validate()?;
         validate_inputs(&candidate, &BTreeMap::new())?;
         Graph::build(&candidate, state.names.as_deref())?;
-        candidate.revision = candidate
+        let next = state
             .revision
             .checked_add(1)
             .ok_or_else(|| ToolkitError::new("resource_limit", "revision counter exhausted"))?;
         state.model = candidate;
+        state.revision = next;
+        for key in &changed {
+            state.cell_revisions.insert(key.clone(), next);
+        }
         state.dirty.extend(changed);
-        Ok(state.model.revision)
+        for target in &removed {
+            state.authored.remove(target);
+        }
+        state.authored.extend(written);
+        Ok(next)
     }
     /// The session's offset from UTC in minutes (east positive).
     pub fn utc_offset_minutes(&self) -> i32 {
@@ -1960,30 +2244,61 @@ impl Session {
     }
     /// Calculate with a pinned clock and seed (replay, undo, tests).
     pub fn calculate_with(&self, workers: usize, context: &CalcContext) -> CalculationReport {
-        let (model, previous, dirty, names) = {
-            let state = self.state();
-            (
-                state.model.clone(),
-                state.published.clone(),
-                state.dirty.clone(),
-                state.names.clone(),
-            )
-        };
-        let report = calculate_inner(
-            &model,
-            workers,
-            previous.as_ref(),
-            &dirty,
-            context,
-            names.as_deref(),
-        );
-        self.publish(report)
+        self.calculate_pass(workers, context).report
     }
-    fn publish(&self, mut report: CalculationReport) -> CalculationReport {
+    /// One pass, published like `calculate_with`, returned with what it read.
+    pub fn calculate_pass(&self, workers: usize, context: &CalcContext) -> CalculationPass {
+        self.finish_pass(self.begin_pass(), workers, context)
+    }
+    /// Read what a pass needs under the lock. Split from `finish_pass` so a
+    /// test can commit an edit between the read and the publication.
+    pub(crate) fn begin_pass(&self) -> PassInput {
+        let state = self.state();
+        PassInput {
+            model: state.model.clone(),
+            revision: state.revision,
+            previous: state.published.clone(),
+            dirty: state.dirty.clone(),
+            names: state.names.clone(),
+            authored: state.authored.clone(),
+        }
+    }
+    /// Calculate outside the lock, then publish under it.
+    pub(crate) fn finish_pass(
+        &self,
+        input: PassInput,
+        workers: usize,
+        context: &CalcContext,
+    ) -> CalculationPass {
+        let outcome = calculate_inner(
+            &input.model,
+            input.revision,
+            workers,
+            input.previous.as_ref(),
+            &input.dirty,
+            context,
+            input.names.as_deref(),
+        );
+        let ended_early = outcome.ended_early;
+        CalculationPass {
+            report: self.publish(outcome.report, ended_early),
+            model: input.model,
+            base_revision: input.previous.map(|report| report.revision),
+            context: *context,
+            authored: input.authored,
+            calculated_formulas: outcome.calculated_formulas,
+            unresolved_formulas: outcome.unresolved_formulas,
+            ended_early,
+        }
+    }
+    /// A pass at an older revision is marked stale. A pass that ended early
+    /// is returned as it is. Neither replaces the published report or clears
+    /// the dirty set.
+    fn publish(&self, mut report: CalculationReport, ended_early: bool) -> CalculationReport {
         let mut state = self.state();
-        if state.model.revision != report.revision {
+        if state.revision != report.revision {
             report.stale = true;
-        } else {
+        } else if !ended_early {
             state.published = Some(report.clone());
             state.dirty.clear();
         }
@@ -2100,7 +2415,6 @@ pub fn operating_scenario() -> WorkbookModel {
     forecast.column_widths.insert("G".into(), 32.0);
     WorkbookModel {
         schema_version: 1,
-        revision: 0,
         sheets: vec![assumptions, forecast],
         inputs: [
             (
@@ -2736,7 +3050,7 @@ mod tests {
                 None,
             )
             .unwrap();
-        assert!(session.publish(old).stale);
+        assert!(session.publish(old, false).stale);
         assert!(session.published().is_none());
         let current = session.calculate(2);
         assert!(!current.stale);
@@ -2749,9 +3063,11 @@ mod tests {
         let copy = session.clone();
         let reader = std::thread::spawn(move || {
             for _ in 0..10 {
-                let snapshot = copy.snapshot();
+                let (snapshot, revision) = copy.snapshot_with_revision();
+                assert!(revision <= 3);
+                // A stateless pass has no session, so it reports revision 0.
                 let report = calculate(&snapshot, 2);
-                assert_eq!(report.revision, snapshot.revision);
+                assert_eq!(report.revision, 0);
                 assert!(report.diagnostics.is_empty());
             }
         });
@@ -2764,8 +3080,8 @@ mod tests {
                 .unwrap();
         }
         reader.join().unwrap();
-        assert_eq!(original.revision, 0);
-        assert_eq!(session.snapshot().revision, 3);
+        assert_eq!(original, operating_scenario());
+        assert_eq!(session.revision(), 3);
     }
     #[test]
     fn wire_null_is_explicit_clear_and_invalid_fields_are_rejected() {
@@ -2940,7 +3256,7 @@ mod tests {
     #[test]
     fn session_recovers_after_a_panic_under_its_lock() {
         let session = Session::new(operating_scenario()).unwrap();
-        let revision = session.snapshot().revision;
+        let revision = session.revision();
         let poisoner = session.clone();
         let outcome = std::thread::spawn(move || {
             let _guard = poisoner.state.lock().unwrap();
@@ -2950,7 +3266,7 @@ mod tests {
         assert!(outcome.is_err(), "the spawned thread must have panicked");
         assert!(session.state.is_poisoned());
         // Every entry point still works on the intact state.
-        assert_eq!(session.snapshot().revision, revision);
+        assert_eq!(session.revision(), revision);
         assert!(session.published().is_none());
         let next = session
             .apply(
@@ -3082,5 +3398,320 @@ mod tests {
                 assert_eq!(diagnostic.sheet.as_deref(), Some("Data"));
             }
         }
+    }
+
+    const REVISION_DOCUMENT: &str = r#"{"schema_version":1,"revision":@,"sheets":[{"id":"s","name":"S","cells":{"A1":{"value":1}}}],"inputs":{},"outputs":{}}"#;
+
+    #[test]
+    fn document_revision_key_is_validated_then_dropped() {
+        for accepted in ["0", "4", "18446744073709551615"] {
+            let text = REVISION_DOCUMENT.replace('@', accepted);
+            let model: WorkbookModel = serde_json::from_str(&text).unwrap();
+            assert!(
+                serde_json::to_value(&model)
+                    .unwrap()
+                    .get("revision")
+                    .is_none(),
+                "{accepted}"
+            );
+            let (paired, legacy) = read_document(text.as_bytes()).unwrap();
+            assert_eq!(paired, model);
+            assert_eq!(legacy.to_string(), accepted);
+        }
+        for refused in [
+            "-1",
+            "true",
+            "false",
+            "null",
+            "1.5",
+            "\"1\"",
+            "18446744073709551616",
+        ] {
+            let text = REVISION_DOCUMENT.replace('@', refused);
+            assert!(
+                serde_json::from_str::<WorkbookModel>(&text).is_err(),
+                "{refused}"
+            );
+            assert!(read_document(text.as_bytes()).is_err(), "{refused}");
+        }
+        // Without the key the legacy revision is 0, and an unknown root key
+        // is still refused.
+        let absent = REVISION_DOCUMENT.replace(r#""revision":@,"#, "");
+        assert_eq!(read_document(absent.as_bytes()).unwrap().1, 0);
+        let unknown = REVISION_DOCUMENT.replace(r#""revision":@"#, r#""revisions":0"#);
+        assert!(serde_json::from_str::<WorkbookModel>(&unknown).is_err());
+        // No writer emits the key.
+        for written in [
+            serde_json::to_value(operating_scenario()).unwrap(),
+            serde_json::to_value(WorkbookModel::default()).unwrap(),
+            serde_json::to_value(Session::new(operating_scenario()).unwrap().snapshot()).unwrap(),
+        ] {
+            assert!(written.get("revision").is_none());
+        }
+    }
+
+    #[test]
+    fn revision_is_session_state() {
+        assert_eq!(Session::new(operating_scenario()).unwrap().revision(), 0);
+        let session = Session::with_names_at(operating_scenario(), None, 5).unwrap();
+        assert_eq!(session.revision(), 5);
+        let next = session
+            .apply(
+                vec![Edit::value("Assumptions", "B1", CellValue::Number(21.0))],
+                Some(5),
+            )
+            .unwrap();
+        assert_eq!(next, 6);
+        let (snapshot, revision) = session.snapshot_with_revision();
+        assert_eq!(revision, 6);
+        assert_eq!(snapshot, session.snapshot());
+        assert_eq!(session.calculate(1).revision, 6);
+        // A legacy key seeds an engine session through the paired reader.
+        let text = REVISION_DOCUMENT.replace('@', "7");
+        let (model, legacy) = read_document(text.as_bytes()).unwrap();
+        let seeded = Session::with_names_at(model, None, legacy).unwrap();
+        assert_eq!(seeded.revision(), 7);
+        assert!(
+            serde_json::to_value(seeded.snapshot())
+                .unwrap()
+                .get("revision")
+                .is_none()
+        );
+        assert_eq!(
+            inspect_with_names_at(&seeded.snapshot(), None, legacy)["revision"],
+            7
+        );
+        assert_eq!(inspect(&seeded.snapshot())["revision"], 0);
+    }
+
+    #[test]
+    fn fork_is_detached() {
+        let parent = Session::with_names_at(operating_scenario(), None, 2).unwrap();
+        parent
+            .apply(
+                vec![Edit::value("Assumptions", "B1", CellValue::Number(21.0))],
+                Some(2),
+            )
+            .unwrap();
+        parent.calculate(1);
+        let before = parent.snapshot();
+        let fork = parent.fork();
+        assert_eq!(fork.revision(), 3);
+        assert_eq!(fork.snapshot(), before);
+        // The fork starts with nothing published and keeps the authored set.
+        assert!(fork.published().is_none());
+        assert!(parent.published().is_some());
+        assert_eq!(
+            fork.begin_pass().authored,
+            BTreeSet::from(["Assumptions!B1".to_string()])
+        );
+        fork.apply(
+            vec![Edit::value("Assumptions", "B2", CellValue::Number(9.0))],
+            Some(3),
+        )
+        .unwrap();
+        assert_eq!(fork.revision(), 4);
+        assert_eq!(parent.revision(), 3);
+        assert_eq!(parent.snapshot(), before);
+        assert_eq!(parent.begin_pass().authored.len(), 1);
+        assert_eq!(fork.begin_pass().authored.len(), 2);
+    }
+
+    #[test]
+    fn authored_cells_follow_value_and_formula_edits_only() {
+        let session = Session::new(operating_scenario()).unwrap();
+        assert!(session.begin_pass().authored.is_empty());
+        let style = Style {
+            bold: Some(true),
+            ..Style::default()
+        };
+        session
+            .apply(
+                vec![
+                    Edit::value("Assumptions", "B1", CellValue::Number(21.0)),
+                    Edit::formula("Assumptions", "D1", "=1+1"),
+                    Edit {
+                        sheet: "Assumptions".into(),
+                        address: "B2".into(),
+                        value: None,
+                        formula: None,
+                        style: Some(style),
+                        restore_absent: false,
+                    },
+                ],
+                None,
+            )
+            .unwrap();
+        assert_eq!(
+            session.begin_pass().authored,
+            BTreeSet::from(["Assumptions!B1".to_string(), "Assumptions!D1".to_string()])
+        );
+        session
+            .apply(vec![Edit::absent("Assumptions", "D1")], None)
+            .unwrap();
+        assert_eq!(
+            session.begin_pass().authored,
+            BTreeSet::from(["Assumptions!B1".to_string()])
+        );
+    }
+
+    #[test]
+    fn revision_counter_stops_at_its_last_value() {
+        let session = Session::with_names_at(operating_scenario(), None, u64::MAX).unwrap();
+        let before = session.snapshot();
+        let error = session
+            .apply(
+                vec![Edit::value("Assumptions", "B1", CellValue::Number(21.0))],
+                Some(u64::MAX),
+            )
+            .unwrap_err();
+        assert_eq!(error.code, "resource_limit");
+        assert_eq!(error.message, "revision counter exhausted");
+        assert_eq!(session.revision(), u64::MAX);
+        assert_eq!(session.snapshot(), before);
+        let values = BTreeMap::from([("unit_price".to_string(), CellValue::Number(21.0))]);
+        assert_eq!(
+            session.set_inputs(&values, None).unwrap_err().code,
+            "resource_limit"
+        );
+        assert_eq!(session.revision(), u64::MAX);
+    }
+
+    #[test]
+    fn set_inputs_reports_a_coded_conflict() {
+        let session = Session::new(operating_scenario()).unwrap();
+        let before = session.snapshot();
+        let values = BTreeMap::from([("unit_price".to_string(), CellValue::Number(25.0))]);
+        let error = session.set_inputs(&values, Some(1)).unwrap_err();
+        assert_eq!(error.code, "revision_conflict");
+        assert_eq!(
+            error.to_string(),
+            "revision_conflict: model revision conflict"
+        );
+        assert_eq!(session.revision(), 0);
+        assert_eq!(session.snapshot(), before);
+        // An unknown name or a refused value commits nothing.
+        let unknown = BTreeMap::from([
+            ("unit_price".to_string(), CellValue::Number(25.0)),
+            ("nope".to_string(), CellValue::Number(1.0)),
+        ]);
+        assert_eq!(
+            session.set_inputs(&unknown, Some(0)).unwrap_err().code,
+            "unknown_input"
+        );
+        let refused = BTreeMap::from([("unit_price".to_string(), CellValue::Text("x".into()))]);
+        assert_eq!(
+            session.set_inputs(&refused, Some(0)).unwrap_err().code,
+            "invalid_input"
+        );
+        assert_eq!(session.snapshot(), before);
+        assert_eq!(session.set_inputs(&BTreeMap::new(), Some(0)).unwrap(), 0);
+        assert_eq!(session.set_inputs(&values, Some(0)).unwrap(), 1);
+        assert_eq!(session.set_inputs(&values, None).unwrap(), 2);
+    }
+
+    /// Three formulas: a sum, a product no output need read, and one that
+    /// does not parse.
+    fn three_formula_cells() -> Vec<(&'static str, Cell)> {
+        vec![
+            ("A1", number(1.0)),
+            ("A2", number(2.0)),
+            ("A3", Cell::formula("=A1+A2")),
+            ("B1", Cell::formula("=A1*10")),
+            ("B2", Cell::formula("=1+")),
+        ]
+    }
+
+    #[test]
+    fn pass_counts_range_over_the_closure() {
+        let context = CalcContext {
+            now_ms: 0,
+            utc_offset_minutes: 0,
+            seed: 1,
+        };
+        // No outputs bound: the closure is every cell. A3 and B1 have values
+        // (2 formulas); B2 does not parse (1 formula).
+        let all = Session::new(model(&three_formula_cells(), &[])).unwrap();
+        let pass = all.calculate_pass(1, &context);
+        assert_eq!((pass.calculated_formulas, pass.unresolved_formulas), (2, 1));
+        assert!(!pass.ended_early);
+        assert_eq!(pass.base_revision, None);
+        // One bound output, A3 = A1 + A2: the closure holds one formula.
+        let bound = Session::new(model(&three_formula_cells(), &[("sum", "A3")])).unwrap();
+        let pass = bound.calculate_pass(1, &context);
+        assert_eq!((pass.calculated_formulas, pass.unresolved_formulas), (1, 0));
+        assert_eq!(pass.report.values["Data!A3"], scalar(3.0));
+        let again = bound.calculate_pass(1, &context);
+        assert_eq!(again.base_revision, Some(0));
+        assert!(again.report.evaluated_cells.is_empty());
+        assert_eq!(
+            (again.calculated_formulas, again.unresolved_formulas),
+            (1, 0)
+        );
+    }
+
+    #[test]
+    fn a_pass_that_ends_early_is_not_published() {
+        let context = CalcContext {
+            now_ms: 0,
+            utc_offset_minutes: 0,
+            seed: 1,
+        };
+        // Two arrays of 60000 cells exceed the budget of 100000 materialized
+        // result cells, so the pass stops part-way.
+        let mut workbook = model(&[("A1", number(1.0)), ("B1", Cell::formula("=A1+1"))], &[]);
+        let session = Session::new(workbook.clone()).unwrap();
+        let first = session.calculate_pass(1, &context);
+        assert!(!first.ended_early);
+        assert_eq!(session.published().unwrap().revision, 0);
+        session
+            .apply(
+                vec![
+                    Edit::formula("Data", "C1", "=SEQUENCE(60000)"),
+                    Edit::formula("Data", "D1", "=SEQUENCE(60000)"),
+                    Edit::value("Data", "A1", CellValue::Number(5.0)),
+                ],
+                Some(0),
+            )
+            .unwrap();
+        let failed = session.calculate_pass(1, &context);
+        assert!(failed.ended_early);
+        assert!(!failed.report.stale);
+        assert_eq!(failed.report.revision, 1);
+        assert!(
+            failed
+                .report
+                .diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.code == "resource_limit")
+        );
+        // Nothing was published at revision 1, and the base is still the
+        // completed pass at revision 0 with its dirty set intact.
+        assert!(session.published().is_none());
+        assert_eq!(session.state().published.as_ref().unwrap().revision, 0);
+        assert_eq!(session.state().dirty.len(), 3);
+        session
+            .apply(
+                vec![Edit::absent("Data", "C1"), Edit::absent("Data", "D1")],
+                Some(1),
+            )
+            .unwrap();
+        let fixed = session.calculate_pass(1, &context);
+        assert!(!fixed.ended_early);
+        assert_eq!(fixed.base_revision, Some(0));
+        // B1 = A1 + 1 = 6 was recalculated: nothing came from the failed pass.
+        assert_eq!(fixed.report.evaluated_cells, vec!["Data!B1".to_string()]);
+        assert_eq!(fixed.report.values["Data!B1"], scalar(6.0));
+        assert_eq!(session.published().unwrap().revision, 2);
+        // A graph-level refusal ends early before any closure is known: the
+        // one formula cell of the workbook (B1) is counted unresolved.
+        workbook.schema_version = 2;
+        let refused = calculate_inner(&workbook, 0, 1, None, &BTreeSet::new(), &context, None);
+        assert!(refused.ended_early);
+        assert!(refused.report.values.is_empty());
+        assert_eq!(
+            (refused.calculated_formulas, refused.unresolved_formulas),
+            (0, 1)
+        );
     }
 }
