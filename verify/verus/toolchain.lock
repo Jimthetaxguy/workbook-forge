@@ -1,0 +1,7 @@
+# Exact toolchain these proofs were checked with. verify.sh refuses to run on a mismatch.
+VERUS_VERSION=0.2026.11.02.8bf68ee
+VERUS_RELEASE_URL=https://github.com/verus-lang/verus/releases/tag/release%2F0.2026.11.02.8bf68ee
+VERUS_X86_LINUX_ZIP_SHA256=f3a0119292df8855e4435da8130bee1873b0e6a60c306accf81a08ea687bba3c
+RUST_TOOLCHAIN=1.99.1
+RUSTC_VERSION=rustc 1.99.1 (58cf8f9c3 2026-10-13)
+Z3_VERSION=Z3 version 4.16.0 - 64 bit
