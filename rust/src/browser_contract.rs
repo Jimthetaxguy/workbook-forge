@@ -1054,6 +1054,23 @@ fn execute<W: CommandTarget + ?Sized>(
         Operation::SetCells { edits } => {
             let edits = normalized(edits.clone());
             match check_preconditions(inner, workbook, envelope, base_revision, current) {
+                // An empty batch leaves the revision where it is. Logged
+                // as applied, it would be a second intent at that revision:
+                // the log could not be replayed, and a stale cell's writer
+                // would be read as this command. A stale one is refused as
+                // stale first, as it always was.
+                Ok(_) if edits.is_empty() => {
+                    let error = invalid("set_cells needs at least one edit");
+                    return log_rejection(
+                        inner,
+                        envelope,
+                        command,
+                        base,
+                        current,
+                        Vec::new(),
+                        error,
+                    );
+                }
                 Ok(expected) => (edits, expected, None),
                 Err(error) => {
                     let requested = requested_inputs(&edits);

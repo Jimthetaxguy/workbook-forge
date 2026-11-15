@@ -86,6 +86,11 @@ and lists every failing cell:
 session's log, or `null` when the write did not go through a logged path.
 Nothing is applied: a command is still all or nothing.
 
+A `set_cells` command with no edits is refused as `invalid_request` once it
+passes the staleness check. It could not move the revision, and an applied
+intent that leaves the revision alone would be read as a cell's writer and
+would stop the log from replaying.
+
 Other refusals, all applying nothing:
 
 - `invalid_revision`: a `base_version` that is not a decimal string, or that

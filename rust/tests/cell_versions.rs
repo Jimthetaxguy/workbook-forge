@@ -592,3 +592,50 @@ fn replay_rebuilds_identical_cell_versions() {
     assert_eq!(second["cell_revisions"], live);
     assert_eq!(second["snapshot"], first["snapshot"]);
 }
+
+/// A command with no edits cannot move the revision, so it is refused: the
+/// writer named for a stale cell stays the command that wrote it, and the
+/// log still replays.
+#[test]
+fn an_empty_set_cells_is_refused_and_never_named_as_a_writer() {
+    let (bytes, workbook, session) = open();
+    let writer = run(
+        &session,
+        &workbook,
+        envelope("w-1", ALICE, "strict", "0", json!([]), set("A1", 1.0)),
+    );
+    assert_eq!(writer["status"], "applied", "{writer:#}");
+    let empty = run(
+        &session,
+        &workbook,
+        envelope(
+            "w-2",
+            AGENT,
+            "cells",
+            "1",
+            json!([]),
+            json!({"type": "set_cells", "edits": []}),
+        ),
+    );
+    assert_eq!(empty["status"], "rejected", "{empty:#}");
+    assert_eq!(empty["error"]["code"], "invalid_request");
+    let stale = run(
+        &session,
+        &workbook,
+        envelope(
+            "w-3",
+            AGENT,
+            "cells",
+            "0",
+            json!([pre("A1", "0")]),
+            set("A1", 2.0),
+        ),
+    );
+    assert_eq!(stale["error"]["code"], "revision_conflict", "{stale:#}");
+    assert_eq!(
+        stale["error"]["stale_cells"][0]["overwritten_by"],
+        writer["event_id"]
+    );
+    let ndjson = session.export_log_ndjson(workbook.revision(), None);
+    replay(&bytes, &ndjson).expect("the log replays");
+}

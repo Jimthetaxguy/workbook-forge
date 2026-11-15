@@ -424,6 +424,8 @@ def test_a_temp_directory_outside_the_static_roots_leaves_the_receipt(tmp_path, 
         base = shared_memory / f"wf-sanitise-{tmp_path.name}"
     else:
         resolved_tmp = tmp_path.resolve()
+        if resolved_tmp.parts[1] in sanitize_receipt.HOME_ROOTS:
+            pytest.skip("pytest's directory is under a home root, which the tool never takes as a temp prefix")
         narrowed = tuple(
             name for name in sanitize_receipt.MACHINE_LOCAL_ROOTS if name != resolved_tmp.parts[1]
         )
