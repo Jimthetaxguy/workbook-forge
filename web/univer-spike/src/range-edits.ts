@@ -277,7 +277,7 @@ function nameSeries(words: string[]): LinePlan {
  *
  * - numbers: two or more typed numbers continue their straight line. Evenly
  *   spaced numbers keep their step (1, 2 gives 3, 4, 5); otherwise the
- *   least-squares line through them is used, as Excel's linear trend does.
+ *   least-squares line through them is used.
  * - text ending in a whole number ("Item1", "Product 1"): the number counts
  *   up by one, or by the step two or more cells set.
  * - day and month names, short or long: the next name in the list, or every
