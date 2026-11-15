@@ -738,6 +738,25 @@ impl CommandSession {
                 return Err(error);
             }
         };
+        // An empty batch leaves the revision where it is. Logged as
+        // applied, it would be a second intent at that revision: the
+        // log could not be replayed, and a stale cell's writer would
+        // be read as this command. A stale expected revision is still
+        // a revision conflict. The refusal is recorded as rejected,
+        // the same way an empty `set_cells` is.
+        if edits.is_empty() && workbook.revision() == expected {
+            let error = invalid("applyEdits needs at least one edit");
+            inner.log.record_intent(
+                actor,
+                command,
+                base,
+                false,
+                expected,
+                Vec::new(),
+                Some(&error),
+            );
+            return Err(error);
+        }
         let requested = requested_inputs(&edits);
         let targets = resolve_targets(workbook, &edits);
         let before = workbook.read_cells(&targets);

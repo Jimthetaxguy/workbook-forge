@@ -3,8 +3,10 @@
 //! examples/univer_spike_fixture.rs), never engine output.
 use std::collections::BTreeMap;
 use workbook_forge::browser_contract::{
-    apply_edits_envelope, classify_edit_error, parse_envelope, parse_revision, revision_string,
+    CommandSession, apply_edits_envelope, classify_edit_error, parse_envelope, parse_revision,
+    revision_string,
 };
+use workbook_forge::event_log::{Baseline, replay};
 use workbook_forge::xlsx::{ImportedWorkbook, import_xlsx_bytes};
 
 fn fixture() -> ImportedWorkbook {
@@ -133,4 +135,99 @@ fn revision_strings_and_error_codes_are_stable() {
         "bad token"
     );
     assert_eq!(classify_edit_error("something else").code, "edit_rejected");
+}
+
+/// An empty legacy apply cannot move the revision. Recording it as applied
+/// would make replay reject the log and would name that command as a cell's
+/// writer. A stale expected revision is still a conflict.
+#[test]
+fn an_empty_legacy_apply_is_refused_and_the_log_replays() {
+    let path = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../fixtures/univer-spike-chain.xlsx"
+    );
+    let bytes = std::fs::read(path).expect("fixture");
+    let workbook = import_xlsx_bytes(&bytes, BTreeMap::new(), BTreeMap::new()).expect("import");
+    let session = CommandSession::new();
+    session.set_baseline(Baseline::xlsx("univer-spike-chain.xlsx", &bytes));
+    session.start_log(None, serde_json::json!({"wasm_sha256": null}), 0);
+
+    let bad_revision = parse_envelope(&session.apply_edits_logged(&workbook, "[]", "-1"));
+    assert_eq!(bad_revision["error"]["code"], "invalid_revision");
+
+    let empty = parse_envelope(&session.apply_edits_logged(&workbook, "[]", "0"));
+    assert_eq!(empty["ok"], false);
+    assert_eq!(empty["error"]["code"], "invalid_request");
+    assert_eq!(
+        empty["error"]["message"],
+        "applyEdits needs at least one edit"
+    );
+    assert_eq!(revision_string(&workbook), "0");
+    assert_eq!(number(&workbook, "A1"), 10.0);
+
+    let applied = parse_envelope(&session.apply_edits_logged(
+        &workbook,
+        r#"[{"sheet":"Sheet1","address":"A1","value":20}]"#,
+        "0",
+    ));
+    assert_eq!(applied, serde_json::json!({"ok": true, "revision": "1"}));
+
+    let again = parse_envelope(&session.apply_edits_logged(&workbook, "[]", "1"));
+    assert_eq!(again["error"]["code"], "invalid_request");
+    assert_eq!(
+        again["error"]["message"],
+        "applyEdits needs at least one edit"
+    );
+    assert_eq!(revision_string(&workbook), "1");
+    assert_eq!(number(&workbook, "A1"), 20.0);
+
+    let stale = parse_envelope(&session.apply_edits_logged(&workbook, "[]", "0"));
+    assert_eq!(stale["error"]["code"], "revision_conflict");
+    assert_eq!(stale["error"]["expected_revision"], "0");
+    assert_eq!(stale["error"]["current_revision"], "1");
+    assert_eq!(revision_string(&workbook), "1");
+
+    let writer = session
+        .events()
+        .iter()
+        .find(|event| event["kind"] == "intent" && event["status"] == "applied")
+        .expect("the value edit")["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let conflict = serde_json::from_str::<serde_json::Value>(&session.apply_and_calculate(
+        &workbook,
+        &serde_json::json!({
+            "v": 1,
+            "command_id": "stale-a1",
+            "client_id": "client-a",
+            "client_seq": "1",
+            "actor": {"kind": "human", "id": "alice"},
+            "base_revision": "0",
+            "mode": "cells",
+            "preconditions": [{"sheet": "Sheet1", "address": "A1", "base_version": "0"}],
+            "op": {"type": "set_cells", "edits": [{"sheet": "Sheet1", "address": "A1", "value": 7}]}
+        })
+        .to_string(),
+    ))
+    .unwrap();
+    assert_eq!(conflict["error"]["code"], "revision_conflict");
+    assert_eq!(
+        conflict["error"]["stale_cells"][0]["overwritten_by"],
+        writer
+    );
+    assert_eq!(number(&workbook, "A1"), 20.0);
+
+    let applied_revisions: Vec<_> = session
+        .events()
+        .iter()
+        .filter(|event| event["kind"] == "intent" && event["status"] == "applied")
+        .map(|event| event["revision"].as_str().unwrap().to_string())
+        .collect();
+    assert_eq!(applied_revisions, vec!["1".to_string()]);
+
+    let ndjson = session.export_log_ndjson(workbook.revision(), None);
+    let replayed = replay(&bytes, &ndjson).expect("replay");
+    assert_eq!(replayed["ok"], true);
+    assert_eq!(replayed["revision"], "1");
 }
