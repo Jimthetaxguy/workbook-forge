@@ -21,7 +21,10 @@ web/forge-engine/   headless package: Forge WASM in a Web Worker behind a typed
   src/engine.ts     command handler; transport-free, runs in a worker,
                     a WebView shell, or Node
   src/worker.ts     Web Worker entry, the only owner of BrowserWorkbook
+  src/worker-host.ts request loop; worker.ts wires it to the Worker global
   src/client.ts     typed client over any MessagePort-like channel
+  src/reference-shift.ts  moves relative references in formula text as typed
+  src/index.ts      re-exports the protocol and the client
   build-wasm.sh     cargo build --target wasm32 + wasm-bindgen (version pinned
                     to rust/Cargo.lock)
 web/univer-spike/   Univer adapter and demo, using only the command API
@@ -116,7 +119,7 @@ Where this API differs, and why:
 |---|---|---|---|
 | Operations | `discover, describe, read, calculate, explain, preview_inputs, set_inputs, edit, export` over a JSON request/response transport | `open, newWorkbook, snapshot, applyEdits, calculate, export, applyAndCalculate, log, subscribe, replay` over postMessage | A worker holding the WASM workbook needs byte-level `open` and `export`. `applyEdits` corresponds to `edit` and `snapshot` to a full `read`. `log`, `subscribe`, `export` with `includeLog`, and `replay` are the memory-only session event log. |
 | Revision | `number`, a safe integer | decimal `string` | wasm-bindgen passes `u64` as `BigInt`. The string form never loses precision and needs no BigInt in hosts. |
-| Errors | thrown `ClientError(code, message, uncertain)` | returned `{ok:false, error:{code, message, expected_revision, current_revision}}` | Results cross a worker boundary, and conflicts carry both revisions. |
+| Errors | thrown `ClientError(code, message, uncertain)` | returned `{ok:false, error:{code, message, expected_revision?, current_revision?}}`; other fields may appear | Results cross a worker boundary, and conflicts carry both revisions. |
 | `Edit` styles | allowed | omitted | Imported workbooks reject style edits (`validate_edits`). |
 | Calculation | `outputs` (bound outputs), `evaluated_cell_count`, diagnostics with counts | `values` for every cell as `Sheet!A1`, `stale`, `diagnostics` | The view needs every formula cell's value, not only bound outputs. |
 | Reads | paged `read` with dependencies | one full `snapshot` | The spike fixture is small. Paging is the obvious next step for large sheets. |
@@ -132,7 +135,8 @@ These are additive. The existing methods are unchanged.
 - `BrowserWorkbook.revisionString(): string`
 - `BrowserWorkbook.applyEditsResultJson(editsJson, expectedRevision: string): string`
   returns `{"ok":true,"revision":"N"}` or
-  `{"ok":false,"error":{"code","message","expected_revision","current_revision"}}`.
+  `{ok: false, error: {code, message, expected_revision?, current_revision?}}`.
+  Other fields may appear.
   It never throws for a rejected edit, and a rejected batch applies nothing.
   Codes: `revision_conflict`, `out_of_bounds`, `unknown_sheet`, `unsupported_edit`,
   `invalid_request`, `invalid_revision`, `edit_rejected`, plus any toolkit
@@ -250,8 +254,8 @@ Findings:
     available yet."); the command id is kept in `audit.blocked` and shown in
     the Developer panel.
 - **Presentation.** `snapshot` carries each cell's presentation when the
-  model has one (`style`: number format, bold, italic, font color, fill,
-  horizontal alignment, wrap) and each sheet's `columnWidths`. Both fields are
+  model has one (`style`: number format, bold, font color, fill,
+  horizontal alignment) and each sheet's `columnWidths`. Both fields are
   additive and optional; `schema_version` and `model_version` are unchanged.
   The adapter turns them into Univer styles when it builds the workbook, and
   `@univerjs/sheets-numfmt` draws the number format. Presentation is read
@@ -1436,8 +1440,8 @@ tools. Vite 7.3.7 (esbuild/rollup) is used instead.
   `=PI()`), because Univer trims the number it shows. The raw value still
   matches Forge. This is older than General number drawing and is not changed
   by it; the comparison should allow for the trim.
-- Presentation is read only. Number formats, bold, italic, font color, fill,
-  horizontal alignment, wrap and column widths are shown; borders, row
+- Presentation is read only. Number formats, bold, font color, fill,
+  horizontal alignment and column widths are shown; borders, row
   heights, merged-cell drawing, conditional formats and theme colors are not.
   Formatting commands are refused.
 - A formula that uses a function outside the catalog leaves its cell blank and
