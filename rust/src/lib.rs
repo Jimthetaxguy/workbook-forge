@@ -2318,8 +2318,9 @@ fn to_number(v: &Value) -> Result<f64, FormulaError> {
         Value::Bool(b) => Ok(if *b { 1.0 } else { 0.0 }),
         Value::Blank => Ok(0.0),
         Value::Text(s) if s.trim().is_empty() => Ok(0.0),
-        // Rust's float parser accepts "inf", "infinity" and "nan"; Excel does
-        // not treat those spellings as numbers, so they stay non-numeric text.
+        // Rust's float parser accepts "inf", "infinity" and "nan". Those
+        // spellings stay non-numeric text: a non-finite parse is rejected
+        // (docs/behavior-profiles.md). Not checked against Excel.
         Value::Text(s) => s
             .trim()
             .parse::<f64>()
@@ -3544,11 +3545,13 @@ fn substitute_all_bounded(
     check_text_units(result_units, limit)?;
     Ok(text.replace(old, new))
 }
-/// Whether this expression always returns a reference in Excel.
+/// Whether this expression always carries reference provenance.
 ///
 /// A cell reference and INDEX over a range do. XLOOKUP and the IF family do
 /// not: a hit or a selected reference does, and a scalar fallback does not.
 /// That distinction travels on the value as [`CalcValue::Referenced`].
+/// See docs/behavior-profiles.md ("Selected references in SUM and AVERAGE").
+/// Nothing there was observed in Excel.
 fn returns_reference(expr: &Expr) -> bool {
     match expr {
         Expr::Ref(_, _) => true,

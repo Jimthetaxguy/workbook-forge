@@ -149,7 +149,7 @@ export function fillSource(source: Rect, row: number, col: number): { row: numbe
   return { row: wrap(row, source.startRow, source.endRow), col: wrap(col, source.startColumn, source.endColumn) };
 }
 
-/** The built-in lists Excel continues by name: days and months, short and long. */
+/** Day and month names, short and long. Microsoft's pages cover continuing these (docs/specs/univer-spike.md, "Series"). */
 const NAME_LISTS = [
   'Sun Mon Tue Wed Thu Fri Sat',
   'Sunday Monday Tuesday Wednesday Thursday Friday Saturday',
@@ -159,14 +159,16 @@ const NAME_LISTS = [
 const LIST_WORDS = new Set(NAME_LISTS.flat().map((word) => word.toLowerCase()));
 
 /**
- * True when Excel would continue this line of cells as a series instead of
- * copying it: two or more typed numbers, a date or time, text that holds a
- * digit ("Item 1"), or a day or month name. Formulas, a single number,
- * booleans and other text are copied by Excel too. `dateLike[i]` says cell i
- * is drawn with a date or time format. The rule is deliberately wide: it
- * flags some lines Excel would simply copy rather than copy one Excel would
- * continue. `planLine` then says whether the series is one this page
- * continues.
+ * True when this page treats the line as a series candidate instead of a
+ * copy: two or more typed numbers, a date or time, text that holds a digit
+ * ("Item 1"), or a day or month name. A formula, a single number, a boolean
+ * or other text is a copy. `dateLike[i]` says cell i is drawn with a date or
+ * time format. The rule is deliberately wide: it flags some lines a copy
+ * would also describe. `planLine` then says whether the series is one this
+ * page continues.
+ * docs/specs/univer-spike.md ("Series"): Microsoft's pages cover even steps,
+ * Item1, and day names. Least-squares and this wide refuse rule are this
+ * page's rules.
  */
 export function isSeriesLine(line: (Held | undefined)[], dateLike: boolean[]): boolean {
   let numbers = 0;
@@ -187,12 +189,13 @@ export function isSeriesLine(line: (Held | undefined)[], dateLike: boolean[]): b
  * What a fill does with one line of the source (a column when filling down or
  * up, a row when filling across).
  *
- * - `copy`: Excel copies this line, so the source repeats.
+ * - `copy`: the source repeats.
  * - `series`: `at(k)` is the value k cells from the line's first cell, so
  *   `at(line.length)` is the first cell after it and `at(-1)` the first cell
  *   before it. `at` returns undefined when the series has no value there.
- * - `refuse`: Excel would continue a series this page does not build, so a
- *   copy would not match Excel.
+ * - `refuse`: this page does not build a series for the line, so the fill is
+ *   refused. The wide refuse rule is this page's (docs/specs/univer-spike.md,
+ *   "Series").
  */
 export type LinePlan = { kind: 'copy' } | { kind: 'refuse' } | { kind: 'series'; at: (k: number) => Scalar | undefined };
 
@@ -272,8 +275,8 @@ function nameSeries(words: string[]): LinePlan {
 }
 
 /**
- * Decide what a fill does with one line of the source. Lines Excel copies are
- * copied. Three kinds of series are continued:
+ * Decide what a fill does with one line of the source. A line that
+ * `isSeriesLine` does not flag is copied. Three kinds of series are continued:
  *
  * - numbers: two or more typed numbers continue their straight line. Evenly
  *   spaced numbers keep their step (1, 2 gives 3, 4, 5); otherwise the
@@ -283,10 +286,14 @@ function nameSeries(words: string[]): LinePlan {
  * - day and month names, short or long: the next name in the list, or every
  *   n-th name when two or more cells set a step. The list wraps round.
  *
- * Anything else that Excel would continue is refused: dates and times, a line
+ * Anything else flagged as a series is refused: dates and times, a line
  * that mixes kinds or has a formula or a blank among its series cells, text
  * with a number elsewhere than its end, text numbers that are not evenly
  * spaced, names in mixed case and a lone "May".
+ *
+ * docs/specs/univer-spike.md ("Series"): Microsoft's pages cover even steps,
+ * Item1, and day names. Least-squares and the wide refuse rule are this
+ * page's rules.
  */
 export function planLine(line: (Held | undefined)[], dateLike: boolean[]): LinePlan {
   if (!isSeriesLine(line, dateLike)) return { kind: 'copy' };

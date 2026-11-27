@@ -486,8 +486,9 @@ fn item_matches(item: &CellValue, value: &CellValue) -> bool {
         _ => false,
     }
 }
-/// A number as text with 15 significant digits (`%.15g`, `E` exponent), the
-/// rule Python's `xlsx_features.general_text` uses.
+/// A number as text with 15 significant digits (`%.15g`, `E` exponent).
+/// Finite values and infinities match Python's `xlsx_features.general_text`.
+/// Non-finite NaN does not: this function prints `NaN` and Python prints `nan`.
 pub(crate) fn general_text(value: f64) -> String {
     if value == 0.0 || !value.is_finite() {
         return if value.is_finite() {

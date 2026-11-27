@@ -1977,8 +1977,9 @@ impl ImportedWorkbook {
         Ok(())
     }
     pub fn apply(&self, mut edits: Vec<Edit>, expected_revision: Option<u64>) -> Result<u64> {
-        // A number written into a Text-formatted (@) cell is stored as text,
-        // as Excel does.
+        // A number written into a Text-formatted (@) cell is stored as text.
+        // Workbook Forge follows this rule; not checked against Excel
+        // (docs/text-cells.md).
         if !self.text_cells.is_empty() || !self.text_layouts.is_empty() {
             for edit in &mut edits {
                 if edit.formula.is_none()
@@ -2153,8 +2154,7 @@ fn formula_cache(
     }
 }
 
-/// Add or remove OOXML's namespace marker for functions whose formulas are
-/// otherwise the same in the workbook model and Excel's formula bar.
+/// Add or remove this crate's OOXML spelling (`_xlfn.`) for XLOOKUP and XMATCH.
 fn rewrite_ooxml_function_markers(formula: &str, add_markers: bool) -> String {
     let formula = formula.strip_prefix('=').unwrap_or(formula);
     let bytes = formula.as_bytes();
@@ -2220,8 +2220,7 @@ fn rewrite_ooxml_function_markers(formula: &str, add_markers: bool) -> String {
     output
 }
 
-/// Excel accepts newer function names without `_xlfn.` while editing, but the
-/// marker is needed in OOXML for Excel to recalculate the saved formula.
+/// Write XLOOKUP and XMATCH in this crate's OOXML spelling (`_xlfn.`).
 fn formula_for_ooxml(formula: &str) -> String {
     rewrite_ooxml_function_markers(formula, true)
 }

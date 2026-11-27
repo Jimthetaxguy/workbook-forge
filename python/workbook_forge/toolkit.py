@@ -164,7 +164,11 @@ class WorkbookModel:
         return self._session.apply(_encode(batch), expected_revision)
 
     def _as_text(self, edit: Mapping[str, Any]) -> Mapping[str, Any]:
-        """A number written into a Text-formatted (@) cell is stored as text, as Excel does."""
+        """A number written into a Text-formatted (@) cell is stored as text.
+
+        Workbook Forge follows this rule; not checked against Excel
+        (docs/text-cells.md).
+        """
         value = edit.get("value")
         if "formula" in edit or isinstance(value, bool) or not isinstance(value, (int, float)):
             return edit
