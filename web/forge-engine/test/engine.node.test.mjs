@@ -480,6 +480,46 @@ test('snapshot says when a workbook uses the 1904 date system, and only then', (
   assert.equal('date1904' in call(older, 'snapshot').value, false);
 });
 
+// Replay reads the same flag snapshot() does. op_1904_dates.xlsx stores
+// 42886 in Log!A1 under <workbookPr date1904="1">. A 1900 import and a blank
+// workbook leave the field off, which is the 1900 system.
+test('replay keeps the date system the live snapshot reports', () => {
+  const engine = new ForgeEngine({ openXlsx, createBlankWorkbook, sha256Hex, replayJson });
+  const dated = new Uint8Array(corpusFile('op_1904_dates.xlsx'));
+  assert.equal(call(engine, 'open', { bytes: dated, name: 'op_1904_dates.xlsx' }).ok, true);
+  const live = call(engine, 'snapshot').value;
+  assert.equal(live.date1904, true);
+  assert.equal(live.sheets[0].name, 'Log');
+  assert.equal(live.sheets[0].cells.A1.value, 42886);
+  const replayed = call(engine, 'replay', {
+    baseline: dated,
+    events: call(engine, 'log', { fromSeq: 0, limit: 100 }).value.events,
+  });
+  assert.equal(replayed.ok, true, JSON.stringify(replayed.error));
+  assert.equal(replayed.value.snapshot.date1904, true);
+  assert.equal(replayed.value.snapshot.revision, live.revision);
+  assert.deepEqual(replayed.value.snapshot.sheets, live.sheets);
+
+  const plain = new Uint8Array(corpusFile('op_styles_number_formats.xlsx'));
+  assert.equal(call(engine, 'open', { bytes: plain, name: 'op_styles_number_formats.xlsx' }).ok, true);
+  assert.equal('date1904' in call(engine, 'snapshot').value, false);
+  const replayed1900 = call(engine, 'replay', {
+    baseline: plain,
+    events: call(engine, 'log', { fromSeq: 0, limit: 100 }).value.events,
+  });
+  assert.equal(replayed1900.ok, true, JSON.stringify(replayed1900.error));
+  assert.equal('date1904' in replayed1900.value.snapshot, false);
+
+  assert.equal(call(engine, 'newWorkbook', { sheetName: 'Sheet1' }).ok, true);
+  assert.equal('date1904' in call(engine, 'snapshot').value, false);
+  const replayedBlank = call(engine, 'replay', {
+    baseline: new Uint8Array(),
+    events: call(engine, 'log', { fromSeq: 0, limit: 100 }).value.events,
+  });
+  assert.equal(replayedBlank.ok, true, JSON.stringify(replayedBlank.error));
+  assert.equal('date1904' in replayedBlank.value.snapshot, false);
+});
+
 // copyFormulas: what a formula becomes when its cell is copied elsewhere.
 // Expected references are Microsoft's, from "Switch between relative,
 // absolute, and mixed references" (support.microsoft.com, article
