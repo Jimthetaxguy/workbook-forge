@@ -12,7 +12,8 @@ Rules, in order:
   encoding is one of ``utf-8``, ``utf-16`` (mark required), ``utf-16-le``,
   ``utf-16-be`` or ``latin-1``. Bytes that do not decode refuse with
   ``csv_encoding``; nothing falls back to another encoding silently.
-* Syntax (RFC 4180, as Excel reads it). A field that starts with ``"`` is
+* Syntax. Workbook Forge follows RFC 4180; not checked against Excel
+  (docs/csv-import.md). A field that starts with ``"`` is
   quoted: ``""`` is a literal quote and the field may hold delimiters and line
   breaks. A quote inside an unquoted field is literal. Records end at CRLF,
   LF or CR; a final line break does not add a row, a blank line in the middle

@@ -234,7 +234,7 @@ export type NoticeKind = 'info' | 'error';
 
 /** How every notice about a change Forge refused begins. */
 export const REJECTED = 'Change not applied.';
-/** Shown when the fill handle meets a series Excel would continue and this page does not build. */
+/** Shown when the fill handle meets a series this page refuses (docs/specs/univer-spike.md, "Series"). */
 export const SERIES_REFUSED =
   'Fill continues numbers (1, 2, 3), text ending in a number (Item 1) and day and month names. Dates, times and other patterns are not available yet. Ctrl+D and Ctrl+R copy as they are.';
 
@@ -352,7 +352,7 @@ export class ForgeUniverAdapter {
    * text. Workbook Forge follows this rule; not checked against Excel.
    */
   private readonly textLayouts = new Map<string, { layout: TextFormatLayout; opened: Set<string> }>();
-  /** `Sheet!A1` keys of cells drawn with a date or time format: the fill handle would continue them. */
+  /** `Sheet!A1` keys of cells drawn with a date or time format. A fill that includes one is refused (docs/specs/univer-spike.md, "Series"). */
   private readonly dateCells = new Set<string>();
   /** The selection a copy command is about to copy, until the clipboard write names it. */
   private copying: Omit<CopiedRange, 'id'> | null = null;
@@ -1162,10 +1162,12 @@ export class ForgeUniverAdapter {
   /**
    * The fill handle, Ctrl+D and Ctrl+R: repeat the source over the rest of
    * the target. Ctrl+D and Ctrl+R always copy (`applyType: 'COPY'`). The fill
-   * handle copies where Excel would copy and continues the series `planLine`
+   * handle copies a line `planLine` marks `copy`, and continues a series it
    * builds (numbers, text ending in a number, day and month names). Any other
-   * series Excel would continue is refused, because a copy there would not
-   * match Excel.
+   * line it marks `refuse` is refused.
+   * docs/specs/univer-spike.md ("Series"): Microsoft's pages cover even
+   * steps, Item1, and day names. Least-squares and the wide refuse rule are
+   * this page's rules.
    * Univer sends the range the handle was dragged to as `targetRange`.
    */
   private routeFill(id: string, params: Record<string, unknown>): never {

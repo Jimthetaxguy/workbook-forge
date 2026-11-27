@@ -1,6 +1,12 @@
-// Draws General-format numbers the way Excel's General format does when a
-// number is too long for its cell: rounded decimals, not scientific notation.
-// The rule is in ./general-number.ts; this file only fits it into Univer.
+// Draws a General-format number into the cell: rounded decimals, and
+// scientific notation when the rule calls for it. Only the drawn text
+// changes. The number the cell holds, the formula bar, a copy and an export
+// never pass through here. The rule is in ./general-number.ts; this file
+// only fits it into Univer.
+//
+// docs/specs/univer-spike.md ("General numbers") quotes Microsoft's pages
+// and the Office Open XML notes, and lists the parts that were not observed
+// in Excel.
 //
 // Univer 1.2.0 decides the drawn text of a number cell in
 // SpreadsheetSkeleton._applyNumberDisplay (@univerjs/engine-render). For a

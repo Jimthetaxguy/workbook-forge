@@ -386,7 +386,9 @@ def general_text(value: float) -> str:
     """A number as text with 15 significant digits (``%.15g``, ``E`` exponent).
 
     Used when a number is written into a Text-formatted (``@``) cell and to
-    measure a number for a text-length rule. Python and Rust share this rule.
+    measure a number for a text-length rule. Finite values and infinities
+    match Rust's ``general_text``. Non-finite ``nan`` does not: Python prints
+    ``nan`` and Rust prints ``NaN``.
     """
     text = format(float(value), ".15g")
     if "e" in text:

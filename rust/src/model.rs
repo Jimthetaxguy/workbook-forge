@@ -673,9 +673,9 @@ fn evaluate(
             Value::Number(number) => scalar_from_f64(number),
             Value::Text(text) => Outcome::Value(Scalar::Text(text)),
             Value::Bool(value) => Outcome::Value(Scalar::Boolean(value)),
-            // A scalar formula whose value is a blank reference is 0 in Excel,
-            // and that is what the workbook adapter caches. A null result
-            // would be indistinguishable from "not calculated".
+            // A scalar formula whose value is a blank reference is cached as
+            // 0. A null result would be indistinguishable from "not
+            // calculated" (docs/behavior-profiles.md).
             Value::Blank => Outcome::Value(Scalar::Number(Number::from(0))),
             Value::Error(error) => from_formula_error(error, sheet_name, address),
         },

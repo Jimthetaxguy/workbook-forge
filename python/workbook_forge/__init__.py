@@ -100,20 +100,21 @@ class _Range:
 
 @dataclass(frozen=True, slots=True)
 class _Referenced:
-    """A scalar Excel still treats as a one-cell reference.
+    """A scalar that still carries one-cell reference provenance.
 
     Successful XLOOKUP over a referenced return array, and a branch that IF,
     IFERROR, IFNA, IFS, SWITCH or CHOOSE selects from a reference, keep this
     marker. SUM, AVERAGE, COUNT, AND, OR, XOR and the range statistics honor
     it. Value contexts unwrap it. A scalar ``if_not_found`` literal never
-    receives the marker.
+    receives the marker. See docs/behavior-profiles.md ("Selected references
+    in SUM and AVERAGE"); nothing there was observed in Excel.
     """
 
     value: Scalar
 
 
 def _dereference(value: object) -> object:
-    """Drop reference provenance where Excel would read the cell's value."""
+    """Drop reference provenance where a value context reads the scalar."""
     if isinstance(value, _Referenced):
         return value.value
     return value
@@ -1153,8 +1154,9 @@ def _number(value: object) -> float | int | ErrorValue:
             parsed = float(text)
         except ValueError:
             return ErrorValue("#VALUE!", f"{value!r} is not numeric")
-        # float() also reads "inf", "infinity" and "nan"; Excel does not treat
-        # those spellings as numbers, so they stay non-numeric text.
+        # float() also reads "inf", "infinity" and "nan". Those spellings stay
+        # non-numeric text: a non-finite parse is rejected
+        # (docs/behavior-profiles.md). Not checked against Excel.
         if not math.isfinite(parsed):
             return ErrorValue("#VALUE!", f"{value!r} is not numeric")
         return int(parsed) if parsed.is_integer() else parsed
@@ -3366,11 +3368,13 @@ def _datedif_call(args: tuple[object, ...], budget: _WildcardBudget) -> object:
 
 
 def _returns_reference(node: _Node) -> bool:
-    """Whether this expression always returns a reference in Excel.
+    """Whether this expression always carries reference provenance.
 
     A cell reference and INDEX over a range do. XLOOKUP and the IF family do
     not: a hit or a selected reference does, and a scalar fallback does not.
     That distinction travels on the value as :class:`_Referenced`.
+    See docs/behavior-profiles.md ("Selected references in SUM and AVERAGE").
+    Nothing there was observed in Excel.
     """
     return node.kind == "cell" or (
         node.kind == "call" and _canonical_function_name(str(node.value)) == "INDEX"
@@ -3394,7 +3398,10 @@ def _with_reference(node: _Node, value: object) -> object:
 
 
 def _as_reference_argument(child: _Node, value: object, *, primitive: bool) -> object:
-    """Present one SUM, AVERAGE, COUNT, AND or OR argument with Excel's reference rules.
+    """Present one SUM, AVERAGE, COUNT, AND or OR argument as a reference or a value.
+
+    The rule is the profile in docs/behavior-profiles.md ("Selected references
+    in SUM and AVERAGE"); it was not observed in Excel.
 
     XOR and the range statistics read the same provenance through
     :func:`_keeps_reference` in their own argument readers. INDEX counts as a
